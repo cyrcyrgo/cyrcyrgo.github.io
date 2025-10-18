@@ -1,0 +1,853 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能搜索</title>
+    <style>
+        :root {
+            --primary-color: #0078d7;
+            --secondary-color: #50b6ff;
+            --text-color: #333;
+            --light-color: #fff;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            --error-color: #ff4d4f;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            touch-action: manipulation;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+            animation: gradientShift 15s ease infinite;
+            background-size: 200% 200%;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .search-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: min(90%, 600px);
+            background: var(--light-color);
+            padding: 2rem;
+            border-radius: 1.25rem;
+            box-shadow: 0 1.25rem 1.875rem var(--shadow-color);
+            text-align: center;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            z-index: 1000;
+        }
+
+        .search-container.fixed-top {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(90%, 800px);
+            padding: 1rem;
+            border-radius: 30px;
+        }
+
+        .search-title {
+            color: var(--text-color);
+            margin-bottom: 1.875rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+        }
+
+        .search-box-container {
+            position: relative;
+            margin-bottom: 1.25rem;
+            z-index: 1;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 0.9375rem 1.25rem;
+            font-size: 1rem;
+            border: 0.125rem solid #ddd;
+            border-radius: 1.5625rem;
+            outline: none;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0.25rem 0.625rem var(--shadow-color);
+        }
+
+        .search-box:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0.625rem rgba(0, 120, 215, 0.3);
+            transform: scale(1.02);
+        }
+
+        .engine-divider {
+            height: 1px;
+            background-color: rgba(0, 0, 0, 0.1);
+            margin: 1rem 0;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .engine-divider-text {
+            background-color: var(--light-color);
+            padding: 0 1rem;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #666;
+            font-size: 0.875rem;
+        }
+
+        .engine-container {
+            margin: 1rem 0;
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            transition: all 0.3s ease;
+        }
+
+        .engine-container.hidden, .engine-divider.hidden {
+            opacity: 0;
+            height: 0;
+            margin: 0;
+            padding: 0;
+            transform: translateY(-20px);
+        }
+
+        .action-divider {
+            height: 1px;
+            background-color: rgba(0, 0, 0, 0.1);
+            margin: 1.5rem 0;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .action-divider-text {
+            background-color: var(--light-color);
+            padding: 0 1rem;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #666;
+            font-size: 0.875rem;
+        }
+
+        .option-btn {
+            padding: 0.5rem 1rem;
+            background: rgba(0, 120, 215, 0.1);
+            border: 1px solid rgba(0, 120, 215, 0.3);
+            border-radius: 1.5625rem;
+            color: var(--primary-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .option-btn:hover {
+            background: rgba(0, 120, 215, 0.2);
+        }
+
+        .option-btn.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .search-btn {
+            margin-top: 1.25rem;
+            padding: 0.75rem 1.875rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: var(--light-color);
+            border: none;
+            border-radius: 1.5625rem;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+            box-shadow: 0 0.25rem 0.9375rem rgba(0, 120, 215, 0.4);
+        }
+
+        .search-btn:hover {
+            transform: translateY(-0.1875rem);
+            box-shadow: 0 0.5rem 1.25rem rgba(0, 120, 215, 0.5);
+        }
+
+        .error-message {
+            color: var(--error-color);
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+            height: 1.25rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .error-message.show {
+            opacity: 1;
+        }
+
+        .hint {
+            margin-top: 0.9375rem;
+            color: #666;
+            font-size: 0.875rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .loading {
+            display: none;
+            width: 3rem;
+            height: 3rem;
+            margin: 1.25rem auto;
+            border: 0.375rem solid #f3f3f3;
+            border-top: 0.375rem solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            position: relative;
+            z-index: 1;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .home-btn {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 40px;
+            height: 40px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            z-index: 1001;
+        }
+
+        .home-btn.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .beta-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: min(90%, 600px);
+            background: var(--light-color);
+            padding: 2rem;
+            border-radius: 1.25rem;
+            box-shadow: 0 1.25rem 1.875rem var(--shadow-color);
+            text-align: center;
+            z-index: 1000;
+            opacity: 0;
+            transition: all 0.8s ease;
+            pointer-events: none;
+        }
+
+        .beta-container.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .beta-title {
+            color: var(--text-color);
+            margin-bottom: 1.875rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .beta-message {
+            color: var(--text-color);
+            margin-bottom: 1.875rem;
+            font-size: 1.1rem;
+            line-height: 1.6;
+        }
+
+        .beta-btn {
+            margin: 1.25rem auto;
+            padding: 0.75rem 1.875rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: var(--light-color);
+            border: none;
+            border-radius: 1.5625rem;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+            box-shadow: 0 0.25rem 0.9375rem rgba(0, 120, 215, 0.4);
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .beta-btn.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .beta-btn:hover {
+            transform: translateY(-0.1875rem);
+            box-shadow: 0 0.5rem 1.25rem rgba(0, 120, 215, 0.5);
+        }
+
+        .agreement-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 1.5rem 0;
+        }
+
+        .agreement-checkbox {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .agreement-text {
+            color: var(--text-color);
+            font-size: 0.9rem;
+        }
+
+        .disclaimer-link {
+            color: var(--primary-color);
+            text-decoration: underline;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .disclaimer-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .disclaimer-content {
+            background: var(--light-color);
+            padding: 2rem;
+            border-radius: 0.5rem;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .disclaimer-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .disclaimer-title {
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .disclaimer-list {
+            text-align: left;
+            margin-left: 1rem;
+        }
+
+        .disclaimer-item {
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .version {
+            position: absolute;
+            right: 20px;
+            bottom: 10px;
+            color: #666;
+            font-size: 0.75rem;
+        }
+
+        @media (max-width: 768px) {
+            .search-container, .beta-container {
+                width: 90%;
+                padding: 1.5rem;
+            }
+
+            .search-container.fixed-top {
+                width: 90%;
+                padding: 1rem;
+            }
+
+            .option-container {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .home-btn {
+                width: 36px;
+                height: 36px;
+                right: 15px;
+                bottom: 15px;
+            }
+
+            .version {
+                right: 15px;
+                bottom: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="search-container" id="searchContainer">
+        <div class="search-title">智能搜索</div>
+        <div class="search-box-container">
+            <input type="text" id="searchInput" class="search-box" placeholder="请输入网址或搜索内容" autocomplete="off">
+        </div>
+
+        <div class="engine-divider" id="engineDivider">
+            <span class="engine-divider-text">搜索引擎</span>
+        </div>
+
+        <div class="engine-container" id="engineContainer">
+            <div class="option-btn" data-engine="bing">必应</div>
+            <div class="option-btn" data-engine="baidu">百度</div>
+            <div class="option-btn" data-engine="360">360</div>
+            <div class="option-btn" data-engine="sogou">搜狗</div>
+        </div>
+
+        <div class="action-divider">
+            <span class="action-divider-text">处理方式</span>
+        </div>
+
+        <div class="action-container" id="actionContainer">
+            <div class="option-btn active" data-action="ai">AI大模型识别</div>
+            <div class="option-btn" data-action="search">强制搜索</div>
+            <div class="option-btn" data-action="url">强制网址</div>
+        </div>
+
+        <div class="error-message" id="engineError"></div>
+
+        <button onclick="performSearch()" class="search-btn">搜索</button>
+        <div class="loading" id="loading"></div>
+        <div class="hint">
+            提示：AI大模型识别会自动判断最佳处理方式
+        </div>
+        <div class="version">v4.3</div>
+    </div>
+
+    <div class="beta-container" id="betaContainer">
+        <div class="beta-title">测试版访问</div>
+        <div class="beta-message">
+            我们有测试版你可以进行尝试，请点击下方Beta按钮。
+        </div>
+        <div class="agreement-container">
+            <input type="checkbox" id="agreementCheckbox" class="agreement-checkbox">
+            <label for="agreementCheckbox" class="agreement-text">
+                我已同意进入公测版<span class="disclaimer-link" id="disclaimerLink">公测版免责声明</span>
+            </label>
+        </div>
+        <button class="beta-btn" id="betaBtn">Beta</button>
+    </div>
+
+    <div class="disclaimer-modal" id="disclaimerModal">
+        <div class="disclaimer-content">
+            <span class="disclaimer-close" id="disclaimerClose">&times;</span>
+            <div class="disclaimer-title">公测版免责声明</div>
+            <ol class="disclaimer-list">
+                <li class="disclaimer-item">本测试版软件为开发中的版本，可能存在不稳定因素。</li>
+                <li class="disclaimer-item">使用测试版软件可能导致数据丢失或系统不稳定。</li>
+                <li class="disclaimer-item">测试版软件的功能可能与最终发布版本有显著差异。</li>
+                <li class="disclaimer-item">开发者不对测试版软件中的任何错误或缺陷承担责任。</li>
+                <li class="disclaimer-item">测试版软件可能包含未经充分测试的新功能。</li>
+                <li class="disclaimer-item">使用测试版软件即表示您自愿承担所有相关风险。</li>
+                <li class="disclaimer-item">测试版软件可能不包含完整的安全防护措施。</li>
+                <li class="disclaimer-item">测试版软件的性能可能低于最终发布版本。</li>
+                <li class="disclaimer-item">测试期间可能会收集使用数据以改进产品。</li>
+                <li class="disclaimer-item">测试版软件可能不定期更新或停止服务。</li>
+                <li class="disclaimer-item">测试版软件的使用可能受到地域限制。</li>
+                <li class="disclaimer-item">测试版软件可能不支持所有设备或浏览器。</li>
+                <li class="disclaimer-item">测试版软件的部分功能可能需要额外权限。</li>
+                <li class="disclaimer-item">测试版软件可能包含实验性技术预览。</li>
+                <li class="disclaimer-item">测试版软件的使用可能影响设备电池寿命。</li>
+                <li class="disclaimer-item">测试版软件可能产生额外的网络流量费用。</li>
+                <li class="disclaimer-item">测试版软件可能与其他应用程序存在兼容性问题。</li>
+                <li class="disclaimer-item">测试版软件的用户界面可能不完整或存在错误。</li>
+                <li class="disclaimer-item">测试版软件的部分功能可能无法正常工作。</li>
+                <li class="disclaimer-item">测试版软件可能不支持数据备份或恢复。</li>
+                <li class="disclaimer-item">测试版软件可能无法与正式版软件同步数据。</li>
+                <li class="disclaimer-item">测试版软件可能包含已知但未修复的安全漏洞。</li>
+                <li class="disclaimer-item">测试版软件可能不支持多语言或部分翻译不完整。</li>
+                <li class="disclaimer-item">测试版软件可能无法访问某些服务或内容。</li>
+                <li class="disclaimer-item">开发者保留随时修改或终止测试版的权利。</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="home-btn" id="homeBtn" title="重新运行">↻</div>
+
+    <script>
+        // 搜索引擎配置
+        const searchEngines = {
+            bing: {
+                name: "必应",
+                url: "https://www.bing.com/search?q="
+            },
+            baidu: {
+                name: "百度",
+                url: "https://www.baidu.com/s?wd="
+            },
+            "360": {
+                name: "360",
+                url: "https://www.so.com/s?q="
+            },
+            sogou: {
+                name: "搜狗",
+                url: "https://www.sogou.com/web?query="
+            }
+        };
+
+        let currentEngine = null;
+        let currentAction = "ai";
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('searchInput');
+            const searchContainer = document.getElementById('searchContainer');
+            const homeBtn = document.getElementById('homeBtn');
+            const engineBtns = document.querySelectorAll('[data-engine]');
+            const actionBtns = document.querySelectorAll('[data-action]');
+            const engineContainer = document.getElementById('engineContainer');
+            const engineDivider = document.getElementById('engineDivider');
+            const engineError = document.getElementById('engineError');
+            const betaContainer = document.getElementById('betaContainer');
+            const betaBtn = document.getElementById('betaBtn');
+            const agreementCheckbox = document.getElementById('agreementCheckbox');
+            const disclaimerLink = document.getElementById('disclaimerLink');
+            const disclaimerModal = document.getElementById('disclaimerModal');
+            const disclaimerClose = document.getElementById('disclaimerClose');
+
+            // 初始自动聚焦
+            searchInput.focus();
+
+            // 点击搜索框时上滑 - 修复动画失效问题
+            searchInput.addEventListener('focus', function() {
+                searchContainer.classList.add('fixed-top');
+            });
+
+            // 监听回车键
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performSearch();
+                }
+            });
+
+            // 搜索引擎选择
+            engineBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const engine = this.getAttribute('data-engine');
+
+                    // 如果点击的是已选引擎，则取消选择
+                    if (currentEngine === engine) {
+                        this.classList.remove('active');
+                        currentEngine = null;
+                    } else {
+                        // 取消其他引擎的选择
+                        engineBtns.forEach(b => b.classList.remove('active'));
+                        this.classList.add('active');
+                        currentEngine = engine;
+                    }
+
+                    // 隐藏错误提示
+                    engineError.classList.remove('show');
+                });
+            });
+
+            // 处理方式选择
+            actionBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const action = this.getAttribute('data-action');
+                    actionBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentAction = action;
+
+                    // 根据选择的处理方式调整界面
+                    if (action === "url") {
+                        // 强制网址时隐藏搜索引擎选择
+                        engineContainer.classList.add('hidden');
+                        engineDivider.classList.add('hidden');
+                    } else {
+                        // 其他情况显示搜索引擎选择
+                        engineContainer.classList.remove('hidden');
+                        engineDivider.classList.remove('hidden');
+                    }
+                });
+            });
+
+            // 返回首页按钮点击事件
+            homeBtn.addEventListener('click', function() {
+                resetToInitialState();
+            });
+
+            // 同意复选框变化事件 - 修复按钮问题
+            agreementCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    betaBtn.classList.add('active');
+                } else {
+                    betaBtn.classList.remove('active');
+                }
+            });
+
+            // Beta按钮点击事件
+            betaBtn.addEventListener('click', function() {
+                window.location.href = "https://cyrcyrgobeta.github.io/";
+            });
+
+            // 免责声明链接点击事件 - 修复免责声明消失问题
+            disclaimerLink.addEventListener('click', function() {
+                disclaimerModal.style.display = 'flex';
+            });
+
+            // 免责声明关闭按钮点击事件
+            disclaimerClose.addEventListener('click', function() {
+                disclaimerModal.style.display = 'none';
+            });
+
+            // 点击模态框外部关闭
+            disclaimerModal.addEventListener('click', function(e) {
+                if (e.target === disclaimerModal) {
+                    disclaimerModal.style.display = 'none';
+                }
+            });
+        });
+
+        // 执行搜索
+        function performSearch() {
+            const input = document.getElementById('searchInput').value.trim().toLowerCase();
+            const loading = document.getElementById('loading');
+            const homeBtn = document.getElementById('homeBtn');
+            const engineError = document.getElementById('engineError');
+            const engineContainer = document.getElementById('engineContainer');
+            const searchContainer = document.getElementById('searchContainer');
+            const betaContainer = document.getElementById('betaContainer');
+
+            if (!input) {
+                engineError.textContent = "请输入内容";
+                engineError.classList.add('show');
+                return;
+            }
+
+            // 检查是否是beta测试版请求
+            if (input === 'beta') {
+                // 添加渐隐动画
+                searchContainer.style.opacity = '0';
+                searchContainer.style.transform = 'translate(-50%, -50%) scale(0.95)';
+
+                // 延迟显示beta容器以确保动画效果
+                setTimeout(() => {
+                    searchContainer.style.display = 'none';
+                    betaContainer.classList.add('show');
+                    homeBtn.classList.add('show');
+                }, 800);
+                return;
+            }
+
+            // 检查强制搜索时是否选择了搜索引擎
+            if (currentAction === "search" && !currentEngine) {
+                engineError.textContent = "请先选择搜索引擎";
+                engineError.classList.add('show');
+                return;
+            }
+
+            // AI大模型识别为搜索内容但未选择搜索引擎
+            if (currentAction === "ai" && !isUrl(input) && !currentEngine) {
+                engineError.textContent = "请选择搜索引擎";
+                engineError.classList.add('show');
+                return;
+            }
+
+            // 隐藏错误提示
+            engineError.classList.remove('show');
+
+            // 显示加载动画和返回按钮
+            loading.style.display = 'block';
+            homeBtn.classList.add('show');
+
+            setTimeout(function() {
+                let targetUrl;
+
+                // 根据选择的处理方式决定跳转逻辑
+                switch(currentAction) {
+                    case "search":
+                        // 强制搜索必须选择搜索引擎（前面已检查）
+                        targetUrl = searchEngines[currentEngine].url + encodeURIComponent(input);
+                        break;
+
+                    case "url":
+                        targetUrl = completeWebsiteUrl(input);
+                        break;
+
+                    case "ai":
+                    default:
+                        if (isUrl(input)) {
+                            // 明确的网址 -> 直接访问
+                            targetUrl = completeWebsiteUrl(input);
+                        } else if (currentEngine) {
+                            // 有选择引擎 -> 使用选择的搜索引擎
+                            targetUrl = searchEngines[currentEngine].url + encodeURIComponent(input);
+                        } else {
+                            // 默认使用必应搜索
+                            targetUrl = searchEngines["bing"].url + encodeURIComponent(input);
+                        }
+                }
+
+                window.location.href = targetUrl;
+            }, 800);
+        }
+
+        // 重置到初始状态
+        function resetToInitialState() {
+            const searchContainer = document.getElementById('searchContainer');
+            const betaContainer = document.getElementById('betaContainer');
+            const homeBtn = document.getElementById('homeBtn');
+            const searchInput = document.getElementById('searchInput');
+            const loading = document.getElementById('loading');
+            const engineBtns = document.querySelectorAll('[data-engine]');
+            const actionBtns = document.querySelectorAll('[data-action]');
+            const engineContainer = document.getElementById('engineContainer');
+            const engineDivider = document.getElementById('engineDivider');
+            const engineError = document.getElementById('engineError');
+            const agreementCheckbox = document.getElementById('agreementCheckbox');
+            const betaBtn = document.getElementById('betaBtn');
+            const disclaimerModal = document.getElementById('disclaimerModal');
+
+            // 隐藏返回按钮和加载动画
+            homeBtn.classList.remove('show');
+            loading.style.display = 'none';
+            engineError.classList.remove('show');
+            disclaimerModal.style.display = 'none';
+
+            // 重置搜索框位置
+            searchContainer.classList.remove('fixed-top');
+            searchContainer.style.display = 'block';
+            searchContainer.style.opacity = '1';
+            searchContainer.style.transform = 'translate(-50%, -50%)';
+
+            // 隐藏beta容器
+            betaContainer.classList.remove('show');
+            agreementCheckbox.checked = false;
+            betaBtn.classList.remove('active');
+
+            // 重置选项
+            engineBtns.forEach(b => b.classList.remove('active'));
+            actionBtns.forEach(b => b.classList.remove('active'));
+            document.querySelector('[data-action="ai"]').classList.add('active');
+
+            // 显示所有区域
+            engineContainer.classList.remove('hidden');
+            engineDivider.classList.remove('hidden');
+
+            currentEngine = null;
+            currentAction = "ai";
+
+            // 清空输入并重新聚焦
+            searchInput.value = '';
+            setTimeout(() => {
+                searchInput.focus();
+            }, 300);
+        }
+
+        // 判断输入是否为网址
+        function isUrl(string) {
+            const urlKeywords = ['http://', 'https://', 'www.', 'ftp://'];
+            const hasProtocol = urlKeywords.some(keyword => string.toLowerCase().startsWith(keyword));
+            const hasDot = string.includes('.');
+            const noSpaces = !string.includes(' ');
+
+            if (noSpaces && (hasProtocol || (hasDot && (string.startsWith('www.') || /^[a-zA-Z0-9.-]+$/.test(string.split('.')[0]))))) {
+                return true;
+            }
+
+            const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
+            return urlPattern.test(string) || string.toLowerCase().startsWith('www.');
+        }
+
+        // 补全网址格式
+        function completeWebsiteUrl(input) {
+            let url = input.trim();
+
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                if (!url.endsWith('/')) {
+                    url += '/';
+                }
+                return url;
+            }
+
+            if (url.startsWith('www.')) {
+                url = 'https://' + url;
+            } else {
+                url = 'https://www.' + url;
+            }
+
+            if (!url.match(/\.[a-zA-Z]{2,}$/)) {
+                const lastDotIndex = url.lastIndexOf('.');
+                if (lastDotIndex === -1 || !isCommonTld(url.substring(lastDotIndex + 1))) {
+                    url += '.com';
+                }
+            }
+
+            if (!url.endsWith('/')) {
+                url += '/';
+            }
+
+            return url;
+        }
+
+        // 检查是否为常见的顶级域名
+        function isCommonTld(tld) {
+            const commonTlds = [
+                'com', 'org', 'net', 'edu', 'gov', 'mil', 'int', 
+                'cn', 'uk', 'us', 'ca', 'au', 'de', 'fr', 'jp', 
+                'kr', 'ru', 'it', 'es', 'nl', 'se', 'no', 'ch', 
+                'br', 'mx', 'in', 'sg', 'th', 'vn', 'my', 'id', 
+                'ph', 'nz', 'ae', 'sa', 'qc', 'ie', 'dk', 'fi',
+                'run', 'io', 'ai', 'tv', 'me', 'tech', 'app', 'online'
+            ];
+            return commonTlds.includes(tld.toLowerCase());
+        }
+    </script>
+</body>
+</html>
