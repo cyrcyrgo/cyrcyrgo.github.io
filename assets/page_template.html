@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>智能搜索</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{
+  width:100%;height:100%;overflow:hidden;
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  __BG_GRADIENT__
+  display:flex;align-items:center;justify-content:center;
+  color:__TEXT_COLOR__;
+  position:relative;
+  -webkit-font-smoothing:antialiased;
+}
+.search-wrap{position:relative;z-index:1;width:100%;display:flex;justify-content:center;padding:20px;}
+.search-wrapper{
+  width:min(92%,520px);
+  background:__INPUT_BG__;
+  border-radius:20px;
+  padding:clamp(28px,4vw,40px) clamp(22px,3vw,32px);
+  __SHADOW_CSS__
+  __BLUR_EXTRA__
+  position:relative;
+}
+.search-title{
+  text-align:center;font-size:clamp(1.4rem,3vw,1.8rem);font-weight:800;margin-bottom:clamp(20px,3vw,32px);color:__TEXT_COLOR__;
+  letter-spacing:-0.01em;
+}
+.search-title::after{
+  content:'';display:block;width:40px;height:3px;margin:10px auto 0;
+  background:__ACCENT_COLOR__;border-radius:2px;opacity:0.7;
+}
+.search-input{
+  width:100%;
+  __BORDER_CSS__
+  border-radius:__BORDER_RADIUS__px;
+  padding:clamp(14px,2vw,18px) clamp(16px,2.5vw,22px);
+  font-size:clamp(0.95rem,1.6vw,1.1rem);outline:none;color:__TEXT_COLOR__;background:__INPUT_BG__;
+  __SHADOW_CSS__
+  __TRANSITION_CSS__
+  letter-spacing:0.01em;
+}
+.search-input::placeholder{color:__TEXT_COLOR__66;}
+.search-input:focus{ border-color:__ACCENT_COLOR__; }
+__HOVER_CSS__
+.search-btn{
+  display:block;width:100%;margin-top:clamp(14px,2vw,20px);
+  padding:clamp(12px,1.8vw,16px) clamp(24px,3vw,32px);
+  font-size:clamp(0.95rem,1.6vw,1.1rem);font-weight:700;letter-spacing:0.06em;
+  background:__ACCENT_COLOR__;color:#fff;border:none;
+  border-radius:__BORDER_RADIUS__px;cursor:pointer;
+  __SHADOW_CSS__
+  __TRANSITION_CSS__
+}
+.search-engine-tag{
+  text-align:center;margin-top:clamp(12px,1.8vw,18px);font-size:clamp(0.7rem,1vw,0.8rem);color:__TEXT_COLOR__88;
+  letter-spacing:0.04em;
+}
+.gear-btn{
+  position:fixed;top:clamp(12px,2vw,20px);right:clamp(12px,2vw,20px);
+  width:clamp(36px,4vw,44px);height:clamp(36px,4vw,44px);
+  border-radius:50%;border:1px solid __TEXT_COLOR__33;
+  background:__INPUT_BG__;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  z-index:100;
+  __SHADOW_CSS__
+  __TRANSITION_CSS__
+}
+.gear-btn:hover{
+  border-color:__ACCENT_COLOR__;
+  transform:rotate(60deg);
+}
+.gear-btn svg{
+  width:55%;height:55%;
+  fill:__TEXT_COLOR__88;
+  transition:fill 0.25s;
+}
+.gear-btn:hover svg{fill:__ACCENT_COLOR__;}
+__ANIM_CSS__
+__GRADIENT_ANIM_CSS__
+__BLUR_CSS__
+
+@media (max-width:480px){
+  .search-wrapper{padding:24px 16px;border-radius:16px;}
+  .search-wrap{padding:12px;}
+}
+@media (min-width:1400px){
+  .search-wrapper{max-width:600px;}
+}
+</style></head>
+<body>
+__PARTICLES_HTML__
+<a class="gear-btn" href="../index.html" title="返回配置中心">
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.61 3.61 0 0112 15.6z"/></svg>
+</a>
+<div class="search-wrap">
+<div class="search-wrapper">
+  <div class="search-title">智能搜索</div>
+  <input class="search-input" type="text" id="searchInput" placeholder="输入搜索内容..." autocomplete="off">
+  <button class="search-btn" id="searchBtn">搜索</button>
+  <div class="search-engine-tag">搜索引擎：__ENGINE_NAME__</div>
+</div>
+</div>
+<script>
+(function(){
+  var engineUrl='__ENGINE_URL__';
+  var input=document.getElementById('searchInput');
+  var btn=document.getElementById('searchBtn');
+  function doSearch(){
+    var q=input.value.trim();
+    if(q) window.location.href=engineUrl+encodeURIComponent(q);
+  }
+  btn.addEventListener('click',doSearch);
+  input.addEventListener('keypress',function(ev){if(ev.key==='Enter')doSearch();});
+  input.focus();
+})();
+</script>
+</body>
+</html>

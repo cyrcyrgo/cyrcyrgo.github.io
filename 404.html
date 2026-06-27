@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>404 - 页面未找到</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  background:#11111b;
+  color:#cdd6f4;
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  text-align:center;
+  padding:40px 20px;
+}
+.error-code{font-size:6rem;font-weight:900;color:#89b4fa;line-height:1;}
+.error-title{font-size:1.4rem;font-weight:700;margin:16px 0 8px;color:#f5c2e7;}
+.error-msg{font-size:0.9rem;color:#a6adc8;margin-bottom:32px;line-height:1.6;}
+.home-btn{
+  padding:14px 36px;
+  font-size:1rem;
+  font-weight:700;
+  background:linear-gradient(135deg,#89b4fa,#a6e3a1);
+  color:#1e1e2e;
+  border:none;
+  border-radius:12px;
+  cursor:pointer;
+  text-decoration:none;
+  display:inline-block;
+  transition:all 0.3s;
+  box-shadow:0 6px 20px rgba(137,180,250,0.3);
+}
+.home-btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(137,180,250,0.5);}
+</style>
+</head>
+<body>
+<div class="error-code">404</div>
+<div class="error-title">页面未找到</div>
+<div class="error-msg">您访问的页面不存在或已被移除。<br>请返回首页重新配置您的搜索页面。</div>
+<a class="home-btn" href="index.html">返回首页</a>
+</body>
+</html>

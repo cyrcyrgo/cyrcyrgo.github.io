@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>project-manager.js 测试</title>
+    <style>
+        body { font-family: monospace; background: #1a1a2e; color: #00ff00; padding: 20px; }
+        .pass { color: #00ff00; }
+        .fail { color: #ff4444; }
+        pre { background: #0d0d1a; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<h1>project-manager.js 正确性测试</h1>
+<pre id="output"></pre>
+
+<script>
+// 模拟 terminal 对象（project-manager.js 依赖 terminal.println）
+window.terminal = {
+    output: { appendChild: function() {}, scrollTop: 0 },
+    input: { disabled: false, style: { opacity: '1' }, focus: function() {} },
+    currentProject: null,
+    currentEnv: null,
+    println: function(msg, cls) {
+        var el = document.getElementById('output');
+        el.textContent += (cls ? '[' + cls + '] ' : '') + msg + '\n';
+    },
+    printHtml: function() {},
+    scrollToBottom: function() {},
+    isProcessing: false
+};
+
+// 模拟 localStorage
+var _storage = {};
+window.localStorage = {
+    getItem: function(k) { return _storage[k] || null; },
+    setItem: function(k, v) { _storage[k] = v; },
+    removeItem: function(k) { delete _storage[k]; }
+};
+
+var testResults = [];
+function assert(condition, message) {
+    if (condition) {
+        testResults.push({ pass: true, msg: message });
+        document.getElementById('output').textContent += 'PASS: ' + message + '\n';
+    } else {
+        testResults.push({ pass: false, msg: message });
+        document.getElementById('output').textContent += 'FAIL: ' + message + '\n';
+    }
+}
+</script>
+
+<!-- 加载 project-manager.js -->
+<script src="../js/project-manager.js"></script>
+
+<script>
+// ========== 测试用例 ==========
+
+// 测试1: window.projects 应该与 projects 引用同一个对象
+assert(
+    window.projects !== undefined && window.projects !== null,
+    'window.projects 应该已定义'
+);
+
+// 测试2: 创建项目后，window.projects 应该包含该项目
+createProject('test-project');
+assert(
+    window.projects['test-project'] !== undefined,
+    '创建项目后 window.projects 应包含该项目'
+);
+
+// 测试3: 创建文件后，window.projects 应该反映文件变更
+terminal.currentProject = 'test-project';
+createFile('main.py');
+window.projects['test-project'].files['main.py'] = 'print("hello")';
+assert(
+    window.projects['test-project'].files['main.py'] !== undefined,
+    '创建文件后 window.projects 应反映文件变更'
+);
+
+// 测试4: 删除项目后，window.projects 应该不再包含该项目
+deleteProject('test-project');
+assert(
+    window.projects['test-project'] === undefined,
+    '删除项目后 window.projects 应不再包含该项目'
+);
+
+// 测试5: loadProjects 从 localStorage 恢复后，window.projects 应同步
+_storage['mltsf-projects'] = JSON.stringify({
+    'restored-project': { name: 'restored-project', files: { 'test.py': 'x=1' }, createdAt: '2024-01-01' }
+});
+loadProjects();
+assert(
+    window.projects['restored-project'] !== undefined,
+    'loadProjects 恢复后 window.projects 应包含恢复的项目'
+);
+assert(
+    window.projects['restored-project'].files['test.py'] === 'x=1',
+    'loadProjects 恢复后文件内容应正确'
+);
+
+// 测试6: deleteAllProjects 后 window.projects 应为空对象
+deleteAllProjects();
+assert(
+    Object.keys(window.projects).length === 0,
+    'deleteAllProjects 后 window.projects 应为空'
+);
+
+// 测试7: 模拟 ExtensionAPI.getProjects() 的行为
+var extensionProjects = window.projects || {};
+assert(
+    Object.keys(extensionProjects).length === 0,
+    'ExtensionAPI.getProjects() 应返回正确的空对象（不是独立的 {}）'
+);
+
+// 汇总
+var passed = testResults.filter(function(t) { return t.pass; }).length;
+var failed = testResults.filter(function(t) { return !t.pass; }).length;
+document.getElementById('output').textContent += '\n==========\n';
+document.getElementById('output').textContent += '结果: ' + passed + ' 通过, ' + failed + ' 失败\n';
+if (failed > 0) {
+    document.getElementById('output').style.color = '#ff4444';
+} else {
+    document.getElementById('output').style.color = '#00ff00';
+}
+</script>
+</body>
+</html>

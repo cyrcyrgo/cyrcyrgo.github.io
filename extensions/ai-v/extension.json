@@ -1,0 +1,20 @@
+{
+    "name": "ai-v",
+    "version": "1.0.0",
+    "description": "极简AI助手 - 轻量级AI对话，支持Agent命令执行，流式输出可打断",
+    "author": "kzk",
+    "main": "main.js",
+    "styles": ["style.css"],
+    "permissions": ["network", "storage", "ui"],
+    "autoLoad": false,
+    "commands": [
+        {
+            "name": "aip",
+            "description": "配置AI参数 (URL, 模型, 模式, API Key)"
+        },
+        {
+            "name": "ait",
+            "description": "进入AI持续对话模式 (Agent: 可执行终端命令)"
+        }
+    ]
+}

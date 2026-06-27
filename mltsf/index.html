@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MLTSF - 多语言终端模拟器</title>
+    <link rel="stylesheet" href="css/terminal.css">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <!-- 扩展包样式注入容器 (由 extension-manager 动态添加) -->
+    <style id="ext-styles-container"></style>
+</head>
+<body>
+    <div id="terminal">
+        <div id="terminal-header">
+            <span>MLTSF Terminal v3.0 - 可扩展多语言终端</span>
+            <span id="current-env">当前环境: 未选择</span>
+        </div>
+        <div id="output">
+            <!-- 终端输出内容（包括扩展包UI面板的挂载点） -->
+        </div>
+        <div id="input-line">
+            <span id="prompt">user@mltsf:~$ </span>
+            <input type="text" id="command-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" autofocus>
+        </div>
+    </div>
+
+    <!-- 扩展包浮动UI层（对话框、弹窗等） -->
+    <div id="ext-dialogs" style="display:none;"></div>
+
+    <!-- 加载核心库 (按依赖顺序) -->
+    <!-- 1. 基础环境: Pyodide Python运行时 -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+    <!-- 2. 项目管理 -->
+    <script src="js/project-manager.js"></script>
+    <!-- 3. 语言环境 -->
+    <script src="js/python-env.js"></script>
+    <script src="js/cpp-env.js"></script>
+    <!-- 4. 终端核心 -->
+    <script src="js/terminal.js"></script>
+    <!-- 5. 扩展管理器 (先定义注册机制) -->
+    <script src="js/extension-manager.js"></script>
+    <!-- 6. 扩展SDK v3.0 (提供注册API、资源加载、UI渲染等) -->
+    <script src="js/extension-sdk.js"></script>
+    <!-- 7. 内置命令集 -->
+    <script src="js/commands.js"></script>
+</body>
+</html>
