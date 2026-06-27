@@ -1,0 +1,342 @@
+/**
+ * ai-v 极简AI助手 - 样式
+ * ========================
+ * 极简设计，匹配 MLTSF 终端风格
+ */
+
+/* ============================================================
+ *  配置面板
+ * ============================================================ */
+.aiv-config {
+    padding: 12px 0;
+}
+
+.aiv-config-row {
+    margin-bottom: 14px;
+}
+
+.aiv-config-row label {
+    display: block;
+    color: #00ff00;
+    font-size: 13px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    letter-spacing: 0.5px;
+}
+
+.aiv-config-row input {
+    width: 100%;
+    background: #0a0a0a;
+    border: 1px solid #333;
+    color: #e0e0e0;
+    padding: 10px 12px;
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: 14px;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.aiv-config-row input:focus {
+    border-color: #00ff00;
+    box-shadow: 0 0 8px rgba(0, 255, 0, 0.15);
+}
+
+.aiv-config-row input::placeholder {
+    color: #555;
+}
+
+.aiv-config-hint {
+    display: block;
+    color: #666;
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.aiv-config-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #222;
+}
+
+/* ============================================================
+ *  聊天面板
+ * ============================================================ */
+.aiv-chat {
+    display: flex;
+    flex-direction: column;
+    height: 450px;
+    max-height: 60vh;
+    min-height: 300px;
+}
+
+/* 模型信息栏 */
+.aiv-chat-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    background: #0a0a0a;
+    border-bottom: 1px solid #222;
+    font-size: 12px;
+    color: #888;
+    flex-shrink: 0;
+}
+
+.aiv-chat-mode {
+    color: #00ff00;
+    font-weight: bold;
+    font-size: 11px;
+    padding: 2px 8px;
+    border: 1px solid #00ff00;
+    border-radius: 3px;
+}
+
+/* 消息区域 */
+.aiv-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-behavior: smooth;
+}
+
+.aiv-chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.aiv-chat-messages::-webkit-scrollbar-track {
+    background: #0a0a0a;
+}
+
+.aiv-chat-messages::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 3px;
+}
+
+.aiv-chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* 消息气泡 */
+.aiv-msg {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.6;
+    word-wrap: break-word;
+    animation: aiv-fadeIn 0.2s ease;
+}
+
+@keyframes aiv-fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 用户消息 */
+.aiv-msg-user {
+    align-self: flex-end;
+    background: rgba(0, 255, 0, 0.08);
+    border: 1px solid rgba(0, 255, 0, 0.2);
+    color: #e0e0e0;
+    border-bottom-right-radius: 2px;
+}
+
+/* AI消息 */
+.aiv-msg-assistant {
+    align-self: flex-start;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid #2a2a2a;
+    color: #ccc;
+    border-bottom-left-radius: 2px;
+}
+
+/* 系统消息 */
+.aiv-msg-system {
+    align-self: center;
+    max-width: 90%;
+    background: transparent;
+    color: #666;
+    font-size: 11px;
+    text-align: center;
+    padding: 4px 8px;
+    border: none;
+}
+
+/* 错误消息 */
+.aiv-msg-error {
+    align-self: center;
+    max-width: 90%;
+    background: rgba(255, 50, 50, 0.08);
+    border: 1px solid rgba(255, 50, 50, 0.2);
+    color: #ff5555;
+    font-size: 12px;
+    text-align: center;
+}
+
+/* 命令执行 */
+.aiv-msg-command {
+    align-self: flex-start;
+    background: rgba(0, 255, 0, 0.05);
+    border: 1px dashed rgba(0, 255, 0, 0.3);
+    color: #00ff00;
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: 12px;
+    padding: 6px 12px;
+    max-width: 95%;
+}
+
+.aiv-msg-cmd-result {
+    align-self: flex-start;
+    font-size: 11px;
+    padding: 3px 10px;
+    margin-left: 12px;
+    border-radius: 3px;
+    max-width: 90%;
+}
+
+.aiv-msg-cmd-result.aiv-success {
+    color: #00cc66;
+    background: rgba(0, 204, 102, 0.05);
+}
+
+.aiv-msg-cmd-result.aiv-error {
+    color: #ff5555;
+    background: rgba(255, 85, 85, 0.05);
+}
+
+/* 流式输出光标 */
+.aiv-cursor {
+    display: inline-block;
+    color: #00ff00;
+    animation: aiv-blink 1s step-end infinite;
+    font-weight: bold;
+}
+
+@keyframes aiv-blink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0; }
+}
+
+.aiv-streaming .aiv-cursor {
+    animation: aiv-blink 0.8s step-end infinite;
+}
+
+/* ============================================================
+ *  消息内容样式
+ * ============================================================ */
+
+/* 代码块 */
+.aiv-code-block {
+    background: #0a0a0a;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin: 8px 0;
+    overflow-x: auto;
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #00ff00;
+    white-space: pre-wrap;
+}
+
+.aiv-code-block code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+    color: inherit;
+}
+
+/* 行内代码 */
+.aiv-inline-code {
+    background: rgba(0, 255, 0, 0.08);
+    color: #00ff66;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: 12px;
+}
+
+/* 粗体 */
+.aiv-msg-assistant b {
+    color: #fff;
+    font-weight: bold;
+}
+
+/* 斜体 */
+.aiv-msg-assistant i {
+    color: #aaa;
+}
+
+/* ============================================================
+ *  输入区域
+ * ============================================================ */
+.aiv-chat-input-area {
+    padding: 8px 12px;
+    border-top: 1px solid #222;
+    background: #0a0a0a;
+    flex-shrink: 0;
+}
+
+.aiv-chat-input-area input {
+    width: 100%;
+    background: #111;
+    border: 1px solid #333;
+    color: #e0e0e0;
+    padding: 10px 14px;
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: 14px;
+    border-radius: 4px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.aiv-chat-input-area input:focus {
+    border-color: #00ff00;
+    box-shadow: 0 0 8px rgba(0, 255, 0, 0.15);
+}
+
+.aiv-chat-input-area input::placeholder {
+    color: #555;
+}
+
+/* 提示栏 */
+.aiv-chat-hints {
+    display: flex;
+    gap: 12px;
+    padding: 4px 14px;
+    background: #0a0a0a;
+    flex-shrink: 0;
+}
+
+.aiv-chat-hints span {
+    font-size: 10px;
+    color: #444;
+    font-family: 'Courier New', 'Consolas', monospace;
+}
+
+/* ============================================================
+ *  响应式适配
+ * ============================================================ */
+@media (max-width: 600px) {
+    .aiv-msg {
+        max-width: 95%;
+    }
+
+    .aiv-chat {
+        height: 350px;
+    }
+
+    .aiv-chat-hints {
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+}

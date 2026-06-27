@@ -1,0 +1,474 @@
+:root {
+    --terminal-bg: #000000;
+    --terminal-color: #00ff00;
+    --terminal-prompt: #00ff00;
+    --terminal-caret: #00ff00;
+    --terminal-header-border: #00ff00;
+    --terminal-scrollbar: #00ff00;
+    --color-error: #ff0000;
+    --color-success: #00ff00;
+    --color-info: #00ffff;
+    --color-warning: #ffff00;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: var(--terminal-bg);
+    color: var(--terminal-color);
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100dvh;
+    height: 100dvh;
+}
+
+/* 桌面端禁止全局滚动，移动端保留滚动能力 */
+@media (min-width: 768px) {
+    body {
+        overflow: hidden;
+    }
+}
+
+#terminal {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    color: var(--terminal-color);
+    background-color: var(--terminal-bg);
+}
+
+#terminal-header {
+    display: flex;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--terminal-header-border);
+    margin-bottom: 10px;
+}
+
+#output {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+#output::-webkit-scrollbar {
+    width: 8px;
+}
+
+#output::-webkit-scrollbar-track {
+    background: var(--terminal-bg);
+}
+
+#output::-webkit-scrollbar-thumb {
+    background: var(--terminal-scrollbar);
+    border-radius: 4px;
+}
+
+/* Firefox 滚动条样式支持 */
+#output {
+    scrollbar-width: thin;
+    scrollbar-color: var(--terminal-scrollbar) var(--terminal-bg);
+}
+
+#output:hover {
+    scrollbar-color: var(--color-success) #333;
+}
+
+#output div {
+    margin-bottom: 2px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+#input-line {
+    display: flex;
+    align-items: center;
+}
+
+#prompt {
+    margin-right: 5px;
+    color: var(--terminal-prompt);
+}
+
+#command-input {
+    flex: 1;
+    background-color: var(--terminal-bg);
+    color: var(--terminal-color);
+    border: none;
+    outline: none;
+    font-family: inherit;
+    font-size: inherit;
+    caret-color: var(--terminal-caret);
+}
+
+/* 代码高亮样式 */
+.code-line {
+    color: #ffffff;
+}
+
+.error-line {
+    color: #ff0000;
+}
+
+.success-line {
+    color: #00ff00;
+}
+
+.info-line {
+    color: #00ffff;
+}
+
+.warning-line {
+    color: #ffff00;
+}
+
+/* 颜色名称映射（首字母大写格式，如 Red, Green, Blue） */
+.color-Red { --terminal-color: #ff0000; --terminal-prompt: #ff0000; --terminal-caret: #ff0000; --terminal-header-border: #ff0000; --terminal-scrollbar: #ff0000; }
+.color-Green { --terminal-color: #00ff00; --terminal-prompt: #00ff00; --terminal-caret: #00ff00; --terminal-header-border: #00ff00; --terminal-scrollbar: #00ff00; }
+.color-Blue { --terminal-color: #0000ff; --terminal-prompt: #0000ff; --terminal-caret: #0000ff; --terminal-header-border: #0000ff; --terminal-scrollbar: #0000ff; }
+.color-Cyan { --terminal-color: #00ffff; --terminal-prompt: #00ffff; --terminal-caret: #00ffff; --terminal-header-border: #00ffff; --terminal-scrollbar: #00ffff; }
+.color-Yellow { --terminal-color: #ffff00; --terminal-prompt: #ffff00; --terminal-caret: #ffff00; --terminal-header-border: #ffff00; --terminal-scrollbar: #ffff00; }
+.color-Magenta { --terminal-color: #ff00ff; --terminal-prompt: #ff00ff; --terminal-caret: #ff00ff; --terminal-header-border: #ff00ff; --terminal-scrollbar: #ff00ff; }
+.color-White { --terminal-color: #ffffff; --terminal-prompt: #ffffff; --terminal-caret: #ffffff; --terminal-header-border: #ffffff; --terminal-scrollbar: #ffffff; }
+/* .color-Black 已移除：黑字在黑底上会导致终端完全不可见 */
+.color-Gray { --terminal-color: #808080; --terminal-prompt: #808080; --terminal-caret: #808080; --terminal-header-border: #808080; --terminal-scrollbar: #808080; }
+.color-Orange { --terminal-color: #ffa500; --terminal-prompt: #ffa500; --terminal-caret: #ffa500; --terminal-header-border: #ffa500; --terminal-scrollbar: #ffa500; }
+.color-Purple { --terminal-color: #800080; --terminal-prompt: #800080; --terminal-caret: #800080; --terminal-header-border: #800080; --terminal-scrollbar: #800080; }
+.color-Pink { --terminal-color: #ffc0cb; --terminal-prompt: #ffc0cb; --terminal-caret: #ffc0cb; --terminal-header-border: #ffc0cb; --terminal-scrollbar: #ffc0cb; }
+.color-Brown { --terminal-color: #a52a2a; --terminal-prompt: #a52a2a; --terminal-caret: #a52a2a; --terminal-header-border: #a52a2a; --terminal-scrollbar: #a52a2a; }
+
+/* 加载动画 */
+.loading {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--terminal-color);
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ==========================================
+   扩展包UI组件样式 (Extension SDK v3.0)
+   ========================================== */
+
+/* 扩展面板 - 内嵌在终端输出中的可滚动内容区 */
+.ext-panel {
+    background: #0a0a0a;
+    border: 1px solid #00ff00;
+    border-radius: 4px;
+    margin: 8px 0;
+    padding: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.ext-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #333;
+    color: #00ff00;
+    font-weight: bold;
+}
+
+.ext-panel-close {
+    cursor: pointer;
+    color: #ff4444;
+    font-size: 16px;
+    padding: 0 4px;
+}
+
+.ext-panel-close:hover {
+    color: #ff0000;
+}
+
+.ext-panel-content {
+    color: #e0e0e0;
+    line-height: 1.6;
+    word-break: break-all;
+    white-space: pre-wrap;
+}
+
+/* 扩展对话框 - 模态覆盖层 */
+.ext-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+}
+
+.ext-dialog-box {
+    background: #111;
+    border: 1px solid #00ff00;
+    border-radius: 6px;
+    padding: 20px;
+    min-width: 320px;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+    animation: slideIn 0.2s ease;
+}
+
+.ext-dialog-title {
+    color: #00ff00;
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #333;
+}
+
+.ext-dialog-message {
+    color: #e0e0e0;
+    margin-bottom: 16px;
+    line-height: 1.5;
+    word-break: break-all;
+    white-space: pre-wrap;
+}
+
+.ext-dialog-input {
+    width: 100%;
+    background: #000;
+    color: #00ff00;
+    border: 1px solid #333;
+    padding: 8px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 14px;
+    margin-bottom: 12px;
+    outline: none;
+}
+
+.ext-dialog-input:focus {
+    border-color: #00ff00;
+}
+
+.ext-dialog-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.ext-dialog-btn {
+    background: #000;
+    color: #00ff00;
+    border: 1px solid #00ff00;
+    padding: 6px 16px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ext-dialog-btn:hover {
+    background: #00ff00;
+    color: #000;
+}
+
+.ext-dialog-btn.primary {
+    background: #00ff00;
+    color: #000;
+}
+
+.ext-dialog-btn.danger {
+    color: #ff4444;
+    border-color: #ff4444;
+}
+
+.ext-dialog-btn.danger:hover {
+    background: #ff4444;
+    color: #000;
+}
+
+/* 扩展按钮 - 内嵌终端输出中的操作按钮 */
+.ext-btn {
+    display: inline-block;
+    background: #000;
+    color: #00ff00;
+    border: 1px solid #00ff00;
+    padding: 4px 12px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    margin: 2px;
+    transition: all 0.2s;
+}
+
+.ext-btn:hover {
+    background: #00ff00;
+    color: #000;
+}
+
+.ext-btn.danger {
+    color: #ff4444;
+    border-color: #ff4444;
+}
+
+.ext-btn.danger:hover {
+    background: #ff4444;
+    color: #000;
+}
+
+/* 扩展进度条 */
+.ext-progress-bar {
+    width: 100%;
+    height: 20px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 3px;
+    margin: 4px 0;
+    overflow: hidden;
+}
+
+.ext-progress-fill {
+    height: 100%;
+    background: #00ff00;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #000;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+/* 扩展表格 */
+.ext-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    color: #e0e0e0;
+}
+
+.ext-table th,
+.ext-table td {
+    border: 1px solid #333;
+    padding: 6px 10px;
+    text-align: left;
+}
+
+.ext-table th {
+    background: #0a0a0a;
+    color: #00ff00;
+    font-weight: bold;
+}
+
+.ext-table tr:nth-child(even) {
+    background: #0d0d0d;
+}
+
+.ext-table tr:hover {
+    background: #1a1a1a;
+}
+
+/* 扩展标签 */
+.ext-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.ext-badge.success {
+    background: #00ff00;
+    color: #000;
+}
+
+.ext-badge.warning {
+    background: #ffff00;
+    color: #000;
+}
+
+.ext-badge.error {
+    background: #ff4444;
+    color: #fff;
+}
+
+.ext-badge.info {
+    background: #00ffff;
+    color: #000;
+}
+
+/* 扩展内联代码块 */
+.ext-code {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    color: #00ff00;
+}
+
+/* 扩展分割线 */
+.ext-divider {
+    border: none;
+    border-top: 1px solid #333;
+    margin: 12px 0;
+}
+
+/* 扩展浮动通知 */
+.ext-toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #111;
+    border: 1px solid #00ff00;
+    border-radius: 4px;
+    padding: 10px 16px;
+    color: #00ff00;
+    z-index: 2000;
+    animation: slideInRight 0.3s ease;
+    max-width: 400px;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
+}
+
+.ext-toast.error {
+    border-color: #ff4444;
+    color: #ff4444;
+}
+
+.ext-toast.warning {
+    border-color: #ffff00;
+    color: #ffff00;
+}
+
+/* 动画关键帧 */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
