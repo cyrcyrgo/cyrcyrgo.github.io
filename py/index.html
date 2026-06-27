@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="蟒蛇 - Python在线编译器，在浏览器中运行Python代码">
+    <title>蟒蛇 - Python在线编译器</title>
+    
+    <!-- 字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- 图标 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- 样式 -->
+    <link rel="stylesheet" href="css/style.css">
+    
+    <!-- 网站图标 -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
+</head>
+<body>
+    <!-- 加载遮罩 -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-logo">🐍</div>
+            <div class="loading-title" data-i18n="app.title">Python在线编译器</div>
+            <div class="loading-status" id="loading-status" data-i18n="loading.initPyodide">正在初始化 Python 运行时...</div>
+            <div class="loading-progress">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <div class="loading-hint" data-i18n="loading.firstLoad">首次加载需要下载约 10MB 的 Python 运行时</div>
+        </div>
+    </div>
+
+    <!-- 主应用 -->
+    <div id="app" class="python-ide">
+        <!-- 顶部菜单栏 -->
+        <header class="menu-bar">
+            <div class="menu-left">
+                <div class="logo">
+                    <span class="logo-icon">🐍</span>
+                    <span class="logo-text" data-i18n="app.name">蟒蛇</span>
+                    <span class="logo-version" data-i18n="app.version">v1.0.0</span>
+                </div>
+                
+                <nav class="main-menu">
+                    <div class="menu-item dropdown" id="menu-file">
+                        <span class="menu-label"><i class="fas fa-file"></i> <span data-i18n="menu.file">文件</span></span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-item" data-action="new-file">
+                                <i class="fas fa-file-plus"></i> <span data-i18n="file.new">新建文件</span>
+                                <span class="shortcut">Ctrl+N</span>
+                            </div>
+                            <div class="dropdown-item" data-action="open-file">
+                                <i class="fas fa-folder-open"></i> <span data-i18n="file.open">打开文件</span>
+                                <span class="shortcut">Ctrl+O</span>
+                            </div>
+                            <div class="dropdown-item" data-action="save-file">
+                                <i class="fas fa-save"></i> <span data-i18n="file.save">保存文件</span>
+                                <span class="shortcut">Ctrl+S</span>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-item" data-action="download-py">
+                                <i class="fas fa-download"></i> <span data-i18n="file.downloadPy">下载 .py 文件</span>
+                            </div>
+                            <div class="dropdown-item" data-action="download-html">
+                                <i class="fas fa-file-code"></i> <span data-i18n="file.downloadHtml">导出为 HTML</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="menu-item dropdown" id="menu-edit">
+                        <span class="menu-label"><i class="fas fa-edit"></i> <span data-i18n="menu.edit">编辑</span></span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-item" data-action="undo">
+                                <i class="fas fa-undo"></i> <span data-i18n="edit.undo">撤销</span>
+                                <span class="shortcut">Ctrl+Z</span>
+                            </div>
+                            <div class="dropdown-item" data-action="redo">
+                                <i class="fas fa-redo"></i> <span data-i18n="edit.redo">重做</span>
+                                <span class="shortcut">Ctrl+Y</span>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-item" data-action="cut">
+                                <i class="fas fa-cut"></i> <span data-i18n="edit.cut">剪切</span>
+                                <span class="shortcut">Ctrl+X</span>
+                            </div>
+                            <div class="dropdown-item" data-action="copy">
+                                <i class="fas fa-copy"></i> <span data-i18n="edit.copy">复制</span>
+                                <span class="shortcut">Ctrl+C</span>
+                            </div>
+                            <div class="dropdown-item" data-action="paste">
+                                <i class="fas fa-paste"></i> <span data-i18n="edit.paste">粘贴</span>
+                                <span class="shortcut">Ctrl+V</span>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-item" data-action="find">
+                                <i class="fas fa-search"></i> <span data-i18n="edit.find">查找</span>
+                                <span class="shortcut">Ctrl+F</span>
+                            </div>
+                            <div class="dropdown-item" data-action="replace">
+                                <i class="fas fa-exchange-alt"></i> <span data-i18n="edit.replace">替换</span>
+                                <span class="shortcut">Ctrl+H</span>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-item" data-action="format-code">
+                                <i class="fas fa-align-left"></i> <span data-i18n="edit.formatCode">格式化代码</span>
+                                <span class="shortcut">Shift+Alt+F</span>
+                            </div>
+                            <div class="dropdown-item" data-action="comment-toggle">
+                                <i class="fas fa-comment"></i> <span data-i18n="edit.commentToggle">注释/取消注释</span>
+                                <span class="shortcut">Ctrl+/</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="menu-item dropdown" id="menu-run">
+                        <span class="menu-label"><i class="fas fa-play"></i> <span data-i18n="menu.run">运行</span></span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-item" data-action="run-code">
+                                <i class="fas fa-play-circle"></i> <span data-i18n="run.runCode">运行代码</span>
+                                <span class="shortcut">F5</span>
+                            </div>
+                            <div class="dropdown-item" data-action="run-selection">
+                                <i class="fas fa-play"></i> <span data-i18n="run.runSelection">运行选中代码</span>
+                                <span class="shortcut">Shift+F5</span>
+                            </div>
+                            <div class="dropdown-item" data-action="stop">
+                                <i class="fas fa-stop"></i> <span data-i18n="run.stop">停止</span>
+                                <span class="shortcut">Ctrl+C</span>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-item" data-action="clear-console">
+                                <i class="fas fa-eraser"></i> <span data-i18n="run.clearConsole">清空控制台</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="menu-item dropdown" id="menu-packages">
+                        <span class="menu-label"><i class="fas fa-box"></i> <span data-i18n="menu.packages">包</span></span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-item" data-action="install-package">
+                                <i class="fas fa-download"></i> <span data-i18n="packages.install">安装包</span>
+                            </div>
+                            <div class="dropdown-item" data-action="list-packages">
+                                <i class="fas fa-list"></i> <span data-i18n="packages.installed">已安装包</span>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-item" data-action="install-numpy">
+                                <i class="fas fa-calculator"></i> <span data-i18n="packages.installNumpy">安装 NumPy</span>
+                            </div>
+                            <div class="dropdown-item" data-action="install-pandas">
+                                <i class="fas fa-table"></i> <span data-i18n="packages.installPandas">安装 Pandas</span>
+                            </div>
+                            <div class="dropdown-item" data-action="install-matplotlib">
+                                <i class="fas fa-chart-line"></i> <span data-i18n="packages.installMatplotlib">安装 Matplotlib</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="menu-item dropdown" id="menu-examples">
+                        <span class="menu-label"><i class="fas fa-book"></i> <span data-i18n="menu.examples">示例</span></span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-item" data-action="example-hello">
+                                <i class="fas fa-hand-wave"></i> <span data-i18n="example.hello">Hello World</span>
+                            </div>
+                            <div class="dropdown-item" data-action="example-calculator">
+                                <i class="fas fa-calculator"></i> <span data-i18n="example.calculator">计算器</span>
+                            </div>
+                            <div class="dropdown-item" data-action="example-loop">
+                                <i class="fas fa-sync"></i> <span data-i18n="example.loop">循环示例</span>
+                            </div>
+                            <div class="dropdown-item" data-action="example-function">
+                                <i class="fas fa-code"></i> <span data-i18n="example.function">函数示例</span>
+                            </div>
+                            <div class="dropdown-item" data-action="example-class">
+                                <i class="fas fa-cube"></i> <span data-i18n="example.class">类示例</span>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-item" data-action="example-numpy">
+                                <i class="fas fa-chart-bar"></i> <span data-i18n="example.numpy">NumPy 示例</span>
+                            </div>
+                            <div class="dropdown-item" data-action="example-matplotlib">
+                                <i class="fas fa-chart-pie"></i> <span data-i18n="example.matplotlib">Matplotlib 示例</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="menu-item dropdown" id="menu-help">
+                        <span class="menu-label"><i class="fas fa-question-circle"></i> <span data-i18n="menu.help">帮助</span></span>
+                        <div class="dropdown-menu">
+                            <div class="dropdown-item" data-action="documentation">
+                                <i class="fas fa-book-open"></i> <span data-i18n="help.documentation">Python 文档</span>
+                            </div>
+                            <div class="dropdown-item" data-action="shortcuts">
+                                <i class="fas fa-keyboard"></i> <span data-i18n="help.shortcuts">快捷键</span>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-item" data-action="about">
+                                <i class="fas fa-info-circle"></i> <span data-i18n="help.about">关于</span>
+                            </div>
+                            <div class="dropdown-item" data-action="disclaimer">
+                                <i class="fas fa-exclamation-triangle"></i> <span data-i18n="help.disclaimer">免责声明</span>
+                            </div>
+                        </div>
+                    </div>
+                </nav>
+            </div>
+            
+            <div class="menu-right">
+                <div class="file-name" id="file-name">
+                    <input type="text" value="main.py" id="file-name-input" title="文件名">
+                </div>
+                
+                <div class="status-indicators">
+                    <span class="indicator" id="python-status" title="Python 状态">
+                        <i class="fas fa-circle"></i> Python
+                    </span>
+                    <span class="indicator" id="memory-usage" title="内存使用">
+                        <i class="fas fa-memory"></i> --
+                    </span>
+                </div>
+                
+                <div class="menu-actions">
+                    <button class="btn btn-success" id="btn-run" data-i18n-title="shortcut.run" title="运行 (F5)">
+                        <i class="fas fa-play"></i> <span data-i18n="shortcut.run">运行</span>
+                    </button>
+                    <button class="btn btn-danger" id="btn-stop" data-i18n-title="run.stop" title="停止">
+                        <i class="fas fa-stop"></i>
+                    </button>
+                </div>
+                
+                <div class="language-selector">
+                    <select id="language-select" title="语言">
+                        <option value="zh-CN">中文</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主内容区域 -->
+        <main class="main-content">
+            <!-- 左侧边栏 -->
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-tabs">
+                    <button class="sidebar-tab active" data-tab="files">
+                        <i class="fas fa-folder"></i>
+                    </button>
+                    <button class="sidebar-tab" data-tab="outline">
+                        <i class="fas fa-list"></i>
+                    </button>
+                    <button class="sidebar-tab" data-tab="snippets">
+                        <i class="fas fa-code"></i>
+                    </button>
+                </div>
+                
+                <div class="sidebar-content">
+                    <!-- 文件面板 -->
+                    <div class="sidebar-panel active" id="panel-files">
+                        <div class="panel-header">
+                            <span data-i18n="sidebar.files">文件</span>
+                            <div class="panel-actions">
+                                <button class="btn btn-icon btn-sm" id="btn-new-file" data-i18n-title="file.new" title="新建文件">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="file-tree" id="file-tree">
+                            <!-- 文件列表 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 大纲面板 -->
+                    <div class="sidebar-panel" id="panel-outline">
+                        <div class="panel-header">
+                            <span data-i18n="sidebar.outline">大纲</span>
+                        </div>
+                        <div class="outline-list" id="outline-list">
+                            <!-- 代码大纲 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 代码片段面板 -->
+                    <div class="sidebar-panel" id="panel-snippets">
+                        <div class="panel-header">
+                            <span data-i18n="sidebar.snippets">代码片段</span>
+                        </div>
+                        <div class="snippets-list" id="snippets-list">
+                            <!-- 预设代码片段 -->
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 编辑器区域 -->
+            <div class="editor-container">
+                <!-- 标签栏 -->
+                <div class="editor-tabs" id="editor-tabs">
+                    <div class="editor-tab active" data-file="main.py">
+                        <i class="fab fa-python"></i>
+                        <span>main.py</span>
+                        <button class="close-tab"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                
+                <!-- Monaco编辑器 -->
+                <div class="editor-wrapper">
+                    <div id="monaco-editor" class="monaco-editor"></div>
+                </div>
+                
+                <!-- 行号指示器 -->
+                <div class="line-indicator" id="line-indicator">
+                    <span>行 1, 列 1</span>
+                </div>
+            </div>
+
+            <!-- 右侧面板（输出/控制台） -->
+            <div class="output-panel" id="output-panel">
+                <div class="output-tabs">
+                    <button class="output-tab active" data-tab="console">
+                        <i class="fas fa-terminal"></i> <span data-i18n="console.title">控制台</span>
+                    </button>
+                    <button class="output-tab" data-tab="output">
+                        <i class="fas fa-print"></i> <span data-i18n="console.output">输出</span>
+                    </button>
+                    <button class="output-tab" data-tab="problems">
+                        <i class="fas fa-exclamation-circle"></i> <span data-i18n="console.problems">问题</span>
+                        <span class="badge" id="problems-count">0</span>
+                    </button>
+                    <button class="output-tab" data-tab="variables">
+                        <i class="fas fa-database"></i> <span data-i18n="console.variables">变量</span>
+                    </button>
+                </div>
+                
+                <div class="output-content">
+                    <!-- 控制台 -->
+                    <div class="output-view active" id="view-console">
+                        <div class="console-toolbar">
+                            <button class="btn btn-icon btn-sm" id="btn-clear-console" title="清空">
+                                <i class="fas fa-eraser"></i>
+                            </button>
+                            <button class="btn btn-icon btn-sm" id="btn-export-console" title="导出">
+                                <i class="fas fa-download"></i>
+                            </button>
+                            <div class="console-filter">
+                                <button class="filter-btn active" data-filter="all">全部</button>
+                                <button class="filter-btn" data-filter="output">输出</button>
+                                <button class="filter-btn" data-filter="error">错误</button>
+                                <button class="filter-btn" data-filter="warning">警告</button>
+                            </div>
+                        </div>
+                        <div class="console-output" id="console-output">
+                            <div class="console-welcome">
+                                <span class="python-logo">🐍</span>
+                                <span class="welcome-text">Python 在线编译器 - 蟒蛇 v1.0.0</span>
+                                <span class="python-version" id="python-version"></span>
+                            </div>
+                        </div>
+                        <div class="console-input-wrapper">
+                            <span class="console-prompt">&gt;&gt;&gt;</span>
+                            <input type="text" id="console-input" class="console-input" data-i18n-placeholder="console.inputPlaceholder" placeholder="输入 Python 表达式...">
+                            <button class="btn btn-sm" id="btn-console-enter">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                        <div class="console-status-line">
+                            <span class="status-dot idle" id="status-dot"></span>
+                            <span class="status-dot-text" id="status-dot-text">空闲中</span>
+                            <button class="btn btn-sm btn-ghost btn-cancel-input" id="btn-cancel-input" style="display:none; margin-left: auto;" data-i18n-title="console.cancelInput" title="取消输入">
+                                <i class="fas fa-times"></i> <span data-i18n="console.cancelInput">取消输入</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 输出视图 -->
+                    <div class="output-view" id="view-output">
+                        <div class="output-content-inner" id="output-content"></div>
+                    </div>
+                    
+                    <!-- 问题视图 -->
+                    <div class="output-view" id="view-problems">
+                        <div class="problems-toolbar">
+                            <div class="problems-mode-toggle">
+                                <span class="mode-label">分析模式:</span>
+                                <button class="mode-btn active" data-mode="simple" id="mode-simple">简易</button>
+                                <button class="mode-btn" data-mode="advanced" id="mode-advanced">进阶</button>
+                            </div>
+                            <button class="btn btn-icon btn-sm" id="btn-analyze" title="手动分析">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="problems-container">
+                            <div class="logix-watermark" aria-hidden="true">
+                                <div class="logix-watermark__grid">
+                                    <span>LogiX</span><span>LogiX</span><span>LogiX</span>
+                                    <span>LogiX</span><span>LogiX</span><span>LogiX</span>
+                                    <span>LogiX</span><span>LogiX</span><span>LogiX</span>
+                                </div>
+                            </div>
+                            <div class="problems-list" id="problems-list"></div>
+                        </div>
+                        <div class="logix-footer" id="logix-footer">
+                            <span class="logix-brand">
+                                <span class="logix-brand__chip"><i class="fas fa-microchip"></i></span>
+                                <span class="logix-brand__text">由 <strong>LogiX</strong> 分析引擎提供技术支持</span>
+                            </span>
+                            <span class="logix-stats" id="logix-stats">
+                                <span class="logix-stats__dot"></span>
+                                <span class="logix-stats__label">v3.0.0 · 就绪</span>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- 变量视图 -->
+                    <div class="output-view" id="view-variables">
+                        <div class="variables-list" id="variables-list"></div>
+                    </div>
+                </div>
+                
+                <!-- 面板调整器 -->
+                <div class="panel-resizer" id="panel-resizer"></div>
+            </div>
+        </main>
+
+        <!-- 底部状态栏 -->
+        <footer class="status-bar">
+            <div class="status-left">
+                <span class="status-item" id="status-ready">
+                    <i class="fas fa-check-circle"></i> <span data-i18n="status.ready">就绪</span>
+                </span>
+            </div>
+            <div class="status-center">
+                <span class="status-item" id="status-message"></span>
+            </div>
+            <div class="status-right">
+                <span class="status-item" id="status-position">行 1, 列 1</span>
+                <span class="status-item" id="status-encoding">UTF-8</span>
+                <span class="status-item" id="status-eol">LF</span>
+                <span class="status-item">
+                    <i class="fab fa-python"></i> Python
+                </span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- 模态框容器 -->
+    <div id="modal-container"></div>
+    
+    <!-- Toast通知 -->
+    <div id="toast-container"></div>
+    
+    <!-- 右键菜单 -->
+    <div id="context-menu" class="context-menu"></div>
+
+    <!-- Pyodide 由 js/pyodide-manager.js 动态按需加载，避免重复引入 -->
+    
+    <!-- Monaco Editor - 使用国内镜像 -->
+    <script src="https://cdn.jsdmirror.com/npm/monaco-editor@0.45.0/min/vs/loader.min.js"></script>
+    
+    <!-- 应用脚本 -->
+    <script src="js/i18n.js"></script>
+    <script src="js/pyodide-manager.js"></script>
+    <script src="js/analyzer.js"></script>
+    <script src="js/editor-manager.js"></script>
+    <script src="js/console-manager.js"></script>
+    <script src="js/file-manager.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
