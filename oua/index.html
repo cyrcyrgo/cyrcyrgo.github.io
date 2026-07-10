@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>加密计算</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+  }
+  .container {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 50px 40px;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 420px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  h1 {
+    font-size: 24px;
+    margin-bottom: 30px;
+    background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .input-group {
+    margin-bottom: 25px;
+    text-align: left;
+  }
+  label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #bbb;
+  }
+  input[type="password"] {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+    font-size: 16px;
+    outline: none;
+    transition: all 0.3s;
+  }
+  input[type="password"]:focus {
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.15);
+  }
+  button {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(123, 47, 247, 0.3);
+  }
+  button:active {
+    transform: translateY(0);
+  }
+  .error {
+    color: #ff6b6b;
+    font-size: 14px;
+    margin-top: 15px;
+    min-height: 20px;
+  }
+  .hidden { display: none; }
+  .loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #00d4ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 25px;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .countdown {
+    font-size: 48px;
+    font-weight: bold;
+    margin: 20px 0;
+    font-family: "Courier New", monospace;
+    background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .status-text {
+    font-size: 16px;
+    color: #bbb;
+    margin-bottom: 10px;
+  }
+  .progress-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 20px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+    width: 0%;
+    transition: width 1s linear;
+  }
+  .result {
+    font-size: 72px;
+    font-weight: bold;
+    background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: fadeIn 0.8s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .result-label {
+    font-size: 14px;
+    color: #bbb;
+    margin-bottom: 15px;
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div id="login-screen">
+      <h1>请输入密码</h1>
+      <div class="input-group">
+        <label for="password">密码</label>
+        <input type="password" id="password" placeholder="请输入密码" autocomplete="off">
+      </div>
+      <button onclick="checkPassword()">确认</button>
+      <div class="error" id="error-msg"></div>
+    </div>
+
+    <div id="loading-screen" class="hidden">
+      <h1>正在加密计算中</h1>
+      <div class="loading-spinner"></div>
+      <div class="status-text">剩余时间</div>
+      <div class="countdown" id="countdown">03:00</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </div>
+
+    <div id="result-screen" class="hidden">
+      <div class="result-label">加密计算完成</div>
+      <div class="result" id="result-text">you</div>
+    </div>
+  </div>
+
+<script>
+  const CORRECT_PASSWORD = "asdfghjkl";
+  const TOTAL_SECONDS = 180;
+
+  function checkPassword() {
+    const input = document.getElementById("password").value;
+    const errorMsg = document.getElementById("error-msg");
+    
+    if (input === CORRECT_PASSWORD) {
+      errorMsg.textContent = "";
+      startEncryption();
+    } else {
+      errorMsg.textContent = "密码错误，请重试";
+    }
+  }
+
+  function startEncryption() {
+    document.getElementById("login-screen").classList.add("hidden");
+    document.getElementById("loading-screen").classList.remove("hidden");
+    
+    let remaining = TOTAL_SECONDS;
+    const countdownEl = document.getElementById("countdown");
+    const progressFill = document.getElementById("progress-fill");
+    
+    updateDisplay(remaining);
+    
+    const timer = setInterval(() => {
+      remaining--;
+      updateDisplay(remaining);
+      
+      const progress = ((TOTAL_SECONDS - remaining) / TOTAL_SECONDS) * 100;
+      progressFill.style.width = progress + "%";
+      
+      if (remaining <= 0) {
+        clearInterval(timer);
+        showResult();
+      }
+    }, 1000);
+  }
+
+  function updateDisplay(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    document.getElementById("countdown").textContent =
+      String(mins).padStart(2, "0") + ":" + String(secs).padStart(2, "0");
+  }
+
+  function showResult() {
+    document.getElementById("loading-screen").classList.add("hidden");
+    document.getElementById("result-screen").classList.remove("hidden");
+  }
+
+  document.getElementById("password").addEventListener("keypress", (e) => {
+    if (e.key === "Enter") checkPassword();
+  });
+</script>
+</body>
+</html>
