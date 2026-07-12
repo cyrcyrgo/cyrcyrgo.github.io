@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HH Paint - WebNT</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --text: #e0e0e0;
+    --accent: #ce93d8;
+    --surface: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.08);
+    --hover: rgba(255,255,255,0.08);
+    --active: rgba(206,147,216,0.25);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+  /* 菜单栏 */
+  .menu-bar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 8px;
+    background: rgba(0,0,0,0.3);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .menu-item {
+    position: relative;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: #ccc;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .menu-item:hover { background: var(--hover); }
+  .menu-item.open { background: var(--active); }
+  .menu-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 180px;
+    background: #222;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px;
+    z-index: 1000;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .menu-item.open .menu-dropdown { display: block; }
+  .menu-dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 12px;
+    font-size: 12px;
+    color: #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .menu-dropdown-item:hover { background: var(--hover); }
+  .menu-dropdown-item .shortcut { color: #666; font-size: 11px; margin-left: 24px; }
+  .menu-separator {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 8px;
+  }
+  /* 工具栏 */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .tool-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 4px;
+    border-right: 1px solid var(--border);
+  }
+  .tool-group:last-child { border-right: none; }
+  .tool-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #aaa;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.15s;
+  }
+  .tool-btn:hover { background: var(--hover); color: #fff; }
+  .tool-btn.active { background: var(--active); color: var(--accent); }
+  .tool-btn[title] { position: relative; }
+  .toolbar input[type="color"] {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+    padding: 2px;
+  }
+  .toolbar input[type="range"] {
+    width: 80px;
+    height: 4px;
+    accent-color: var(--accent);
+  }
+  .toolbar .size-label {
+    font-size: 11px;
+    color: #888;
+    min-width: 20px;
+    text-align: center;
+  }
+  /* 画布区域 */
+  .canvas-area {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #2a2a3e;
+    background-image:
+      linear-gradient(45deg, #333 25%, transparent 25%),
+      linear-gradient(-45deg, #333 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #333 75%),
+      linear-gradient(-45deg, transparent 75%, #333 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  }
+  .canvas-scroll {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+  }
+  .canvas-wrapper {
+    position: relative;
+    display: inline-block;
+    margin: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  #paint-canvas {
+    display: block;
+    cursor: crosshair;
+    background: #fff;
+  }
+  #paint-canvas.eraser { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><circle cx='8' cy='8' r='6' fill='none' stroke='black' stroke-width='1.5'/></svg>") 8 8, crosshair; }
+  #paint-canvas.text-mode { cursor: text; }
+  #paint-canvas.fill-mode { cursor: cell; }
+  /* 状态栏 */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 12px;
+    background: rgba(0,0,0,0.3);
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: #777;
+    flex-shrink: 0;
+  }
+  .status-bar .pos { min-width: 100px; }
+  /* 颜色面板 */
+  .color-palette {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+  }
+  .color-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  .color-swatch:hover { border-color: #fff; }
+  .color-swatch.active { border: 2px solid #fff; }
+</style>
+</head>
+<body>
+  <!-- 菜单栏 -->
+  <div class="menu-bar" id="menu-bar">
+    <div class="menu-item" data-menu="file">
+      文件
+      <div class="menu-dropdown">
+        <div class="menu-dropdown-item" data-action="new">新建 <span class="shortcut">Ctrl+N</span></div>
+        <div class="menu-dropdown-item" data-action="open">打开 <span class="shortcut">Ctrl+O</span></div>
+        <div class="menu-separator"></div>
+        <div class="menu-dropdown-item" data-action="save">保存 <span class="shortcut">Ctrl+S</span></div>
+        <div class="menu-dropdown-item" data-action="saveas">另存为 <span class="shortcut">Ctrl+Shift+S</span></div>
+      </div>
+    </div>
+    <div class="menu-item" data-menu="edit">
+      编辑
+      <div class="menu-dropdown">
+        <div class="menu-dropdown-item" data-action="undo">撤销 <span class="shortcut">Ctrl+Z</span></div>
+        <div class="menu-dropdown-item" data-action="redo">重做 <span class="shortcut">Ctrl+Y</span></div>
+        <div class="menu-separator"></div>
+        <div class="menu-dropdown-item" data-action="clear">清空画布</div>
+      </div>
+    </div>
+    <div class="menu-item" data-menu="view">
+      视图
+      <div class="menu-dropdown">
+        <div class="menu-dropdown-item" data-action="zoomIn">放大 <span class="shortcut">Ctrl++</span></div>
+        <div class="menu-dropdown-item" data-action="zoomOut">缩小 <span class="shortcut">Ctrl+-</span></div>
+        <div class="menu-dropdown-item" data-action="zoomReset">重置缩放 <span class="shortcut">Ctrl+0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 工具栏 -->
+  <div class="toolbar">
+    <div class="tool-group">
+      <button class="tool-btn active" data-tool="pencil" title="铅笔 (P)">&#9998;</button>
+      <button class="tool-btn" data-tool="eraser" title="橡皮 (E)">&#9003;</button>
+      <button class="tool-btn" data-tool="fill" title="填充 (G)">&#128396;</button>
+      <button class="tool-btn" data-tool="eyedropper" title="取色器 (I)">&#128065;</button>
+    </div>
+    <div class="tool-group">
+      <button class="tool-btn" data-tool="line" title="直线 (L)">&#8213;</button>
+      <button class="tool-btn" data-tool="rect" title="矩形 (R)">&#9634;</button>
+      <button class="tool-btn" data-tool="circle" title="圆形 (C)">&#9711;</button>
+    </div>
+    <div class="tool-group">
+      <input type="color" id="color-picker" value="#333333" title="前景色">
+      <div class="color-palette" id="color-palette">
+        <span class="color-swatch active" data-color="#333333" style="background:#333333"></span>
+        <span class="color-swatch" data-color="#e74c3c" style="background:#e74c3c"></span>
+        <span class="color-swatch" data-color="#e67e22" style="background:#e67e22"></span>
+        <span class="color-swatch" data-color="#f1c40f" style="background:#f1c40f"></span>
+        <span class="color-swatch" data-color="#2ecc71" style="background:#2ecc71"></span>
+        <span class="color-swatch" data-color="#3498db" style="background:#3498db"></span>
+        <span class="color-swatch" data-color="#9b59b6" style="background:#9b59b6"></span>
+        <span class="color-swatch" data-color="#1abc9c" style="background:#1abc9c"></span>
+        <span class="color-swatch" data-color="#ecf0f1" style="background:#ecf0f1"></span>
+        <span class="color-swatch" data-color="#95a5a6" style="background:#95a5a6"></span>
+      </div>
+    </div>
+    <div class="tool-group">
+      <input type="range" id="brush-size" min="1" max="30" value="3" title="画笔大小">
+      <span class="size-label" id="size-label">3px</span>
+    </div>
+    <div class="tool-group">
+      <button class="tool-btn" id="btn-undo" title="撤销 (Ctrl+Z)">&#8630;</button>
+      <button class="tool-btn" id="btn-redo" title="重做 (Ctrl+Y)">&#8631;</button>
+    </div>
+  </div>
+
+  <!-- 画布 -->
+  <div class="canvas-area">
+    <div class="canvas-scroll" id="canvas-scroll">
+      <div class="canvas-wrapper" id="canvas-wrapper">
+        <canvas id="paint-canvas" width="800" height="600"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 状态栏 -->
+  <div class="status-bar">
+    <span id="status-pos">0, 0</span>
+    <span id="status-tool">铅笔</span>
+    <span id="status-canvas-size">800 x 600</span>
+    <span id="status-file">未保存</span>
+  </div>
+
+  <!-- 隐藏的文件输入 -->
+  <input type="file" id="file-input" accept=".hh1" style="display:none">
+
+<script>
+(function() {
+  const canvas = document.getElementById('paint-canvas');
+  const ctx = canvas.getContext('2d');
+  const canvasWrapper = document.getElementById('canvas-wrapper');
+  const canvasScroll = document.getElementById('canvas-scroll');
+  const fileInput = document.getElementById('file-input');
+  const colorPicker = document.getElementById('color-picker');
+  const brushSizeSlider = document.getElementById('brush-size');
+  const sizeLabel = document.getElementById('size-label');
+
+  // ============ 状态 ============
+  let currentTool = 'pencil';
+  let currentColor = '#333333';
+  let brushSize = 3;
+  let drawing = false;
+  let startX = 0, startY = 0;
+  let zoomLevel = 1;
+  let currentFileName = null;
+  let modified = false;
+
+  // 撤销/重做
+  const MAX_HISTORY = 50;
+  let undoStack = [];
+  let redoStack = [];
+
+  // 形状绘制时的临时快照
+  let shapeSnapshot = null;
+
+  // ============ 初始化画布 ============
+  function initCanvas() {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    saveState();
+    updateStatus();
+  }
+
+  function saveState() {
+    undoStack.push(canvas.toDataURL());
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack = [];
+    modified = true;
+    updateStatus();
+  }
+
+  function loadState(dataUrl) {
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = dataUrl;
+  }
+
+  function undo() {
+    if (undoStack.length <= 1) return;
+    redoStack.push(undoStack.pop());
+    loadState(undoStack[undoStack.length - 1]);
+    modified = true;
+    updateStatus();
+  }
+
+  function redo() {
+    if (redoStack.length === 0) return;
+    const state = redoStack.pop();
+    undoStack.push(state);
+    loadState(state);
+    modified = true;
+    updateStatus();
+  }
+
+  // ============ 工具管理 ============
+  function setTool(tool) {
+    currentTool = tool;
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`.tool-btn[data-tool="${tool}"]`);
+    if (btn) btn.classList.add('active');
+
+    canvas.classList.remove('eraser', 'text-mode', 'fill-mode');
+    if (tool === 'eraser') canvas.classList.add('eraser');
+    if (tool === 'fill') canvas.classList.add('fill-mode');
+
+    const toolNames = {
+      pencil: '铅笔', eraser: '橡皮', fill: '填充', eyedropper: '取色器',
+      line: '直线', rect: '矩形', circle: '圆形'
+    };
+    document.getElementById('status-tool').textContent = toolNames[tool] || tool;
+  }
+
+  // ============ 绘画事件 ============
+  function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) / zoomLevel,
+      y: (e.clientY - rect.top) / zoomLevel
+    };
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const pos = getCanvasPos(e);
+    startX = pos.x;
+    startY = pos.y;
+
+    if (currentTool === 'fill') {
+      floodFill(Math.floor(pos.x), Math.floor(pos.y), currentColor);
+      saveState();
+      return;
+    }
+
+    if (currentTool === 'eyedropper') {
+      const pixel = ctx.getImageData(Math.floor(pos.x), Math.floor(pos.y), 1, 1).data;
+      const hex = '#' + [pixel[0], pixel[1], pixel[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+      setColor(hex);
+      setTool('pencil');
+      return;
+    }
+
+    drawing = true;
+    ctx.strokeStyle = currentColor;
+    ctx.fillStyle = currentColor;
+    ctx.lineWidth = brushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (currentTool === 'pencil' || currentTool === 'eraser') {
+      if (currentTool === 'eraser') {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = brushSize * 2;
+      }
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+    } else if (currentTool === 'line' || currentTool === 'rect' || currentTool === 'circle') {
+      shapeSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    }
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    const pos = getCanvasPos(e);
+    document.getElementById('status-pos').textContent = `${Math.floor(pos.x)}, ${Math.floor(pos.y)}`;
+
+    if (!drawing) return;
+
+    if (currentTool === 'pencil' || currentTool === 'eraser') {
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+    } else if (currentTool === 'line' || currentTool === 'rect' || currentTool === 'circle') {
+      if (!shapeSnapshot) return;
+      ctx.putImageData(shapeSnapshot, 0, 0);
+      ctx.strokeStyle = currentColor;
+      ctx.fillStyle = currentColor;
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+
+      if (currentTool === 'line') {
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(pos.x, pos.y);
+      } else if (currentTool === 'rect') {
+        ctx.rect(startX, startY, pos.x - startX, pos.y - startY);
+      } else if (currentTool === 'circle') {
+        const rx = Math.abs(pos.x - startX) / 2;
+        const ry = Math.abs(pos.y - startY) / 2;
+        const cx = (startX + pos.x) / 2;
+        const cy = (startY + pos.y) / 2;
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+    }
+  });
+
+  canvas.addEventListener('pointerup', () => {
+    if (!drawing) return;
+    drawing = false;
+    shapeSnapshot = null;
+    saveState();
+  });
+
+  canvas.addEventListener('pointerleave', () => {
+    if (drawing) {
+      drawing = false;
+      shapeSnapshot = null;
+      saveState();
+    }
+  });
+
+  // ============ 填充工具 ============
+  function floodFill(startX, startY, fillColor) {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    const w = canvas.width;
+    const h = canvas.height;
+
+    const startIdx = (startY * w + startX) * 4;
+    const startR = data[startIdx];
+    const startG = data[startIdx + 1];
+    const startB = data[startIdx + 2];
+    const startA = data[startIdx + 3];
+
+    const fillR = parseInt(fillColor.slice(1, 3), 16);
+    const fillG = parseInt(fillColor.slice(3, 5), 16);
+    const fillB = parseInt(fillColor.slice(5, 7), 16);
+
+    if (startR === fillR && startG === fillG && startB === fillB && startA === 255) return;
+
+    const stack = [[startX, startY]];
+    const visited = new Uint8Array(w * h);
+
+    while (stack.length > 0) {
+      const [x, y] = stack.pop();
+      const idx = y * w + x;
+      if (x < 0 || x >= w || y < 0 || y >= h || visited[idx]) continue;
+      const pxIdx = idx * 4;
+      if (data[pxIdx] !== startR || data[pxIdx + 1] !== startG || data[pxIdx + 2] !== startB || data[pxIdx + 3] !== startA) continue;
+
+      visited[idx] = 1;
+      data[pxIdx] = fillR;
+      data[pxIdx + 1] = fillG;
+      data[pxIdx + 2] = fillB;
+      data[pxIdx + 3] = 255;
+
+      stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  // ============ 颜色 ============
+  function setColor(hex) {
+    currentColor = hex;
+    colorPicker.value = hex;
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+    const swatch = document.querySelector(`.color-swatch[data-color="${hex}"]`);
+    if (swatch) swatch.classList.add('active');
+  }
+
+  colorPicker.addEventListener('input', () => setColor(colorPicker.value));
+
+  document.querySelectorAll('.color-swatch').forEach(s => {
+    s.addEventListener('click', () => setColor(s.dataset.color));
+  });
+
+  brushSizeSlider.addEventListener('input', () => {
+    brushSize = parseInt(brushSizeSlider.value);
+    sizeLabel.textContent = brushSize + 'px';
+  });
+
+  // ============ 工具栏按钮 ============
+  document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+    btn.addEventListener('click', () => setTool(btn.dataset.tool));
+  });
+
+  document.getElementById('btn-undo').addEventListener('click', undo);
+  document.getElementById('btn-redo').addEventListener('click', redo);
+
+  // ============ 菜单 ============
+  let openMenu = null;
+
+  document.querySelectorAll('.menu-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (openMenu === item) {
+        item.classList.remove('open');
+        openMenu = null;
+      } else {
+        if (openMenu) openMenu.classList.remove('open');
+        item.classList.add('open');
+        openMenu = item;
+      }
+    });
+  });
+
+  document.querySelectorAll('.menu-dropdown-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (openMenu) openMenu.classList.remove('open');
+      openMenu = null;
+      const action = item.dataset.action;
+      handleMenuAction(action);
+    });
+  });
+
+  document.addEventListener('click', () => {
+    if (openMenu) { openMenu.classList.remove('open'); openMenu = null; }
+  });
+
+  function handleMenuAction(action) {
+    switch(action) {
+      case 'new': newFile(); break;
+      case 'open': openFile(); break;
+      case 'save': saveFile(); break;
+      case 'saveas': saveFileAs(); break;
+      case 'undo': undo(); break;
+      case 'redo': redo(); break;
+      case 'clear': clearCanvas(); break;
+      case 'zoomIn': zoomIn(); break;
+      case 'zoomOut': zoomOut(); break;
+      case 'zoomReset': zoomReset(); break;
+    }
+  }
+
+  // ============ 文件操作 ============
+  function newFile() {
+    if (modified && !confirm('当前绘画未保存，是否继续？')) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    undoStack = [];
+    redoStack = [];
+    modified = false;
+    currentFileName = null;
+    saveState();
+    updateStatus();
+  }
+
+  function openFile() {
+    fileInput.click();
+  }
+
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (modified && !confirm('当前绘画未保存，是否继续？')) {
+      fileInput.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const hh1 = JSON.parse(ev.target.result);
+        if (hh1.format !== 'hh1') throw new Error('无效的文件格式');
+        const img = new Image();
+        img.onload = () => {
+          canvas.width = hh1.width;
+          canvas.height = hh1.height;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+          currentFileName = file.name;
+          modified = false;
+          undoStack = [];
+          redoStack = [];
+          saveState();
+          updateStatus();
+          updateCanvasWrapper();
+        };
+        img.src = hh1.data;
+        fileInput.value = '';
+      } catch(err) {
+        alert('无法打开文件：' + err.message);
+        fileInput.value = '';
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  function saveFile() {
+    if (currentFileName) {
+      downloadHH1(currentFileName);
+      modified = false;
+      updateStatus();
+    } else {
+      saveFileAs();
+    }
+  }
+
+  function saveFileAs() {
+    const name = prompt('请输入文件名：', currentFileName || '未命名.hh1');
+    if (!name) return;
+    const fileName = name.endsWith('.hh1') ? name : name + '.hh1';
+    currentFileName = fileName;
+    downloadHH1(fileName);
+    modified = false;
+    updateStatus();
+  }
+
+  function downloadHH1(fileName) {
+    const hh1Data = {
+      version: '1.0',
+      format: 'hh1',
+      width: canvas.width,
+      height: canvas.height,
+      data: canvas.toDataURL('image/png'),
+      created: new Date().toISOString(),
+      app: 'HH Paint'
+    };
+    const blob = new Blob([JSON.stringify(hh1Data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function clearCanvas() {
+    if (!confirm('确定要清空画布吗？此操作不可撤销。')) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    saveState();
+  }
+
+  // ============ 缩放 ============
+  function zoomIn() {
+    zoomLevel = Math.min(5, zoomLevel + 0.2);
+    applyZoom();
+  }
+
+  function zoomOut() {
+    zoomLevel = Math.max(0.2, zoomLevel - 0.2);
+    applyZoom();
+  }
+
+  function zoomReset() {
+    zoomLevel = 1;
+    applyZoom();
+  }
+
+  function applyZoom() {
+    canvasWrapper.style.transform = `scale(${zoomLevel})`;
+    canvasWrapper.style.transformOrigin = 'top left';
+  }
+
+  function updateCanvasWrapper() {
+    canvasWrapper.style.transform = `scale(${zoomLevel})`;
+    canvasWrapper.style.transformOrigin = 'top left';
+  }
+
+  // ============ 状态栏 ============
+  function updateStatus() {
+    document.getElementById('status-canvas-size').textContent = `${canvas.width} x ${canvas.height}`;
+    document.getElementById('status-file').textContent = modified
+      ? (currentFileName ? `${currentFileName} (已修改)` : '未保存')
+      : (currentFileName || '新建');
+  }
+
+  // ============ 键盘快捷键 ============
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      switch(e.key.toLowerCase()) {
+        case 'z': e.preventDefault(); undo(); break;
+        case 'y': e.preventDefault(); redo(); break;
+        case 's':
+          e.preventDefault();
+          if (e.shiftKey) saveFileAs();
+          else saveFile();
+          break;
+        case 'n': e.preventDefault(); newFile(); break;
+        case 'o': e.preventDefault(); openFile(); break;
+        case '=': case '+': e.preventDefault(); zoomIn(); break;
+        case '-': e.preventDefault(); zoomOut(); break;
+        case '0': e.preventDefault(); zoomReset(); break;
+      }
+    } else {
+      switch(e.key.toLowerCase()) {
+        case 'p': setTool('pencil'); break;
+        case 'e': setTool('eraser'); break;
+        case 'g': setTool('fill'); break;
+        case 'i': setTool('eyedropper'); break;
+        case 'l': setTool('line'); break;
+        case 'r': setTool('rect'); break;
+        case 'c': setTool('circle'); break;
+      }
+    }
+  });
+
+  // ============ 启动 ============
+  initCanvas();
+  updateCanvasWrapper();
+  updateStatus();
+})();
+</script>
+</body>
+</html>
