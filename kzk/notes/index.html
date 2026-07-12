@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sticky Notes</title>
+<style>
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+
+.header h1 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #ffcc02;
+  letter-spacing: 0.02em;
+}
+
+.header .note-count {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.add-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid #ffcc02;
+  background: transparent;
+  color: #ffcc02;
+  font-size: 1.6rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.add-btn:hover {
+  background: #ffcc02;
+  color: #1a1a2e;
+  transform: rotate(90deg);
+}
+
+/* ── Notes Grid ── */
+.notes-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+  align-content: start;
+}
+
+.notes-grid::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notes-grid::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.12);
+  border-radius: 3px;
+}
+
+/* ── Single Note ── */
+.note {
+  position: relative;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 200px;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  animation: noteIn 0.35s ease-out;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.note.removing {
+  animation: noteOut 0.3s ease-in forwards;
+}
+
+@keyframes noteIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes noteOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.8) translateY(10px);
+  }
+}
+
+/* ── Note color themes ── */
+.note.yellow  { background: #3d3a20; border-color: rgba(255,204,2,0.25); }
+.note.pink    { background: #3d2030; border-color: rgba(255,100,140,0.25); }
+.note.blue    { background: #203040; border-color: rgba(80,160,255,0.25); }
+.note.green   { background: #203830; border-color: rgba(80,220,140,0.25); }
+.note.orange  { background: #3d3020; border-color: rgba(255,160,40,0.25); }
+.note.purple  { background: #302040; border-color: rgba(180,120,255,0.25); }
+
+/* ── Note body ── */
+.note-body {
+  flex: 1;
+  outline: none;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: #e0e0e0;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  min-height: 80px;
+  cursor: text;
+}
+
+.note-body:empty::before {
+  content: "双击此处输入内容…";
+  color: #666;
+  pointer-events: none;
+}
+
+.note-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.note-body::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+}
+
+/* ── Note footer ── */
+.note-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.note-timestamp {
+  font-size: 0.72rem;
+  color: #777;
+  white-space: nowrap;
+}
+
+.note-charcount {
+  font-size: 0.72rem;
+  color: #777;
+  white-space: nowrap;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Color picker ── */
+.color-picker {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.color-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.color-dot:hover {
+  transform: scale(1.3);
+}
+
+.color-dot.active {
+  border-color: #fff;
+  transform: scale(1.2);
+}
+
+.color-dot.yellow  { background: #ccb000; }
+.color-dot.pink    { background: #d4607e; }
+.color-dot.blue    { background: #5090d0; }
+.color-dot.green   { background: #50b080; }
+.color-dot.orange  { background: #d08040; }
+.color-dot.purple  { background: #9060c0; }
+
+/* ── Delete button ── */
+.delete-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.08);
+  color: #aaa;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.delete-btn:hover {
+  background: rgba(255,70,70,0.25);
+  color: #ff6666;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  color: #555;
+  text-align: center;
+  animation: fadeIn 0.5s ease;
+}
+
+.empty-state .icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .notes-grid {
+    grid-template-columns: 1fr;
+    padding: 16px;
+    gap: 14px;
+  }
+  .header {
+    padding: 12px 16px;
+  }
+  .header h1 {
+    font-size: 1.15rem;
+  }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="header">
+    <h1>📌 Sticky Notes</h1>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <span class="note-count" id="noteCount">0 条笔记</span>
+      <button class="add-btn" id="addBtn" title="添加笔记">+</button>
+    </div>
+  </div>
+  <div class="notes-grid" id="notesGrid"></div>
+</div>
+
+<script>
+(() => {
+
+const STORAGE_KEY = 'webnt_sticky_notes';
+const COLORS = ['yellow', 'pink', 'blue', 'green', 'orange', 'purple'];
+
+const notesGrid = document.getElementById('notesGrid');
+const addBtn = document.getElementById('addBtn');
+const noteCount = document.getElementById('noteCount');
+
+// ── Data ──
+
+function loadNotes() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveNotes(notes) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+}
+
+let notes = loadNotes();
+
+// ── Render ──
+
+function updateCount() {
+  const n = notes.length;
+  noteCount.textContent = n + ' 条笔记';
+}
+
+function createNoteElement(note) {
+  const div = document.createElement('div');
+  div.className = 'note ' + note.color;
+  div.dataset.id = note.id;
+
+  const body = document.createElement('div');
+  body.className = 'note-body';
+  body.contentEditable = 'true';
+  body.textContent = note.text || '';
+  body.addEventListener('input', () => {
+    updateNoteText(note.id, body.innerText);
+    updateCharCount(div, body.innerText);
+  });
+
+  const footer = document.createElement('div');
+  footer.className = 'note-footer';
+
+  const footerLeft = document.createElement('div');
+  footerLeft.className = 'footer-left';
+
+  const ts = document.createElement('span');
+  ts.className = 'note-timestamp';
+  ts.textContent = formatTime(note.createdAt);
+
+  const cc = document.createElement('span');
+  cc.className = 'note-charcount';
+  cc.textContent = (note.text || '').length + ' 字';
+
+  footerLeft.appendChild(ts);
+  footerLeft.appendChild(cc);
+
+  const footerRight = document.createElement('div');
+  footerRight.className = 'footer-right';
+
+  const colorPicker = document.createElement('div');
+  colorPicker.className = 'color-picker';
+  COLORS.forEach(c => {
+    const dot = document.createElement('span');
+    dot.className = 'color-dot ' + c + (c === note.color ? ' active' : '');
+    dot.title = c;
+    dot.addEventListener('click', () => setNoteColor(note.id, c, div, colorPicker));
+    colorPicker.appendChild(dot);
+  });
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'delete-btn';
+  delBtn.innerHTML = '&#10005;';
+  delBtn.title = '删除';
+  delBtn.addEventListener('click', () => removeNote(note.id, div));
+
+  footerRight.appendChild(colorPicker);
+  footerRight.appendChild(delBtn);
+
+  footer.appendChild(footerLeft);
+  footer.appendChild(footerRight);
+
+  div.appendChild(body);
+  div.appendChild(footer);
+
+  return div;
+}
+
+function updateCharCount(noteEl, text) {
+  const cc = noteEl.querySelector('.note-charcount');
+  if (cc) cc.textContent = (text || '').length + ' 字';
+}
+
+function renderAll() {
+  notesGrid.innerHTML = '';
+  if (notes.length === 0) {
+    notesGrid.innerHTML = '<div class="empty-state"><div class="icon">📝</div><p>还没有笔记<br>点击右上角 <strong>+</strong> 按钮创建第一条</p></div>';
+  } else {
+    notes.forEach(note => {
+      notesGrid.appendChild(createNoteElement(note));
+    });
+  }
+  updateCount();
+}
+
+// ── Actions ──
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return pad(d.getMonth() + 1) + '/' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+function addNote() {
+  const note = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    text: '',
+    color: COLORS[notes.length % COLORS.length],
+    createdAt: Date.now()
+  };
+  notes.unshift(note);
+  saveNotes(notes);
+
+  const el = createNoteElement(note);
+  notesGrid.prepend(el);
+  updateCount();
+
+  // Remove empty state if present
+  const empty = notesGrid.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  // Focus the new note
+  const body = el.querySelector('.note-body');
+  if (body) body.focus();
+}
+
+function updateNoteText(id, text) {
+  const note = notes.find(n => n.id === id);
+  if (note) {
+    note.text = text;
+    saveNotes(notes);
+  }
+}
+
+function setNoteColor(id, color, noteEl, pickerEl) {
+  const note = notes.find(n => n.id === id);
+  if (!note) return;
+  note.color = color;
+  saveNotes(notes);
+
+  // Update DOM
+  noteEl.className = 'note ' + color;
+  const dots = pickerEl.querySelectorAll('.color-dot');
+  dots.forEach(d => d.classList.remove('active'));
+  const active = pickerEl.querySelector('.color-dot.' + color);
+  if (active) active.classList.add('active');
+}
+
+function removeNote(id, noteEl) {
+  noteEl.classList.add('removing');
+  noteEl.addEventListener('animationend', () => {
+    notes = notes.filter(n => n.id !== id);
+    saveNotes(notes);
+    noteEl.remove();
+    updateCount();
+    if (notes.length === 0) {
+      notesGrid.innerHTML = '<div class="empty-state"><div class="icon">📝</div><p>还没有笔记<br>点击右上角 <strong>+</strong> 按钮创建第一条</p></div>';
+    }
+  }, { once: true });
+}
+
+// ── Init ──
+
+addBtn.addEventListener('click', addNote);
+
+// Keyboard shortcut: Ctrl+N / Cmd+N to add note
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+    e.preventDefault();
+    addNote();
+  }
+});
+
+renderAll();
+
+})();
+</script>
+
+</body>
+</html>

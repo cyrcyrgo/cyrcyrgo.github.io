@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Typing Practice - WebNT</title>
+<style>
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  overflow: hidden;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #64b5f6;
+  letter-spacing: 0.5px;
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+}
+
+.btn {
+  padding: 8px 18px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  background: #16213e;
+  color: #e0e0e0;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.btn:hover {
+  background: #1f3460;
+  border-color: #64b5f6;
+}
+
+.btn.active {
+  background: #64b5f6;
+  color: #1a1a2e;
+  border-color: #64b5f6;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: #64b5f6;
+  color: #1a1a2e;
+  border-color: #64b5f6;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: #90caf9;
+  border-color: #90caf9;
+}
+
+/* Stats bar */
+.stats-bar {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #64b5f6;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Progress bar */
+.progress-wrap {
+  height: 4px;
+  background: #2a2a4a;
+  border-radius: 2px;
+  margin-bottom: 24px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #64b5f6;
+  border-radius: 2px;
+  transition: width 0.15s ease;
+  width: 0%;
+}
+
+/* Typing area */
+.typing-area {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 28px 20px;
+  background: #16213e;
+  border-radius: 10px;
+  border: 1px solid #2a2a4a;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.text-display {
+  font-size: 20px;
+  line-height: 1.8;
+  word-break: break-all;
+  letter-spacing: 1px;
+  width: 100%;
+  user-select: none;
+}
+
+.char {
+  position: relative;
+  display: inline;
+}
+
+.char.correct {
+  color: #66bb6a;
+}
+
+.char.incorrect {
+  color: #ef5350;
+  text-decoration: underline;
+  text-decoration-color: #ef5350;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.char.remaining {
+  color: #555;
+}
+
+.char.cursor {
+  color: #e0e0e0;
+}
+
+.char.cursor::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  background: #64b5f6;
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Input (hidden) */
+.hidden-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Results overlay */
+.results-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.results-card {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 14px;
+  padding: 40px 44px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  animation: slideUp 0.35s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.results-card h2 {
+  font-size: 26px;
+  color: #64b5f6;
+  margin-bottom: 28px;
+  font-weight: 700;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 24px;
+  margin-bottom: 32px;
+}
+
+.result-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-label {
+  font-size: 12px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.result-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #e0e0e0;
+}
+
+.result-value.wpm {
+  color: #64b5f6;
+}
+
+.result-value.accuracy {
+  color: #66bb6a;
+}
+
+.result-value.errors {
+  color: #ef5350;
+}
+
+.result-value.time {
+  color: #ffb74d;
+}
+
+.btn-lg {
+  padding: 12px 36px;
+  font-size: 16px;
+  border-radius: 8px;
+}
+
+/* Hint */
+.hint {
+  margin-top: 16px;
+  font-size: 13px;
+  color: #666;
+  text-align: center;
+  flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <div class="header">
+    <div class="title">⌨ Typing Practice</div>
+    <div class="controls">
+      <button class="btn active" id="btnCN" onclick="setMode('cn')">中文</button>
+      <button class="btn" id="btnEN" onclick="setMode('en')">English</button>
+      <button class="btn" onclick="newText()">🔄 换一篇</button>
+    </div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-item">
+      <span class="stat-label" id="speedLabel">CPM</span>
+      <span class="stat-value" id="speedVal">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">准确率</span>
+      <span class="stat-value" id="accVal">100%</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">用时</span>
+      <span class="stat-value" id="timeVal">0s</span>
+    </div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-fill" id="progressBar"></div>
+  </div>
+
+  <div class="typing-area" id="typingArea" onclick="focusInput()">
+    <div class="text-display" id="textDisplay"></div>
+  </div>
+
+  <div class="hint" id="hint">点击上方区域开始打字，或按任意键开始</div>
+
+  <input type="text" class="hidden-input" id="hiddenInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+</div>
+
+<script>
+const CN_SENTENCES = [
+  '春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。',
+  '生活不止眼前的苟且，还有诗和远方的田野。',
+  '人生就像一场旅行，不必在乎目的地，在乎的是沿途的风景。',
+  '书山有路勤为径，学海无涯苦作舟。',
+  '千里之行，始于足下。不积跬步，无以至千里。',
+  '时间就像海绵里的水，只要愿挤，总还是有的。',
+  '机会总是留给有准备的人，成功需要坚持和努力。',
+  '世界那么大，我想去看看，趁阳光正好，趁微风不噪。',
+  '每一个不曾起舞的日子，都是对生命的辜负。',
+  '读万卷书，行万里路，身体和灵魂总有一个在路上。',
+  '不忘初心，方得始终。初心易得，始终难守。',
+  '天行健，君子以自强不息；地势坤，君子以厚德载物。',
+  '长风破浪会有时，直挂云帆济沧海。',
+  '三人行，必有我师焉。择其善者而从之，其不善者而改之。',
+  '知识就是力量，想象力比知识更重要。',
+  '纸上得来终觉浅，绝知此事要躬行。',
+  '学而不思则罔，思而不学则殆。',
+  '宝剑锋从磨砺出，梅花香自苦寒来。',
+  '路漫漫其修远兮，吾将上下而求索。',
+  '山重水复疑无路，柳暗花明又一村。',
+];
+
+const EN_SENTENCES = [
+  'The quick brown fox jumps over the lazy dog near the river.',
+  'Practice makes perfect, so keep typing every single day to improve.',
+  'A journey of a thousand miles begins with a single step forward.',
+  'Reading is to the mind what exercise is to the body and soul.',
+  'The only way to do great work is to love what you do every day.',
+  'Success is not final, failure is not fatal: it is the courage to continue that counts.',
+  'In the middle of difficulty lies opportunity waiting to be discovered.',
+  'The best way to predict the future is to create it with your own hands.',
+  'Life is what happens when you are busy making other plans for tomorrow.',
+  'To be yourself in a world that is constantly trying to make you something else is the greatest accomplishment.',
+  'The future belongs to those who believe in the beauty of their dreams.',
+  'It does not matter how slowly you go as long as you do not stop moving forward.',
+  'Everything you have ever wanted is on the other side of fear and doubt.',
+  'Happiness is not something ready made, it comes from your own actions.',
+  'The purpose of our lives is to be happy and to spread kindness.',
+  'You miss one hundred percent of the shots you do not take in life.',
+  'Strive not to be a success, but rather to be of value to the world.',
+  'The greatest glory in living lies not in never falling, but in rising every time we fall.',
+  'Your time is limited, so do not waste it living someone else\'s life.',
+  'Stay hungry, stay foolish, and never stop learning new things.',
+];
+
+let mode = 'cn';
+let currentText = '';
+let typedChars = '';
+let timerInterval = null;
+let startTime = null;
+let finished = false;
+let errorCount = 0;
+
+const textDisplay = document.getElementById('textDisplay');
+const hiddenInput = document.getElementById('hiddenInput');
+const progressBar = document.getElementById('progressBar');
+const speedVal = document.getElementById('speedVal');
+const accVal = document.getElementById('accVal');
+const timeVal = document.getElementById('timeVal');
+const speedLabel = document.getElementById('speedLabel');
+const hint = document.getElementById('hint');
+const typingArea = document.getElementById('typingArea');
+
+function setMode(m) {
+  if (finished) return;
+  mode = m;
+  document.getElementById('btnCN').className = mode === 'cn' ? 'btn active' : 'btn';
+  document.getElementById('btnEN').className = mode === 'en' ? 'btn active' : 'btn';
+  speedLabel.textContent = mode === 'cn' ? 'CPM' : 'WPM';
+  resetState();
+  pickRandomText();
+  render();
+  speedVal.textContent = '0';
+  accVal.textContent = '100%';
+  timeVal.textContent = '0s';
+  progressBar.style.width = '0%';
+  hint.style.display = 'block';
+}
+
+function pickRandomText() {
+  const pool = mode === 'cn' ? CN_SENTENCES : EN_SENTENCES;
+  let idx;
+  do {
+    idx = Math.floor(Math.random() * pool.length);
+  } while (pool.length > 1 && pool[idx] === currentText);
+  currentText = pool[idx];
+}
+
+function resetState() {
+  typedChars = '';
+  finished = false;
+  errorCount = 0;
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  startTime = null;
+  hiddenInput.value = '';
+  speedVal.textContent = '0';
+  accVal.textContent = '100%';
+  timeVal.textContent = '0s';
+  progressBar.style.width = '0%';
+  hint.style.display = 'block';
+  removeResultsOverlay();
+}
+
+function newText() {
+  resetState();
+  pickRandomText();
+  render();
+  focusInput();
+}
+
+function focusInput() {
+  if (!finished) hiddenInput.focus();
+}
+
+function startTimer() {
+  if (startTime) return;
+  startTime = Date.now();
+  hint.style.display = 'none';
+  timerInterval = setInterval(updateStats, 100);
+}
+
+function updateStats() {
+  if (!startTime) return;
+  const elapsed = (Date.now() - startTime) / 1000;
+  timeVal.textContent = Math.floor(elapsed) + 's';
+
+  const charsTyped = typedChars.length;
+  if (charsTyped > 0) {
+    const minutes = elapsed / 60;
+    if (mode === 'cn') {
+      const cpm = Math.round(charsTyped / minutes);
+      speedVal.textContent = cpm;
+    } else {
+      // Count words in typed chars (split by spaces)
+      const words = typedChars.split(' ').filter(w => w.length > 0).length;
+      const wpm = Math.round(words / minutes);
+      speedVal.textContent = wpm;
+    }
+  }
+
+  if (charsTyped > 0) {
+    const acc = Math.round(((charsTyped - errorCount) / charsTyped) * 100);
+    accVal.textContent = acc + '%';
+  }
+
+  const progress = currentText.length > 0 ? (typedChars.length / currentText.length) * 100 : 0;
+  progressBar.style.width = progress + '%';
+}
+
+function checkComplete() {
+  if (typedChars.length >= currentText.length) {
+    finished = true;
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    updateStats();
+    showResults();
+  }
+}
+
+function showResults() {
+  const elapsed = startTime ? (Date.now() - startTime) / 1000 : 0;
+  const minutes = elapsed / 60;
+  let speed = 0;
+  const charsTyped = typedChars.length;
+
+  if (minutes > 0) {
+    if (mode === 'cn') {
+      speed = Math.round(charsTyped / minutes);
+    } else {
+      const words = typedChars.split(' ').filter(w => w.length > 0).length;
+      speed = Math.round(words / minutes);
+    }
+  }
+
+  const accuracy = charsTyped > 0 ? Math.round(((charsTyped - errorCount) / charsTyped) * 100) : 100;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'results-overlay';
+  overlay.id = 'resultsOverlay';
+  overlay.innerHTML = `
+    <div class="results-card">
+      <h2>🎉 练习完成！</h2>
+      <div class="results-grid">
+        <div class="result-item">
+          <span class="result-label">${mode === 'cn' ? 'CPM' : 'WPM'}</span>
+          <span class="result-value wpm">${speed}</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">准确率</span>
+          <span class="result-value accuracy">${accuracy}%</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">用时</span>
+          <span class="result-value time">${elapsed.toFixed(1)}s</span>
+        </div>
+        <div class="result-item">
+          <span class="result-label">错误数</span>
+          <span class="result-value errors">${errorCount}</span>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-lg" onclick="newText()">再来一篇</button>
+    </div>
+  `;
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) newText();
+  });
+  document.body.appendChild(overlay);
+}
+
+function removeResultsOverlay() {
+  const existing = document.getElementById('resultsOverlay');
+  if (existing) existing.remove();
+}
+
+function render() {
+  let html = '';
+  for (let i = 0; i < currentText.length; i++) {
+    const ch = currentText[i];
+    let cls = 'remaining';
+    if (i < typedChars.length) {
+      cls = typedChars[i] === ch ? 'correct' : 'incorrect';
+    } else if (i === typedChars.length) {
+      cls = 'cursor';
+    }
+    html += `<span class="char ${cls}">${escapeHtml(ch)}</span>`;
+  }
+  textDisplay.innerHTML = html;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+hiddenInput.addEventListener('input', function(e) {
+  if (finished) return;
+  startTimer();
+
+  const inputVal = hiddenInput.value;
+  // Process character by character
+  let idx = typedChars.length;
+  let newErrors = 0;
+
+  while (idx < inputVal.length && idx < currentText.length) {
+    const ch = inputVal[idx];
+    if (ch !== currentText[idx]) {
+      newErrors++;
+    }
+    idx++;
+  }
+
+  // If user typed beyond text length, ignore those extra chars
+  if (inputVal.length > currentText.length) {
+    hiddenInput.value = inputVal.substring(0, currentText.length);
+    typedChars = inputVal.substring(0, currentText.length);
+  } else {
+    typedChars = inputVal;
+  }
+
+  // Recalculate errorCount from scratch to handle backspace
+  errorCount = 0;
+  for (let i = 0; i < typedChars.length; i++) {
+    if (typedChars[i] !== currentText[i]) {
+      errorCount++;
+    }
+  }
+
+  render();
+  checkComplete();
+});
+
+hiddenInput.addEventListener('keydown', function(e) {
+  if (finished) {
+    e.preventDefault();
+    return;
+  }
+  if (e.key === 'Backspace' && typedChars.length === 0) {
+    e.preventDefault();
+  }
+});
+
+// Click on typing area to focus
+typingArea.addEventListener('click', focusInput);
+
+// Auto-focus on page load
+window.addEventListener('load', function() {
+  pickRandomText();
+  render();
+  focusInput();
+});
+
+// Keep focus on hidden input
+document.addEventListener('click', function(e) {
+  if (!finished && e.target !== hiddenInput && !e.target.closest('.btn') && !e.target.closest('.results-overlay')) {
+    focusInput();
+  }
+});
+</script>
+</body>
+</html>
