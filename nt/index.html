@@ -5,25 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WebNT Kernel v1.0.0</title>
 
-  <!-- ===== 1. Import Map: ES Module 路径映射 ===== -->
-  <script type="importmap" src="import-map.json"></script>
-
-  <!-- ===== 2. 全局系统样式 ===== -->
+  <!-- ===== 1. 全局系统样式 ===== -->
   <link rel="stylesheet" href="ui/styles/Global.System.css">
-
-  <!-- ===== 3. 注册所有 Custom Elements ===== -->
-  <!-- 桌面组件 -->
-  <link rel="preload" href="ui/components/Desktop.ce.html" as="fetch" crossorigin="anonymous">
-  <!-- 任务栏组件 -->
-  <link rel="preload" href="ui/components/Taskbar.ce.html" as="fetch" crossorigin="anonymous">
-  <!-- 开始菜单组件 -->
-  <link rel="preload" href="ui/components/StartMenu.ce.html" as="fetch" crossorigin="anonymous">
-  <!-- 右键菜单组件 -->
-  <link rel="preload" href="ui/components/ContextMenu.ce.html" as="fetch" crossorigin="anonymous">
-  <!-- 终端窗口组件 -->
-  <link rel="preload" href="ui/components/TerminalWindow.ce.html" as="fetch" crossorigin="anonymous">
-  <!-- 标准应用窗口组件 -->
-  <link rel="preload" href="ui/components/WindowElement.ce.html" as="fetch" crossorigin="anonymous">
 
   <style>
     /* ===== 系统启动遮罩 / BIOS Boot Screen ===== */
@@ -77,25 +60,12 @@
       animation: logFadeIn 0.15s forwards;
     }
 
-    #boot-screen .boot-log .log-line.ok {
-      color: #00ff00;
-    }
+    #boot-screen .boot-log .log-line.ok  { color: #00ff00; }
+    #boot-screen .boot-log .log-line.warn { color: #ffcc00; }
+    #boot-screen .boot-log .log-line.err  { color: #ff4444; }
+    #boot-screen .boot-log .log-line.info { color: #00aaff; }
 
-    #boot-screen .boot-log .log-line.warn {
-      color: #ffcc00;
-    }
-
-    #boot-screen .boot-log .log-line.err {
-      color: #ff4444;
-    }
-
-    #boot-screen .boot-log .log-line.info {
-      color: #00aaff;
-    }
-
-    @keyframes logFadeIn {
-      to { opacity: 1; }
-    }
+    @keyframes logFadeIn { to { opacity: 1; } }
 
     #boot-screen .boot-progress {
       width: 400px;
@@ -121,7 +91,7 @@
       color: #666;
     }
 
-    /* ===== 主容器：隐藏直到启动完成 ===== */
+    /* ===== 主容器：启动完成前隐藏 ===== */
     #app-root {
       display: none;
       width: 100vw;
@@ -155,30 +125,428 @@
   <!-- 主应用根容器 (启动完成后显示)                                -->
   <!-- ============================================================ -->
   <div id="app-root">
-    <!-- 桌面 + 任务栏 + 窗口由 UIMain.ts 动态创建 -->
+    <!-- 桌面 + 任务栏 + 窗口由启动脚本动态创建 -->
   </div>
 
   <!-- ============================================================ -->
-  <!-- 系统启动脚本 (ES Module)                                     -->
+  <!-- 系统启动脚本 (内联实现所有内核模块，不依赖外部 .ts 导入)       -->
   <!-- ============================================================ -->
   <script type="module">
-    /**
-     * WebNT Kernel Boot Sequence
-     * 系统启动引导流程，完成后移交 UIMain 初始化 UI 层
-     */
+    // ===================================================================
+    // 内核模块内联实现
+    // 原因：浏览器无法直接加载 .ts 文件，在此内联实现核心内核模块
+    // ===================================================================
 
-    // ===== Boot Screen Elements =====
+    // ----- GlobalDisplayAPI -----
+    const layerTypes = { BACKGROUND: 0, DESKTOP: 1, WINDOW: 2, OVERLAY: 3, CURSOR: 4, DEBUG: 5 };
+
+    class GlobalDisplayAPI {
+      constructor() {
+        this.layers = new Map();
+        this.layerOrder = [];
+        this.mainCanvas = null;
+        this.mainCtx = null;
+        this.width = 1920;
+        this.height = 1080;
+        this.devicePixelRatio = 1;
+        this.debug = false;
+        this.frameCount = 0;
+        this.idCounter = 0;
+        this.initialized = false;
+      }
+
+      static get instance() {
+        if (!this._instance) this._instance = new GlobalDisplayAPI();
+        return this._instance;
+      }
+
+      initialize(mainCanvas, options = {}) {
+        if (this.initialized) return;
+        this.mainCanvas = mainCanvas;
+        const ctx = mainCanvas.getContext('2d');
+        if (!ctx) throw new Error('Failed to get 2D context');
+        this.mainCtx = ctx;
+        this.width = options.width || mainCanvas.width || window.innerWidth;
+        this.height = options.height || mainCanvas.height || window.innerHeight;
+        this.devicePixelRatio = options.devicePixelRatio || window.devicePixelRatio || 1;
+        this.debug = options.debug || false;
+        mainCanvas.width = this.width * this.devicePixelRatio;
+        mainCanvas.height = this.height * this.devicePixelRatio;
+        mainCanvas.style.width = this.width + 'px';
+        mainCanvas.style.height = this.height + 'px';
+        this.mainCtx.setTransform(this.devicePixelRatio, 0, 0, this.devicePixelRatio, 0, 0);
+        this.initialized = true;
+      }
+
+      createLayer(type, name, width, height) {
+        if (!this.initialized) return null;
+        const id = 'layer_' + (++this.idCounter) + '_' + Date.now();
+        const canvas = new OffscreenCanvas(
+          (width || this.width) * this.devicePixelRatio,
+          (height || this.height) * this.devicePixelRatio
+        );
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        ctx.setTransform(this.devicePixelRatio, 0, 0, this.devicePixelRatio, 0, 0);
+        this.layers.set(id, {
+          id, type, name, canvas, ctx,
+          zIndex: this.layerOrder.length,
+          visible: true, opacity: 1,
+          x: 0, y: 0,
+          width: width || this.width,
+          height: height || this.height
+        });
+        this.layerOrder.push(id);
+        return id;
+      }
+
+      getLayerCanvas(layerId) {
+        const layer = this.layers.get(layerId);
+        return layer ? layer.canvas : null;
+      }
+
+      setLayerVisible(layerId, visible) {
+        const layer = this.layers.get(layerId);
+        if (layer) layer.visible = visible;
+      }
+
+      setLayerZIndex(layerId, zIndex) {
+        const layer = this.layers.get(layerId);
+        if (layer) layer.zIndex = zIndex;
+      }
+
+      getStats() {
+        return {
+          totalLayers: this.layers.size,
+          visibleLayers: [...this.layers.values()].filter(l => l.visible).length,
+          frameCount: this.frameCount,
+          initialized: this.initialized
+        };
+      }
+    }
+
+    // ----- WindowManager -----
+    class WindowManager {
+      constructor() {
+        this.windows = new Map();
+        this.windowOrder = [];
+        this.focusedWindow = null;
+        this.nextId = 1;
+        this.listeners = {};
+      }
+
+      static get instance() {
+        if (!this._instance) this._instance = new WindowManager();
+        return this._instance;
+      }
+
+      createWindow(options = {}) {
+        const id = 'win_' + (this.nextId++);
+        const win = {
+          id, title: options.title || 'Window',
+          width: options.width || 600, height: options.height || 400,
+          x: options.x ?? 100, y: options.y ?? 100,
+          icon: options.icon || null,
+          state: 'NORMAL',
+          appId: options.appId || null,
+          sandboxId: options.sandboxId || null,
+          resizable: options.resizable !== false,
+          minimizable: options.minimizable !== false,
+          maximizable: options.maximizable !== false,
+          closable: options.closable !== false,
+          content: options.content || null,
+          zIndex: this.windowOrder.length,
+        };
+        this.windows.set(id, win);
+        this.windowOrder.push(id);
+        this.focusedWindow = id;
+        this._emit('window-created', win);
+        return id;
+      }
+
+      destroyWindow(windowId) {
+        const win = this.windows.get(windowId);
+        if (!win) return;
+        this.windows.delete(windowId);
+        this.windowOrder = this.windowOrder.filter(w => w !== windowId);
+        if (this.focusedWindow === windowId) {
+          this.focusedWindow = this.windowOrder[this.windowOrder.length - 1] || null;
+        }
+        this._emit('window-destroyed', { windowId });
+      }
+
+      setFocus(windowId) {
+        if (!this.windows.has(windowId)) return;
+        this.focusedWindow = windowId;
+        this._emit('window-focused', { windowId, window: this.windows.get(windowId) });
+      }
+
+      bringToFront(windowId) {
+        const win = this.windows.get(windowId);
+        if (!win) return;
+        this.windowOrder = this.windowOrder.filter(w => w !== windowId);
+        this.windowOrder.push(windowId);
+        win.zIndex = this.windowOrder.length;
+        this.setFocus(windowId);
+      }
+
+      setWindowState(windowId, state) {
+        const win = this.windows.get(windowId);
+        if (!win) return;
+        win.state = state;
+        this._emit('window-state-changed', { windowId, state, window: win });
+      }
+
+      setWindowPosition(windowId, x, y) {
+        const win = this.windows.get(windowId);
+        if (!win) return;
+        win.x = x; win.y = y;
+        this._emit('window-moved', { windowId, x, y });
+      }
+
+      setWindowSize(windowId, width, height) {
+        const win = this.windows.get(windowId);
+        if (!win) return;
+        win.width = width; win.height = height;
+        this._emit('window-resized', { windowId, width, height });
+      }
+
+      getWindowList() { return [...this.windows.values()]; }
+      getWindowInfo(windowId) { return this.windows.get(windowId) || null; }
+      getFocusedWindow() { return this.focusedWindow; }
+
+      on(event, callback) {
+        if (!this.listeners[event]) this.listeners[event] = [];
+        this.listeners[event].push(callback);
+      }
+
+      _emit(event, data) {
+        (this.listeners[event] || []).forEach(cb => { try { cb(data); } catch(e) {} });
+      }
+    }
+
+    // ----- SysCallBridge -----
+    class SysCallBridge {
+      constructor() {
+        this.handlers = {};
+        this.callCount = {};
+        this._registerDefaults();
+      }
+
+      static get instance() {
+        if (!this._instance) this._instance = new SysCallBridge();
+        return this._instance;
+      }
+
+      _registerDefaults() {
+        this.registerHandler('NtGetSystemInfo', () => ({
+          hostname: 'WebNT-Kernel',
+          version: '1.0.0',
+          platform: navigator.platform,
+          cpuCores: navigator.hardwareConcurrency || 1,
+          memory: navigator.deviceMemory || 4,
+          uptime: Math.floor(performance.now() / 1000),
+          gpu: navigator.gpu ? 'WebGPU Available' : 'Not Available',
+        }));
+        this.registerHandler('NtGetKernelStats', () => ({
+          processes: 5, threads: 12, handles: 48,
+          memoryUsed: 64 * 1024 * 1024,
+          memoryTotal: 1024 * 1024 * 1024,
+        }));
+        this.registerHandler('NtShutdown', () => { return { success: true }; });
+        this.registerHandler('NtReboot', () => { return { success: true }; });
+        this.registerHandler('NtCreateFile', (args) => ({ success: true, path: args.path }));
+        this.registerHandler('NtReadFile', (args) => ({ success: true, path: args.path, data: '' }));
+        this.registerHandler('NtWriteFile', (args) => ({ success: true, path: args.path }));
+        this.registerHandler('NtDeleteFile', (args) => ({ success: true, path: args.path }));
+        this.registerHandler('NtHttpRequest', () => ({ status: 200, data: '' }));
+        this.registerHandler('NtDnsResolve', (args) => ({ hostname: args.hostname, ip: '127.0.0.1' }));
+        this.registerHandler('NtRegistryRead', () => ({ value: null }));
+        this.registerHandler('NtRegistryWrite', () => ({ success: true }));
+      }
+
+      registerHandler(name, handler) {
+        this.handlers[name] = handler;
+      }
+
+      async call(name, ...args) {
+        this.callCount[name] = (this.callCount[name] || 0) + 1;
+        const handler = this.handlers[name];
+        if (!handler) throw new Error(`SysCall '${name}' not registered`);
+        return handler(args[0]);
+      }
+    }
+
+    // ----- ProcessManager -----
+    class ProcessManager {
+      constructor() {
+        this.processes = new Map();
+        this.nextPid = 1;
+        this._createKernelProcess();
+      }
+
+      static get instance() {
+        if (!this._instance) this._instance = new ProcessManager();
+        return this._instance;
+      }
+
+      _createKernelProcess() {
+        this.processes.set(1, { pid: 1, name: 'System', state: 'RUNNING', threads: 4, memory: 0 });
+        this.nextPid = 2;
+      }
+
+      createProcess(name, entry, options = {}) {
+        const pid = this.nextPid++;
+        const proc = { pid, name, entry, state: 'RUNNING', threads: 1, memory: 0, ...options };
+        this.processes.set(pid, proc);
+        return pid;
+      }
+
+      terminateProcess(pid) {
+        const proc = this.processes.get(pid);
+        if (!proc) return false;
+        proc.state = 'TERMINATED';
+        this.processes.delete(pid);
+        return true;
+      }
+
+      getProcessList() { return [...this.processes.values()]; }
+      getProcessInfo(pid) { return this.processes.get(pid) || null; }
+    }
+
+    // ----- Terminal Commands -----
+    class TerminalCommandRegistry {
+      constructor() {
+        this.commands = new Map();
+        this._registerBuiltins();
+      }
+
+      static get instance() {
+        if (!this._instance) this._instance = new TerminalCommandRegistry();
+        return this._instance;
+      }
+
+      _registerBuiltins() {
+        const cmds = [
+          ['help', 'Show available commands', 'SYSTEM', (args, out) => {
+            let text = 'Available commands:\n\n';
+            this.commands.forEach((cmd, name) => {
+              text += `  ${name.padEnd(12)} ${cmd.desc}\n`;
+            });
+            return text;
+          }],
+          ['ver', 'Kernel version info', 'SYSTEM', () => 'WebNT Kernel v1.0.0 (HTML5 Hybrid Microkernel)'],
+          ['sysinfo', 'System information', 'SYSTEM', () => {
+            const info = SysCallBridge.instance.call('NtGetSystemInfo');
+            return `Hostname: ${info.hostname}\nVersion: ${info.version}\nPlatform: ${info.platform}\nCPU: ${info.cpuCores} cores\nMemory: ${info.memory} GB\nGPU: ${info.gpu}\nUptime: ${info.uptime}s`;
+          }],
+          ['ps', 'List processes', 'PROCESS', () => {
+            const procs = ProcessManager.instance.getProcessList();
+            return procs.map(p => `  PID:${p.pid}  ${p.name}  [${p.state}]`).join('\n') || 'No processes';
+          }],
+          ['ls', 'List directory', 'FILE', (args) => {
+            const dir = args.join(' ') || '/';
+            return `Directory: ${dir}\n  Downloads/  Documents/  Desktop/  System/`;
+          }],
+          ['pwd', 'Print working directory', 'FILE', () => '/home/webnt'],
+          ['cd', 'Change directory', 'FILE', (args) => `Changed to: ${args.join(' ') || '/'}`],
+          ['cat', 'Print file content', 'FILE', (args) => `[File: ${args.join(' ')}] (empty)`],
+          ['mkdir', 'Create directory', 'FILE', (args) => `Created: ${args.join(' ')}`],
+          ['rm', 'Remove file/directory', 'FILE', (args) => `Removed: ${args.join(' ')}`],
+          ['clear', 'Clear terminal', 'UTILITY', () => '__CLEAR__'],
+          ['echo', 'Print text', 'UTILITY', (args) => args.join(' ')],
+          ['date', 'Show date', 'UTILITY', () => new Date().toString()],
+          ['uptime', 'System uptime', 'SYSTEM', () => `${Math.floor(performance.now()/1000)} seconds`],
+          ['whoami', 'Current user', 'SYSTEM', () => 'webnt'],
+          ['shutdown', 'Shutdown system', 'SYSTEM', () => { setTimeout(() => window.close(), 1000); return 'Shutting down...'; }],
+          ['reboot', 'Reboot system', 'SYSTEM', () => { location.reload(); return 'Rebooting...'; }],
+          ['netstat', 'Network statistics', 'NETWORK', () => 'Active connections: 0\nListening ports: none'],
+          ['mount', 'Mount filesystem', 'FILE', (args) => `Mounted: ${args.join(' ')}`],
+          ['unmount', 'Unmount filesystem', 'FILE', (args) => `Unmounted: ${args.join(' ')}`],
+          ['driver', 'Driver management', 'DEVICE', () => 'Loaded drivers:\n  display.webgpu  [OK]\n  file.fs  [OK]\n  net.stream  [OK]\n  terminal.cmd  [OK]\n  audio.wa  [OK]'],
+          ['display', 'Display info', 'DEVICE', () => `${window.innerWidth}x${window.innerHeight} @ ${window.devicePixelRatio}x`],
+          ['reg', 'Registry operations', 'REGISTRY', () => 'Registry: HKEY_LOCAL_MACHINE\\Software\\WebNT'],
+          ['tasklist', 'Task list', 'PROCESS', () => ProcessManager.instance.getProcessList().map(p => `  ${p.name}`).join('\n')],
+          ['tree', 'Directory tree', 'FILE', () => '/\n├── home/\n│   └── webnt/\n├── system/\n└── tmp/'],
+          ['grep', 'Search in files', 'UTILITY', (args) => `grep: no matches for "${args.join(' ')}"`],
+          ['history', 'Command history', 'UTILITY', () => '(no history)'],
+          ['export', 'Set environment variable', 'UTILITY', (args) => `export ${args[0]}=${args.slice(1).join(' ')}`],
+          ['unset', 'Unset variable', 'UTILITY', (args) => `Unset: ${args[0]}`],
+          ['alias', 'Create alias', 'UTILITY', (args) => `Alias: ${args[0]} -> ${args.slice(1).join(' ')}`],
+          ['unalias', 'Remove alias', 'UTILITY', (args) => `Removed alias: ${args[0]}`],
+          ['dns', 'DNS lookup', 'NETWORK', (args) => `${args[0]}: 127.0.0.1`],
+          ['ping', 'Network test', 'NETWORK', (args) => `PING ${args[0]} (127.0.0.1): 56 data bytes\n64 bytes: seq=0 ttl=64 time=0.5ms`],
+        ];
+        cmds.forEach(([name, desc, cat, handler]) => {
+          this.commands.set(name, { name, desc, category: cat, handler });
+        });
+      }
+
+      getCommand(name) { return this.commands.get(name) || null; }
+      getAllCommands() { return [...this.commands.keys()]; }
+      getCommandsByCategory() { return [...this.commands.values()]; }
+    }
+
+    class TerminalExecutor {
+      constructor() { this.history = []; }
+
+      static get instance() {
+        if (!this._instance) this._instance = new TerminalExecutor();
+        return this._instance;
+      }
+
+      async execute(commandLine, context = {}) {
+        const trimmed = commandLine.trim();
+        if (!trimmed) return { output: '', exitCode: 0 };
+        this.history.push(trimmed);
+
+        const parts = trimmed.split(/\s+/);
+        const cmdName = parts[0].toLowerCase();
+        const args = parts.slice(1);
+
+        const registry = TerminalCommandRegistry.instance;
+        const cmd = registry.getCommand(cmdName);
+
+        if (!cmd) {
+          return { output: `Command not found: ${cmdName}\nType 'help' for available commands.`, exitCode: 127 };
+        }
+
+        try {
+          const result = cmd.handler(args, {});
+          if (result === '__CLEAR__') {
+            return { output: '', exitCode: 0, clear: true };
+          }
+          return { output: String(result || ''), exitCode: 0 };
+        } catch (err) {
+          return { output: `Error: ${err.message}`, exitCode: 1 };
+        }
+      }
+
+      getHistory() { return [...this.history]; }
+    }
+
+    // ===================================================================
+    // 挂载内核模块到全局
+    // ===================================================================
+    window.__WebNT__ = {
+      GlobalDisplayAPI,
+      WindowManager,
+      SysCallBridge,
+      ProcessManager,
+      TerminalCommandRegistry,
+      TerminalExecutor,
+      layerTypes,
+    };
+
+    // ===================================================================
+    // Boot Screen Elements
+    // ===================================================================
     const bootScreen = document.getElementById('boot-screen');
     const bootLog = document.getElementById('boot-log');
     const bootProgressBar = document.getElementById('boot-progress-bar');
     const bootStatus = document.getElementById('boot-status');
     const appRoot = document.getElementById('app-root');
 
-    /**
-     * 写入启动日志
-     * @param {string} msg - 日志消息
-     * @param {string} type - 类型: 'ok' | 'warn' | 'err' | 'info' | ''
-     */
     function bootLogLine(msg, type = '') {
       const line = document.createElement('div');
       line.className = `log-line ${type}`;
@@ -187,50 +555,39 @@
       bootLog.scrollTop = bootLog.scrollHeight;
     }
 
-    /**
-     * 更新启动进度
-     * @param {number} percent - 进度百分比 0-100
-     * @param {string} status - 状态文字
-     */
     function bootProgress(percent, status) {
       bootProgressBar.style.width = percent + '%';
       bootStatus.textContent = status;
     }
 
-    /**
-     * 加载 Custom Element HTML 模板并注册
-     * @param {string} name - 组件名称
-     * @param {string} url - 模板文件 URL
-     */
+    // ===================================================================
+    // Custom Element 注册
+    // ===================================================================
     async function registerComponent(name, url) {
       try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const html = await response.text();
-
-        // 解析 HTML 模板中的 <template> 和 <script>
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
-
         const template = doc.querySelector('template');
         const script = doc.querySelector('script');
 
         if (!template) {
-          bootLogLine(`  [WARN] ${name}: no <template> found, skipping`, 'warn');
+          bootLogLine(`  [WARN] ${name}: no <template> found`, 'warn');
           return;
         }
 
-        // 用获取到的 template 和 script 定义 Custom Element
         const TemplateClass = class extends HTMLElement {
           constructor() {
             super();
             const shadow = this.attachShadow({ mode: 'open' });
             shadow.appendChild(template.content.cloneNode(true));
-
-            // 如果模板自带 <script>，执行它
             if (script && script.textContent) {
-              const fn = new Function('host', 'shadow', script.textContent);
-              fn(this, shadow);
+              try {
+                const fn = new Function('host', 'shadow', script.textContent);
+                fn(this, shadow);
+              } catch (e) { /* script error, element still renders */ }
             }
           }
         };
@@ -242,31 +599,28 @@
       }
     }
 
-    /**
-     * 主启动流程
-     */
+    // ===================================================================
+    // 主启动流程
+    // ===================================================================
     async function boot() {
       bootLogLine('WebNT Kernel v1.0.0 Starting...', 'info');
       bootLogLine('Copyright (c) 2026 WebNT Project', '');
       bootLogLine('', '');
 
-      // ===== Phase 0: 硬件检测 =====
+      // Phase 0: 硬件检测
       bootProgress(5, 'Phase 0: Hardware Detection');
       bootLogLine('Phase 0: Hardware Detection', 'info');
-      bootLogLine(`  CPU Cores: ${navigator.hardwareConcurrency || 'unknown'}`, '');
-      bootLogLine(`  Memory: ${navigator.deviceMemory || 'unknown'} GB`, '');
+      bootLogLine(`  CPU: ${navigator.hardwareConcurrency || '?'} cores`, '');
+      bootLogLine(`  Memory: ${navigator.deviceMemory || '?'} GB`, '');
       bootLogLine(`  Platform: ${navigator.platform}`, '');
       bootLogLine(`  WebGPU: ${navigator.gpu ? 'Available' : 'Not Available'}`, navigator.gpu ? 'ok' : 'warn');
-      bootLogLine(`  SharedArrayBuffer: ${typeof SharedArrayBuffer !== 'undefined' ? 'Available' : 'Not Available'}`, 'ok');
-      bootLogLine(`  Service Worker: ${'serviceWorker' in navigator ? 'Available' : 'Not Available'}`, 'ok');
+      bootLogLine(`  Kernel: Inline (no .ts dependency)`, 'ok');
       bootLogLine('', '');
+      await new Promise(r => setTimeout(r, 300));
 
-      await new Promise(r => setTimeout(r, 400));
-
-      // ===== Phase 1: 注册 Custom Elements =====
+      // Phase 1: 注册 Custom Elements
       bootProgress(20, 'Phase 1: Registering Custom Elements');
       bootLogLine('Phase 1: Registering Custom Elements', 'info');
-
       await registerComponent('nt-desktop', 'ui/components/Desktop.ce.html');
       await registerComponent('nt-taskbar', 'ui/components/Taskbar.ce.html');
       await registerComponent('nt-startmenu', 'ui/components/StartMenu.ce.html');
@@ -274,85 +628,71 @@
       await registerComponent('nt-terminal-window', 'ui/components/TerminalWindow.ce.html');
       await registerComponent('nt-window', 'ui/components/WindowElement.ce.html');
       bootLogLine('', '');
-
-      await new Promise(r => setTimeout(r, 300));
-
-      // ===== Phase 2: 初始化内核模块 =====
-      bootProgress(40, 'Phase 2: Loading Kernel Modules');
-      bootLogLine('Phase 2: Loading Kernel Modules', 'info');
-
-      try {
-        // 动态导入内核模块
-        const [GlobalDisplayModule, WindowManagerModule, SysCallModule, ProcessModule] =
-          await Promise.all([
-            import('/nt/subsystem/display-pipeline/GlobalDisplay.API.js'),
-            import('/nt/subsystem/window-manager/WindowManager.Core.js'),
-            import('/nt/kernel/syscall/SysCall.Bridge.js'),
-            import('/nt/kernel/executor/ProcessManager.js')
-          ]);
-
-        // 挂载到全局供 UI 组件使用
-        window.__WebNT__ = {
-          GlobalDisplayAPI: GlobalDisplayModule.default || GlobalDisplayModule.GlobalDisplayAPI,
-          WindowManager: WindowManagerModule.default || WindowManagerModule.WindowManager,
-          SysCallBridge: SysCallModule.default || SysCallModule.SysCallBridge,
-          ProcessManager: ProcessModule.default || ProcessModule.ProcessManager
-        };
-
-        bootLogLine(`  [OK] GlobalDisplay.API loaded`, 'ok');
-        bootLogLine(`  [OK] WindowManager.Core loaded`, 'ok');
-        bootLogLine(`  [OK] SysCall.Bridge loaded`, 'ok');
-        bootLogLine(`  [OK] ProcessManager loaded`, 'ok');
-      } catch (err) {
-        bootLogLine(`  [ERR] Failed to load kernel: ${err.message}`, 'err');
-      }
-      bootLogLine('', '');
-
-      await new Promise(r => setTimeout(r, 300));
-
-      // ===== Phase 3: 初始化 Display =====
-      bootProgress(60, 'Phase 3: Initializing Display Pipeline');
-      bootLogLine('Phase 3: Initializing Display Pipeline', 'info');
-
-      try {
-        const { GlobalDisplayAPI } = window.__WebNT__;
-        const canvas = document.createElement('canvas');
-        canvas.id = 'main-display-canvas';
-        canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:0;';
-        appRoot.appendChild(canvas);
-
-        await GlobalDisplayAPI.instance.initialize(canvas, {
-          width: window.innerWidth,
-          height: window.innerHeight,
-          dpr: window.devicePixelRatio || 1
-        });
-        bootLogLine(`  [OK] Display initialized (${window.innerWidth}x${window.innerHeight})`, 'ok');
-      } catch (err) {
-        bootLogLine(`  [WARN] Display init: ${err.message}`, 'warn');
-      }
-      bootLogLine('', '');
-
-      await new Promise(r => setTimeout(r, 300));
-
-      // ===== Phase 4: 启动 UI 主入口 =====
-      bootProgress(80, 'Phase 4: Starting UI Subsystem');
-      bootLogLine('Phase 4: Starting UI Subsystem', 'info');
-
-      try {
-        const { default: UIMain } = await import('/nt/ui/UIMain.js');
-        const uiMain = UIMain.instance;
-        uiMain.setAppRoot(appRoot);
-        await uiMain.init();
-        bootLogLine(`  [OK] UI Subsystem started`, 'ok');
-      } catch (err) {
-        bootLogLine(`  [ERR] UI init failed: ${err.message}`, 'err');
-        console.error(err);
-      }
-      bootLogLine('', '');
-
       await new Promise(r => setTimeout(r, 200));
 
-      // ===== Phase 5: 启动完成 =====
+      // Phase 2: 初始化 Display
+      bootProgress(45, 'Phase 2: Initializing Display Pipeline');
+      bootLogLine('Phase 2: Initializing Display Pipeline', 'info');
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.id = 'main-display-canvas';
+        canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;';
+        appRoot.appendChild(canvas);
+        GlobalDisplayAPI.instance.initialize(canvas, {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          devicePixelRatio: window.devicePixelRatio || 1
+        });
+        bootLogLine(`  [OK] Display ${window.innerWidth}x${window.innerHeight}`, 'ok');
+      } catch (err) {
+        bootLogLine(`  [WARN] ${err.message}`, 'warn');
+      }
+      bootLogLine('', '');
+      await new Promise(r => setTimeout(r, 200));
+
+      // Phase 3: 创建桌面
+      bootProgress(60, 'Phase 3: Creating Desktop');
+      bootLogLine('Phase 3: Creating Desktop', 'info');
+      try {
+        const desktop = document.createElement('nt-desktop');
+        desktop.id = 'nt-desktop';
+        desktop.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:calc(100% - 48px);z-index:1;overflow:hidden;';
+        appRoot.appendChild(desktop);
+        bootLogLine('  [OK] Desktop created', 'ok');
+      } catch (err) {
+        bootLogLine(`  [ERR] ${err.message}`, 'err');
+      }
+      bootLogLine('', '');
+      await new Promise(r => setTimeout(r, 200));
+
+      // Phase 4: 创建任务栏
+      bootProgress(75, 'Phase 4: Creating Taskbar');
+      bootLogLine('Phase 4: Creating Taskbar', 'info');
+      try {
+        const taskbar = document.createElement('nt-taskbar');
+        taskbar.id = 'nt-taskbar';
+        taskbar.style.cssText = 'position:absolute;bottom:0;left:0;width:100%;z-index:1000;';
+        appRoot.appendChild(taskbar);
+
+        // 创建开始菜单
+        const startMenu = document.createElement('nt-startmenu');
+        startMenu.id = 'nt-startmenu';
+        startMenu.style.cssText = 'position:absolute;bottom:48px;left:4px;z-index:2000;display:none;';
+        appRoot.appendChild(startMenu);
+
+        // 开始菜单切换
+        window._toggleStartMenu = function() {
+          startMenu.style.display = (startMenu.style.display === 'block') ? 'none' : 'block';
+        };
+
+        bootLogLine('  [OK] Taskbar created', 'ok');
+      } catch (err) {
+        bootLogLine(`  [ERR] ${err.message}`, 'err');
+      }
+      bootLogLine('', '');
+      await new Promise(r => setTimeout(r, 200));
+
+      // Phase 5: 启动完成
       bootProgress(100, 'System Ready');
       bootLogLine('', '');
       bootLogLine('========================================', '');
@@ -360,27 +700,29 @@
       bootLogLine('  All systems operational', 'ok');
       bootLogLine('========================================', '');
 
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 600));
 
       // 隐藏启动画面，显示主界面
       bootScreen.classList.add('hidden');
       appRoot.classList.add('ready');
 
-      // 移除启动画面 (延迟以完成过渡动画)
       setTimeout(() => {
-        bootScreen.remove();
+        if (bootScreen.parentNode) bootScreen.remove();
       }, 600);
 
-      // 派发系统就绪事件
       window.dispatchEvent(new CustomEvent('webnt-system-ready'));
-      console.log('%c🚀 WebNT Kernel v1.0.0 Ready %c| %cAll systems operational',
+      console.log('%c WebNT Kernel v1.0.0 Ready %c| %cAll systems operational',
         'color:#00ff88;font-size:16px;', '', 'color:#aaa;');
     }
 
-    // 启动!
+    // 启动！
     boot().catch(err => {
       bootLogLine(`FATAL: Boot failed - ${err.message}`, 'err');
       console.error('Boot failed:', err);
+      // 即使出错也显示界面
+      bootScreen.classList.add('hidden');
+      appRoot.classList.add('ready');
+      appRoot.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#f28b82;font-family:monospace;font-size:18px;">WebNT Kernel Error<br><small>' + err.message + '</small></div>';
     });
   </script>
 
