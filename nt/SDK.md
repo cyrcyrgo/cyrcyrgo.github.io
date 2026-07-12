@@ -598,48 +598,143 @@ pm.on('process.killed', (pid) => console.log('进程终止:', pid));
 
 ## 9. 应用安装与分发
 
-### 9.1 通过应用商店安装
+### 9.1 应用商店架构
 
-1. 将应用部署到 HTTPS 服务器
-2. 在 `index.html` 中注册推荐应用（可选）：
+应用商店分为两个标签页：
+
+| 标签 | 说明 |
+|------|------|
+| **官方应用** | 已注册的第三方应用列表，按注册顺序排列，可查看详情页并安装 |
+| **链接扫描** | 输入链接或 SDK 特征码，自动匹配已注册应用 |
+
+### 9.2 应用注册规范
+
+开发者需要将应用信息注册到 `storeRegistry` 数组：
 
 ```javascript
-// 在 appstore 的推荐列表中
-{name:'贪吃蛇', icon:'🐍', color:'#81c995', url:'https://example.com/snake.html'}
+const storeRegistry = [
+  {
+    id: 'snake',                    // 唯一标识符（小写，不含空格）
+    name: '贪吃蛇',                  // 显示名称
+    icon: '🐍',                     // 图标（emoji）
+    color: '#81c995',               // 主题色
+    version: '2.1.0',               // 版本号（语义化版本）
+    author: 'WebNT Labs',           // 作者/组织
+    category: '游戏',               // 分类：游戏/工具/生活/教育/开发
+    url: 'https://example.com/app', // 安装 URL（HTTPS）
+    description: '应用简介...',      // 简短描述（30-50 字）
+    features: [                     // 功能特性列表（3-5 项）
+      '经典街机玩法',
+      '5 档难度选择',
+      '本地排行榜',
+    ],
+    permissions: [                  // 所需权限
+      'storage: 存储排行榜数据',
+      'network: 获取在线数据',
+    ],
+    images: [                       // 应用截图（SVG/PNG/JPG URL）
+      'https://example.com/screenshot1.png',
+    ],
+  },
+];
 ```
 
-3. 用户通过应用商店输入 URL 安装
-4. 应用数据存储在 `localStorage` 的 `webnt_installed_apps` 键中
+### 9.3 SDK 特征码系统
 
-### 9.2 localStorage 数据结构
+开发者必须在应用 HTML 页面的 `<head>` 中声明 SDK 特征码：
+
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <!-- SDK 特征码：webnt-app:<应用ID>:<版本号> -->
+  <meta name="webnt-app" content="snake:2.1.0">
+  <meta name="webnt-app-version" content="2.1.0">
+  <meta name="webnt-app-id" content="snake">
+  <title>贪吃蛇 - WebNT</title>
+</head>
+```
+
+特征码格式：
+```
+webnt-app:<app-id>:<version>
+```
+
+示例：
+- `webnt-app:snake:2.1.0` — 贪吃蛇 v2.1.0
+- `webnt-app:tetris:1.0.0` — 俄罗斯方块 v1.0.0
+- `webnt-app:mdeditor:1.2.0` — Markdown 编辑器 v1.2.0
+
+### 9.4 链接扫描流程
+
+```
+用户输入 URL/特征码
+    │
+    ├─ 匹配特征码格式: /webnt-app:([a-zA-Z0-9_-]+):?([\d.]+)?/
+    │   └─ 找到 → 显示匹配应用卡片
+    │
+    ├─ 匹配 URL 文件名: /([a-zA-Z0-9_-]+)\.html?$/
+    │   └─ 找到 → 模糊匹配已注册应用
+    │
+    └─ 未匹配 → 提示未找到
+```
+
+### 9.5 版本检测与更新机制
+
+```javascript
+// 安装时记录版本号
+const newApp = {
+  id: 'ext_snake_1690000000000',
+  storeId: 'snake',
+  name: '贪吃蛇',
+  url: 'https://example.com/snake.html',
+  icon: '🐍',
+  color: '#81c995',
+  version: '2.0.0',  // 安装时的版本
+};
+
+// 应用商店检测版本差异
+const installed = getInstalled('snake');
+const registry = storeRegistry.find(a => a.id === 'snake');
+const hasUpdate = installed.version !== registry.version;
+
+// 如果有更新，详情页显示"更新至 v2.1.0"按钮
+// 更新操作: 更新 URL + 版本号
+```
+
+### 9.6 localStorage 数据结构
 
 ```json
 [
   {
-    "id": "ext_1690000000000",
+    "id": "ext_snake_1690000000000",
+    "storeId": "snake",
     "name": "贪吃蛇",
     "url": "https://example.com/snake.html",
     "icon": "🐍",
-    "color": "#81c995"
+    "color": "#81c995",
+    "version": "2.0.0"
   }
 ]
 ```
 
-### 9.3 应用 URL 要求
+### 9.7 应用 URL 要求
 
 - 必须使用 **HTTPS**（iframe 沙箱要求）
 - 支持 CORS 跨域
 - 建议部署到 GitHub Pages、Vercel、Netlify 等平台
 - 文件大小建议 < 5MB
+- 必须在 HTML 中声明 SDK 特征码 meta 标签
 
-### 9.4 分发渠道
+### 9.8 分发渠道
 
-| 渠道 | 方式 |
-|------|------|
-| 应用商店 | 用户输入 URL 安装 |
-| 内置应用 | 提交 PR 到主仓库 |
-| 直接链接 | 分享应用 URL，用户手动安装 |
-| 终端安装 | `install <url>` 命令（计划中） |
+| 渠道 | 方式 | 特征码 |
+|------|------|--------|
+| 应用商店官方 | 注册到 storeRegistry，用户通过详情页安装 | 自动识别 |
+| 链接扫描 | 用户输入 URL，自动匹配特征码 | `webnt-app:id:version` |
+| 直接安装 | 分享应用 URL，用户手动输入 | meta 标签声明 |
+| 终端安装 | `install <url>` 命令 | 计划中 |
 
 ---
 
