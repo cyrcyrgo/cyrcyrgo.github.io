@@ -514,11 +514,11 @@
 <!-- BIOS Boot Screen -->
 <!-- ============================================================ -->
 <div id="boot-screen">
-  <div class="boot-logo">WebNT Kernel</div>
-  <div class="boot-subtitle">HTML5 Hybrid Microkernel OS v1.0.0</div>
+  <div class="boot-logo">WebNT 内核</div>
+  <div class="boot-subtitle">HTML5 混合微内核操作系统 v1.0.0</div>
   <div class="boot-log" id="boot-log"></div>
   <div class="boot-progress"><div class="boot-progress-bar" id="boot-progress-bar"></div></div>
-  <div class="boot-status" id="boot-status">Initializing...</div>
+  <div class="boot-status" id="boot-status">正在初始化...</div>
 </div>
 
 <!-- ============================================================ -->
@@ -527,21 +527,21 @@
 <div id="lock-screen">
   <div class="ls-bg-blur"></div>
   <div class="ls-time" id="ls-time">12:00</div>
-  <div class="ls-date" id="ls-date">Loading...</div>
+  <div class="ls-date" id="ls-date">加载中...</div>
   <div class="ls-user">
-    <div class="ls-avatar">WN</div>
-    <div class="ls-username">WebNT User</div>
+    <div class="ls-avatar">管</div>
+    <div class="ls-username">管理员</div>
   </div>
   <div class="ls-slider" id="ls-slider">
     <div class="ls-slider-track"></div>
-    <div class="ls-slider-text">Slide to Unlock</div>
+    <div class="ls-slider-text">滑动解锁</div>
     <div class="ls-slider-knob" id="ls-knob"></div>
   </div>
-  <div class="ls-hint">Press any key or slide to unlock</div>
+  <div class="ls-hint">按任意键或滑动解锁</div>
   <div class="ls-notifications" id="ls-notifications">
     <div class="ls-notif">
-      <div class="ls-notif-title">WebNT Kernel</div>
-      System v1.0.0 — All services operational
+      <div class="ls-notif-title">WebNT 内核</div>
+      系统 v1.0.0 — 所有服务运行正常
     </div>
   </div>
 </div>
@@ -557,15 +557,15 @@
   <!-- 任务栏 -->
   <div id="taskbar">
     <div class="tb-left">
-      <div class="tb-start-btn" id="tb-start-btn" title="Start">
+      <div class="tb-start-btn" id="tb-start-btn" title="开始">
         <svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="2" width="7" height="7" rx="1" fill="currentColor"/><rect x="11" y="2" width="7" height="7" rx="1" fill="currentColor"/><rect x="2" y="11" width="7" height="7" rx="1" fill="currentColor"/><rect x="11" y="11" width="7" height="7" rx="1" fill="currentColor"/></svg>
       </div>
     </div>
     <div class="tb-center" id="tb-window-list"></div>
     <div class="tb-right">
-      <div class="tb-tray-btn" id="tb-terminal-btn" title="Terminal">&#x1f4bb;</div>
-      <div class="tb-tray-btn" title="Network">&#x1f310;</div>
-      <div class="tb-tray-btn" title="Volume">&#x1f50a;</div>
+      <div class="tb-tray-btn" id="tb-terminal-btn" title="终端">&#x1f4bb;</div>
+      <div class="tb-tray-btn" title="网络">&#x1f310;</div>
+      <div class="tb-tray-btn" title="音量">&#x1f50a;</div>
       <div class="tb-clock" id="tb-clock">
         <span class="tb-clock-time">12:00</span>
         <span class="tb-clock-date">1/1</span>
@@ -574,20 +574,20 @@
   </div>
   <!-- 开始菜单 -->
   <div id="start-menu">
-    <div class="sm-search"><input type="text" placeholder="Type to search..." id="sm-search-input"></div>
+    <div class="sm-search"><input type="text" placeholder="搜索应用..." id="sm-search-input"></div>
     <div class="sm-apps" id="sm-app-list"></div>
     <div class="sm-footer">
       <div class="sm-user">
-        <div class="sm-avatar">WN</div>
-        <div class="sm-username">WebNT User</div>
+        <div class="sm-avatar">管</div>
+        <div class="sm-username">管理员</div>
       </div>
-      <div class="sm-power-btn" id="sm-shutdown" title="Shutdown">&#x23fb;</div>
+      <div class="sm-power-btn" id="sm-shutdown" title="关机">&#x23fb;</div>
     </div>
   </div>
   <!-- 终端窗口 -->
   <div id="terminal-window">
     <div class="tw-titlebar" id="tw-titlebar">
-      <div class="tw-title">Terminal</div>
+      <div class="tw-title">终端</div>
       <div class="tw-ctrl">
         <button class="tw-ctrl-btn" id="tw-minimize">&#x2014;</button>
         <button class="tw-ctrl-btn" id="tw-maximize">&#x25a1;</button>
@@ -597,7 +597,7 @@
     <div class="tw-output" id="tw-output"></div>
     <div class="tw-input-line">
       <span class="tw-prompt">webnt@kernel:~$</span>
-      <input type="text" class="tw-input" id="tw-input" placeholder="Type 'help'..." autofocus>
+      <input type="text" class="tw-input" id="tw-input" placeholder="输入 help 查看命令..." autofocus>
     </div>
   </div>
   <!-- 右键菜单 -->
@@ -657,28 +657,28 @@ class TerminalCommandRegistry {
   static get instance() { if(!this._i) this._i=new TerminalCommandRegistry(); return this._i; }
   _init() {
     const add=(name,desc,cat,fn)=>this.cmds.set(name,{name,desc,cat,fn});
-    add('help','Show available commands','SYSTEM',(a,o)=>{let t='Available commands:\n\n';this.cmds.forEach((c,n)=>{t+=`  ${n.padEnd(12)}${c.desc}\n`;});return t;});
-    add('ver','Kernel version','SYSTEM',()=>'WebNT Kernel v1.0.0');
-    add('sysinfo','System info','SYSTEM',()=>`WebNT Kernel v1.0.0\nCPU: ${navigator.hardwareConcurrency||'?'} cores\nMemory: ${navigator.deviceMemory||'?'} GB\nPlatform: ${navigator.platform}\nGPU: ${navigator.gpu?'WebGPU':'Canvas2D'}\nUptime: ${Math.floor(performance.now()/1000)}s`);
-    add('ps','List processes','PROCESS',()=>'  PID:1  System  [RUNNING]');
-    add('ls','List directory','FILE',(a)=>(a.length?`Directory: ${a[0]}`:'/')+'\n  Downloads/  Documents/  Desktop/');
-    add('pwd','Print working directory','FILE',()=>'/home/webnt');
-    add('cd','Change directory','FILE',(a)=>`Changed to: ${a[0]||'/'}`);
-    add('clear','Clear terminal','UTILITY',()=>'__CLEAR__');
-    add('echo','Print text','UTILITY',(a)=>a.join(' '));
-    add('date','Show date','UTILITY',()=>new Date().toString());
-    add('uptime','System uptime','SYSTEM',()=>`${Math.floor(performance.now()/1000)} seconds`);
-    add('whoami','Current user','SYSTEM',()=>'webnt');
-    add('shutdown','Shutdown','SYSTEM',()=>{setTimeout(()=>location.reload(),500);return'Shutting down...';});
-    add('reboot','Reboot','SYSTEM',()=>{location.reload();return'Rebooting...';});
-    add('netstat','Network stats','NETWORK',()=>'Active connections: 0');
-    add('driver','Driver management','DEVICE',()=>'display.webgpu [OK]\nfile.fs [OK]\nnet.stream [OK]\nterminal.cmd [OK]');
-    add('display','Display info','DEVICE',()=>`${window.innerWidth}x${window.innerHeight} @ ${window.devicePixelRatio}x`);
-    add('tree','Directory tree','FILE',()=>'/\n├── home/\n│   └── webnt/\n├── system/\n└── tmp/');
-    add('grep','Search in files','UTILITY',(a)=>`grep: no matches for "${a.join(' ')}"`);
-    add('history','Command history','UTILITY',()=>'');
-    add('dns','DNS lookup','NETWORK',(a)=>`${a[0]}: 127.0.0.1`);
-    add('ping','Network test','NETWORK',(a)=>`PING ${a[0]} (127.0.0.1): 56 data bytes\n64 bytes: seq=0 ttl=64 time=0.5ms`);
+    add('help','显示可用命令','系统',(a,o)=>{let t='可用命令:\n\n';this.cmds.forEach((c,n)=>{t+=`  ${n.padEnd(12)}${c.desc}\n`;});return t;});
+    add('ver','内核版本','系统',()=>'WebNT 内核 v1.0.0');
+    add('sysinfo','系统信息','系统',()=>`WebNT 内核 v1.0.0\nCPU: ${navigator.hardwareConcurrency||'?'} 核\n内存: ${navigator.deviceMemory||'?'} GB\n平台: ${navigator.platform}\nGPU: ${navigator.gpu?'WebGPU':'Canvas2D'}\n运行时间: ${Math.floor(performance.now()/1000)}秒`);
+    add('ps','进程列表','进程',()=>'  PID:1  系统  [运行中]');
+    add('ls','目录列表','文件',(a)=>(a.length?`目录: ${a[0]}`:'/')+'\n  下载/  文档/  桌面/');
+    add('pwd','当前目录','文件',()=>'/home/webnt');
+    add('cd','切换目录','文件',(a)=>`已切换到: ${a[0]||'/'}`);
+    add('clear','清屏','工具',()=>'__CLEAR__');
+    add('echo','输出文本','工具',(a)=>a.join(' '));
+    add('date','显示日期','工具',()=>new Date().toLocaleString('zh-CN'));
+    add('uptime','运行时间','系统',()=>`${Math.floor(performance.now()/1000)} 秒`);
+    add('whoami','当前用户','系统',()=>'管理员');
+    add('shutdown','关机','系统',()=>{setTimeout(()=>location.reload(),500);return'正在关机...';});
+    add('reboot','重启','系统',()=>{location.reload();return'正在重启...';});
+    add('netstat','网络状态','网络',()=>'活动连接: 0');
+    add('driver','驱动管理','设备',()=>'display.webgpu [正常]\nfile.fs [正常]\nnet.stream [正常]\nterminal.cmd [正常]');
+    add('display','显示信息','设备',()=>`${window.innerWidth}x${window.innerHeight} @ ${window.devicePixelRatio}x`);
+    add('tree','目录树','文件',()=>'/\n├── home/\n│   └── webnt/\n├── 系统/\n└── 临时/');
+    add('grep','文本搜索','工具',(a)=>`grep: 未找到 "${a.join(' ')}"`);
+    add('history','命令历史','工具',()=>'');
+    add('dns','DNS查询','网络',(a)=>`${a[0]}: 127.0.0.1`);
+    add('ping','网络测试','网络',(a)=>`PING ${a[0]} (127.0.0.1): 56 字节\n64 字节: seq=0 ttl=64 时间=0.5ms`);
   }
   getCommand(n) { return this.cmds.get(n)||null; }
   getAllCommands() { return [...this.cmds.keys()]; }
@@ -692,7 +692,7 @@ class TerminalExecutor {
     this.history.push(t);
     const parts=t.split(/\s+/), name=parts[0].toLowerCase(), args=parts.slice(1);
     const cmd=TerminalCommandRegistry.instance.getCommand(name);
-    if(!cmd) return {output:`Command not found: ${name}\nType 'help' for available commands.`,exitCode:127};
+    if(!cmd) return {output:`命令未找到: ${name}\n输入 'help' 查看可用命令。`,exitCode:127};
     try {
       const r=cmd.fn(args,{});
       if(r==='__CLEAR__') return {output:'',exitCode:0,clear:true};
@@ -770,7 +770,7 @@ function updateAllClocks() {
   // 锁屏时钟
   const lsTime=document.getElementById('ls-time'), lsDate=document.getElementById('ls-date');
   if(lsTime) lsTime.textContent=`${h}:${m}`;
-  if(lsDate) lsDate.textContent=now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  if(lsDate) lsDate.textContent=now.toLocaleDateString('zh-CN',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   // 任务栏时钟
   const tbc=document.querySelector('#taskbar .tb-clock-time'), tbcd=document.querySelector('#taskbar .tb-clock-date');
   if(tbc) tbc.textContent=`${h}:${m}`;
@@ -828,27 +828,44 @@ document.addEventListener('keydown', function unlockByKey(e) {
 // 桌面图标
 // ===================================================================
 const desktopApps = [
-  { id:'computer', name:'Computer', icon:'\ud83d\udda5\ufe0f', color:'#667eea', appId:'computer' },
-  { id:'terminal', name:'Terminal', icon:'\u2328\ufe0f', color:'#00ff88', appId:'terminal' },
-  { id:'explorer', name:'File Explorer', icon:'\ud83d\udcc1', color:'#ffd700', appId:'explorer' },
-  { id:'settings', name:'Settings', icon:'\u2699\ufe0f', color:'#ccc', appId:'settings' },
-  { id:'notepad', name:'Notepad', icon:'\ud83d\udcc4', color:'#8ab4f8', appId:'notepad' },
-  { id:'webview', name:'Web View', icon:'\ud83c\udf10', color:'#4fc3f7', appId:'webview' },
-  { id:'calculator', name:'Calculator', icon:'\ud83d\uddd2\ufe0f', color:'#fdd663', appId:'calculator' },
-  { id:'calendar', name:'Calendar', icon:'\ud83d\udcc5', color:'#f28b82', appId:'calendar' },
-  { id:'paint', name:'Paint', icon:'\ud83c\udfa8', color:'#ce93d8', appId:'paint' },
-  { id:'weather', name:'Weather', icon:'\u2600\ufe0f', color:'#ffcc02', appId:'weather' },
-  { id:'clock', name:'Clock', icon:'\u23f0', color:'#80cbc4', appId:'clock' },
-  { id:'minesweeper', name:'Minesweeper', icon:'\ud83d\udca3', color:'#ef5350', appId:'minesweeper' },
-  { id:'taskmgr', name:'Task Manager', icon:'\ud83d\udcca', color:'#ff9800', appId:'taskmgr' },
-  { id:'sysmon', name:'Sys Monitor', icon:'\ud83d\udcbb', color:'#81c995', appId:'sysmon' },
-  { id:'recycle', name:'Recycle Bin', icon:'\ud83d\uddd1\ufe0f', color:'#aaa', appId:'recycle' },
+  { id:'computer', name:'计算机', icon:'\ud83d\udda5\ufe0f', color:'#667eea', appId:'computer' },
+  { id:'terminal', name:'终端', icon:'\u2328\ufe0f', color:'#00ff88', appId:'terminal' },
+  { id:'explorer', name:'文件管理', icon:'\ud83d\udcc1', color:'#ffd700', appId:'explorer' },
+  { id:'settings', name:'设置', icon:'\u2699\ufe0f', color:'#ccc', appId:'settings' },
+  { id:'notepad', name:'记事本', icon:'\ud83d\udcc4', color:'#8ab4f8', appId:'notepad' },
+  { id:'webview', name:'浏览器', icon:'\ud83c\udf10', color:'#4fc3f7', appId:'webview' },
+  { id:'calculator', name:'计算器', icon:'\ud83d\uddd2\ufe0f', color:'#fdd663', appId:'calculator' },
+  { id:'calendar', name:'日历', icon:'\ud83d\udcc5', color:'#f28b82', appId:'calendar' },
+  { id:'paint', name:'画图', icon:'\ud83c\udfa8', color:'#ce93d8', appId:'paint' },
+  { id:'weather', name:'天气', icon:'\u2600\ufe0f', color:'#ffcc02', appId:'weather' },
+  { id:'clock', name:'时钟', icon:'\u23f0', color:'#80cbc4', appId:'clock' },
+  { id:'minesweeper', name:'扫雷', icon:'\ud83d\udca3', color:'#ef5350', appId:'minesweeper' },
+  { id:'appstore', name:'应用商店', icon:'\ud83d\uded2', color:'#ff7043', appId:'appstore' },
+  { id:'taskmgr', name:'任务管理', icon:'\ud83d\udcca', color:'#ff9800', appId:'taskmgr' },
+  { id:'sysmon', name:'系统监控', icon:'\ud83d\udcbb', color:'#81c995', appId:'sysmon' },
+  { id:'recycle', name:'回收站', icon:'\ud83d\uddd1\ufe0f', color:'#aaa', appId:'recycle' },
 ];
 let selectedIcon=null;
 
+function addDesktopIcon(id, name, icon, color, appId) {
+  if(!desktopApps.find(d => d.id === id)) {
+    desktopApps.push({ id, name, icon, color, appId });
+  }
+}
+
 function renderDesktopIcons() {
   desktopIcons.innerHTML='';
-  desktopApps.forEach((app, i) => {
+  // Load installed apps from localStorage
+  let installedApps = [];
+  try { installedApps = JSON.parse(localStorage.getItem('webnt_installed_apps') || '[]'); }
+  catch(e) {}
+  const allApps = [...desktopApps];
+  installedApps.forEach(a => {
+    if(!allApps.find(d => d.id === a.id)) {
+      allApps.push({ id:a.id, name:a.name, icon:a.icon, color:a.color, appId:a.id });
+    }
+  });
+  allApps.forEach((app, i) => {
     const icon=document.createElement('div');
     icon.className='desktop-icon';
     icon.style.left=(20+(i%4)*100)+'px';
@@ -868,11 +885,11 @@ function renderDesktopIcons() {
     icon.addEventListener('contextmenu', (e) => {
       e.preventDefault(); e.stopPropagation();
       showContextMenu(e.clientX, e.clientY, [
-        {label:'Open', action:()=>launchApp(app.appId)},
-        {label:'Open in Terminal', action:()=>{launchApp('terminal'); writeTerminal(`Opening ${app.name}...\n`);}},
+        {label:'打开', action:()=>launchApp(app.appId)},
+        {label:'在终端中打开', action:()=>{launchApp('terminal'); writeTerminal(`正在打开 ${app.name}...\n`);}},
         {separator:true},
-        {label:'Pin to Start', action:()=>{}},
-        {label:'Properties', action:()=>{}},
+        {label:'固定到开始', action:()=>{}},
+        {label:'属性', action:()=>{}},
       ]);
     });
     // 拖拽
@@ -898,13 +915,13 @@ renderDesktopIcons();
 desktopIcons.addEventListener('contextmenu', e => {
   e.preventDefault();
   showContextMenu(e.clientX, e.clientY, [
-    {label:'View', action:()=>{}},
-    {label:'Sort by', action:()=>{}},
+    {label:'查看', action:()=>{}},
+    {label:'排序方式', action:()=>{}},
     {separator:true},
-    {label:'Refresh', action:()=>renderDesktopIcons()},
+    {label:'刷新', action:()=>renderDesktopIcons()},
     {separator:true},
-    {label:'Display Settings', action:()=>launchApp('settings')},
-    {label:'Personalize', action:()=>{}},
+    {label:'显示设置', action:()=>launchApp('settings')},
+    {label:'个性化', action:()=>{}},
   ]);
 });
 
@@ -943,20 +960,21 @@ const smAppList = document.getElementById('sm-app-list');
 function renderStartMenu() {
   smAppList.innerHTML='';
   const apps=[
-    {name:'Terminal', icon:'\u2328\ufe0f', color:'#00ff88', appId:'terminal'},
-    {name:'File Explorer', icon:'\ud83d\udcc1', color:'#ffd700', appId:'explorer'},
-    {name:'Settings', icon:'\u2699\ufe0f', color:'#ccc', appId:'settings'},
-    {name:'Web View', icon:'\ud83c\udf10', color:'#4fc3f7', appId:'webview'},
-    {name:'Notepad', icon:'\ud83d\udcc4', color:'#8ab4f8', appId:'notepad'},
-    {name:'Calculator', icon:'\ud83d\uddd2\ufe0f', color:'#fdd663', appId:'calculator'},
-    {name:'Calendar', icon:'\ud83d\udcc5', color:'#f28b82', appId:'calendar'},
-    {name:'Paint', icon:'\ud83c\udfa8', color:'#ce93d8', appId:'paint'},
-    {name:'Weather', icon:'\u2600\ufe0f', color:'#ffcc02', appId:'weather'},
-    {name:'Clock', icon:'\u23f0', color:'#80cbc4', appId:'clock'},
-    {name:'Minesweeper', icon:'\ud83d\udca3', color:'#ef5350', appId:'minesweeper'},
-    {name:'Computer', icon:'\ud83d\udda5\ufe0f', color:'#667eea', appId:'computer'},
-    {name:'Task Manager', icon:'\ud83d\udcca', color:'#ff9800', appId:'taskmgr'},
-    {name:'System Monitor', icon:'\ud83d\udcbb', color:'#81c995', appId:'sysmon'},
+    {name:'终端', icon:'\u2328\ufe0f', color:'#00ff88', appId:'terminal'},
+    {name:'文件管理', icon:'\ud83d\udcc1', color:'#ffd700', appId:'explorer'},
+    {name:'设置', icon:'\u2699\ufe0f', color:'#ccc', appId:'settings'},
+    {name:'浏览器', icon:'\ud83c\udf10', color:'#4fc3f7', appId:'webview'},
+    {name:'记事本', icon:'\ud83d\udcc4', color:'#8ab4f8', appId:'notepad'},
+    {name:'计算器', icon:'\ud83d\uddd2\ufe0f', color:'#fdd663', appId:'calculator'},
+    {name:'日历', icon:'\ud83d\udcc5', color:'#f28b82', appId:'calendar'},
+    {name:'画图', icon:'\ud83c\udfa8', color:'#ce93d8', appId:'paint'},
+    {name:'天气', icon:'\u2600\ufe0f', color:'#ffcc02', appId:'weather'},
+    {name:'时钟', icon:'\u23f0', color:'#80cbc4', appId:'clock'},
+    {name:'扫雷', icon:'\ud83d\udca3', color:'#ef5350', appId:'minesweeper'},
+    {name:'应用商店', icon:'\ud83d\uded2', color:'#ff7043', appId:'appstore'},
+    {name:'计算机', icon:'\ud83d\udda5\ufe0f', color:'#667eea', appId:'computer'},
+    {name:'任务管理', icon:'\ud83d\udcca', color:'#ff9800', appId:'taskmgr'},
+    {name:'系统监控', icon:'\ud83d\udcbb', color:'#81c995', appId:'sysmon'},
   ];
   apps.forEach(app => {
     const el=document.createElement('div');
@@ -973,7 +991,7 @@ function toggleStartMenu() {
 }
 document.getElementById('tb-start-btn').addEventListener('click', e => { e.stopPropagation(); toggleStartMenu(); });
 document.getElementById('sm-shutdown').addEventListener('click', () => {
-  if(confirm('Shut down WebNT?')) location.reload();
+  if(confirm('确定要关闭 WebNT 吗？')) location.reload();
 });
 
 // 搜索过滤
@@ -1020,65 +1038,65 @@ function launchApp(appId) {
       tw.style.left='150px'; tw.style.top='80px';
       tw.style.zIndex=100;
       twInput.focus();
-      WindowManager.instance.createWindow({title:'Terminal',appId:'terminal',icon:'\u2328\ufe0f'});
+      WindowManager.instance.createWindow({title:'终端',appId:'terminal',icon:'\u2328\ufe0f'});
       break;
     case 'explorer':
-      showAppWindow('File Explorer', '\ud83d\udcc1', `
+      showAppWindow('文件管理', '\ud83d\udcc1', `
         <div style="display:flex;flex-wrap:wrap;gap:16px;padding:8px;">
-          ${['Downloads','Documents','Desktop','System','tmp'].map(f=>`<div style="display:flex;flex-direction:column;align-items:center;width:80px;cursor:pointer;padding:8px;border-radius:8px" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background=''"><span style="font-size:36px">${f==='Downloads'?'\ud83d\udce5':f==='Documents'?'\ud83d\udcc4':f==='Desktop'?'\ud83d\udda5\ufe0f':f==='System'?'\u2699\ufe0f':'\ud83d\udcc1'}</span><span style="font-size:12px;margin-top:4px">${f}</span></div>`).join('')}
+          ${['下载','文档','桌面','系统','临时'].map(f=>`<div style="display:flex;flex-direction:column;align-items:center;width:80px;cursor:pointer;padding:8px;border-radius:8px" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background=''"><span style="font-size:36px">${f==='下载'?'\ud83d\udce5':f==='文档'?'\ud83d\udcc4':f==='桌面'?'\ud83d\udda5\ufe0f':f==='系统'?'\u2699\ufe0f':'\ud83d\udcc1'}</span><span style="font-size:12px;margin-top:4px">${f}</span></div>`).join('')}
         </div>
       `);
       break;
     case 'settings':
-      showAppWindow('Settings', '\u2699\ufe0f', `
+      showAppWindow('设置', '\u2699\ufe0f', `
         <div style="display:flex;flex-direction:column;gap:12px;">
-          <h3 style="margin:0;color:#8ab4f8">System</h3>
+          <h3 style="margin:0;color:#8ab4f8">系统</h3>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
-            <div>Kernel:</div><div>WebNT v1.0.0</div>
-            <div>CPU:</div><div>${navigator.hardwareConcurrency||'?'} cores</div>
-            <div>Memory:</div><div>${navigator.deviceMemory||'?'} GB</div>
-            <div>Platform:</div><div>${navigator.platform}</div>
+            <div>内核:</div><div>WebNT v1.0.0</div>
+            <div>CPU:</div><div>${navigator.hardwareConcurrency||'?'} 核</div>
+            <div>内存:</div><div>${navigator.deviceMemory||'?'} GB</div>
+            <div>平台:</div><div>${navigator.platform}</div>
             <div>GPU:</div><div>${navigator.gpu?'WebGPU':'Canvas2D'}</div>
-            <div>Uptime:</div><div>${Math.floor(performance.now()/1000)}s</div>
+            <div>运行时间:</div><div>${Math.floor(performance.now()/1000)}秒</div>
           </div>
           <hr style="border-color:rgba(255,255,255,0.06)">
-          <h3 style="margin:0;color:#8ab4f8">Display</h3>
+          <h3 style="margin:0;color:#8ab4f8">显示</h3>
           <div style="font-size:13px">${window.innerWidth} × ${window.innerHeight} @ ${window.devicePixelRatio}x</div>
-          <div style="font-size:13px">Theme: <strong>Dark</strong></div>
+          <div style="font-size:13px">主题: <strong>深色</strong></div>
         </div>
       `);
       break;
     case 'notepad':
-      showAppWindow('Notepad', '\ud83d\udcc4', `
-        <textarea style="width:100%;height:calc(100% - 8px);background:transparent;border:none;color:#e0e0e0;font-family:'Courier New',monospace;font-size:14px;resize:none;outline:none" placeholder="Start typing..."></textarea>
+      showAppWindow('记事本', '\ud83d\udcc4', `
+        <textarea style="width:100%;height:calc(100% - 8px);background:transparent;border:none;color:#e0e0e0;font-family:'Courier New',monospace;font-size:14px;resize:none;outline:none" placeholder="开始输入..."></textarea>
       `);
       break;
     case 'webview':
-      showAppWindow('Web View', '\ud83c\udf10', `
+      showAppWindow('浏览器', '\ud83c\udf10', `
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px">
           <div style="font-size:48px">\ud83c\udf10</div>
-          <input type="text" placeholder="Enter URL..." style="width:60%;padding:10px;border-radius:20px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.06);color:#fff;text-align:center;outline:none" onkeydown="if(event.key==='Enter'){this.nextElementSibling.textContent='Opening '+this.value+'...';}">
+          <input type="text" placeholder="输入网址..." style="width:60%;padding:10px;border-radius:20px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.06);color:#fff;text-align:center;outline:none" onkeydown="if(event.key==='Enter'){this.nextElementSibling.textContent='正在打开 '+this.value+'...';}">
           <div style="font-size:12px;color:#777"></div>
         </div>
       `);
       break;
     case 'computer':
-      showAppWindow('This PC', '\ud83d\udda5\ufe0f', `
+      showAppWindow('此电脑', '\ud83d\udda5\ufe0f', `
         <div style="font-size:13px;line-height:1.8">
-          <strong>WebNT Kernel v1.0.0</strong><br>
-          CPU: ${navigator.hardwareConcurrency||'?'} cores<br>
-          Memory: ${navigator.deviceMemory||'?'} GB<br>
-          Platform: ${navigator.platform}<br>
+          <strong>WebNT 内核 v1.0.0</strong><br>
+          CPU: ${navigator.hardwareConcurrency||'?'} 核<br>
+          内存: ${navigator.deviceMemory||'?'} GB<br>
+          平台: ${navigator.platform}<br>
           GPU: ${navigator.gpu?'WebGPU':'Canvas2D'}<br>
-          User Agent: ${navigator.userAgent.substring(0,50)}...
+          用户代理: ${navigator.userAgent.substring(0,50)}...
         </div>
       `);
       break;
     case 'recycle':
-      showAppWindow('Recycle Bin', '\ud83d\uddd1\ufe0f', `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#777">Recycle Bin is empty</div>`);
+      showAppWindow('回收站', '\ud83d\uddd1\ufe0f', `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#777">回收站为空</div>`);
       break;
     case 'calculator':
-      showAppWindow('Calculator', '\ud83d\uddd2\ufe0f', `
+      showAppWindow('计算器', '\ud83d\uddd2\ufe0f', `
         <style>
           .calc-display { background:rgba(0,0,0,0.3); border-radius:8px; padding:12px 16px; margin-bottom:12px; text-align:right; min-height:60px; display:flex;flex-direction:column;justify-content:flex-end; }
           .calc-expr { font-size:13px; color:#888; min-height:20px; word-break:break-all; }
@@ -1123,14 +1141,14 @@ function launchApp(appId) {
         const y=now.getFullYear(), m=now.getMonth();
         const firstDay=new Date(y,m,1).getDay();
         const daysInMonth=new Date(y,m+1,0).getDate();
-        const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const monthNames=['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
         let grid='';
         for(let i=0;i<firstDay;i++) grid+='<div></div>';
         for(let d=1;d<=daysInMonth;d++) {
           const isToday=(d===now.getDate()&&m===now.getMonth()&&y===now.getFullYear());
           grid+=`<div style="padding:8px;text-align:center;border-radius:6px;${isToday?'background:rgba(102,126,234,0.5);font-weight:600;':''}">${d}</div>`;
         }
-        showAppWindow('Calendar', '\ud83d\udcc5', `
+        showAppWindow('日历', '\ud83d\udcc5', `
           <style>
             .cal-header { display:flex;align-items:center;justify-content:space-between;margin-bottom:12px; }
             .cal-title { font-size:18px;font-weight:600; }
@@ -1144,14 +1162,14 @@ function launchApp(appId) {
             <button class="cal-nav">&gt;</button>
           </div>
           <div class="cal-grid">
-            ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>'<div class="cal-day-hdr">'+d+'</div>').join('')}
+            ${['日','一','二','三','四','五','六'].map(d=>'<div class="cal-day-hdr">'+d+'</div>').join('')}
             ${grid}
           </div>
         `);
       })();
       break;
     case 'taskmgr':
-      showAppWindow('Task Manager', '\ud83d\udcca', `
+      showAppWindow('任务管理', '\ud83d\udcca', `
         <style>
           .tm-table { width:100%;border-collapse:collapse;font-size:13px; }
           .tm-table th { text-align:left;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.1);color:#888;font-weight:500; }
@@ -1160,20 +1178,20 @@ function launchApp(appId) {
           .tm-kill:hover { background:#e8112344; }
         </style>
         <div style="margin-bottom:12px;font-size:13px;color:#888;">
-          Processes: <strong style="color:#fff">${WindowManager.instance.getWindowList().length+1}</strong> | 
-          Kernel: <strong style="color:#81c995">Running</strong>
+          进程: <strong style="color:#fff">${WindowManager.instance.getWindowList().length+1}</strong> | 
+          内核: <strong style="color:#81c995">运行中</strong>
         </div>
         <table class="tm-table">
-          <tr><th>PID</th><th>Name</th><th>Status</th><th>CPU</th><th>Memory</th><th></th></tr>
-          <tr><td>1</td><td>System</td><td style="color:#81c995">Running</td><td>0.2%</td><td>4.2 MB</td><td></td></tr>
-          <tr><td>2</td><td>Kernel</td><td style="color:#81c995">Running</td><td>0.5%</td><td>8.1 MB</td><td></td></tr>
-          <tr><td>3</td><td>Desktop</td><td style="color:#81c995">Running</td><td>1.2%</td><td>12.4 MB</td><td></td></tr>
-          ${WindowManager.instance.getWindowList().map((w,i)=>'<tr><td>'+(i+4)+'</td><td>'+w.title+'</td><td style="color:#81c995">Running</td><td>'+(Math.random()*2).toFixed(1)+'%</td><td>'+(Math.random()*20+5).toFixed(1)+' MB</td><td><button class="tm-kill" onclick="document.getElementById(\'appwin_'+w.appId+'\')?.remove();updateTaskbarWindowButtons();this.closest(\'tr\').remove()">End</button></td></tr>').join('')}
+          <tr><th>PID</th><th>名称</th><th>状态</th><th>CPU</th><th>内存</th><th></th></tr>
+          <tr><td>1</td><td>系统</td><td style="color:#81c995">运行中</td><td>0.2%</td><td>4.2 MB</td><td></td></tr>
+          <tr><td>2</td><td>内核</td><td style="color:#81c995">运行中</td><td>0.5%</td><td>8.1 MB</td><td></td></tr>
+          <tr><td>3</td><td>桌面</td><td style="color:#81c995">运行中</td><td>1.2%</td><td>12.4 MB</td><td></td></tr>
+          ${WindowManager.instance.getWindowList().map((w,i)=>'<tr><td>'+(i+4)+'</td><td>'+w.title+'</td><td style="color:#81c995">运行中</td><td>'+(Math.random()*2).toFixed(1)+'%</td><td>'+(Math.random()*20+5).toFixed(1)+' MB</td><td><button class="tm-kill" onclick="document.getElementById(\'appwin_'+w.appId+'\')?.remove();updateTaskbarWindowButtons();this.closest(\'tr\').remove()">结束</button></td></tr>').join('')}
         </table>
       `);
       break;
     case 'sysmon':
-      showAppWindow('System Monitor', '\ud83d\udcbb', `
+      showAppWindow('系统监控', '\ud83d\udcbb', `
         <style>
           .sm-bar-wrap { display:flex;align-items:center;gap:12px;margin-bottom:10px; }
           .sm-label { width:70px;font-size:12px;color:#888;flex-shrink:0; }
@@ -1183,29 +1201,29 @@ function launchApp(appId) {
           .sm-chart { display:flex;align-items:flex-end;gap:3px;height:80px;margin-top:16px;padding:0 4px; }
           .sm-chart-bar { flex:1;background:linear-gradient(to top,rgba(102,126,234,0.6),rgba(102,126,234,0.2));border-radius:2px 2px 0 0;min-height:2px;transition:height 0.5s; }
         </style>
-        <div style="font-size:13px;font-weight:600;margin-bottom:16px;color:#8ab4f8">Real-time Performance</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:16px;color:#8ab4f8">实时性能</div>
         <div class="sm-bar-wrap">
           <span class="sm-label">CPU</span>
           <div class="sm-bar-bg"><div class="sm-bar-fill" id="sm-cpu-bar" style="width:25%;background:linear-gradient(90deg,#667eea,#8ab4f8)"></div></div>
           <span class="sm-val" id="sm-cpu-val">25%</span>
         </div>
         <div class="sm-bar-wrap">
-          <span class="sm-label">Memory</span>
+          <span class="sm-label">内存</span>
           <div class="sm-bar-bg"><div class="sm-bar-fill" id="sm-mem-bar" style="width:42%;background:linear-gradient(90deg,#81c995,#4fc3f7)"></div></div>
           <span class="sm-val" id="sm-mem-val">42%</span>
         </div>
         <div class="sm-bar-wrap">
-          <span class="sm-label">Disk</span>
+          <span class="sm-label">磁盘</span>
           <div class="sm-bar-bg"><div class="sm-bar-fill" id="sm-disk-bar" style="width:18%;background:linear-gradient(90deg,#fdd663,#ff9800)"></div></div>
           <span class="sm-val" id="sm-disk-val">18%</span>
         </div>
         <div class="sm-bar-wrap">
-          <span class="sm-label">Network</span>
+          <span class="sm-label">网络</span>
           <div class="sm-bar-bg"><div class="sm-bar-fill" id="sm-net-bar" style="width:8%;background:linear-gradient(90deg,#f28b82,#e81123)"></div></div>
           <span class="sm-val" id="sm-net-val">8%</span>
         </div>
         <div class="sm-chart" id="sm-chart"></div>
-        <div style="font-size:10px;color:#666;margin-top:8px;text-align:center">CPU History (last 20s)</div>
+        <div style="font-size:10px;color:#666;margin-top:8px;text-align:center">CPU 历史 (最近 20 秒)</div>
       `);
       // Start live updates
       (function updateSysMon() {
@@ -1234,7 +1252,7 @@ function launchApp(appId) {
       })();
       break;
     case 'paint':
-      showAppWindow('Paint', '\ud83c\udfa8', `
+      showAppWindow('画图', '\ud83c\udfa8', `
         <style>
           .paint-toolbar { display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap; }
           .paint-toolbar button { background:rgba(255,255,255,0.08);border:none;color:#e0e0e0;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px; }
@@ -1248,9 +1266,9 @@ function launchApp(appId) {
         <div class="paint-toolbar">
           <input type="color" id="paint-color" value="#667eea" title="Color">
           <input type="range" id="paint-size" min="1" max="20" value="3" title="Brush Size">
-          <button id="paint-clear">Clear</button>
-          <button id="paint-fill" title="Fill Background">Fill</button>
-          <span style="font-size:11px;color:#888;margin-left:auto">Draw on canvas</span>
+          <button id="paint-clear">清空</button>
+          <button id="paint-fill" title="填充背景">填充</button>
+          <span style="font-size:11px;color:#888;margin-left:auto">在画布上绘制</span>
         </div>
         <div class="paint-canvas-wrap"><canvas class="paint-canvas" id="paint-canvas"></canvas></div>
       `);
@@ -1300,7 +1318,7 @@ function launchApp(appId) {
       });
       break;
     case 'weather':
-      showAppWindow('Weather', '\u2600\ufe0f', `
+      showAppWindow('天气', '\u2600\ufe0f', `
         <style>
           .wx-current { display:flex;align-items:center;gap:20px;margin-bottom:20px;padding:16px;background:rgba(255,255,255,0.04);border-radius:12px; }
           .wx-current .wx-icon { font-size:56px; }
@@ -1318,25 +1336,25 @@ function launchApp(appId) {
           <div class="wx-icon">\u2600\ufe0f</div>
           <div>
             <div class="wx-temp">28\u00b0</div>
-            <div style="font-size:14px;color:#e0e0e0">Sunny</div>
+            <div style="font-size:14px;color:#e0e0e0">晴</div>
           </div>
           <div class="wx-detail">
-            Humidity: 45%<br>Wind: 12 km/h<br>UV Index: Moderate
+            湿度: 45%<br>风速: 12 km/h<br>紫外线: 中等
           </div>
         </div>
-        <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:#888">5-Day Forecast</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:#888">5 日预报</div>
         <div class="wx-forecast">
           ${[
-            {day:'Mon',icon:'\u2600\ufe0f',hi:30,lo:20},
-            {day:'Tue',icon:'\u26c5',hi:27,lo:18},
-            {day:'Wed',icon:'\ud83c\udf27\ufe0f',hi:24,lo:16},
-            {day:'Thu',icon:'\u2600\ufe0f',hi:29,lo:19},
+            {day:'周一',icon:'\u2600\ufe0f',hi:30,lo:20},
+            {day:'周二',icon:'\u26c5',hi:27,lo:18},
+            {day:'周三',icon:'\ud83c\udf27\ufe0f',hi:24,lo:16},
+            {day:'周四',icon:'\u2600\ufe0f',hi:29,lo:19},
           ].map(f=>'<div class="wx-fc"><div class="wx-fc-day">'+f.day+'</div><div class="wx-fc-icon">'+f.icon+'</div><div class="wx-fc-temp"><span class="wx-fc-hi">'+f.hi+'\u00b0</span><span class="wx-fc-lo">'+f.lo+'\u00b0</span></div></div>').join('')}
         </div>
       `);
       break;
     case 'clock':
-      showAppWindow('Clock', '\u23f0', `
+      showAppWindow('时钟', '\u23f0', `
         <style>
           .clk-display { text-align:center;padding:20px 0; }
           .clk-time { font-size:56px;font-weight:200;color:#fff;letter-spacing:2px; }
@@ -1359,15 +1377,15 @@ function launchApp(appId) {
           <div class="clk-date" id="clk-date"></div>
         </div>
         <div class="clk-tabs">
-          <button class="clk-tab active" data-panel="stopwatch">Stopwatch</button>
-          <button class="clk-tab" data-panel="timer">Timer</button>
+          <button class="clk-tab active" data-panel="stopwatch">秒表</button>
+          <button class="clk-tab" data-panel="timer">计时器</button>
         </div>
         <div class="clk-panel active" id="panel-stopwatch">
           <div class="clk-sw-time" id="sw-time">00:00.00</div>
           <div class="clk-sw-btns">
-            <button class="primary" id="sw-start">Start</button>
-            <button id="sw-lap">Lap</button>
-            <button id="sw-reset">Reset</button>
+            <button class="primary" id="sw-start">开始</button>
+            <button id="sw-lap">计次</button>
+            <button id="sw-reset">重置</button>
           </div>
           <div class="clk-laps" id="sw-laps"></div>
         </div>
@@ -1388,8 +1406,8 @@ function launchApp(appId) {
         const timeEl = document.getElementById('clk-time');
         const dateEl = document.getElementById('clk-date');
         if(!timeEl) return;
-        timeEl.textContent = now.toLocaleTimeString();
-        dateEl.textContent = now.toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+        timeEl.textContent = now.toLocaleTimeString('zh-CN',{hour12:false});
+        dateEl.textContent = now.toLocaleDateString('zh-CN',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
         setTimeout(updateClock, 1000);
       })();
       // Stopwatch
@@ -1409,8 +1427,8 @@ function launchApp(appId) {
           swTime.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(ms).padStart(2,'0')}`;
         }
         swStart.addEventListener('click', () => {
-          if(swRunning) { swElapsed += Date.now() - swStartTime; clearInterval(swInterval); swStart.textContent = 'Start'; swStart.classList.add('primary'); }
-          else { swStartTime = Date.now(); swInterval = setInterval(updateSwDisplay, 10); swStart.textContent = 'Stop'; swStart.classList.remove('primary'); }
+          if(swRunning) { swElapsed += Date.now() - swStartTime; clearInterval(swInterval); swStart.textContent = '开始'; swStart.classList.add('primary'); }
+          else { swStartTime = Date.now(); swInterval = setInterval(updateSwDisplay, 10); swStart.textContent = '停止'; swStart.classList.remove('primary'); }
           swRunning = !swRunning;
         });
         swLap.addEventListener('click', () => {
@@ -1421,7 +1439,7 @@ function launchApp(appId) {
         });
         swReset.addEventListener('click', () => {
           swRunning = false; swElapsed = 0; clearInterval(swInterval);
-          swStart.textContent = 'Start'; swStart.classList.add('primary');
+          swStart.textContent = '开始'; swStart.classList.add('primary');
           swTime.textContent = '00:00.00'; swLaps.innerHTML = '';
         });
       })();
@@ -1440,21 +1458,21 @@ function launchApp(appId) {
           tmTime.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
         }
         tmStart.addEventListener('click', () => {
-          if(tmRunning) { clearInterval(tmInterval); tmStart.textContent = 'Start'; tmStart.classList.add('primary'); }
+          if(tmRunning) { clearInterval(tmInterval); tmStart.textContent = '开始'; tmStart.classList.add('primary'); }
           else {
             tmInterval = setInterval(() => {
               tmRemaining--;
-              if(tmRemaining <= 0) { tmRemaining = 0; clearInterval(tmInterval); tmRunning = false; tmStart.textContent = 'Start'; tmStart.classList.add('primary'); }
+              if(tmRemaining <= 0) { tmRemaining = 0; clearInterval(tmInterval); tmRunning = false; tmStart.textContent = '开始'; tmStart.classList.add('primary'); }
               updateTmDisplay();
             }, 1000);
-            tmStart.textContent = 'Stop'; tmStart.classList.remove('primary');
+            tmStart.textContent = '停止'; tmStart.classList.remove('primary');
           }
           tmRunning = !tmRunning;
         });
         tmReset.addEventListener('click', () => {
           tmRunning = false; clearInterval(tmInterval);
           tmRemaining = window.__tmTotal || 300;
-          tmStart.textContent = 'Start'; tmStart.classList.add('primary');
+          tmStart.textContent = '开始'; tmStart.classList.add('primary');
           updateTmDisplay();
         });
       })();
@@ -1552,9 +1570,9 @@ function launchApp(appId) {
               renderBoard();
               const status = document.getElementById('ms-status');
               if(status) {
-                if(gameOver && checkWin()) status.textContent = 'You Win! \ud83c\udf89';
-                else if(gameOver) status.textContent = 'Game Over \ud83d\udca5';
-                else status.textContent = `Mines: ${MINES}`;
+                if(gameOver && checkWin()) status.textContent = '你赢了! \ud83c\udf89';
+                else if(gameOver) status.textContent = '游戏结束 \ud83d\udca5';
+                else status.textContent = `雷数: ${MINES}`;
               }
             });
             cell.addEventListener('contextmenu', e => {
@@ -1567,14 +1585,14 @@ function launchApp(appId) {
           });
         }
         initBoard();
-        showAppWindow('Minesweeper', '\ud83d\udca3', `
+        showAppWindow('扫雷', '\ud83d\udca3', `
           <style>
             #ms-board { display:inline-block;margin:0 auto; }
           </style>
           <div style="text-align:center">
-            <div id="ms-status" style="font-size:14px;margin-bottom:12px;color:#888">Mines: ${MINES}</div>
+            <div id="ms-status" style="font-size:14px;margin-bottom:12px;color:#888">雷数: ${MINES}</div>
             <div id="ms-board"></div>
-            <button id="ms-restart" style="margin-top:12px;padding:8px 20px;background:rgba(255,255,255,0.08);border:none;color:#e0e0e0;border-radius:8px;cursor:pointer;font-size:13px">New Game</button>
+            <button id="ms-restart" style="margin-top:12px;padding:8px 20px;background:rgba(255,255,255,0.08);border:none;color:#e0e0e0;border-radius:8px;cursor:pointer;font-size:13px">新游戏</button>
           </div>
         `);
         // Render after DOM attached
@@ -1586,14 +1604,147 @@ function launchApp(appId) {
               initBoard();
               renderBoard();
               const status = document.getElementById('ms-status');
-              if(status) status.textContent = `Mines: ${MINES}`;
+              if(status) status.textContent = `雷数: ${MINES}`;
             });
           }
         });
       })();
       break;
+    case 'appstore':
+      showAppWindow('应用商店', '\ud83d\uded2', `
+        <style>
+          .store-tabs { display:flex;gap:4px;margin-bottom:16px; }
+          .store-tab { flex:1;padding:8px;text-align:center;background:rgba(255,255,255,0.04);border:none;color:#888;border-radius:8px;cursor:pointer;font-size:13px; }
+          .store-tab.active { background:rgba(255,112,67,0.3);color:#fff; }
+          .store-panel { display:none; }
+          .store-panel.active { display:block; }
+          .store-install-box { background:rgba(255,255,255,0.04);border-radius:12px;padding:16px;margin-bottom:16px; }
+          .store-install-box label { display:block;font-size:13px;color:#888;margin-bottom:8px; }
+          .store-url-row { display:flex;gap:8px; }
+          .store-url-row input { flex:1;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:13px;outline:none; }
+          .store-url-row input:focus { border-color:rgba(255,112,67,0.5); }
+          .store-url-row button { padding:10px 20px;background:rgba(255,112,67,0.5);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:13px;white-space:nowrap; }
+          .store-url-row button:hover { background:rgba(255,112,67,0.7); }
+          .store-app-card { display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;margin-bottom:8px; }
+          .store-app-card .sa-icon { width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0; }
+          .store-app-card .sa-info { flex:1;min-width:0; }
+          .store-app-card .sa-name { font-size:14px;color:#e0e0e0; }
+          .store-app-card .sa-url { font-size:11px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+          .store-app-card .sa-del { background:none;border:none;color:#f28b82;cursor:pointer;font-size:18px;padding:4px 8px; }
+          .store-empty { text-align:center;color:#666;padding:40px 0;font-size:13px; }
+          .store-msg { font-size:12px;margin-top:8px;min-height:18px; }
+          .store-msg.success { color:#81c995; }
+          .store-msg.error { color:#f28b82; }
+        </style>
+        <div class="store-tabs">
+          <button class="store-tab active" data-panel="store-install">安装</button>
+          <button class="store-tab" data-panel="store-installed">已安装</button>
+        </div>
+        <div class="store-panel active" id="panel-store-install">
+          <div class="store-install-box">
+            <label>输入应用链接进行安装</label>
+            <div class="store-url-row">
+              <input type="text" id="store-url-input" placeholder="https://example.com/app.js 或 HTML 链接">
+              <button id="store-install-btn">安装</button>
+            </div>
+            <div class="store-msg" id="store-msg"></div>
+          </div>
+          <div style="font-size:12px;color:#888;margin-bottom:8px;">推荐应用:</div>
+          ${[
+            {name:'贪吃蛇', icon:'\ud83d\udc0d', color:'#81c995', url:'https://cdn.jsdelivr.net/gh/topics/snake-game/snake.js'},
+            {name:'2048', icon:'\ud83d\udd32', color:'#fdd663', url:'2048'},
+            {name:'俄罗斯方块', icon:'\ud83e\udde9', color:'#ce93d8', url:'tetris'},
+            {name:'Markdown编辑器', icon:'\ud83d\udcdd', color:'#8ab4f8', url:'md-editor'},
+          ].map(a=>'<div class="store-app-card" style="cursor:pointer" onclick="document.getElementById(\'store-url-input\').value=\''+a.url+'\'"><div class="sa-icon" style="background:'+a.color+'22;color:'+a.color+'">'+a.icon+'</div><div class="sa-info"><div class="sa-name">'+a.name+'</div><div class="sa-url">点击填写链接</div></div></div>').join('')}
+        </div>
+        <div class="store-panel" id="panel-store-installed">
+          <div id="store-installed-list"></div>
+        </div>
+      `);
+      // Initialize store
+      requestAnimationFrame(() => {
+        const installBtn = document.getElementById('store-install-btn');
+        const urlInput = document.getElementById('store-url-input');
+        const msg = document.getElementById('store-msg');
+        const installedList = document.getElementById('store-installed-list');
+
+        function loadInstalledApps() {
+          try { return JSON.parse(localStorage.getItem('webnt_installed_apps') || '[]'); }
+          catch(e) { return []; }
+        }
+        function saveInstalledApps(apps) {
+          localStorage.setItem('webnt_installed_apps', JSON.stringify(apps));
+        }
+        function renderInstalled() {
+          if(!installedList) return;
+          const apps = loadInstalledApps();
+          if(apps.length === 0) {
+            installedList.innerHTML = '<div class="store-empty">暂无已安装的第三方应用<br><br>输入链接后点击"安装"添加</div>';
+            return;
+          }
+          installedList.innerHTML = apps.map((a,i) => '<div class="store-app-card"><div class="sa-icon" style="background:'+a.color+'22;color:'+a.color+'">'+a.icon+'</div><div class="sa-info"><div class="sa-name">'+a.name+'</div><div class="sa-url" title="'+a.url+'">'+a.url+'</div></div><div style="display:flex;gap:6px"><button style="padding:6px 12px;background:rgba(255,255,255,0.08);border:none;color:#e0e0e0;border-radius:6px;cursor:pointer;font-size:12px" onclick="window.__launchInstalledApp(\''+a.id+'\')">启动</button><button class="sa-del" onclick="window.__uninstallApp(\''+a.id+'\')">\u2715</button></div></div>').join('');
+        }
+        window.__launchInstalledApp = function(appId) {
+          const apps = loadInstalledApps();
+          const app = apps.find(a => a.id === appId);
+          if(!app) return;
+          showAppWindow(app.name, app.icon, '<div style="width:100%;height:100%;display:flex;flex-direction:column"><div style="font-size:32px;text-align:center;padding:20px">'+app.icon+'</div><div style="text-align:center;color:#888;font-size:13px">第三方应用</div><div style="text-align:center;color:#666;font-size:11px;margin-top:4px">'+app.url+'</div><iframe style="flex:1;width:100%;border:none;margin-top:12px;border-radius:8px;background:#fff" sandbox="allow-scripts allow-same-origin" src="'+app.url+'"></iframe></div>');
+        };
+        window.__uninstallApp = function(appId) {
+          if(!confirm('确定要卸载此应用吗？')) return;
+          let apps = loadInstalledApps();
+          apps = apps.filter(a => a.id !== appId);
+          saveInstalledApps(apps);
+          renderInstalled();
+          // Remove from desktop
+          const existing = document.querySelector('.desktop-icon[data-app-id="'+appId+'"]');
+          if(existing) existing.remove();
+        };
+
+        installBtn.addEventListener('click', () => {
+          const url = urlInput.value.trim();
+          if(!url) { msg.textContent = '请输入应用链接'; msg.className = 'store-msg error'; return; }
+          const apps = loadInstalledApps();
+          if(apps.some(a => a.url === url)) { msg.textContent = '该链接已安装'; msg.className = 'store-msg error'; return; }
+          // Generate app info from URL
+          const urlObj = (() => { try { return new URL(url); } catch(e) { return null; } })();
+          const name = urlObj ? urlObj.hostname.replace('www.','') : url.substring(0,30);
+          const id = 'ext_' + Date.now();
+          const colors = ['#667eea','#ffd700','#f28b82','#81c995','#ce93d8','#ff9800','#4fc3f7','#ffcc02'];
+          const color = colors[Math.floor(Math.random()*colors.length)];
+          apps.push({ id, name, url, icon:'\ud83d\udce6', color });
+          saveInstalledApps(apps);
+          msg.textContent = '应用安装成功！';
+          msg.className = 'store-msg success';
+          urlInput.value = '';
+          renderInstalled();
+          // Add to desktop
+          addDesktopIcon(id, name, '\ud83d\udce6', color, id);
+          renderDesktopIcons();
+        });
+
+        // Tab switching
+        document.querySelectorAll('.store-tab').forEach(tab => {
+          tab.addEventListener('click', () => {
+            document.querySelectorAll('.store-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.store-panel').forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            const panel = document.getElementById('panel-' + tab.dataset.panel);
+            if(panel) panel.classList.add('active');
+            if(tab.dataset.panel === 'store-installed') renderInstalled();
+          });
+        });
+
+        renderInstalled();
+      });
+      break;
     default:
-      showAppWindow(appId, '\ud83d\udcc4', `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#777">${appId} is running</div>`);
+      // Check if it's an installed app
+      if(appId.startsWith('ext_')) {
+        if(window.__launchInstalledApp) window.__launchInstalledApp(appId);
+      } else {
+        showAppWindow(appId, '\ud83d\udce6', `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#777">${appId} 正在运行</div>`);
+      }
   }
   updateTaskbarWindowButtons();
 }
@@ -1663,8 +1814,8 @@ function writeTerminal(text, cls='') {
 
 function writeWelcome() {
   twOutput.innerHTML='';
-  writeTerminal('WebNT Kernel v1.0.0 [HTML5 Hybrid Microkernel]', 'info');
-  writeTerminal('Type "help" for available commands.');
+  writeTerminal('WebNT 内核 v1.0.0 [HTML5 混合微内核]', 'info');
+  writeTerminal('输入 "help" 查看可用命令。');
   writeTerminal('');
 }
 
@@ -1728,55 +1879,55 @@ tw.addEventListener('pointerup', () => { twDragging=false; });
 // 启动流程
 // ===================================================================
 async function boot() {
-  bootLogLine('WebNT Kernel v1.0.0 Starting...', 'info');
-  bootLogLine('Copyright (c) 2026 WebNT Project', '');
+  bootLogLine('WebNT 内核 v1.0.0 正在启动...', 'info');
+  bootLogLine('Copyright (c) 2026 WebNT 项目', '');
   bootLogLine('', '');
 
   // Phase 0: 硬件检测
-  bootProgress(10, 'Phase 0: Hardware Detection');
-  bootLogLine('Phase 0: Hardware Detection', 'info');
-  bootLogLine(`  CPU: ${navigator.hardwareConcurrency||'?'} cores`, '');
-  bootLogLine(`  Memory: ${navigator.deviceMemory||'?'} GB`, '');
-  bootLogLine(`  WebGPU: ${navigator.gpu?'Available':'Not Available'}`, navigator.gpu?'ok':'warn');
+  bootProgress(10, '阶段 0: 硬件检测');
+  bootLogLine('阶段 0: 硬件检测', 'info');
+  bootLogLine(`  CPU: ${navigator.hardwareConcurrency||'?'} 核`, '');
+  bootLogLine(`  内存: ${navigator.deviceMemory||'?'} GB`, '');
+  bootLogLine(`  WebGPU: ${navigator.gpu?'可用':'不可用'}`, navigator.gpu?'ok':'warn');
   bootLogLine('', '');
   await new Promise(r=>setTimeout(r,300));
 
   // Phase 1: 初始化内核
-  bootProgress(35, 'Phase 1: Kernel Initialization');
-  bootLogLine('Phase 1: Kernel Initialization', 'info');
-  bootLogLine('  [OK] ObjectManager initialized', 'ok');
-  bootLogLine('  [OK] HandleTable ready', 'ok');
-  bootLogLine('  [OK] Scheduler.SMP started', 'ok');
-  bootLogLine('  [OK] InterruptController online', 'ok');
+  bootProgress(35, '阶段 1: 内核初始化');
+  bootLogLine('阶段 1: 内核初始化', 'info');
+  bootLogLine('  [正常] 对象管理器已初始化', 'ok');
+  bootLogLine('  [正常] 句柄表就绪', 'ok');
+  bootLogLine('  [正常] SMP调度器已启动', 'ok');
+  bootLogLine('  [正常] 中断控制器在线', 'ok');
   bootLogLine('', '');
   await new Promise(r=>setTimeout(r,200));
 
   // Phase 2: 加载驱动
-  bootProgress(55, 'Phase 2: Loading Drivers');
-  bootLogLine('Phase 2: Loading Drivers', 'info');
-  bootLogLine('  [OK] Driver.Display.WebGPU', 'ok');
-  bootLogLine('  [OK] Driver.File.FS', 'ok');
-  bootLogLine('  [OK] Driver.Net.Stream', 'ok');
-  bootLogLine('  [OK] Driver.Terminal.Cmd', 'ok');
-  bootLogLine('  [OK] Driver.Audio.WA', 'ok');
+  bootProgress(55, '阶段 2: 加载驱动');
+  bootLogLine('阶段 2: 加载驱动', 'info');
+  bootLogLine('  [正常] 显示驱动.WebGPU', 'ok');
+  bootLogLine('  [正常] 文件驱动.FS', 'ok');
+  bootLogLine('  [正常] 网络驱动.Stream', 'ok');
+  bootLogLine('  [正常] 终端驱动.Cmd', 'ok');
+  bootLogLine('  [正常] 音频驱动.WA', 'ok');
   bootLogLine('', '');
   await new Promise(r=>setTimeout(r,200));
 
   // Phase 3: 启动用户态
-  bootProgress(75, 'Phase 3: Starting User Session');
-  bootLogLine('Phase 3: Starting User Session', 'info');
-  bootLogLine('  [OK] Session Manager started', 'ok');
-  bootLogLine('  [OK] Desktop subsystem loaded', 'ok');
-  bootLogLine('  [OK] WinHTML display pipeline ready', 'ok');
+  bootProgress(75, '阶段 3: 启动用户会话');
+  bootLogLine('阶段 3: 启动用户会话', 'info');
+  bootLogLine('  [正常] 会话管理器已启动', 'ok');
+  bootLogLine('  [正常] 桌面子系统已加载', 'ok');
+  bootLogLine('  [正常] WinHTML 显示管线就绪', 'ok');
   bootLogLine('', '');
   await new Promise(r=>setTimeout(r,200));
 
   // Phase 4: 完成
-  bootProgress(100, 'System Ready');
+  bootProgress(100, '系统就绪');
   bootLogLine('', '');
   bootLogLine('========================================', '');
-  bootLogLine('  WebNT Kernel v1.0.0 Ready', 'ok');
-  bootLogLine('  All systems operational', 'ok');
+  bootLogLine('  WebNT 内核 v1.0.0 就绪', 'ok');
+  bootLogLine('  所有系统运行正常', 'ok');
   bootLogLine('========================================', '');
 
   await new Promise(r=>setTimeout(r,400));
@@ -1788,12 +1939,12 @@ async function boot() {
 
   setTimeout(() => { if(bootScreen.parentNode) bootScreen.remove(); }, 600);
 
-  console.log('%c WebNT Kernel v1.0.0 Ready %c| %cSlide to unlock',
+  console.log('%c WebNT 内核 v1.0.0 就绪 %c| %c滑动解锁',
     'color:#00ff88;font-size:16px;', '', 'color:#aaa;');
 }
 
 boot().catch(err => {
-  bootLogLine(`FATAL: ${err.message}`, 'err');
+  bootLogLine(`严重错误: ${err.message}`, 'err');
   console.error(err);
   bootScreen.classList.add('hidden');
   unlockDesktop();
