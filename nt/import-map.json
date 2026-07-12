@@ -1,0 +1,21 @@
+{
+  "imports": {
+    "kernel/executor/ProcessManager": "/nt/kernel/executor/ProcessManager.js",
+    "kernel/syscall/SysCall.Bridge": "/nt/kernel/syscall/SysCall.Bridge.js",
+    "kernel/terminal/Terminal.CommandRegistry": "/nt/kernel/terminal/Terminal.CommandRegistry.js",
+    "kernel/terminal/Terminal.Executor": "/nt/kernel/terminal/Terminal.Executor.js",
+    "kernel/terminal/Terminal.Lexer": "/nt/kernel/terminal/Terminal.Lexer.js",
+    "subsystem/app-sandbox/SandboxIframe.Bridge": "/nt/subsystem/app-sandbox/SandboxIframe.Bridge.js",
+    "subsystem/app-sandbox/SandboxPolicy": "/nt/subsystem/app-sandbox/SandboxPolicy.js",
+    "subsystem/display-pipeline/DisplayEventHub": "/nt/subsystem/display-pipeline/DisplayEventHub.js",
+    "subsystem/display-pipeline/GlobalDisplay.API": "/nt/subsystem/display-pipeline/GlobalDisplay.API.js",
+    "subsystem/window-manager/WindowManager.Core": "/nt/subsystem/window-manager/WindowManager.Core.js",
+    "ui/UIMain": "/nt/ui/UIMain.js",
+    "ui/components/DesktopIcons": "/nt/ui/components/DesktopIcons.js",
+    "ui/components/Taskbar": "/nt/ui/components/Taskbar.js",
+    "ui/components/SystemTray": "/nt/ui/components/SystemTray.js",
+    "ui/components/TerminalUI": "/nt/ui/components/TerminalUI.js",
+    "ui/components/WindowManagerUI": "/nt/ui/components/WindowManagerUI.js",
+    "ui/sandbox/AppContainer": "/nt/ui/sandbox/AppContainer.js"
+  }
+}

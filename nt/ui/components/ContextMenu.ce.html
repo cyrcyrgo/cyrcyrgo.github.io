@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+</head>
+<body>
+<!-- ============================================================
+     ContextMenu.ce.html — WebNT-HTML5 Web OS Kernel Context Menu
+     Custom Element: <nt-contextmenu>
+     Uses Shadow DOM (open mode) for style encapsulation.
+     【对接内核】Menu actions call into kernel APIs (SysCall, WindowManager)
+     ============================================================ -->
+
+<template id="nt-contextmenu-template">
+  <style>
+    :host {
+      display: none;
+      position: fixed;
+      z-index: 99999;
+      font-family: var(--sys-font-ui, 'Segoe UI', sans-serif);
+      font-size: var(--sys-font-size-md, 14px);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    :host(.visible) {
+      display: block;
+      animation: sys-scaleIn var(--sys-transition-fast, 100ms ease) forwards;
+    }
+
+    @keyframes sys-scaleIn {
+      from { transform: scale(0.92); opacity: 0; }
+      to   { transform: scale(1);    opacity: 1; }
+    }
+
+    .menu-container {
+      min-width: 200px;
+      max-width: 320px;
+      background: #2d2d2d;
+      border: 1px solid #3c3c3c;
+      border-radius: 8px;
+      padding: 4px 0;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: #e8eaed;
+    }
+
+    .menu-item {
+      display: flex;
+      align-items: center;
+      padding: 6px 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      position: relative;
+      min-height: 32px;
+      gap: 8px;
+    }
+
+    .menu-item:hover,
+    .menu-item.highlighted {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      margin: 0 4px;
+      padding: 6px 8px;
+    }
+
+    .menu-item.disabled {
+      color: #666;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    .menu-item.disabled:hover {
+      background: transparent;
+    }
+
+    .menu-separator {
+      height: 1px;
+      background: #3c3c3c;
+      margin: 4px 8px;
+      pointer-events: none;
+    }
+
+    .menu-icon {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
+    .menu-icon svg {
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .menu-label {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .menu-shortcut {
+      color: #888;
+      font-size: 12px;
+      margin-left: 24px;
+      flex-shrink: 0;
+    }
+
+    .menu-arrow {
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      opacity: 0.5;
+    }
+
+    .menu-arrow svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    /* ── Submenu ─────────────────────────────────────── */
+    .submenu {
+      display: none;
+      position: absolute;
+      left: 100%;
+      top: -4px;
+      min-width: 200px;
+      max-width: 320px;
+      background: #2d2d2d;
+      border: 1px solid #3c3c3c;
+      border-radius: 8px;
+      padding: 4px 0;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      z-index: 100000;
+    }
+
+    .menu-item:hover > .submenu,
+    .menu-item.highlighted > .submenu {
+      display: block;
+    }
+
+    /* ── Menu item with submenu indicator ────────────── */
+    .has-submenu::after {
+      /* The arrow is handled by the .menu-arrow element */
+    }
+  </style>
+
+  <div class="menu-container" id="menu-root" role="menu" tabindex="-1">
+    <!-- Menu items are rendered dynamically -->
+  </div>
+</template>
+
+<script type="module">
+  import SysCallBridge from '../../kernel/syscall/SysCall.Bridge.js';
+  import WindowManager from '../../subsystem/window-manager/WindowManager.Core.js';
+
+  /**
+   * SVG icons for common menu items.
+   */
+  const MENU_ICONS = {
+    refresh: `<svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`,
+    folder: `<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
+    document: `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+    settings: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+    personalize: `<svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
+    sort: `<svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="16" y2="6"/><line x1="4" y1="12" x2="12" y2="12"/><line x1="4" y1="18" x2="8" y2="18"/></svg>`,
+    view: `<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+    new_: `<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+    shortcut: `<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+  };
+
+  class NtContextMenu extends HTMLElement {
+    constructor() {
+      super();
+      this.attachShadow({ mode: 'open' });
+
+      const template = document.getElementById('nt-contextmenu-template');
+      if (template) {
+        this.shadowRoot.appendChild(template.content.cloneNode(true));
+      }
+
+      this._menuRoot = null;
+      this._visible = false;
+      this._actionHandler = null;
+      this._highlightIndex = -1;
+      this._menuItems = [];
+      this._currentItems = [];
+      this._boundKeyDown = this._onKeyDown.bind(this);
+      this._boundClickOutside = this._onClickOutside.bind(this);
+      this._boundMouseMove = this._onMouseMove.bind(this);
+    }
+
+    connectedCallback() {
+      this._menuRoot = this.shadowRoot.getElementById('menu-root');
+    }
+
+    /**
+     * Show the context menu at the given position.
+     * @param {number} x - Client X position
+     * @param {number} y - Client Y position
+     * @param {Array} items - Menu items array
+     * @param {Function} actionHandler - Callback for menu actions
+     */
+    show(x, y, items, actionHandler) {
+      if (!this._menuRoot) return;
+
+      this._currentItems = items;
+      this._actionHandler = actionHandler || null;
+      this._highlightIndex = -1;
+
+      // Render menu items
+      this._renderMenu(items);
+
+      // Position the menu
+      this.style.left = `${x}px`;
+      this.style.top = `${y}px`;
+
+      // Adjust position if menu would go off-screen
+      requestAnimationFrame(() => {
+        const rect = this.getBoundingClientRect();
+        const menuHeight = rect.height;
+        const menuWidth = rect.width;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        if (x + menuWidth > viewportWidth) {
+          this.style.left = `${Math.max(0, x - menuWidth)}px`;
+        }
+        if (y + menuHeight > viewportHeight) {
+          this.style.top = `${Math.max(0, y - menuHeight)}px`;
+        }
+      });
+
+      this._visible = true;
+      this.classList.add('visible');
+
+      // Bind events
+      document.addEventListener('keydown', this._boundKeyDown);
+      document.addEventListener('mousedown', this._boundClickOutside);
+      document.addEventListener('mousemove', this._boundMouseMove);
+
+      // Focus the menu for keyboard navigation
+      if (this._menuRoot) {
+        this._menuRoot.tabIndex = -1;
+        this._menuRoot.focus();
+      }
+    }
+
+    /**
+     * Hide the context menu.
+     */
+    hide() {
+      this._visible = false;
+      this.classList.remove('visible');
+      this._highlightIndex = -1;
+      this._menuItems = [];
+
+      document.removeEventListener('keydown', this._boundKeyDown);
+      document.removeEventListener('mousedown', this._boundClickOutside);
+      document.removeEventListener('mousemove', this._boundMouseMove);
+    }
+
+    /**
+     * Render the menu items into the DOM.
+     */
+    _renderMenu(items) {
+      if (!this._menuRoot) return;
+
+      this._menuRoot.innerHTML = '';
+      this._menuItems = [];
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const el = this._createMenuItem(item, i);
+        this._menuRoot.appendChild(el);
+      }
+    }
+
+    /**
+     * Create a single menu item element.
+     */
+    _createMenuItem(item, index) {
+      if (item.separator) {
+        const sep = document.createElement('div');
+        sep.className = 'menu-separator';
+        sep.setAttribute('role', 'separator');
+        return sep;
+      }
+
+      const div = document.createElement('div');
+      div.className = 'menu-item';
+      div.setAttribute('role', 'menuitem');
+      div.setAttribute('data-index', String(index));
+      if (item.disabled) {
+        div.classList.add('disabled');
+        div.setAttribute('aria-disabled', 'true');
+      }
+
+      // Icon
+      const iconName = this._getIconName(item);
+      if (iconName && MENU_ICONS[iconName]) {
+        const icon = document.createElement('span');
+        icon.className = 'menu-icon';
+        icon.innerHTML = MENU_ICONS[iconName];
+        div.appendChild(icon);
+      } else {
+        // Placeholder to maintain alignment
+        const icon = document.createElement('span');
+        icon.className = 'menu-icon';
+        div.appendChild(icon);
+      }
+
+      // Label
+      const label = document.createElement('span');
+      label.className = 'menu-label';
+      label.textContent = item.label;
+      div.appendChild(label);
+
+      // Shortcut
+      if (item.shortcut) {
+        const shortcut = document.createElement('span');
+        shortcut.className = 'menu-shortcut';
+        shortcut.textContent = item.shortcut;
+        div.appendChild(shortcut);
+      }
+
+      // Submenu arrow
+      if (item.children && item.children.length > 0) {
+        div.classList.add('has-submenu');
+        const arrow = document.createElement('span');
+        arrow.className = 'menu-arrow';
+        arrow.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
+        div.appendChild(arrow);
+
+        // Create submenu
+        const submenu = document.createElement('div');
+        submenu.className = 'submenu';
+        submenu.setAttribute('role', 'menu');
+        for (let i = 0; i < item.children.length; i++) {
+          const child = item.children[i];
+          const childEl = this._createMenuItem(child, i);
+          submenu.appendChild(childEl);
+        }
+        div.appendChild(submenu);
+      }
+
+      // Click handler
+      if (!item.disabled) {
+        div.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (item.children) return; // Has submenu, don't trigger action
+          this._executeAction(item.action);
+        });
+
+        div.addEventListener('mouseenter', () => {
+          this._highlightIndex = index;
+          this._updateHighlight();
+        });
+      }
+
+      this._menuItems.push({ element: div, item, index });
+      return div;
+    }
+
+    /**
+     * Map menu action to icon name.
+     */
+    _getIconName(item) {
+      if (!item.action) return item.icon || '';
+      if (item.action === 'refresh') return 'refresh';
+      if (item.action === 'new-folder') return 'folder';
+      if (item.action === 'new-text-document') return 'document';
+      if (item.action === 'new-shortcut') return 'shortcut';
+      if (item.action === 'display-settings') return 'settings';
+      if (item.action === 'personalize') return 'personalize';
+      if (item.action.startsWith('sort-')) return 'sort';
+      if (item.action.startsWith('view-')) return 'view';
+      return item.icon || '';
+    }
+
+    /**
+     * Execute a menu action.
+     * 【对接内核】Some actions call into kernel APIs.
+     */
+    _executeAction(action) {
+      if (!action) return;
+
+      // If a custom action handler is provided, delegate to it
+      if (this._actionHandler) {
+        this._actionHandler(action);
+        this.hide();
+        return;
+      }
+
+      // Default kernel-integrated actions
+      switch (action) {
+        case 'refresh':
+          // Refresh: dispatch custom event
+          this.dispatchEvent(new CustomEvent('menu-action', {
+            detail: { action: 'refresh' },
+            bubbles: true,
+            composed: true,
+          }));
+          break;
+
+        case 'display-settings':
+          // 【对接内核】Open settings app via WindowManager
+          WindowManager.instance.createWindow({
+            title: 'Display Settings',
+            width: 700,
+            height: 520,
+            icon: 'gear',
+            appId: 'settings',
+            resizable: true,
+          });
+          break;
+
+        case 'personalize':
+          // 【对接内核】Open personalization via WindowManager
+          WindowManager.instance.createWindow({
+            title: 'Personalization',
+            width: 700,
+            height: 520,
+            icon: 'gear',
+            appId: 'personalize',
+            resizable: true,
+          });
+          break;
+
+        case 'new-folder':
+          // 【对接内核】Create folder via SysCall.NtCreateFile
+          this._createNewFolder();
+          break;
+
+        case 'new-text-document':
+          // 【对接内核】Create file via SysCall.NtCreateFile
+          this._createNewTextDocument();
+          break;
+
+        case 'new-shortcut':
+          this.dispatchEvent(new CustomEvent('menu-action', {
+            detail: { action: 'new-shortcut' },
+            bubbles: true,
+            composed: true,
+          }));
+          break;
+
+        default:
+          // Dispatch generic action event
+          this.dispatchEvent(new CustomEvent('menu-action', {
+            detail: { action },
+            bubbles: true,
+            composed: true,
+          }));
+          break;
+      }
+
+      this.hide();
+    }
+
+    /**
+     * 【对接内核】Create a new folder via SysCall.NtCreateFile
+     */
+    async _createNewFolder() {
+      const folderName = `New Folder ${Date.now() % 1000}`;
+      const path = `/Desktop/${folderName}`;
+      try {
+        await SysCallBridge.instance.call('NtCreateFile', path, '');
+        this.dispatchEvent(new CustomEvent('menu-action', {
+          detail: { action: 'new-folder', path, name: folderName },
+          bubbles: true,
+          composed: true,
+        }));
+      } catch (err) {
+        console.error('ContextMenu: Failed to create folder:', err);
+      }
+    }
+
+    /**
+     * 【对接内核】Create a new text document via SysCall.NtCreateFile
+     */
+    async _createNewTextDocument() {
+      const fileName = `New Document ${Date.now() % 1000}.txt`;
+      const path = `/Desktop/${fileName}`;
+      try {
+        await SysCallBridge.instance.call('NtCreateFile', path, '');
+        this.dispatchEvent(new CustomEvent('menu-action', {
+          detail: { action: 'new-text-document', path, name: fileName },
+          bubbles: true,
+          composed: true,
+        }));
+      } catch (err) {
+        console.error('ContextMenu: Failed to create text document:', err);
+      }
+    }
+
+    /* ── Keyboard navigation ── */
+    _onKeyDown(e) {
+      if (!this._visible) return;
+
+      const items = this._getSelectableItems();
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          this._highlightIndex = Math.min(this._highlightIndex + 1, items.length - 1);
+          if (this._highlightIndex < 0) this._highlightIndex = 0;
+          this._updateHighlight();
+          break;
+
+        case 'ArrowUp':
+          e.preventDefault();
+          this._highlightIndex = Math.max(this._highlightIndex - 1, 0);
+          if (this._highlightIndex >= items.length) this._highlightIndex = items.length - 1;
+          this._updateHighlight();
+          break;
+
+        case 'ArrowRight': {
+          e.preventDefault();
+          const highlighted = this._menuItems.find(
+            (m) => m.index === this._highlightIndex && m.item.children
+          );
+          if (highlighted) {
+            // Open submenu — handled by hover via CSS
+            const submenu = highlighted.element.querySelector('.submenu');
+            if (submenu) {
+              submenu.style.display = 'block';
+            }
+          }
+          break;
+        }
+
+        case 'ArrowLeft':
+          e.preventDefault();
+          // Close submenu
+          break;
+
+        case 'Enter':
+          e.preventDefault();
+          this._activateHighlighted();
+          break;
+
+        case 'Escape':
+          e.preventDefault();
+          this.hide();
+          break;
+      }
+    }
+
+    _getSelectableItems() {
+      return this._menuItems.filter((m) => !m.item.separator && !m.item.disabled);
+    }
+
+    _updateHighlight() {
+      for (const { element, item, index } of this._menuItems) {
+        if (item.separator || item.disabled) continue;
+        if (index === this._highlightIndex) {
+          element.classList.add('highlighted');
+        } else {
+          element.classList.remove('highlighted');
+        }
+      }
+    }
+
+    _activateHighlighted() {
+      const highlighted = this._menuItems.find(
+        (m) => m.index === this._highlightIndex && !m.item.separator && !m.item.disabled
+      );
+      if (highlighted && highlighted.item.action) {
+        this._executeAction(highlighted.item.action);
+      }
+    }
+
+    _onMouseMove(e) {
+      if (!this._visible) return;
+
+      // Find which menu item is under the mouse
+      const target = e.composedPath()[0];
+      const menuItem = target?.closest?.('.menu-item');
+      if (menuItem) {
+        const index = parseInt(menuItem.getAttribute('data-index'), 10);
+        if (!isNaN(index)) {
+          this._highlightIndex = index;
+          this._updateHighlight();
+        }
+      }
+    }
+
+    _onClickOutside(e) {
+      if (!this._visible) return;
+
+      // Check if click is outside this component
+      const path = e.composedPath();
+      if (!path.includes(this)) {
+        this.hide();
+      }
+    }
+  }
+
+  customElements.define('nt-contextmenu', NtContextMenu);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,299 @@
+/* ============================================================
+   Global.System.css — WebNT-HTML5 Web OS Kernel Global Stylesheet
+   ============================================================ */
+
+/* ── Reset ───────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--sys-font-ui);
+  font-size: var(--sys-font-size-md);
+  color: var(--sys-text);
+  background: var(--sys-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── CSS Custom Properties — Light Theme (default) ──────── */
+:root,
+[data-theme="light"] {
+  /* Colors */
+  --sys-bg:              #f0f2f5;
+  --sys-bg-secondary:    #ffffff;
+  --sys-bg-tertiary:     #e8eaed;
+  --sys-text:            #1a1c1e;
+  --sys-text-secondary:  #5f6368;
+  --sys-text-disabled:   #9aa0a6;
+  --sys-accent:          #1a73e8;
+  --sys-accent-hover:    #1557b0;
+  --sys-accent-text:     #ffffff;
+  --sys-border:          #dadce0;
+  --sys-border-light:    #e8eaed;
+  --sys-danger:          #d93025;
+  --sys-warning:         #f9ab00;
+  --sys-success:         #188038;
+  --sys-info:            #1a73e8;
+
+  /* Window */
+  --sys-window-bg:       #ffffff;
+  --sys-window-border:   #c4c7c9;
+  --sys-titlebar-bg:     #dee1e6;
+  --sys-titlebar-text:   #1a1c1e;
+  --sys-titlebar-height: 32px;
+  --sys-window-shadow:   0 4px 24px rgba(0, 0, 0, 0.18);
+  --sys-window-radius:   8px;
+
+  /* Taskbar */
+  --sys-taskbar-bg:      #e8eaed;
+  --sys-taskbar-height:  48px;
+  --sys-taskbar-text:    #1a1c1e;
+
+  /* Terminal */
+  --sys-terminal-bg:     #1e1e1e;
+  --sys-terminal-text:   #d4d4d4;
+  --sys-terminal-prompt: #4ec9b0;
+  --sys-terminal-cursor: #ffffff;
+
+  /* Font */
+  --sys-font-mono:       'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  --sys-font-ui:         'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  --sys-font-size-sm:    12px;
+  --sys-font-size-md:    14px;
+  --sys-font-size-lg:    16px;
+
+  /* Spacing */
+  --sys-spacing-xs: 4px;
+  --sys-spacing-sm: 8px;
+  --sys-spacing-md: 16px;
+  --sys-spacing-lg: 24px;
+  --sys-spacing-xl: 32px;
+
+  /* Animation */
+  --sys-transition-fast:   100ms ease;
+  --sys-transition-normal: 200ms ease;
+  --sys-transition-slow:   350ms ease;
+}
+
+/* ── Dark Theme ─────────────────────────────────────────── */
+[data-theme="dark"] {
+  --sys-bg:              #121212;
+  --sys-bg-secondary:    #1e1e1e;
+  --sys-bg-tertiary:     #2d2d2d;
+  --sys-text:            #e8eaed;
+  --sys-text-secondary:  #9aa0a6;
+  --sys-text-disabled:   #5f6368;
+  --sys-accent:          #8ab4f8;
+  --sys-accent-hover:    #aecbfa;
+  --sys-accent-text:     #1a1c1e;
+  --sys-border:          #3c4043;
+  --sys-border-light:    #2d2d2d;
+  --sys-danger:          #f28b82;
+  --sys-warning:         #fdd663;
+  --sys-success:         #81c995;
+  --sys-info:            #8ab4f8;
+
+  --sys-window-bg:       #1e1e1e;
+  --sys-window-border:   #3c4043;
+  --sys-titlebar-bg:     #2d2d2d;
+  --sys-titlebar-text:   #e8eaed;
+  --sys-window-shadow:   0 4px 24px rgba(0, 0, 0, 0.4);
+
+  --sys-taskbar-bg:      #1e1e1e;
+  --sys-taskbar-text:    #e8eaed;
+
+  --sys-terminal-bg:     #0c0c0c;
+  --sys-terminal-text:   #cccccc;
+  --sys-terminal-prompt: #4ec9b0;
+  --sys-terminal-cursor: #aeafad;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sys-bg:              #121212;
+    --sys-bg-secondary:    #1e1e1e;
+    --sys-bg-tertiary:     #2d2d2d;
+    --sys-text:            #e8eaed;
+    --sys-text-secondary:  #9aa0a6;
+    --sys-text-disabled:   #5f6368;
+    --sys-accent:          #8ab4f8;
+    --sys-accent-hover:    #aecbfa;
+    --sys-accent-text:     #1a1c1e;
+    --sys-border:          #3c4043;
+    --sys-border-light:    #2d2d2d;
+    --sys-danger:          #f28b82;
+    --sys-warning:         #fdd663;
+    --sys-success:         #81c995;
+    --sys-info:            #8ab4f8;
+
+    --sys-window-bg:       #1e1e1e;
+    --sys-window-border:   #3c4043;
+    --sys-titlebar-bg:     #2d2d2d;
+    --sys-titlebar-text:   #e8eaed;
+    --sys-window-shadow:   0 4px 24px rgba(0, 0, 0, 0.4);
+
+    --sys-taskbar-bg:      #1e1e1e;
+    --sys-taskbar-text:    #e8eaed;
+
+    --sys-terminal-bg:     #0c0c0c;
+    --sys-terminal-text:   #cccccc;
+    --sys-terminal-prompt: #4ec9b0;
+    --sys-terminal-cursor: #aeafad;
+  }
+}
+
+/* ── @keyframes ─────────────────────────────────────────── */
+@keyframes sys-fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes sys-fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes sys-slideUp {
+  from { transform: translateY(8px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+
+@keyframes sys-slideDown {
+  from { transform: translateY(-8px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes sys-scaleIn {
+  from { transform: scale(0.92); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+@keyframes sys-pulse {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* ── Scrollbar — WebKit ─────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--sys-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sys-text-secondary);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── Scrollbar — Firefox ────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sys-border) transparent;
+}
+
+/* ── Selection ──────────────────────────────────────────── */
+::selection {
+  background: var(--sys-accent);
+  color: var(--sys-accent-text);
+}
+
+/* ── Focus-visible outline ──────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--sys-accent);
+  outline-offset: 2px;
+}
+
+/* ── Container Queries for responsive layout ────────────── */
+@container (max-width: 640px) {
+  .sys-container-responsive {
+    --sys-grid-cols: 2;
+  }
+}
+
+@container (min-width: 641px) and (max-width: 1024px) {
+  .sys-container-responsive {
+    --sys-grid-cols: 4;
+  }
+}
+
+@container (min-width: 1025px) {
+  .sys-container-responsive {
+    --sys-grid-cols: 6;
+  }
+}
+
+/* ── Utility Classes ────────────────────────────────────── */
+.sys-text-mono {
+  font-family: var(--sys-font-mono);
+}
+
+.sys-text-center {
+  text-align: center;
+}
+
+.sys-flex {
+  display: flex;
+}
+
+.sys-flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.sys-flex-row {
+  display: flex;
+  flex-direction: row;
+}
+
+.sys-gap-xs {
+  gap: var(--sys-spacing-xs);
+}
+
+.sys-gap-sm {
+  gap: var(--sys-spacing-sm);
+}
+
+.sys-gap-md {
+  gap: var(--sys-spacing-md);
+}
+
+.sys-gap-lg {
+  gap: var(--sys-spacing-lg);
+}
+
+.sys-gap-xl {
+  gap: var(--sys-spacing-xl);
+}
+
+.sys-overflow-hidden {
+  overflow: hidden;
+}
+
+.sys-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sys-select-none {
+  user-select: none;
+  -webkit-user-select: none;
+}
