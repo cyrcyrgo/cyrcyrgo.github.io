@@ -840,6 +840,7 @@ const desktopApps = [
   { id:'weather', name:'天气', icon:'\u2600\ufe0f', color:'#ffcc02', appId:'weather' },
   { id:'clock', name:'时钟', icon:'\u23f0', color:'#80cbc4', appId:'clock' },
   { id:'minesweeper', name:'扫雷', icon:'\ud83d\udca3', color:'#ef5350', appId:'minesweeper' },
+  { id:'wordpad', name:'写字板', icon:'\ud83d\udcdd', color:'#64b5f6', appId:'wordpad' },
   { id:'appstore', name:'应用商店', icon:'\ud83d\uded2', color:'#ff7043', appId:'appstore' },
   { id:'taskmgr', name:'任务管理', icon:'\ud83d\udcca', color:'#ff9800', appId:'taskmgr' },
   { id:'sysmon', name:'系统监控', icon:'\ud83d\udcbb', color:'#81c995', appId:'sysmon' },
@@ -971,6 +972,7 @@ function renderStartMenu() {
     {name:'天气', icon:'\u2600\ufe0f', color:'#ffcc02', appId:'weather'},
     {name:'时钟', icon:'\u23f0', color:'#80cbc4', appId:'clock'},
     {name:'扫雷', icon:'\ud83d\udca3', color:'#ef5350', appId:'minesweeper'},
+    {name:'写字板', icon:'\ud83d\udcdd', color:'#64b5f6', appId:'wordpad'},
     {name:'应用商店', icon:'\ud83d\uded2', color:'#ff7043', appId:'appstore'},
     {name:'计算机', icon:'\ud83d\udda5\ufe0f', color:'#667eea', appId:'computer'},
     {name:'任务管理', icon:'\ud83d\udcca', color:'#ff9800', appId:'taskmgr'},
@@ -1042,10 +1044,130 @@ function launchApp(appId) {
       break;
     case 'explorer':
       showAppWindow('文件管理', '\ud83d\udcc1', `
-        <div style="display:flex;flex-wrap:wrap;gap:16px;padding:8px;">
-          ${['下载','文档','桌面','系统','临时'].map(f=>`<div style="display:flex;flex-direction:column;align-items:center;width:80px;cursor:pointer;padding:8px;border-radius:8px" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background=''"><span style="font-size:36px">${f==='下载'?'\ud83d\udce5':f==='文档'?'\ud83d\udcc4':f==='桌面'?'\ud83d\udda5\ufe0f':f==='系统'?'\u2699\ufe0f':'\ud83d\udcc1'}</span><span style="font-size:12px;margin-top:4px">${f}</span></div>`).join('')}
+        <style>
+          .fm-wrap { display:flex;height:100%; }
+          .fm-sidebar { width:180px;border-right:1px solid rgba(255,255,255,0.08);padding:8px;overflow-y:auto;flex-shrink:0; }
+          .fm-sidebar .fm-tree-item { display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;color:#ccc; }
+          .fm-sidebar .fm-tree-item:hover { background:rgba(255,255,255,0.06); }
+          .fm-sidebar .fm-tree-item.active { background:rgba(102,126,234,0.25);color:#fff; }
+          .fm-main { flex:1;display:flex;flex-direction:column;min-width:0; }
+          .fm-toolbar { display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid rgba(255,255,255,0.08); }
+          .fm-toolbar button { background:rgba(255,255,255,0.06);border:none;color:#ccc;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:13px; }
+          .fm-toolbar button:hover { background:rgba(255,255,255,0.12); }
+          .fm-path { flex:1;padding:4px 10px;background:rgba(255,255,255,0.04);border-radius:4px;font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+          .fm-files { flex:1;overflow-y:auto;padding:8px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:4px; }
+          .fm-file { display:flex;flex-direction:column;align-items:center;width:80px;padding:8px 4px;border-radius:8px;cursor:pointer;text-align:center; }
+          .fm-file:hover { background:rgba(255,255,255,0.05); }
+          .fm-file .fm-file-icon { font-size:32px; }
+          .fm-file .fm-file-name { font-size:11px;color:#ccc;margin-top:4px;word-break:break-all; }
+        </style>
+        <div class="fm-wrap">
+          <div class="fm-sidebar" id="fm-sidebar">
+            <div class="fm-tree-item active" data-path="/" onclick="window.__fmNavigate('/')">\ud83d\udcc1 根目录</div>
+            <div class="fm-tree-item" data-path="/下载" onclick="window.__fmNavigate('/下载')">\ud83d\udce5 下载</div>
+            <div class="fm-tree-item" data-path="/文档" onclick="window.__fmNavigate('/文档')">\ud83d\udcc4 文档</div>
+            <div class="fm-tree-item" data-path="/桌面" onclick="window.__fmNavigate('/桌面')">\ud83d\udda5\ufe0f 桌面</div>
+            <div class="fm-tree-item" data-path="/系统" onclick="window.__fmNavigate('/系统')">\u2699\ufe0f 系统</div>
+            <div class="fm-tree-item" data-path="/临时" onclick="window.__fmNavigate('/临时')">\ud83d\udcc1 临时</div>
+          </div>
+          <div class="fm-main">
+            <div class="fm-toolbar">
+              <button onclick="window.__fmBack()" title="返回">\u2190</button>
+              <button onclick="window.__fmForward()" title="前进">\u2192</button>
+              <button onclick="window.__fmUp()" title="上级">\u2191</button>
+              <div class="fm-path" id="fm-path">/</div>
+            </div>
+            <div class="fm-files" id="fm-files"></div>
+          </div>
         </div>
       `);
+      // Initialize FM
+      if(!window.__fmInit) {
+        window.__fmInit = true;
+        window.__fmHistory = [];
+        window.__fmHistoryIdx = -1;
+        window.__fmCurrentPath = '/';
+        const fmFS = {
+          '/': {type:'dir',children:['下载','文档','桌面','系统','临时']},
+          '/下载': {type:'dir',children:[]},
+          '/文档': {type:'dir',children:['readme.txt','笔记.txt','项目计划.txt']},
+          '/桌面': {type:'dir',children:['快捷方式.lnk']},
+          '/系统': {type:'dir',children:['kernel.config','drivers.json','boot.log']},
+          '/临时': {type:'dir',children:['cache.dat','日志.log']},
+          '/文档/readme.txt': {type:'file',size:'1.2 KB',content:'欢迎使用 WebNT 文件管理系统！'},
+          '/文档/笔记.txt': {type:'file',size:'3.5 KB',content:'今天的笔记...'},
+          '/文档/项目计划.txt': {type:'file',size:'8.1 KB',content:'Q3 项目计划\n1. 完成 UI 组件\n2. 集成测试\n3. 发布'},
+          '/桌面/快捷方式.lnk': {type:'file',size:'0.5 KB',content:'[快捷方式]'},
+          '/系统/kernel.config': {type:'file',size:'2.3 KB',content:'kernel_version=1.0.0\nscheduler=smp\nmax_threads=256'},
+          '/系统/drivers.json': {type:'file',size:'4.7 KB',content:'{"display":"webgpu","fs":"internal","net":"stream"}'},
+          '/系统/boot.log': {type:'file',size:'12.1 KB',content:'[正常] 内核初始化完成\n[正常] 驱动加载完成\n[正常] 用户会话已启动'},
+          '/临时/cache.dat': {type:'file',size:'0.8 KB',content:'[二进制数据]'},
+          '/临时/日志.log': {type:'file',size:'2.1 KB',content:'[日志数据]'},
+        };
+        window.__fmNavigate = function(path) {
+          if(!fmFS[path] || fmFS[path].type !== 'dir') return;
+          window.__fmCurrentPath = path;
+          window.__fmHistory = window.__fmHistory.slice(0, window.__fmHistoryIdx + 1);
+          window.__fmHistory.push(path);
+          window.__fmHistoryIdx = window.__fmHistory.length - 1;
+          window.__fmRender();
+        };
+        window.__fmBack = function() {
+          if(window.__fmHistoryIdx > 0) {
+            window.__fmHistoryIdx--;
+            window.__fmCurrentPath = window.__fmHistory[window.__fmHistoryIdx];
+            window.__fmRender();
+          }
+        };
+        window.__fmForward = function() {
+          if(window.__fmHistoryIdx < window.__fmHistory.length - 1) {
+            window.__fmHistoryIdx++;
+            window.__fmCurrentPath = window.__fmHistory[window.__fmHistoryIdx];
+            window.__fmRender();
+          }
+        };
+        window.__fmUp = function() {
+          const p = window.__fmCurrentPath;
+          const idx = p.lastIndexOf('/');
+          if(idx > 0) window.__fmNavigate(p.substring(0, idx));
+          else if(window.__fmCurrentPath !== '/') window.__fmNavigate('/');
+        };
+        window.__fmRender = function() {
+          const path = window.__fmCurrentPath;
+          const pathEl = document.getElementById('fm-path');
+          const filesEl = document.getElementById('fm-files');
+          const sidebarEl = document.getElementById('fm-sidebar');
+          if(pathEl) pathEl.textContent = path;
+          if(sidebarEl) {
+            sidebarEl.querySelectorAll('.fm-tree-item').forEach(item => {
+              item.classList.toggle('active', item.dataset.path === path);
+            });
+          }
+          if(!filesEl) return;
+          const dir = fmFS[path];
+          if(!dir || dir.type !== 'dir') { filesEl.innerHTML = '<div style="color:#666;padding:20px">目录不存在</div>'; return; }
+          if(dir.children.length === 0) {
+            filesEl.innerHTML = '<div style="color:#666;padding:20px;text-align:center;width:100%">此文件夹为空</div>';
+            return;
+          }
+          filesEl.innerHTML = dir.children.map(name => {
+            const fullPath = (path === '/' ? '/' + name : path + '/' + name);
+            const entry = fmFS[fullPath];
+            const isDir = entry && entry.type === 'dir';
+            const icon = isDir ? '\ud83d\udcc1' : (name.endsWith('.txt')||name.endsWith('.log')?'\ud83d\udcc4':name.endsWith('.json')||name.endsWith('.config')?'\u2699\ufe0f':name.endsWith('.lnk')?'\ud83d\udd17':'\ud83d\udce6');
+            const size = entry && entry.size ? entry.size : '';
+            return '<div class="fm-file" ondblclick="'+(isDir ? "window.__fmNavigate('"+fullPath+"')" : "window.__fmOpenFile('"+fullPath+"')")+'"><div class="fm-file-icon">'+icon+'</div><div class="fm-file-name">'+name+'</div>'+ (size ? '<div style="font-size:10px;color:#666">'+size+'</div>' : '') +'</div>';
+          }).join('');
+        };
+        window.__fmOpenFile = function(path) {
+          const entry = fmFS[path];
+          if(!entry) return;
+          showAppWindow(path.split('/').pop(), '\ud83d\udcc4', '<div style="padding:8px;white-space:pre-wrap;font-family:monospace;font-size:13px;color:#e0e0e0;height:100%;overflow:auto">'+ (entry.content || '[无法预览]') +'</div>');
+        };
+        window.__fmNavigate('/');
+      } else {
+        setTimeout(() => window.__fmRender(), 50);
+      }
       break;
     case 'settings':
       showAppWindow('设置', '\u2699\ufe0f', `
