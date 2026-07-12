@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Color Tools — WebNT</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a1a2e;
+    --bg2: #16213e;
+    --bg3: #0f3460;
+    --text: #e0e0e0;
+    --text2: #a0a0b8;
+    --accent: #9b59b6;
+    --accent2: #8e44ad;
+    --border: #2a2a4a;
+    --success: #27ae60;
+    --fail: #e74c3c;
+    --warn: #f39c12;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .app {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 100vh;
+  }
+
+  header {
+    text-align: center;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+  }
+  header .sub {
+    font-size: 0.8rem;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .card h3 {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text2);
+    margin-bottom: 14px;
+  }
+
+  /* ── Picker + Preview ── */
+  .picker-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .picker-row input[type="color"] {
+    -webkit-appearance: none;
+    width: 52px;
+    height: 52px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    background: none;
+    padding: 2px;
+  }
+  .picker-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  .picker-row input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 5px;
+  }
+  .picker-row .hex-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    width: 140px;
+    text-align: center;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .picker-row .hex-input:focus { border-color: var(--accent); }
+
+  .swatch {
+    width: 100%;
+    height: 120px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    transition: background .25s;
+  }
+
+  /* ── Format list ── */
+  .format-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .format-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    user-select: none;
+    position: relative;
+  }
+  .format-item:hover { border-color: var(--accent); background: var(--bg3); }
+  .format-item .label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text2);
+    letter-spacing: 1px;
+  }
+  .format-item .value {
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.9rem;
+    color: var(--text);
+  }
+  .format-item .copied-tip {
+    position: absolute;
+    top: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.7rem;
+    padding: 3px 10px;
+    border-radius: 4px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .2s;
+    white-space: nowrap;
+  }
+  .format-item .copied-tip.show { opacity: 1; }
+
+  /* ── Palette ── */
+  .scheme-btns {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .scheme-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all .2s;
+    white-space: nowrap;
+  }
+  .scheme-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .scheme-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .palette-colors {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .palette-swatch {
+    flex: 1 1 90px;
+    min-width: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: transform .15s;
+  }
+  .palette-swatch:hover { transform: scale(1.05); }
+  .palette-swatch .p-swatch {
+    width: 100%;
+    height: 60px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .palette-swatch .p-hex {
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.75rem;
+    color: var(--text2);
+  }
+
+  /* ── Recent ── */
+  .recent-list {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .recent-item {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    transition: border-color .2s, transform .15s;
+    position: relative;
+  }
+  .recent-item:hover { border-color: var(--accent); transform: scale(1.1); }
+  .recent-empty {
+    font-size: 0.8rem;
+    color: var(--text2);
+    font-style: italic;
+  }
+
+  /* ── Contrast ── */
+  .contrast-row {
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .contrast-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .contrast-field label {
+    font-size: 0.75rem;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .contrast-field .contrast-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .contrast-field input[type="color"] {
+    -webkit-appearance: none;
+    width: 36px;
+    height: 36px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    background: none;
+    padding: 1px;
+  }
+  .contrast-field input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  .contrast-field input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+  .contrast-field input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    width: 100px;
+    text-align: center;
+    outline: none;
+  }
+  .contrast-field input[type="text"]:focus { border-color: var(--accent); }
+
+  .contrast-result {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .contrast-ratio {
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-family: 'Fira Code', 'Consolas', monospace;
+  }
+  .wcag-badges {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .wcag-badge {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .wcag-badge.pass { background: var(--success); color: #fff; }
+  .wcag-badge.fail { background: var(--fail); color: #fff; }
+
+  .preview-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .preview-sample {
+    flex: 1;
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: all .2s;
+  }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: #fff;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .3s;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 600px) {
+    .app { padding: 12px; gap: 14px; }
+    .format-list { grid-template-columns: 1fr 1fr; }
+    .contrast-row { flex-direction: column; align-items: stretch; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <h1>Color Tools</h1>
+    <div class="sub">WebNT System</div>
+  </header>
+
+  <!-- Color Picker -->
+  <div class="card" id="picker-card">
+    <h3>Color Picker</h3>
+    <div class="picker-row">
+      <input type="color" id="colorPicker" value="#9b59b6">
+      <input type="text" class="hex-input" id="hexInput" value="#9b59b6" maxlength="7" placeholder="#000000">
+    </div>
+    <div class="swatch" id="mainSwatch" style="background:#9b59b6; margin-top:14px;"></div>
+  </div>
+
+  <!-- Color Formats -->
+  <div class="card" id="formats-card">
+    <h3>Color Formats <span style="font-weight:400;font-size:0.7rem;text-transform:none;">(click to copy)</span></h3>
+    <div class="format-list" id="formatList"></div>
+  </div>
+
+  <!-- Palette Generator -->
+  <div class="card" id="palette-card">
+    <h3>Palette Generator</h3>
+    <div class="scheme-btns" id="schemeBtns">
+      <button class="scheme-btn active" data-scheme="complementary">Complementary</button>
+      <button class="scheme-btn" data-scheme="analogous">Analogous</button>
+      <button class="scheme-btn" data-scheme="triadic">Triadic</button>
+      <button class="scheme-btn" data-scheme="tetradic">Tetradic</button>
+      <button class="scheme-btn" data-scheme="monochromatic">Monochromatic</button>
+    </div>
+    <div class="palette-colors" id="paletteColors"></div>
+  </div>
+
+  <!-- Recent Colors -->
+  <div class="card" id="recent-card">
+    <h3>Recent Colors</h3>
+    <div class="recent-list" id="recentList"></div>
+  </div>
+
+  <!-- Contrast Checker -->
+  <div class="card" id="contrast-card">
+    <h3>Contrast Checker</h3>
+    <div class="contrast-row">
+      <div class="contrast-field">
+        <label>Foreground</label>
+        <div class="contrast-input-wrap">
+          <input type="color" id="fgPicker" value="#ffffff">
+          <input type="text" id="fgText" value="#ffffff" maxlength="7" placeholder="#ffffff">
+        </div>
+      </div>
+      <div class="contrast-field">
+        <label>Background</label>
+        <div class="contrast-input-wrap">
+          <input type="color" id="bgPicker" value="#1a1a2e">
+          <input type="text" id="bgText" value="#1a1a2e" maxlength="7" placeholder="#1a1a2e">
+        </div>
+      </div>
+    </div>
+    <div class="contrast-result" id="contrastResult"></div>
+    <div class="preview-row" id="contrastPreview"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  /* ── Color conversion utilities ── */
+
+  function hexToRgb(hex) {
+    const r = parseInt(hex.slice(1,3), 16);
+    const g = parseInt(hex.slice(3,5), 16);
+    const b = parseInt(hex.slice(5,7), 16);
+    return { r, g, b };
+  }
+
+  function rgbToHex(r, g, b) {
+    return '#' + [r, g, b].map(x => {
+      const h = Math.round(Math.max(0, Math.min(255, x))).toString(16);
+      return h.length === 1 ? '0' + h : h;
+    }).join('');
+  }
+
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+        case g: h = ((b - r) / d + 2) / 6; break;
+        case b: h = ((r - g) / d + 4) / 6; break;
+      }
+    }
+    return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+  }
+
+  function rgbToHsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const d = max - min;
+    let h = 0;
+    const s = max === 0 ? 0 : d / max;
+    const v = max;
+    if (max !== min) {
+      switch (max) {
+        case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+        case g: h = ((b - r) / d + 2) / 6; break;
+        case b: h = ((r - g) / d + 4) / 6; break;
+      }
+    }
+    return { h: Math.round(h * 360), s: Math.round(s * 100), v: Math.round(v * 100) };
+  }
+
+  function hslToRgb(h, s, l) {
+    h /= 360; s /= 100; l /= 100;
+    let r, g, b;
+    if (s === 0) {
+      r = g = b = l;
+    } else {
+      const hue2rgb = (p, q, t) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+      };
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      r = hue2rgb(p, q, h + 1/3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h - 1/3);
+    }
+    return {
+      r: Math.round(r * 255),
+      g: Math.round(g * 255),
+      b: Math.round(b * 255)
+    };
+  }
+
+  function hexToHsl(hex) {
+    const { r, g, b } = hexToRgb(hex);
+    return rgbToHsl(r, g, b);
+  }
+
+  /* ── Relative luminance ── */
+  function relativeLuminance(r, g, b) {
+    const chan = [r, g, b].map(c => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * chan[0] + 0.7152 * chan[1] + 0.0722 * chan[2];
+  }
+
+  function contrastRatio(hex1, hex2) {
+    const c1 = hexToRgb(hex1);
+    const c2 = hexToRgb(hex2);
+    const l1 = relativeLuminance(c1.r, c1.g, c1.b);
+    const l2 = relativeLuminance(c2.r, c2.g, c2.b);
+    const lighter = Math.max(l1, l2);
+    const darker = Math.min(l1, l2);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  /* ── Palette generation ── */
+  function generatePalette(hex, scheme) {
+    const { h, s, l } = hexToHsl(hex);
+    const colors = [];
+
+    switch (scheme) {
+      case 'complementary': {
+        const h2 = (h + 180) % 360;
+        colors.push(
+          { r: hslToRgb(h, s, l).r, g: hslToRgb(h, s, l).g, b: hslToRgb(h, s, l).b },
+          { r: hslToRgb(h2, s, l).r, g: hslToRgb(h2, s, l).g, b: hslToRgb(h2, s, l).b },
+          { r: hslToRgb(h, s, Math.min(100, l + 15)).r, g: hslToRgb(h, s, Math.min(100, l + 15)).g, b: hslToRgb(h, s, Math.min(100, l + 15)).b },
+          { r: hslToRgb(h2, s, Math.min(100, l + 15)).r, g: hslToRgb(h2, s, Math.min(100, l + 15)).g, b: hslToRgb(h2, s, Math.min(100, l + 15)).b },
+          { r: hslToRgb(h, s, Math.max(0, l - 15)).r, g: hslToRgb(h, s, Math.max(0, l - 15)).g, b: hslToRgb(h, s, Math.max(0, l - 15)).b }
+        );
+        break;
+      }
+      case 'analogous': {
+        const offsets = [-30, -15, 0, 15, 30];
+        offsets.forEach(off => {
+          const nh = (h + off + 360) % 360;
+          const rgb = hslToRgb(nh, s, l);
+          colors.push({ r: rgb.r, g: rgb.g, b: rgb.b });
+        });
+        break;
+      }
+      case 'triadic': {
+        [0, 120, 240].forEach(off => {
+          const nh = (h + off) % 360;
+          const rgb = hslToRgb(nh, s, l);
+          colors.push({ r: rgb.r, g: rgb.g, b: rgb.b });
+        });
+        // Add two tints
+        const rgb1 = hslToRgb(h, s, Math.min(100, l + 20));
+        const rgb2 = hslToRgb((h + 120) % 360, s, Math.min(100, l + 20));
+        colors.push({ r: rgb1.r, g: rgb1.g, b: rgb1.b });
+        colors.push({ r: rgb2.r, g: rgb2.g, b: rgb2.b });
+        break;
+      }
+      case 'tetradic': {
+        [0, 90, 180, 270].forEach(off => {
+          const nh = (h + off) % 360;
+          const rgb = hslToRgb(nh, s, l);
+          colors.push({ r: rgb.r, g: rgb.g, b: rgb.b });
+        });
+        const rgb = hslToRgb(h, s, Math.min(100, l + 15));
+        colors.push({ r: rgb.r, g: rgb.g, b: rgb.b });
+        break;
+      }
+      case 'monochromatic': {
+        const steps = [25, 15, 0, -15, -25];
+        steps.forEach(dl => {
+          const nl = Math.max(5, Math.min(95, l + dl));
+          const rgb = hslToRgb(h, s, nl);
+          colors.push({ r: rgb.r, g: rgb.g, b: rgb.b });
+        });
+        break;
+      }
+    }
+
+    return colors.map(c => rgbToHex(c.r, c.g, c.b));
+  }
+
+  /* ── DOM refs ── */
+  const colorPicker = document.getElementById('colorPicker');
+  const hexInput = document.getElementById('hexInput');
+  const mainSwatch = document.getElementById('mainSwatch');
+  const formatList = document.getElementById('formatList');
+  const schemeBtns = document.getElementById('schemeBtns');
+  const paletteColors = document.getElementById('paletteColors');
+  const recentList = document.getElementById('recentList');
+  const toast = document.getElementById('toast');
+  const fgPicker = document.getElementById('fgPicker');
+  const fgText = document.getElementById('fgText');
+  const bgPicker = document.getElementById('bgPicker');
+  const bgText = document.getElementById('bgText');
+  const contrastResult = document.getElementById('contrastResult');
+  const contrastPreview = document.getElementById('contrastPreview');
+
+  let currentHex = '#9b59b6';
+  let currentScheme = 'complementary';
+  const RECENT_KEY = 'webnt_colortool_recent';
+
+  /* ── Toast ── */
+  let toastTimer;
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+  }
+
+  /* ── Copy helper ── */
+  function copyText(text) {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => showToast('Copied: ' + text));
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Copied: ' + text);
+    }
+  }
+
+  /* ── Recent colors ── */
+  function getRecent() {
+    try {
+      return JSON.parse(localStorage.getItem(RECENT_KEY)) || [];
+    } catch { return []; }
+  }
+
+  function addRecent(hex) {
+    const recents = getRecent().filter(h => h !== hex);
+    recents.unshift(hex);
+    if (recents.length > 10) recents.pop();
+    localStorage.setItem(RECENT_KEY, JSON.stringify(recents));
+    renderRecent();
+  }
+
+  function renderRecent() {
+    const recents = getRecent();
+    if (recents.length === 0) {
+      recentList.innerHTML = '<span class="recent-empty">No recent colors yet</span>';
+      return;
+    }
+    recentList.innerHTML = recents.map(hex =>
+      `<div class="recent-item" style="background:${hex}" title="${hex}" data-hex="${hex}"></div>`
+    ).join('');
+  }
+
+  recentList.addEventListener('click', e => {
+    const item = e.target.closest('.recent-item');
+    if (!item) return;
+    setCurrentColor(item.dataset.hex);
+  });
+
+  /* ── Set current color ── */
+  function setCurrentColor(hex) {
+    hex = hex.toUpperCase();
+    currentHex = hex;
+    colorPicker.value = hex;
+    hexInput.value = hex;
+    mainSwatch.style.background = hex;
+    renderFormats();
+    renderPalette();
+    addRecent(hex);
+  }
+
+  /* ── Format display ── */
+  function renderFormats() {
+    const { r, g, b } = hexToRgb(currentHex);
+    const { h, s, l } = rgbToHsl(r, g, b);
+    const { v } = rgbToHsv(r, g, b);
+
+    const formats = [
+      { label: 'HEX', value: currentHex },
+      { label: 'RGB', value: `rgb(${r}, ${g}, ${b})` },
+      { label: 'HSL', value: `hsl(${h}, ${s}%, ${l}%)` },
+      { label: 'HSV', value: `hsv(${h}, ${s}%, ${v}%)` },
+    ];
+
+    formatList.innerHTML = formats.map(f =>
+      `<div class="format-item" data-copy="${f.value}">
+        <span class="label">${f.label}</span>
+        <span class="value">${f.value}</span>
+        <span class="copied-tip">Copied!</span>
+      </div>`
+    ).join('');
+  }
+
+  formatList.addEventListener('click', e => {
+    const item = e.target.closest('.format-item');
+    if (!item) return;
+    copyText(item.dataset.copy);
+    const tip = item.querySelector('.copied-tip');
+    tip.classList.add('show');
+    setTimeout(() => tip.classList.remove('show'), 1200);
+  });
+
+  /* ── Palette ── */
+  function renderPalette() {
+    const colors = generatePalette(currentHex, currentScheme);
+    paletteColors.innerHTML = colors.map(hex =>
+      `<div class="palette-swatch" data-hex="${hex}" title="${hex}">
+        <div class="p-swatch" style="background:${hex}"></div>
+        <span class="p-hex">${hex}</span>
+      </div>`
+    ).join('');
+  }
+
+  paletteColors.addEventListener('click', e => {
+    const swatch = e.target.closest('.palette-swatch');
+    if (!swatch) return;
+    setCurrentColor(swatch.dataset.hex);
+  });
+
+  schemeBtns.addEventListener('click', e => {
+    const btn = e.target.closest('.scheme-btn');
+    if (!btn) return;
+    currentScheme = btn.dataset.scheme;
+    schemeBtns.querySelectorAll('.scheme-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderPalette();
+  });
+
+  /* ── Contrast checker ── */
+  function updateContrast() {
+    const fg = fgText.value.trim();
+    const bg = bgText.value.trim();
+    const hexRe = /^#[0-9a-fA-F]{6}$/;
+
+    if (!hexRe.test(fg) || !hexRe.test(bg)) {
+      contrastResult.innerHTML = '<span style="color:var(--fail)">Enter valid hex colors (e.g. #ffffff)</span>';
+      contrastPreview.innerHTML = '';
+      return;
+    }
+
+    const ratio = contrastRatio(fg, bg);
+    const aaNormal = ratio >= 4.5;
+    const aaLarge = ratio >= 3;
+    const aaaNormal = ratio >= 7;
+    const aaaLarge = ratio >= 4.5;
+
+    contrastResult.innerHTML = `
+      <div class="contrast-ratio" style="color:${ratio >= 4.5 ? 'var(--success)' : ratio >= 3 ? 'var(--warn)' : 'var(--fail)'}">
+        ${ratio.toFixed(2)}:1
+      </div>
+      <div class="wcag-badges">
+        <span class="wcag-badge ${aaNormal ? 'pass' : 'fail'}">AA Normal ${aaNormal ? '✓' : '✗'}</span>
+        <span class="wcag-badge ${aaLarge ? 'pass' : 'fail'}">AA Large ${aaLarge ? '✓' : '✗'}</span>
+        <span class="wcag-badge ${aaaNormal ? 'pass' : 'fail'}">AAA Normal ${aaaNormal ? '✓' : '✗'}</span>
+        <span class="wcag-badge ${aaaLarge ? 'pass' : 'fail'}">AAA Large ${aaaLarge ? '✓' : '✗'}</span>
+      </div>
+    `;
+
+    contrastPreview.innerHTML = `
+      <div class="preview-sample" style="background:${bg}; color:${fg};">
+        Preview Text — The quick brown fox jumps over the lazy dog.
+      </div>
+    `;
+  }
+
+  function syncContrastColor(picker, textInput) {
+    textInput.value = picker.value.toUpperCase();
+    updateContrast();
+  }
+
+  fgPicker.addEventListener('input', () => syncContrastColor(fgPicker, fgText));
+  bgPicker.addEventListener('input', () => syncContrastColor(bgPicker, bgText));
+  fgText.addEventListener('input', () => {
+    const hex = fgText.value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(hex)) fgPicker.value = hex;
+    updateContrast();
+  });
+  bgText.addEventListener('input', () => {
+    const hex = bgText.value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(hex)) bgPicker.value = hex;
+    updateContrast();
+  });
+
+  /* ── Main color picker events ── */
+  colorPicker.addEventListener('input', () => {
+    const hex = colorPicker.value.toUpperCase();
+    currentHex = hex;
+    hexInput.value = hex;
+    mainSwatch.style.background = hex;
+    renderFormats();
+    renderPalette();
+  });
+  colorPicker.addEventListener('change', () => {
+    addRecent(currentHex);
+  });
+
+  hexInput.addEventListener('input', () => {
+    let val = hexInput.value.trim();
+    if (!val.startsWith('#')) val = '#' + val;
+    hexInput.value = val.toUpperCase();
+  });
+  hexInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      let val = hexInput.value.trim().toUpperCase();
+      if (!val.startsWith('#')) val = '#' + val;
+      if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+        setCurrentColor(val);
+      } else {
+        showToast('Invalid hex color');
+        hexInput.value = currentHex;
+      }
+    }
+  });
+  hexInput.addEventListener('blur', () => {
+    let val = hexInput.value.trim().toUpperCase();
+    if (!val.startsWith('#')) val = '#' + val;
+    if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+      setCurrentColor(val);
+    } else {
+      hexInput.value = currentHex;
+    }
+  });
+
+  /* ── Init ── */
+  renderFormats();
+  renderPalette();
+  renderRecent();
+  updateContrast();
+})();
+</script>
+</body>
+</html>

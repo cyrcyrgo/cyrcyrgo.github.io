@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebNT Timer</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #1a1a2e;
+  --bg-card: #16213e;
+  --bg-elevated: #0f3460;
+  --text: #e0e0e0;
+  --text-muted: #888;
+  --accent: #f28b82;
+  --accent-dim: rgba(242,139,130,0.2);
+  --ring-bg: #2a2a4a;
+  --border: #333;
+  --danger: #ff6b6b;
+  --success: #51cf66;
+  --lap-bg: #1e2a4a;
+}
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.container {
+  width: 100%;
+  max-width: 420px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+
+/* Tab Switcher */
+.tabs {
+  display: flex;
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 24px;
+  flex-shrink: 0;
+}
+
+.tab {
+  flex: 1;
+  padding: 10px 0;
+  text-align: center;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: all 0.3s;
+  border: none;
+  background: transparent;
+}
+
+.tab.active {
+  background: var(--accent);
+  color: #1a1a2e;
+  box-shadow: 0 2px 8px rgba(242,139,130,0.3);
+}
+
+/* Timer Display Area */
+.display-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+/* Countdown Ring */
+.ring-container {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  flex-shrink: 0;
+}
+
+.ring-svg {
+  transform: rotate(-90deg);
+  width: 100%;
+  height: 100%;
+}
+
+.ring-bg {
+  fill: none;
+  stroke: var(--ring-bg);
+  stroke-width: 8;
+}
+
+.ring-progress {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.3s linear;
+}
+
+.ring-time {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring-time .time-display {
+  font-size: 48px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 2px;
+}
+
+.ring-time .time-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Input Section (Countdown) */
+.time-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.time-input-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.time-input-group label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.time-input-group input {
+  width: 64px;
+  height: 44px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 600;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.time-input-group input:focus {
+  border-color: var(--accent);
+}
+
+/* Hide spin buttons */
+.time-input-group input::-webkit-outer-spin-button,
+.time-input-group input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.time-input-group input[type=number] { -moz-appearance: textfield; }
+
+.time-sep {
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--text-muted);
+  margin-top: 16px;
+}
+
+/* Presets */
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.preset-btn {
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+.preset-btn:active { background: var(--accent-dim); }
+
+/* Control Buttons */
+.controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.btn {
+  padding: 12px 28px;
+  border-radius: 25px;
+  border: none;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.btn-start {
+  background: var(--accent);
+  color: #1a1a2e;
+  min-width: 100px;
+}
+.btn-start:hover { box-shadow: 0 4px 16px rgba(242,139,130,0.4); }
+.btn-start:active { transform: scale(0.97); }
+
+.btn-pause {
+  background: var(--bg-elevated);
+  color: var(--text);
+  min-width: 100px;
+}
+.btn-pause:hover { background: #1a4a7a; }
+
+.btn-reset {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  min-width: 80px;
+}
+.btn-reset:hover { color: var(--text); border-color: var(--text-muted); }
+
+.btn-lap {
+  background: var(--bg-elevated);
+  color: var(--accent);
+  min-width: 80px;
+}
+.btn-lap:hover { background: #1a4a7a; }
+
+.btn-lap:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Stopwatch Display */
+.stopwatch-display {
+  font-size: 56px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 3px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.stopwatch-display .ms {
+  font-size: 32px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* Lap List */
+.lap-list {
+  width: 100%;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 20px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.lap-list::-webkit-scrollbar {
+  width: 4px;
+}
+.lap-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.lap-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--lap-bg);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lap-item.best {
+  border-left: 3px solid var(--success);
+  color: var(--success);
+}
+
+.lap-item.worst {
+  border-left: 3px solid var(--danger);
+  color: var(--danger);
+}
+
+.lap-item .lap-idx {
+  color: var(--text-muted);
+  font-size: 12px;
+  min-width: 28px;
+}
+
+.lap-item .lap-time {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.lap-item .lap-total {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* Flash overlay */
+.flash {
+  position: fixed;
+  inset: 0;
+  background: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 100;
+  animation: flashAnim 1s ease-out;
+}
+
+@keyframes flashAnim {
+  0% { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+
+/* Hide sections */
+.hidden { display: none !important; }
+
+/* Flex helpers */
+.flex-col { display: flex; flex-direction: column; align-items: center; }
+.flex-1 { flex: 1; }
+.mt-auto { margin-top: auto; }
+.gap-20 { gap: 20px; }
+</style>
+</head>
+<body>
+
+<div class="container" id="app">
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-mode="countdown">倒计时</button>
+    <button class="tab" data-mode="stopwatch">秒表</button>
+  </div>
+
+  <!-- Countdown Mode -->
+  <div class="display-area" id="countdownPanel">
+    <div class="ring-container">
+      <svg class="ring-svg" viewBox="0 0 200 200">
+        <circle class="ring-bg" cx="100" cy="100" r="92"/>
+        <circle class="ring-progress" id="ringProgress" cx="100" cy="100" r="92"
+          stroke-dasharray="578.053" stroke-dashoffset="0"/>
+      </svg>
+      <div class="ring-time">
+        <div class="time-display" id="cdDisplay">00:00</div>
+        <div class="time-label" id="cdLabel">剩余时间</div>
+      </div>
+    </div>
+
+    <div class="time-inputs" id="timeInputs">
+      <div class="time-input-group">
+        <label>时</label>
+        <input type="number" id="hInput" value="0" min="0" max="99" step="1">
+      </div>
+      <span class="time-sep">:</span>
+      <div class="time-input-group">
+        <label>分</label>
+        <input type="number" id="mInput" value="5" min="0" max="59" step="1">
+      </div>
+      <span class="time-sep">:</span>
+      <div class="time-input-group">
+        <label>秒</label>
+        <input type="number" id="sInput" value="0" min="0" max="59" step="1">
+      </div>
+    </div>
+
+    <div class="presets" id="presets">
+      <button class="preset-btn" data-preset="60">1分钟</button>
+      <button class="preset-btn" data-preset="180">3分钟</button>
+      <button class="preset-btn" data-preset="300">5分钟</button>
+      <button class="preset-btn" data-preset="600">10分钟</button>
+      <button class="preset-btn" data-preset="1800">30分钟</button>
+      <button class="preset-btn" data-preset="3600">60分钟</button>
+    </div>
+
+    <div class="controls" id="cdControls">
+      <button class="btn btn-reset" id="cdReset">重置</button>
+      <button class="btn btn-start" id="cdStart">开始</button>
+    </div>
+  </div>
+
+  <!-- Stopwatch Mode -->
+  <div class="display-area hidden" id="stopwatchPanel">
+    <div class="flex-1 flex-col" style="justify-content:center;">
+      <div class="stopwatch-display" id="swDisplay">
+        00:00:00<span class="ms">.00</span>
+      </div>
+    </div>
+
+    <div class="controls" id="swControls">
+      <button class="btn btn-reset" id="swReset">重置</button>
+      <button class="btn btn-lap" id="swLap" disabled>计次</button>
+      <button class="btn btn-start" id="swStart">开始</button>
+    </div>
+
+    <div class="lap-list" id="lapList"></div>
+  </div>
+</div>
+
+<div class="flash" id="flash"></div>
+
+<script>
+// ============ Audio ============
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playAlarm() {
+  const ctx = getAudioCtx();
+  const now = ctx.currentTime;
+
+  // Three rapid beeps
+  [0, 0.15, 0.3].forEach((offset, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(880, now + offset);
+    osc.frequency.setValueAtTime(660, now + offset + 0.08);
+    gain.gain.setValueAtTime(0.3, now + offset);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.12);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now + offset);
+    osc.stop(now + offset + 0.15);
+  });
+}
+
+// ============ Tab Switching ============
+const tabs = document.querySelectorAll('.tab');
+const countdownPanel = document.getElementById('countdownPanel');
+const stopwatchPanel = document.getElementById('stopwatchPanel');
+let currentMode = 'countdown';
+
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    if (tab.dataset.mode === currentMode) return;
+    tabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentMode = tab.dataset.mode;
+    if (currentMode === 'countdown') {
+      countdownPanel.classList.remove('hidden');
+      stopwatchPanel.classList.add('hidden');
+      updateCountdownDisplay();
+    } else {
+      countdownPanel.classList.add('hidden');
+      stopwatchPanel.classList.remove('hidden');
+    }
+  });
+});
+
+// ============ Countdown ============
+const CIRCUMFERENCE = 2 * Math.PI * 92; // ~578.053
+const ringProgress = document.getElementById('ringProgress');
+const cdDisplay = document.getElementById('cdDisplay');
+const cdLabel = document.getElementById('cdLabel');
+const hInput = document.getElementById('hInput');
+const mInput = document.getElementById('mInput');
+const sInput = document.getElementById('sInput');
+const cdStartBtn = document.getElementById('cdStart');
+const cdResetBtn = document.getElementById('cdReset');
+const flash = document.getElementById('flash');
+
+let cdTotal = 0;
+let cdRemaining = 0;
+let cdRunning = false;
+let cdTimer = null;
+let cdAlarmed = false;
+
+// Clamp input values
+[hInput, mInput, sInput].forEach(inp => {
+  inp.addEventListener('input', () => {
+    const max = parseInt(inp.max);
+    let v = parseInt(inp.value) || 0;
+    if (v < 0) v = 0;
+    if (v > max) v = max;
+    inp.value = v;
+    if (!cdRunning) {
+      cdTotal = getTotalSeconds();
+      cdRemaining = cdTotal;
+      updateCountdownDisplay();
+    }
+  });
+  inp.addEventListener('change', () => {
+    const max = parseInt(inp.max);
+    let v = parseInt(inp.value) || 0;
+    if (v < 0) v = 0;
+    if (v > max) v = max;
+    inp.value = v;
+    if (!cdRunning) {
+      cdTotal = getTotalSeconds();
+      cdRemaining = cdTotal;
+      updateCountdownDisplay();
+    }
+  });
+});
+
+function getTotalSeconds() {
+  return parseInt(hInput.value || 0) * 3600 + parseInt(mInput.value || 0) * 60 + parseInt(sInput.value || 0);
+}
+
+function setInputsFromSeconds(total) {
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  hInput.value = h;
+  mInput.value = m;
+  sInput.value = s;
+}
+
+function updateCountdownDisplay() {
+  const t = cdRemaining;
+  const total = cdTotal || 1;
+  const progress = cdTotal > 0 ? cdRemaining / cdTotal : 0;
+  ringProgress.style.strokeDashoffset = CIRCUMFERENCE * (1 - progress);
+
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = t % 60;
+
+  if (h > 0) {
+    cdDisplay.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  } else {
+    cdDisplay.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+}
+
+function startCountdown() {
+  if (cdRemaining <= 0) return;
+  cdRunning = true;
+  cdAlarmed = false;
+  cdStartBtn.textContent = '暂停';
+  cdStartBtn.className = 'btn btn-pause';
+  cdLabel.textContent = '倒计时中';
+  document.getElementById('timeInputs').style.pointerEvents = 'none';
+  document.getElementById('timeInputs').style.opacity = '0.5';
+  document.getElementById('presets').style.pointerEvents = 'none';
+  document.getElementById('presets').style.opacity = '0.5';
+
+  cdTimer = setInterval(() => {
+    cdRemaining--;
+    updateCountdownDisplay();
+
+    if (cdRemaining <= 0) {
+      clearInterval(cdTimer);
+      cdTimer = null;
+      cdRunning = false;
+      cdAlarmed = true;
+      cdStartBtn.textContent = '开始';
+      cdStartBtn.className = 'btn btn-start';
+      cdLabel.textContent = '时间到！';
+      cdLabel.style.color = 'var(--accent)';
+      document.getElementById('timeInputs').style.pointerEvents = '';
+      document.getElementById('timeInputs').style.opacity = '';
+      document.getElementById('presets').style.pointerEvents = '';
+      document.getElementById('presets').style.opacity = '';
+
+      playAlarm();
+      flash.classList.remove('flash');
+      void flash.offsetWidth;
+      flash.classList.add('flash');
+    }
+  }, 1000);
+}
+
+function pauseCountdown() {
+  if (cdTimer) {
+    clearInterval(cdTimer);
+    cdTimer = null;
+  }
+  cdRunning = false;
+  cdStartBtn.textContent = '开始';
+  cdStartBtn.className = 'btn btn-start';
+  cdLabel.textContent = '已暂停';
+  document.getElementById('timeInputs').style.pointerEvents = '';
+  document.getElementById('timeInputs').style.opacity = '';
+  document.getElementById('presets').style.pointerEvents = '';
+  document.getElementById('presets').style.opacity = '';
+}
+
+function resetCountdown() {
+  if (cdTimer) {
+    clearInterval(cdTimer);
+    cdTimer = null;
+  }
+  cdRunning = false;
+  cdAlarmed = false;
+  cdTotal = getTotalSeconds();
+  cdRemaining = cdTotal;
+  cdStartBtn.textContent = '开始';
+  cdStartBtn.className = 'btn btn-start';
+  cdLabel.textContent = '剩余时间';
+  cdLabel.style.color = 'var(--text-muted)';
+  document.getElementById('timeInputs').style.pointerEvents = '';
+  document.getElementById('timeInputs').style.opacity = '';
+  document.getElementById('presets').style.pointerEvents = '';
+  document.getElementById('presets').style.opacity = '';
+  updateCountdownDisplay();
+}
+
+cdStartBtn.addEventListener('click', () => {
+  if (cdRunning) {
+    pauseCountdown();
+  } else {
+    if (cdAlarmed) {
+      cdTotal = getTotalSeconds();
+      cdRemaining = cdTotal;
+      cdAlarmed = false;
+      cdLabel.style.color = 'var(--text-muted)';
+      cdLabel.textContent = '剩余时间';
+    }
+    if (cdRemaining <= 0) {
+      cdTotal = getTotalSeconds();
+      cdRemaining = cdTotal;
+    }
+    startCountdown();
+  }
+});
+
+cdResetBtn.addEventListener('click', resetCountdown);
+
+// Presets
+document.getElementById('presets').addEventListener('click', (e) => {
+  const btn = e.target.closest('.preset-btn');
+  if (!btn) return;
+  if (cdRunning) return;
+  const secs = parseInt(btn.dataset.preset);
+  cdTotal = secs;
+  cdRemaining = secs;
+  cdAlarmed = false;
+  cdLabel.style.color = 'var(--text-muted)';
+  cdLabel.textContent = '剩余时间';
+  setInputsFromSeconds(secs);
+  updateCountdownDisplay();
+});
+
+// Init
+cdTotal = getTotalSeconds();
+cdRemaining = cdTotal;
+updateCountdownDisplay();
+
+// ============ Stopwatch ============
+const swDisplay = document.getElementById('swDisplay');
+const swStartBtn = document.getElementById('swStart');
+const swResetBtn = document.getElementById('swReset');
+const swLapBtn = document.getElementById('swLap');
+const lapList = document.getElementById('lapList');
+
+let swRunning = false;
+let swStartTime = 0;
+let swElapsed = 0;
+let swTimer = null;
+let laps = [];
+
+function formatSwTime(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const centis = Math.floor((ms % 1000) / 10);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}<span class="ms">.${String(centis).padStart(2, '0')}</span>`;
+}
+
+function formatTimeText(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const centis = Math.floor((ms % 1000) / 10);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(centis).padStart(2, '0')}`;
+}
+
+function updateSwDisplay() {
+  swDisplay.innerHTML = formatSwTime(swElapsed);
+}
+
+function startStopwatch() {
+  swRunning = true;
+  swStartTime = performance.now() - swElapsed;
+  swStartBtn.textContent = '暂停';
+  swStartBtn.className = 'btn btn-pause';
+  swLapBtn.disabled = false;
+
+  function tick() {
+    if (!swRunning) return;
+    swElapsed = performance.now() - swStartTime;
+    updateSwDisplay();
+    swTimer = requestAnimationFrame(tick);
+  }
+  swTimer = requestAnimationFrame(tick);
+}
+
+function pauseStopwatch() {
+  swRunning = false;
+  if (swTimer) {
+    cancelAnimationFrame(swTimer);
+    swTimer = null;
+  }
+  swStartBtn.textContent = '开始';
+  swStartBtn.className = 'btn btn-start';
+  swLapBtn.disabled = true;
+}
+
+function resetStopwatch() {
+  if (swTimer) {
+    cancelAnimationFrame(swTimer);
+    swTimer = null;
+  }
+  swRunning = false;
+  swElapsed = 0;
+  laps = [];
+  swStartBtn.textContent = '开始';
+  swStartBtn.className = 'btn btn-start';
+  swLapBtn.disabled = true;
+  updateSwDisplay();
+  renderLaps();
+}
+
+function addLap() {
+  const lapTime = swElapsed;
+  const prevTotal = laps.length > 0 ? laps[0].total : 0;
+  const split = lapTime - prevTotal;
+  laps.unshift({ total: lapTime, split: split });
+  renderLaps();
+}
+
+function renderLaps() {
+  if (laps.length === 0) {
+    lapList.innerHTML = '';
+    return;
+  }
+
+  // Find best and worst split
+  let bestIdx = 0, worstIdx = 0;
+  let bestVal = laps[0].split, worstVal = laps[0].split;
+  for (let i = 1; i < laps.length; i++) {
+    if (laps[i].split < bestVal) { bestVal = laps[i].split; bestIdx = i; }
+    if (laps[i].split > worstVal) { worstVal = laps[i].split; worstIdx = i; }
+  }
+
+  lapList.innerHTML = laps.map((lap, i) => {
+    let cls = 'lap-item';
+    if (laps.length > 1) {
+      if (i === bestIdx) cls += ' best';
+      if (i === worstIdx && bestIdx !== worstIdx) cls += ' worst';
+    }
+    return `<div class="${cls}">
+      <span class="lap-idx">#${laps.length - i}</span>
+      <span class="lap-time">${formatTimeText(lap.split)}</span>
+      <span class="lap-total">累计 ${formatTimeText(lap.total)}</span>
+    </div>`;
+  }).join('');
+}
+
+swStartBtn.addEventListener('click', () => {
+  if (swRunning) {
+    pauseStopwatch();
+  } else {
+    startStopwatch();
+  }
+});
+
+swResetBtn.addEventListener('click', resetStopwatch);
+swLapBtn.addEventListener('click', addLap);
+
+updateSwDisplay();
+</script>
+</body>
+</html>

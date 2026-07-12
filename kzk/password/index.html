@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebNT - 密码生成器</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100vh;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  overflow: hidden;
+}
+
+.container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  max-width: 540px;
+  margin: 0 auto;
+  padding: 28px 24px;
+  gap: 18px;
+}
+
+.header {
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.header h1 {
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: #81c995;
+  letter-spacing: 0.5px;
+}
+
+.header span {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+/* Password display */
+.password-display {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.password-display input {
+  width: 100%;
+  padding: 14px 54px 14px 16px;
+  font-size: 1.15rem;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  background: #16213e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  color: #e0e0e0;
+  outline: none;
+  letter-spacing: 1px;
+  transition: border-color 0.2s;
+}
+
+.password-display input:focus {
+  border-color: #81c995;
+}
+
+.password-display .copy-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 1.1rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.password-display .copy-btn:hover {
+  color: #81c995;
+  background: rgba(129, 201, 149, 0.1);
+}
+
+.password-display .copy-btn.copied {
+  color: #81c995;
+}
+
+.copy-btn .copy-icon { display: block; }
+.copy-btn .check-icon { display: none; }
+.copy-btn.copied .copy-icon { display: none; }
+.copy-btn.copied .check-icon { display: block; }
+
+/* Strength indicator */
+.strength-section {
+  flex-shrink: 0;
+}
+
+.strength-bar-wrapper {
+  height: 6px;
+  background: #2a2a4a;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.strength-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s, background 0.3s;
+  width: 0%;
+}
+
+.strength-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: #888;
+}
+
+.strength-label .level { font-weight: 500; }
+.strength-label .entropy { }
+
+/* Controls */
+.controls {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #16213e;
+  border-radius: 10px;
+  padding: 18px;
+  border: 1px solid #2a2a4a;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.control-row label {
+  font-size: 0.88rem;
+  color: #ccc;
+  user-select: none;
+}
+
+.control-row input[type="range"] {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: #2a2a4a;
+  border-radius: 3px;
+  outline: none;
+  max-width: 240px;
+}
+
+.control-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: #81c995;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.control-row .length-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #81c995;
+  min-width: 28px;
+  text-align: center;
+}
+
+/* Toggle switch */
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle .slider {
+  position: absolute;
+  inset: 0;
+  background: #2a2a4a;
+  border-radius: 24px;
+  cursor: pointer;
+  transition: background 0.25s;
+}
+
+.toggle .slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: #666;
+  border-radius: 50%;
+  transition: transform 0.25s, background 0.25s;
+}
+
+.toggle input:checked + .slider {
+  background: rgba(129, 201, 149, 0.3);
+}
+
+.toggle input:checked + .slider::before {
+  transform: translateX(20px);
+  background: #81c995;
+}
+
+/* Generate button */
+.generate-btn {
+  flex-shrink: 0;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 500;
+  background: #81c995;
+  color: #1a1a2e;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  letter-spacing: 0.3px;
+}
+
+.generate-btn:hover {
+  background: #6ab882;
+}
+
+.generate-btn:active {
+  transform: scale(0.98);
+}
+
+/* History */
+.history-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-section h3 {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #888;
+  flex-shrink: 0;
+}
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 4px;
+}
+
+.history-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.history-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.history-list::-webkit-scrollbar-thumb {
+  background: #2a2a4a;
+  border-radius: 2px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #16213e;
+  border: 1px solid #2a2a4a;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+
+.history-item .pass-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ccc;
+  cursor: default;
+}
+
+.history-item .pass-meta {
+  font-size: 0.7rem;
+  color: #666;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.history-item .hist-copy {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 0.8rem;
+  margin-left: 6px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.history-item .hist-copy:hover {
+  color: #81c995;
+}
+
+.empty-history {
+  color: #555;
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 20px 0;
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>WebNT 密码生成器</h1>
+    <span>安全 · 随机 · 离线</span>
+  </div>
+
+  <!-- Password display -->
+  <div class="password-display">
+    <input type="text" id="passwordField" readonly placeholder="点击「生成密码」开始…">
+    <button class="copy-btn" id="copyBtn" title="复制到剪贴板">
+      <span class="copy-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+      </span>
+      <span class="check-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#81c995" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </span>
+    </button>
+  </div>
+
+  <!-- Strength indicator -->
+  <div class="strength-section">
+    <div class="strength-bar-wrapper">
+      <div class="strength-bar" id="strengthBar"></div>
+    </div>
+    <div class="strength-label">
+      <span class="level" id="strengthLevel">—</span>
+      <span class="entropy" id="entropyDisplay">熵值: 0 bits</span>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="control-row">
+      <label for="lengthSlider">密码长度</label>
+      <input type="range" id="lengthSlider" min="6" max="64" value="16">
+      <span class="length-value" id="lengthValue">16</span>
+    </div>
+    <div class="control-row">
+      <label for="toggleUpper">包含大写字母</label>
+      <label class="toggle">
+        <input type="checkbox" id="toggleUpper" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="control-row">
+      <label for="toggleLower">包含小写字母</label>
+      <label class="toggle">
+        <input type="checkbox" id="toggleLower" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="control-row">
+      <label for="toggleNumbers">包含数字</label>
+      <label class="toggle">
+        <input type="checkbox" id="toggleNumbers" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="control-row">
+      <label for="toggleSymbols">包含符号</label>
+      <label class="toggle">
+        <input type="checkbox" id="toggleSymbols" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Generate button -->
+  <button class="generate-btn" id="generateBtn">生成密码</button>
+
+  <!-- History -->
+  <div class="history-section">
+    <h3>生成历史</h3>
+    <div class="history-list" id="historyList">
+      <div class="empty-history">暂无记录</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function() {
+  const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const LOWER = 'abcdefghijklmnopqrstuvwxyz';
+  const NUMBERS = '0123456789';
+  const SYMBOLS = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+
+  const passwordField = document.getElementById('passwordField');
+  const copyBtn = document.getElementById('copyBtn');
+  const strengthBar = document.getElementById('strengthBar');
+  const strengthLevel = document.getElementById('strengthLevel');
+  const entropyDisplay = document.getElementById('entropyDisplay');
+  const lengthSlider = document.getElementById('lengthSlider');
+  const lengthValue = document.getElementById('lengthValue');
+  const toggleUpper = document.getElementById('toggleUpper');
+  const toggleLower = document.getElementById('toggleLower');
+  const toggleNumbers = document.getElementById('toggleNumbers');
+  const toggleSymbols = document.getElementById('toggleSymbols');
+  const generateBtn = document.getElementById('generateBtn');
+  const historyList = document.getElementById('historyList');
+
+  let history = [];
+  const MAX_HISTORY = 5;
+
+  function getCharset() {
+    let charset = '';
+    if (toggleUpper.checked) charset += UPPER;
+    if (toggleLower.checked) charset += LOWER;
+    if (toggleNumbers.checked) charset += NUMBERS;
+    if (toggleSymbols.checked) charset += SYMBOLS;
+    return charset;
+  }
+
+  function generatePassword() {
+    const charset = getCharset();
+    if (!charset) return '';
+
+    const length = parseInt(lengthSlider.value, 10);
+    const array = new Uint32Array(length);
+    crypto.getRandomValues(array);
+
+    let password = '';
+    const charsetLen = charset.length;
+    const maxValid = Math.floor(0xFFFFFFFF / charsetLen) * charsetLen;
+
+    for (let i = 0; i < length; i++) {
+      let r = array[i];
+      while (r >= maxValid) {
+        const tmp = new Uint32Array(1);
+        crypto.getRandomValues(tmp);
+        r = tmp[0];
+      }
+      password += charset[r % charsetLen];
+    }
+    return password;
+  }
+
+  function calcEntropy(password) {
+    const charset = getCharset();
+    if (!charset || !password) return 0;
+    const poolSize = new Set(charset).size;
+    return password.length * Math.log2(poolSize);
+  }
+
+  function getStrength(entropy) {
+    if (entropy < 40) return { level: '弱', color: '#e74c3c', width: 25 };
+    if (entropy < 60) return { level: '中等', color: '#f39c12', width: 50 };
+    if (entropy < 80) return { level: '强', color: '#3498db', width: 75 };
+    return { level: '非常强', color: '#81c995', width: 100 };
+  }
+
+  function updateStrengthDisplay(password) {
+    const entropy = calcEntropy(password);
+    const s = getStrength(entropy);
+
+    strengthBar.style.width = s.width + '%';
+    strengthBar.style.background = s.color;
+    strengthLevel.textContent = s.level;
+    strengthLevel.style.color = s.color;
+    entropyDisplay.textContent = '熵值: ' + entropy.toFixed(1) + ' bits';
+  }
+
+  function clearStrengthDisplay() {
+    strengthBar.style.width = '0%';
+    strengthBar.style.background = '';
+    strengthLevel.textContent = '—';
+    strengthLevel.style.color = '';
+    entropyDisplay.textContent = '熵值: 0 bits';
+  }
+
+  function addToHistory(password) {
+    if (!password) return;
+    const charset = getCharset();
+    const poolSize = charset ? new Set(charset).size : 0;
+    const entry = {
+      password,
+      length: password.length,
+      poolSize,
+      time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    };
+    history.unshift(entry);
+    if (history.length > MAX_HISTORY) history.pop();
+    renderHistory();
+  }
+
+  function renderHistory() {
+    if (history.length === 0) {
+      historyList.innerHTML = '<div class="empty-history">暂无记录</div>';
+      return;
+    }
+    historyList.innerHTML = history.map(function(item) {
+      return '<div class="history-item">' +
+        '<span class="pass-text" title="' + escapeHtml(item.password) + '">' + escapeHtml(item.password) + '</span>' +
+        '<span class="pass-meta">' + item.length + '位 · ' + item.time + '</span>' +
+        '<button class="hist-copy" data-pass="' + escapeHtml(item.password) + '" title="复制">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>' +
+            '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>' +
+          '</svg>' +
+        '</button>' +
+      '</div>';
+    }).join('');
+
+    historyList.querySelectorAll('.hist-copy').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        copyToClipboard(btn.dataset.pass);
+      });
+    });
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  function copyToClipboard(text) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(function() {
+      copyBtn.classList.add('copied');
+      setTimeout(function() {
+        copyBtn.classList.remove('copied');
+      }, 1500);
+    }).catch(function() {
+      // Fallback
+      passwordField.select();
+      document.execCommand('copy');
+      copyBtn.classList.add('copied');
+      setTimeout(function() {
+        copyBtn.classList.remove('copied');
+      }, 1500);
+    });
+  }
+
+  function doGenerate() {
+    const charset = getCharset();
+    if (!charset) {
+      passwordField.value = '';
+      clearStrengthDisplay();
+      return;
+    }
+    const password = generatePassword();
+    passwordField.value = password;
+    updateStrengthDisplay(password);
+    addToHistory(password);
+  }
+
+  // Event listeners
+  lengthSlider.addEventListener('input', function() {
+    lengthValue.textContent = this.value;
+  });
+
+  generateBtn.addEventListener('click', doGenerate);
+
+  copyBtn.addEventListener('click', function() {
+    copyToClipboard(passwordField.value);
+  });
+
+  // Toggle changes: re-evaluate existing password strength
+  [toggleUpper, toggleLower, toggleNumbers, toggleSymbols].forEach(function(toggle) {
+    toggle.addEventListener('change', function() {
+      if (passwordField.value) {
+        updateStrengthDisplay(passwordField.value);
+      }
+    });
+  });
+
+  // Initial generate
+  doGenerate();
+})();
+</script>
+</body>
+</html>
