@@ -836,6 +836,10 @@ const desktopApps = [
   { id:'webview', name:'Web View', icon:'\ud83c\udf10', color:'#4fc3f7', appId:'webview' },
   { id:'calculator', name:'Calculator', icon:'\ud83d\uddd2\ufe0f', color:'#fdd663', appId:'calculator' },
   { id:'calendar', name:'Calendar', icon:'\ud83d\udcc5', color:'#f28b82', appId:'calendar' },
+  { id:'paint', name:'Paint', icon:'\ud83c\udfa8', color:'#ce93d8', appId:'paint' },
+  { id:'weather', name:'Weather', icon:'\u2600\ufe0f', color:'#ffcc02', appId:'weather' },
+  { id:'clock', name:'Clock', icon:'\u23f0', color:'#80cbc4', appId:'clock' },
+  { id:'minesweeper', name:'Minesweeper', icon:'\ud83d\udca3', color:'#ef5350', appId:'minesweeper' },
   { id:'taskmgr', name:'Task Manager', icon:'\ud83d\udcca', color:'#ff9800', appId:'taskmgr' },
   { id:'sysmon', name:'Sys Monitor', icon:'\ud83d\udcbb', color:'#81c995', appId:'sysmon' },
   { id:'recycle', name:'Recycle Bin', icon:'\ud83d\uddd1\ufe0f', color:'#aaa', appId:'recycle' },
@@ -946,6 +950,10 @@ function renderStartMenu() {
     {name:'Notepad', icon:'\ud83d\udcc4', color:'#8ab4f8', appId:'notepad'},
     {name:'Calculator', icon:'\ud83d\uddd2\ufe0f', color:'#fdd663', appId:'calculator'},
     {name:'Calendar', icon:'\ud83d\udcc5', color:'#f28b82', appId:'calendar'},
+    {name:'Paint', icon:'\ud83c\udfa8', color:'#ce93d8', appId:'paint'},
+    {name:'Weather', icon:'\u2600\ufe0f', color:'#ffcc02', appId:'weather'},
+    {name:'Clock', icon:'\u23f0', color:'#80cbc4', appId:'clock'},
+    {name:'Minesweeper', icon:'\ud83d\udca3', color:'#ef5350', appId:'minesweeper'},
     {name:'Computer', icon:'\ud83d\udda5\ufe0f', color:'#667eea', appId:'computer'},
     {name:'Task Manager', icon:'\ud83d\udcca', color:'#ff9800', appId:'taskmgr'},
     {name:'System Monitor', icon:'\ud83d\udcbb', color:'#81c995', appId:'sysmon'},
@@ -1232,6 +1240,369 @@ function launchApp(appId) {
           if(chart.children.length>20) chart.firstChild.remove();
         }
         setTimeout(updateSysMon, 1000);
+      })();
+      break;
+    case 'paint':
+      showAppWindow('Paint', '\ud83c\udfa8', `
+        <style>
+          .paint-toolbar { display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap; }
+          .paint-toolbar button { background:rgba(255,255,255,0.08);border:none;color:#e0e0e0;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px; }
+          .paint-toolbar button:hover { background:rgba(255,255,255,0.15); }
+          .paint-toolbar button.active { background:rgba(102,126,234,0.5); }
+          .paint-toolbar input[type=color] { width:32px;height:28px;border:none;border-radius:4px;cursor:pointer;background:transparent; }
+          .paint-toolbar input[type=range] { width:80px; }
+          .paint-canvas-wrap { flex:1;overflow:hidden;border-radius:8px;background:#fff; }
+          .paint-canvas { display:block;cursor:crosshair;width:100%;height:100%; }
+        </style>
+        <div class="paint-toolbar">
+          <input type="color" id="paint-color" value="#667eea" title="Color">
+          <input type="range" id="paint-size" min="1" max="20" value="3" title="Brush Size">
+          <button id="paint-clear">Clear</button>
+          <button id="paint-fill" title="Fill Background">Fill</button>
+          <span style="font-size:11px;color:#888;margin-left:auto">Draw on canvas</span>
+        </div>
+        <div class="paint-canvas-wrap"><canvas class="paint-canvas" id="paint-canvas"></canvas></div>
+      `);
+      // Initialize paint canvas after DOM is attached
+      requestAnimationFrame(() => {
+        const canvas = document.getElementById('paint-canvas');
+        const colorPicker = document.getElementById('paint-color');
+        const sizeSlider = document.getElementById('paint-size');
+        const clearBtn = document.getElementById('paint-clear');
+        const fillBtn = document.getElementById('paint-fill');
+        if(!canvas) return;
+        const wrap = canvas.parentElement;
+        const ctx = canvas.getContext('2d');
+        let drawing = false;
+        function resize() {
+          canvas.width = wrap.clientWidth;
+          canvas.height = wrap.clientHeight;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        resize();
+        new ResizeObserver(resize).observe(wrap);
+        canvas.addEventListener('pointerdown', e => {
+          drawing = true;
+          ctx.beginPath();
+          ctx.moveTo(e.offsetX, e.offsetY);
+          ctx.strokeStyle = colorPicker.value;
+          ctx.lineWidth = parseInt(sizeSlider.value);
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+        });
+        canvas.addEventListener('pointermove', e => {
+          if(!drawing) return;
+          ctx.lineTo(e.offsetX, e.offsetY);
+          ctx.stroke();
+        });
+        canvas.addEventListener('pointerup', () => { drawing = false; });
+        canvas.addEventListener('pointerleave', () => { drawing = false; });
+        clearBtn.addEventListener('click', () => {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        });
+        fillBtn.addEventListener('click', () => {
+          ctx.fillStyle = colorPicker.value;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        });
+      });
+      break;
+    case 'weather':
+      showAppWindow('Weather', '\u2600\ufe0f', `
+        <style>
+          .wx-current { display:flex;align-items:center;gap:20px;margin-bottom:20px;padding:16px;background:rgba(255,255,255,0.04);border-radius:12px; }
+          .wx-current .wx-icon { font-size:56px; }
+          .wx-current .wx-temp { font-size:42px;font-weight:200; }
+          .wx-current .wx-detail { font-size:12px;color:#888;line-height:1.8; }
+          .wx-forecast { display:grid;grid-template-columns:repeat(4,1fr);gap:8px; }
+          .wx-fc { text-align:center;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px; }
+          .wx-fc .wx-fc-day { font-size:11px;color:#888;margin-bottom:6px; }
+          .wx-fc .wx-fc-icon { font-size:28px;margin-bottom:4px; }
+          .wx-fc .wx-fc-temp { font-size:13px; }
+          .wx-fc .wx-fc-hi { color:#f28b82; }
+          .wx-fc .wx-fc-lo { color:#8ab4f8;margin-left:4px; }
+        </style>
+        <div class="wx-current">
+          <div class="wx-icon">\u2600\ufe0f</div>
+          <div>
+            <div class="wx-temp">28\u00b0</div>
+            <div style="font-size:14px;color:#e0e0e0">Sunny</div>
+          </div>
+          <div class="wx-detail">
+            Humidity: 45%<br>Wind: 12 km/h<br>UV Index: Moderate
+          </div>
+        </div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:#888">5-Day Forecast</div>
+        <div class="wx-forecast">
+          ${[
+            {day:'Mon',icon:'\u2600\ufe0f',hi:30,lo:20},
+            {day:'Tue',icon:'\u26c5',hi:27,lo:18},
+            {day:'Wed',icon:'\ud83c\udf27\ufe0f',hi:24,lo:16},
+            {day:'Thu',icon:'\u2600\ufe0f',hi:29,lo:19},
+          ].map(f=>\`<div class="wx-fc">
+            <div class="wx-fc-day">\${f.day}</div>
+            <div class="wx-fc-icon">\${f.icon}</div>
+            <div class="wx-fc-temp"><span class="wx-fc-hi">\${f.hi}\u00b0</span><span class="wx-fc-lo">\${f.lo}\u00b0</span></div>
+          </div>\`).join('')}
+        </div>
+      `);
+      break;
+    case 'clock':
+      showAppWindow('Clock', '\u23f0', `
+        <style>
+          .clk-display { text-align:center;padding:20px 0; }
+          .clk-time { font-size:56px;font-weight:200;color:#fff;letter-spacing:2px; }
+          .clk-date { font-size:14px;color:#888;margin-top:4px; }
+          .clk-tabs { display:flex;gap:4px;margin-bottom:16px; }
+          .clk-tab { flex:1;padding:8px;text-align:center;background:rgba(255,255,255,0.04);border:none;color:#888;border-radius:8px;cursor:pointer;font-size:13px; }
+          .clk-tab.active { background:rgba(102,126,234,0.3);color:#fff; }
+          .clk-panel { display:none; }
+          .clk-panel.active { display:block; }
+          .clk-sw-time { font-size:32px;text-align:center;font-weight:200;padding:16px 0; }
+          .clk-sw-btns { display:flex;gap:8px;justify-content:center; }
+          .clk-sw-btns button { padding:10px 24px;background:rgba(255,255,255,0.08);border:none;color:#e0e0e0;border-radius:8px;cursor:pointer;font-size:14px; }
+          .clk-sw-btns button:hover { background:rgba(255,255,255,0.15); }
+          .clk-sw-btns button.primary { background:rgba(102,126,234,0.5); }
+          .clk-laps { max-height:120px;overflow-y:auto;margin-top:12px;font-size:13px;color:#888; }
+          .clk-laps div { padding:4px 8px;border-bottom:1px solid rgba(255,255,255,0.04); }
+        </style>
+        <div class="clk-display">
+          <div class="clk-time" id="clk-time">--:--:--</div>
+          <div class="clk-date" id="clk-date"></div>
+        </div>
+        <div class="clk-tabs">
+          <button class="clk-tab active" data-panel="stopwatch">Stopwatch</button>
+          <button class="clk-tab" data-panel="timer">Timer</button>
+        </div>
+        <div class="clk-panel active" id="panel-stopwatch">
+          <div class="clk-sw-time" id="sw-time">00:00.00</div>
+          <div class="clk-sw-btns">
+            <button class="primary" id="sw-start">Start</button>
+            <button id="sw-lap">Lap</button>
+            <button id="sw-reset">Reset</button>
+          </div>
+          <div class="clk-laps" id="sw-laps"></div>
+        </div>
+        <div class="clk-panel" id="panel-timer">
+          <div class="clk-sw-time" id="tm-time">05:00</div>
+          <div class="clk-sw-btns" style="margin-bottom:12px">
+            <button class="primary" id="tm-start">Start</button>
+            <button id="tm-reset">Reset</button>
+          </div>
+          <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
+            ${[1,3,5,10,15,30].map(m=>\`<button style="padding:6px 12px;background:rgba(255,255,255,0.06);border:none;color:#ccc;border-radius:6px;cursor:pointer;font-size:12px" onclick="document.getElementById('tm-time').textContent='\${String(m).padStart(2,'0')}:00';window.__tmTotal=\${m*60};window.__tmRemaining=\${m*60}">\${m} min</button>\`).join('')}
+          </div>
+        </div>
+      `);
+      // Clock live update
+      (function updateClock() {
+        const now = new Date();
+        const timeEl = document.getElementById('clk-time');
+        const dateEl = document.getElementById('clk-date');
+        if(!timeEl) return;
+        timeEl.textContent = now.toLocaleTimeString();
+        dateEl.textContent = now.toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+        setTimeout(updateClock, 1000);
+      })();
+      // Stopwatch
+      (function() {
+        const swTime = document.getElementById('sw-time');
+        const swStart = document.getElementById('sw-start');
+        const swLap = document.getElementById('sw-lap');
+        const swReset = document.getElementById('sw-reset');
+        const swLaps = document.getElementById('sw-laps');
+        if(!swTime) return;
+        let swRunning = false, swStartTime = 0, swElapsed = 0, swInterval;
+        function updateSwDisplay() {
+          const total = swElapsed + (swRunning ? Date.now() - swStartTime : 0);
+          const ms = Math.floor(total/10)%100;
+          const s = Math.floor(total/1000)%60;
+          const m = Math.floor(total/60000);
+          swTime.textContent = \`\${String(m).padStart(2,'0')}:\${String(s).padStart(2,'0')}.\${String(ms).padStart(2,'0')}\`;
+        }
+        swStart.addEventListener('click', () => {
+          if(swRunning) { swElapsed += Date.now() - swStartTime; clearInterval(swInterval); swStart.textContent = 'Start'; swStart.classList.add('primary'); }
+          else { swStartTime = Date.now(); swInterval = setInterval(updateSwDisplay, 10); swStart.textContent = 'Stop'; swStart.classList.remove('primary'); }
+          swRunning = !swRunning;
+        });
+        swLap.addEventListener('click', () => {
+          if(!swRunning && swElapsed===0) return;
+          const lap = document.createElement('div');
+          lap.textContent = \`#\${swLaps.children.length+1}  \${swTime.textContent}\`;
+          swLaps.appendChild(lap);
+        });
+        swReset.addEventListener('click', () => {
+          swRunning = false; swElapsed = 0; clearInterval(swInterval);
+          swStart.textContent = 'Start'; swStart.classList.add('primary');
+          swTime.textContent = '00:00.00'; swLaps.innerHTML = '';
+        });
+      })();
+      // Timer
+      (function() {
+        const tmTime = document.getElementById('tm-time');
+        const tmStart = document.getElementById('tm-start');
+        const tmReset = document.getElementById('tm-reset');
+        if(!tmTime) return;
+        let tmRunning = false, tmRemaining = 300, tmInterval;
+        window.__tmTotal = 300;
+        window.__tmRemaining = 300;
+        function updateTmDisplay() {
+          const m = Math.floor(tmRemaining/60);
+          const s = tmRemaining%60;
+          tmTime.textContent = \`\${String(m).padStart(2,'0')}:\${String(s).padStart(2,'0')}\`;
+        }
+        tmStart.addEventListener('click', () => {
+          if(tmRunning) { clearInterval(tmInterval); tmStart.textContent = 'Start'; tmStart.classList.add('primary'); }
+          else {
+            tmInterval = setInterval(() => {
+              tmRemaining--;
+              if(tmRemaining <= 0) { tmRemaining = 0; clearInterval(tmInterval); tmRunning = false; tmStart.textContent = 'Start'; tmStart.classList.add('primary'); }
+              updateTmDisplay();
+            }, 1000);
+            tmStart.textContent = 'Stop'; tmStart.classList.remove('primary');
+          }
+          tmRunning = !tmRunning;
+        });
+        tmReset.addEventListener('click', () => {
+          tmRunning = false; clearInterval(tmInterval);
+          tmRemaining = window.__tmTotal || 300;
+          tmStart.textContent = 'Start'; tmStart.classList.add('primary');
+          updateTmDisplay();
+        });
+      })();
+      // Tab switching
+      (function() {
+        document.querySelectorAll('.clk-tab').forEach(tab => {
+          tab.addEventListener('click', () => {
+            document.querySelectorAll('.clk-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.clk-panel').forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+          });
+        });
+      })();
+      break;
+    case 'minesweeper':
+      (() => {
+        const ROWS=9, COLS=9, MINES=10;
+        let board, revealed, flagged, gameOver, gameStarted;
+        function initBoard() {
+          board = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
+          revealed = Array(ROWS).fill(null).map(() => Array(COLS).fill(false));
+          flagged = Array(ROWS).fill(null).map(() => Array(COLS).fill(false));
+          gameOver = false; gameStarted = false;
+          // Place mines
+          let placed = 0;
+          while(placed < MINES) {
+            const r = Math.floor(Math.random()*ROWS), c = Math.floor(Math.random()*COLS);
+            if(board[r][c] === -1) continue;
+            board[r][c] = -1;
+            placed++;
+          }
+          // Calculate numbers
+          for(let r=0; r<ROWS; r++)
+            for(let c=0; c<COLS; c++) {
+              if(board[r][c] === -1) continue;
+              let count = 0;
+              for(let dr=-1; dr<=1; dr++)
+                for(let dc=-1; dc<=1; dc++) {
+                  if(dr===0 && dc===0) continue;
+                  const nr=r+dr, nc=c+dc;
+                  if(nr>=0 && nr<ROWS && nc>=0 && nc<COLS && board[nr][nc]===-1) count++;
+                }
+              board[r][c] = count;
+            }
+        }
+        function reveal(r, c) {
+          if(r<0||r>=ROWS||c<0||c>=COLS||revealed[r][c]||flagged[r][c]||gameOver) return;
+          revealed[r][c] = true;
+          if(board[r][c] === -1) { gameOver = true; return; }
+          if(board[r][c] === 0) {
+            for(let dr=-1; dr<=1; dr++)
+              for(let dc=-1; dc<=1; dc++)
+                reveal(r+dr, c+dc);
+          }
+        }
+        function checkWin() {
+          for(let r=0; r<ROWS; r++)
+            for(let c=0; c<COLS; c++)
+              if(!revealed[r][c] && board[r][c] !== -1) return false;
+          return true;
+        }
+        function renderBoard() {
+          const container = document.getElementById('ms-board');
+          if(!container) return;
+          let html = '';
+          for(let r=0; r<ROWS; r++) {
+            html += '<div style="display:flex">';
+            for(let c=0; c<COLS; c++) {
+              let content = '', bg = 'rgba(255,255,255,0.06)', color = '#ccc';
+              if(revealed[r][c]) {
+                bg = 'rgba(255,255,255,0.02)';
+                if(board[r][c] === -1) { content = '\ud83d\udca3'; }
+                else if(board[r][c] > 0) {
+                  content = board[r][c];
+                  const colors = ['','#4fc3f7','#81c995','#f28b82','#ce93d8','#ff9800','#fdd663','#aaa','#888'];
+                  color = colors[board[r][c]] || '#fff';
+                }
+              } else if(flagged[r][c]) {
+                content = '\ud83d\udea9'; bg = 'rgba(255,200,50,0.1)';
+              }
+              if(gameOver && board[r][c] === -1 && !flagged[r][c]) { content = '\ud83d\udca3'; bg = 'rgba(255,0,0,0.2)'; }
+              html += \`<div data-r="\${r}" data-c="\${c}" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:16px;background:\${bg};color:\${color};border:1px solid rgba(255,255,255,0.04);cursor:pointer;user-select:none;border-radius:2px">\${content}</div>\`;
+            }
+            html += '</div>';
+          }
+          container.innerHTML = html;
+          // Attach click handlers
+          container.querySelectorAll('div[data-r]').forEach(cell => {
+            cell.addEventListener('click', () => {
+              if(gameOver) return;
+              const r = parseInt(cell.dataset.r), c = parseInt(cell.dataset.c);
+              reveal(r, c);
+              if(checkWin()) { gameOver = true; }
+              renderBoard();
+              const status = document.getElementById('ms-status');
+              if(status) {
+                if(gameOver && checkWin()) status.textContent = 'You Win! \ud83c\udf89';
+                else if(gameOver) status.textContent = 'Game Over \ud83d\udca5';
+                else status.textContent = \`Mines: \${MINES}\`;
+              }
+            });
+            cell.addEventListener('contextmenu', e => {
+              e.preventDefault();
+              if(gameOver || revealed[parseInt(cell.dataset.r)][parseInt(cell.dataset.c)]) return;
+              const r = parseInt(cell.dataset.r), c = parseInt(cell.dataset.c);
+              flagged[r][c] = !flagged[r][c];
+              renderBoard();
+            });
+          });
+        }
+        initBoard();
+        showAppWindow('Minesweeper', '\ud83d\udca3', `
+          <style>
+            #ms-board { display:inline-block;margin:0 auto; }
+          </style>
+          <div style="text-align:center">
+            <div id="ms-status" style="font-size:14px;margin-bottom:12px;color:#888">Mines: ${MINES}</div>
+            <div id="ms-board"></div>
+            <button id="ms-restart" style="margin-top:12px;padding:8px 20px;background:rgba(255,255,255,0.08);border:none;color:#e0e0e0;border-radius:8px;cursor:pointer;font-size:13px">New Game</button>
+          </div>
+        `);
+        // Render after DOM attached
+        requestAnimationFrame(() => {
+          renderBoard();
+          const restartBtn = document.getElementById('ms-restart');
+          if(restartBtn) {
+            restartBtn.addEventListener('click', () => {
+              initBoard();
+              renderBoard();
+              const status = document.getElementById('ms-status');
+              if(status) status.textContent = \`Mines: \${MINES}\`;
+            });
+          }
+        });
       })();
       break;
     default:
