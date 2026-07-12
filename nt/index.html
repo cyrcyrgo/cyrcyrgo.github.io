@@ -837,7 +837,6 @@ const desktopApps = [
   { id:'calculator', name:'计算器', icon:'\ud83d\uddd2\ufe0f', color:'#fdd663', appId:'calculator' },
   { id:'calendar', name:'日历', icon:'\ud83d\udcc5', color:'#f28b82', appId:'calendar' },
   { id:'paint', name:'画图', icon:'\ud83c\udfa8', color:'#ce93d8', appId:'paint' },
-  { id:'hhpaint', name:'HH绘画', icon:'\ud83c\udfa8', color:'#ce93d8', appId:'hhpaint' },
   { id:'weather', name:'天气', icon:'\u2600\ufe0f', color:'#ffcc02', appId:'weather' },
   { id:'clock', name:'时钟', icon:'\u23f0', color:'#80cbc4', appId:'clock' },
   { id:'minesweeper', name:'扫雷', icon:'\ud83d\udca3', color:'#ef5350', appId:'minesweeper' },
@@ -970,7 +969,6 @@ function renderStartMenu() {
     {name:'计算器', icon:'\ud83d\uddd2\ufe0f', color:'#fdd663', appId:'calculator'},
     {name:'日历', icon:'\ud83d\udcc5', color:'#f28b82', appId:'calendar'},
     {name:'画图', icon:'\ud83c\udfa8', color:'#ce93d8', appId:'paint'},
-    {name:'HH绘画', icon:'\ud83c\udfa8', color:'#ce93d8', appId:'hhpaint'},
     {name:'天气', icon:'\u2600\ufe0f', color:'#ffcc02', appId:'weather'},
     {name:'时钟', icon:'\u23f0', color:'#80cbc4', appId:'clock'},
     {name:'扫雷', icon:'\ud83d\udca3', color:'#ef5350', appId:'minesweeper'},
@@ -1440,14 +1438,6 @@ function launchApp(appId) {
           ctx.fillRect(0, 0, canvas.width, canvas.height);
         });
       });
-      break;
-    case 'hhpaint':
-      showAppWindow('HH绘画', '\ud83c\udfa8', `
-        <style>
-          .hhpaint-iframe { width:100%;height:100%;border:none; }
-        </style>
-        <iframe class="hhpaint-iframe" src="kzk/gf/hh/index.html" sandbox="allow-scripts allow-same-origin"></iframe>
-      `);
       break;
     case 'weather':
       showAppWindow('天气', '\u2600\ufe0f', `
