@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+</head>
+<body>
+<!-- ============================================================
+     Desktop.ce.html — WebNT-HTML5 Web OS Kernel Desktop Component
+     Custom Element: <nt-desktop>
+     Uses Shadow DOM (open mode) for style encapsulation.
+     All canvas rendering goes through GlobalDisplay.API.
+     ============================================================ -->
+
+<template id="nt-desktop-template">
+  <style>
+    :host {
+      display: block;
+      width: 100%;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      font-family: var(--sys-font-ui, 'Segoe UI', sans-serif);
+      background: var(--desktop-wallpaper, linear-gradient(135deg, #1a3a5c 0%, #2d6aa0 40%, #4a90d9 70%, #1a3a5c 100%));
+      background-size: cover;
+      background-position: center;
+      container-type: inline-size;
+      container-name: desktop;
+    }
+
+    /* ── Desktop Canvas ─────────────────────────────── */
+    #desktop-canvas {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Icon Grid Area ─────────────────────────────── */
+    .icon-grid {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      padding: 8px;
+      /* Icons are positioned absolutely within this container */
+    }
+
+    /* ── Desktop Icon ───────────────────────────────── */
+    .desktop-icon {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      width: 80px;
+      height: 96px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      border-radius: 4px;
+      padding: 4px 2px;
+    }
+
+    .desktop-icon:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .desktop-icon.selected {
+      background: rgba(255, 255, 255, 0.15);
+      outline: 1px solid rgba(255, 255, 255, 0.35);
+      outline-offset: -1px;
+      border-radius: 4px;
+    }
+
+    .desktop-icon .icon-svg {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      margin-bottom: 4px;
+    }
+
+    .desktop-icon .icon-svg svg {
+      width: 40px;
+      height: 40px;
+    }
+
+    .desktop-icon .icon-label {
+      font-size: 12px;
+      color: #ffffff;
+      text-align: center;
+      line-height: 1.2;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+      word-break: break-word;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      width: 100%;
+      max-height: 28px;
+      pointer-events: none;
+    }
+
+    .desktop-icon.selected .icon-label {
+      text-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+    }
+
+    /* ── Drag Selection Rectangle ───────────────────── */
+    .selection-rect {
+      position: absolute;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      background: rgba(26, 115, 232, 0.15);
+      pointer-events: none;
+      z-index: 10;
+      display: none;
+    }
+
+    /* ── Container Query: adjust icon size ──────────── */
+    @container desktop (max-width: 480px) {
+      .desktop-icon {
+        width: 64px;
+        height: 80px;
+      }
+      .desktop-icon .icon-svg {
+        width: 36px;
+        height: 36px;
+      }
+      .desktop-icon .icon-svg svg {
+        width: 30px;
+        height: 30px;
+      }
+      .desktop-icon .icon-label {
+        font-size: 10px;
+      }
+    }
+
+    @container desktop (min-width: 481px) and (max-width: 768px) {
+      .desktop-icon {
+        width: 72px;
+        height: 88px;
+      }
+      .desktop-icon .icon-svg {
+        width: 44px;
+        height: 44px;
+      }
+      .desktop-icon .icon-svg svg {
+        width: 36px;
+        height: 36px;
+      }
+      .desktop-icon .icon-label {
+        font-size: 11px;
+      }
+    }
+  </style>
+
+  <div class="icon-grid" id="icon-grid">
+    <!-- Icons are rendered here dynamically -->
+  </div>
+
+  <div class="selection-rect" id="selection-rect"></div>
+
+  <canvas id="desktop-canvas"></canvas>
+
+  <!-- Context menu placeholder — will be created dynamically -->
+  <div id="context-menu-host"></div>
+</template>
+
+<script type="module">
+  import GlobalDisplayAPI from '../../subsystem/display-pipeline/GlobalDisplay.API.js';
+  import WindowManager from '../../subsystem/window-manager/WindowManager.Core.js';
+  import SysCallBridge from '../../kernel/syscall/SysCall.Bridge.js';
+  import DesktopIcons from './DesktopIcons.ts';
+
+  const ICON_WIDTH = 80;
+  const ICON_HEIGHT = 96;
+
+  /**
+   * SVG icon paths for desktop icons.
+   */
+  const ICON_SVGS = {
+    monitor: `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+      <line x1="8" y1="21" x2="16" y2="21"/>
+      <line x1="12" y1="17" x2="12" y2="21"/>
+    </svg>`,
+    bin: `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      <line x1="10" y1="11" x2="10" y2="17"/>
+      <line x1="14" y1="11" x2="14" y2="17"/>
+    </svg>`,
+    terminal: `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="4 17 10 11 4 5"/>
+      <line x1="12" y1="19" x2="20" y2="19"/>
+    </svg>`,
+    folder: `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    </svg>`,
+    gear: `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>`,
+    globe: `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="2" y1="12" x2="22" y2="12"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </svg>`,
+    document: `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+      <polyline points="10 9 9 9 8 9"/>
+    </svg>`,
+  };
+
+  /**
+   * Default desktop icons configuration.
+   */
+  const DEFAULT_ICONS = [
+    { id: 'computer',   name: 'Computer',     icon: 'monitor',  appId: 'computer',   x: 16,  y: 16 },
+    { id: 'recyclebin', name: 'Recycle Bin',  icon: 'bin',      appId: 'recyclebin', x: 16,  y: 120 },
+    { id: 'terminal',   name: 'Terminal',     icon: 'terminal', appId: 'terminal',   x: 16,  y: 224 },
+    { id: 'explorer',   name: 'File Explorer',icon: 'folder',   appId: 'explorer',   x: 16,  y: 328 },
+    { id: 'settings',   name: 'Settings',     icon: 'gear',     appId: 'settings',   x: 16,  y: 432 },
+    { id: 'webview',    name: 'Web View',     icon: 'globe',    appId: 'webview',    x: 16,  y: 536 },
+    { id: 'notepad',    name: 'Notepad',      icon: 'document', appId: 'notepad',    x: 16,  y: 640 },
+  ];
+
+  /**
+   * Context menu items definition.
+   */
+  function getContextMenuItems() {
+    return [
+      {
+        label: 'View',
+        icon: '',
+        children: [
+          { label: 'Large icons',   action: 'view-large' },
+          { label: 'Medium icons',  action: 'view-medium' },
+          { label: 'Small icons',   action: 'view-small' },
+          { label: '', separator: true },
+          { label: 'Auto arrange',  action: 'view-auto-arrange' },
+        ],
+      },
+      {
+        label: 'Sort by',
+        icon: '',
+        children: [
+          { label: 'Name', action: 'sort-name' },
+          { label: 'Date', action: 'sort-date' },
+          { label: 'Type', action: 'sort-type' },
+          { label: 'Size', action: 'sort-size' },
+        ],
+      },
+      { label: 'Refresh',         action: 'refresh' },
+      { label: '',                separator: true },
+      {
+        label: 'New',
+        icon: '',
+        children: [
+          { label: 'Folder',        action: 'new-folder' },
+          { label: 'Text Document', action: 'new-text-document' },
+          { label: 'Shortcut',      action: 'new-shortcut' },
+        ],
+      },
+      { label: '',                separator: true },
+      { label: 'Display Settings', action: 'display-settings' },
+      { label: 'Personalize',      action: 'personalize' },
+    ];
+  }
+
+  class NtDesktop extends HTMLElement {
+    constructor() {
+      super();
+      this.attachShadow({ mode: 'open' });
+
+      const template = document.getElementById('nt-desktop-template');
+      if (template) {
+        this.shadowRoot.appendChild(template.content.cloneNode(true));
+      }
+
+      this.desktopIcons = new DesktopIcons();
+      this.iconElements = new Map();
+      this.contextMenu = null;
+      this.displayLayerId = null;
+
+      this._isDragging = false;
+      this._dragStartX = 0;
+      this._dragStartY = 0;
+      this._dragIconId = null;
+      this._dragIconStartX = 0;
+      this._dragIconStartY = 0;
+      this._isSelecting = false;
+      this._selectStartX = 0;
+      this._selectStartY = 0;
+      this._lastClickTime = 0;
+      this._lastClickIconId = null;
+    }
+
+    connectedCallback() {
+      this._initIcons();
+      this._initDisplay();
+      this._bindEvents();
+      this._renderIcons();
+      this._setupContextMenu();
+    }
+
+    disconnectedCallback() {
+      this._unbindEvents();
+    }
+
+    /* ── 【对接内核】Initialize display layer via GlobalDisplay.API ── */
+    _initDisplay() {
+      const canvas = this.shadowRoot.getElementById('desktop-canvas');
+      const rect = this.getBoundingClientRect();
+      const display = GlobalDisplayAPI.instance;
+
+      if (!canvas) return;
+
+      canvas.width = rect.width || 1920;
+      canvas.height = rect.height || 1080;
+
+      try {
+        display.initialize(canvas, {
+          width: rect.width || 1920,
+          height: rect.height || 1080,
+        });
+      } catch {
+        // Already initialized
+      }
+
+      this.displayLayerId = display.createLayer(
+        1, // DESKTOP layer type
+        'desktop-background',
+        rect.width || 1920,
+        rect.height || 1080
+      );
+
+      this.desktopIcons.setLayerId(this.displayLayerId);
+      this.desktopIcons.setDesktopDimensions(rect.width || 1920, rect.height || 1080);
+    }
+
+    /* ── Initialize default icons ── */
+    _initIcons() {
+      for (const def of DEFAULT_ICONS) {
+        this.desktopIcons.addIcon({
+          ...def,
+          selected: false,
+        });
+      }
+      this.desktopIcons.loadLayout();
+    }
+
+    /* ── Render all icons to the DOM ── */
+    _renderIcons() {
+      const grid = this.shadowRoot.getElementById('icon-grid');
+      if (!grid) return;
+
+      grid.innerHTML = '';
+      this.iconElements.clear();
+
+      const icons = this.desktopIcons.getIcons();
+      for (const icon of icons) {
+        const el = this._createIconElement(icon);
+        grid.appendChild(el);
+        this.iconElements.set(icon.id, el);
+      }
+    }
+
+    /* ── Create a single icon DOM element ── */
+    _createIconElement(icon) {
+      const div = document.createElement('div');
+      div.className = 'desktop-icon';
+      if (icon.selected) {
+        div.classList.add('selected');
+      }
+      div.style.left = `${icon.x}px`;
+      div.style.top = `${icon.y}px`;
+      div.setAttribute('data-icon-id', icon.id);
+
+      const svgWrap = document.createElement('div');
+      svgWrap.className = 'icon-svg';
+      svgWrap.innerHTML = ICON_SVGS[icon.icon] || ICON_SVGS['folder'];
+
+      const label = document.createElement('div');
+      label.className = 'icon-label';
+      label.textContent = icon.name;
+
+      div.appendChild(svgWrap);
+      div.appendChild(label);
+
+      div.addEventListener('mousedown', (e) => this._onIconMouseDown(e, icon.id));
+      div.addEventListener('click', (e) => this._onIconClick(e, icon.id));
+
+      return div;
+    }
+
+    /* ── Bind desktop mouse events ── */
+    _bindEvents() {
+      this._boundMouseDown = this._onDesktopMouseDown.bind(this);
+      this._boundMouseMove = this._onDesktopMouseMove.bind(this);
+      this._boundMouseUp = this._onDesktopMouseUp.bind(this);
+      this._boundContextMenu = this._onContextMenu.bind(this);
+      this._boundResize = this._onResize.bind(this);
+
+      this.addEventListener('mousedown', this._boundMouseDown);
+      this.addEventListener('mousemove', this._boundMouseMove);
+      this.addEventListener('mouseup', this._boundMouseUp);
+      this.addEventListener('contextmenu', this._boundContextMenu);
+      window.addEventListener('resize', this._boundResize);
+    }
+
+    _unbindEvents() {
+      this.removeEventListener('mousedown', this._boundMouseDown);
+      this.removeEventListener('mousemove', this._boundMouseMove);
+      this.removeEventListener('mouseup', this._boundMouseUp);
+      this.removeEventListener('contextmenu', this._boundContextMenu);
+      window.removeEventListener('resize', this._boundResize);
+    }
+
+    /* ── Icon mousedown handler ── */
+    _onIconMouseDown(e, iconId) {
+      e.stopPropagation();
+      this._isDragging = true;
+      this._dragIconId = iconId;
+      const icon = this.desktopIcons.getIcons().find((i) => i.id === iconId);
+      if (icon) {
+        this._dragIconStartX = icon.x;
+        this._dragIconStartY = icon.y;
+      }
+      this._dragStartX = e.clientX;
+      this._dragStartY = e.clientY;
+    }
+
+    /* ── Icon click handler (select + double-click launch) ── */
+    _onIconClick(e, iconId) {
+      e.stopPropagation();
+      const now = Date.now();
+
+      // Check for double-click
+      if (
+        this._lastClickIconId === iconId &&
+        now - this._lastClickTime < 400
+      ) {
+        // Double-click: launch the app
+        this._launchApp(iconId);
+        this._lastClickTime = 0;
+        this._lastClickIconId = null;
+        return;
+      }
+
+      this._lastClickTime = now;
+      this._lastClickIconId = iconId;
+
+      // Single click: select
+      if (!e.ctrlKey && !e.metaKey) {
+        this.desktopIcons.deselectAll();
+      }
+      this.desktopIcons.selectIcon(iconId);
+      this._updateIconSelectionVisuals();
+    }
+
+    /* ── 【对接内核】Launch app via WindowManager ── */
+    _launchApp(iconId) {
+      this.desktopIcons.launchIcon(iconId);
+    }
+
+    /* ── Desktop mouse down (start drag selection) ── */
+    _onDesktopMouseDown(e) {
+      // Only start selection on left button, on empty area
+      if (e.button !== 0) return;
+      if (e.target !== this && e.target !== this.shadowRoot.getElementById('icon-grid')) {
+        return;
+      }
+
+      this._isSelecting = true;
+      this._selectStartX = e.clientX;
+      this._selectStartY = e.clientY;
+
+      const rect = this.shadowRoot.getElementById('selection-rect');
+      if (rect) {
+        rect.style.left = `${e.clientX}px`;
+        rect.style.top = `${e.clientY}px`;
+        rect.style.width = '0px';
+        rect.style.height = '0px';
+        rect.style.display = 'block';
+      }
+
+      this.desktopIcons.deselectAll();
+      this._updateIconSelectionVisuals();
+    }
+
+    /* ── Desktop mouse move (drag icon or selection rect) ── */
+    _onDesktopMouseMove(e) {
+      if (this._isDragging && this._dragIconId) {
+        const dx = e.clientX - this._dragStartX;
+        const dy = e.clientY - this._dragStartY;
+        const newX = this._dragIconStartX + dx;
+        const newY = this._dragIconStartY + dy;
+
+        this.desktopIcons.moveIcon(this._dragIconId, newX, newY);
+
+        const el = this.iconElements.get(this._dragIconId);
+        if (el) {
+          const icon = this.desktopIcons.getIcons().find((i) => i.id === this._dragIconId);
+          if (icon) {
+            el.style.left = `${icon.x}px`;
+            el.style.top = `${icon.y}px`;
+          }
+        }
+      }
+
+      if (this._isSelecting) {
+        const rect = this.shadowRoot.getElementById('selection-rect');
+        if (!rect) return;
+
+        const x1 = Math.min(this._selectStartX, e.clientX);
+        const y1 = Math.min(this._selectStartY, e.clientY);
+        const x2 = Math.max(this._selectStartX, e.clientX);
+        const y2 = Math.max(this._selectStartY, e.clientY);
+
+        const hostRect = this.getBoundingClientRect();
+        rect.style.left = `${x1 - hostRect.left}px`;
+        rect.style.top = `${y1 - hostRect.top}px`;
+        rect.style.width = `${x2 - x1}px`;
+        rect.style.height = `${y2 - y1}px`;
+
+        // Select icons within the selection rect
+        this._selectIconsInRect(x1, y1, x2, y2);
+      }
+    }
+
+    /* ── Select icons that fall within the selection rectangle ── */
+    _selectIconsInRect(x1, y1, x2, y2) {
+      const hostRect = this.getBoundingClientRect();
+      const icons = this.desktopIcons.getIcons();
+
+      for (const icon of icons) {
+        const ix = hostRect.left + icon.x;
+        const iy = hostRect.top + icon.y;
+        const ix2 = ix + ICON_WIDTH;
+        const iy2 = iy + ICON_HEIGHT;
+
+        const overlaps =
+          ix < x2 && ix2 > x1 && iy < y2 && iy2 > y1;
+
+        if (overlaps) {
+          this.desktopIcons.selectIcon(icon.id);
+        }
+      }
+      this._updateIconSelectionVisuals();
+    }
+
+    /* ── Desktop mouse up (end drag / end selection) ── */
+    _onDesktopMouseUp(e) {
+      if (this._isDragging) {
+        this._isDragging = false;
+        this._dragIconId = null;
+        this.desktopIcons.saveLayout();
+      }
+
+      if (this._isSelecting) {
+        this._isSelecting = false;
+        const rect = this.shadowRoot.getElementById('selection-rect');
+        if (rect) {
+          rect.style.display = 'none';
+        }
+      }
+    }
+
+    /* ── Update icon selection visual state ── */
+    _updateIconSelectionVisuals() {
+      const icons = this.desktopIcons.getIcons();
+      for (const icon of icons) {
+        const el = this.iconElements.get(icon.id);
+        if (el) {
+          if (icon.selected) {
+            el.classList.add('selected');
+          } else {
+            el.classList.remove('selected');
+          }
+        }
+      }
+    }
+
+    /* ── Right-click context menu ── */
+    _onContextMenu(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // If clicking on an icon, select it first
+      const target = e.composedPath()[0];
+      const iconId = target?.closest?.('.desktop-icon')?.getAttribute?.('data-icon-id');
+      if (iconId) {
+        if (!this.desktopIcons.getIcons().find((i) => i.id === iconId)?.selected) {
+          this.desktopIcons.deselectAll();
+          this.desktopIcons.selectIcon(iconId);
+          this._updateIconSelectionVisuals();
+        }
+      }
+
+      this._showContextMenu(e.clientX, e.clientY);
+    }
+
+    /* ── Setup context menu ── */
+    _setupContextMenu() {
+      // Create the context menu element
+      this.contextMenu = document.createElement('nt-contextmenu');
+      this.shadowRoot.getElementById('context-menu-host').appendChild(this.contextMenu);
+    }
+
+    /* ── Show context menu at position ── */
+    _showContextMenu(x, y) {
+      if (!this.contextMenu) return;
+
+      const items = getContextMenuItems();
+      // Bind the action handlers to this desktop instance
+      this.contextMenu.show(x, y, items, this._handleMenuAction.bind(this));
+    }
+
+    /* ── 【对接内核】Handle context menu actions ── */
+    _handleMenuAction(action) {
+      switch (action) {
+        case 'refresh':
+          // Refresh: re-render icons
+          this._renderIcons();
+          break;
+
+        case 'display-settings':
+          // 【对接内核】Open settings app via WindowManager
+          WindowManager.instance.createWindow({
+            title: 'Display Settings',
+            width: 700,
+            height: 520,
+            icon: 'gear',
+            appId: 'settings',
+            resizable: true,
+          });
+          break;
+
+        case 'personalize':
+          // 【对接内核】Open personalization via WindowManager
+          WindowManager.instance.createWindow({
+            title: 'Personalization',
+            width: 700,
+            height: 520,
+            icon: 'gear',
+            appId: 'personalize',
+            resizable: true,
+          });
+          break;
+
+        case 'new-folder':
+          // 【对接内核】Create folder via SysCall.NtCreateFile
+          this._createNewFolder();
+          break;
+
+        case 'new-text-document':
+          // 【对接内核】Create file via SysCall.NtCreateFile
+          this._createNewTextDocument();
+          break;
+
+        case 'new-shortcut':
+          // Create a shortcut (placeholder icon)
+          this._createNewShortcut();
+          break;
+
+        case 'view-large':
+          this.desktopIcons.setIconSize(48);
+          this._renderIcons();
+          break;
+
+        case 'view-medium':
+          this.desktopIcons.setIconSize(40);
+          this._renderIcons();
+          break;
+
+        case 'view-small':
+          this.desktopIcons.setIconSize(32);
+          this._renderIcons();
+          break;
+
+        case 'view-auto-arrange':
+          this._autoArrangeIcons();
+          break;
+
+        case 'sort-name':
+          this._sortIcons('name');
+          break;
+
+        case 'sort-date':
+          this._sortIcons('date');
+          break;
+
+        case 'sort-type':
+          this._sortIcons('type');
+          break;
+
+        case 'sort-size':
+          this._sortIcons('size');
+          break;
+
+        default:
+          break;
+      }
+    }
+
+    /* ── 【对接内核】Create a new folder via SysCall ── */
+    async _createNewFolder() {
+      const folderName = `New Folder ${Date.now() % 1000}`;
+      const path = `/Desktop/${folderName}`;
+      try {
+        await SysCallBridge.instance.call('NtCreateFile', path, '');
+        // Add a new folder icon to the desktop
+        const existingIcons = this.desktopIcons.getIcons();
+        const nextY = existingIcons.length > 0
+          ? Math.max(...existingIcons.map((i) => i.y)) + ICON_HEIGHT + 8
+          : 16;
+        this.desktopIcons.addIcon({
+          id: `folder-${Date.now()}`,
+          name: folderName,
+          icon: 'folder',
+          appId: 'explorer',
+          x: 16,
+          y: nextY,
+          selected: true,
+        });
+        this.desktopIcons.deselectAll();
+        this.desktopIcons.selectIcon(`folder-${Date.now()}`);
+        this._renderIcons();
+        this.desktopIcons.saveLayout();
+      } catch (err) {
+        console.error('Desktop: Failed to create folder:', err);
+      }
+    }
+
+    /* ── 【对接内核】Create a new text document via SysCall ── */
+    async _createNewTextDocument() {
+      const fileName = `New Document ${Date.now() % 1000}.txt`;
+      const path = `/Desktop/${fileName}`;
+      try {
+        await SysCallBridge.instance.call('NtCreateFile', path, '');
+        const existingIcons = this.desktopIcons.getIcons();
+        const nextY = existingIcons.length > 0
+          ? Math.max(...existingIcons.map((i) => i.y)) + ICON_HEIGHT + 8
+          : 16;
+        this.desktopIcons.addIcon({
+          id: `doc-${Date.now()}`,
+          name: fileName,
+          icon: 'document',
+          appId: 'notepad',
+          x: 16,
+          y: nextY,
+          selected: true,
+        });
+        this.desktopIcons.deselectAll();
+        this.desktopIcons.selectIcon(`doc-${Date.now()}`);
+        this._renderIcons();
+        this.desktopIcons.saveLayout();
+      } catch (err) {
+        console.error('Desktop: Failed to create text document:', err);
+      }
+    }
+
+    /* ── Create a new shortcut ── */
+    _createNewShortcut() {
+      const existingIcons = this.desktopIcons.getIcons();
+      const nextY = existingIcons.length > 0
+        ? Math.max(...existingIcons.map((i) => i.y)) + ICON_HEIGHT + 8
+        : 16;
+      this.desktopIcons.addIcon({
+        id: `shortcut-${Date.now()}`,
+        name: 'New Shortcut',
+        icon: 'globe',
+        appId: 'webview',
+        x: 16,
+        y: nextY,
+        selected: true,
+      });
+      this.desktopIcons.deselectAll();
+      this.desktopIcons.selectIcon(`shortcut-${Date.now()}`);
+      this._renderIcons();
+      this.desktopIcons.saveLayout();
+    }
+
+    /* ── Auto-arrange icons in grid ── */
+    _autoArrangeIcons() {
+      const cols = Math.max(1, Math.floor(this.getBoundingClientRect().width / ICON_WIDTH));
+      const icons = this.desktopIcons.getIcons();
+      let col = 0;
+      let row = 0;
+      for (const icon of icons) {
+        this.desktopIcons.moveIcon(icon.id, col * ICON_WIDTH + 8, row * ICON_HEIGHT + 8);
+        col++;
+        if (col >= cols) {
+          col = 0;
+          row++;
+        }
+      }
+      this._renderIcons();
+      this.desktopIcons.saveLayout();
+    }
+
+    /* ── Sort icons ── */
+    _sortIcons(by) {
+      const icons = this.desktopIcons.getIcons();
+      let sorted;
+      switch (by) {
+        case 'name':
+          sorted = [...icons].sort((a, b) => a.name.localeCompare(b.name));
+          break;
+        case 'date':
+          sorted = [...icons].sort((a, b) => a.id.localeCompare(b.id));
+          break;
+        case 'type':
+          sorted = [...icons].sort((a, b) => a.appId.localeCompare(b.appId));
+          break;
+        case 'size':
+        default:
+          sorted = icons;
+          break;
+      }
+      let row = 0;
+      const cols = Math.max(1, Math.floor(this.getBoundingClientRect().width / ICON_WIDTH));
+      for (let i = 0; i < sorted.length; i++) {
+        const col = i % cols;
+        row = Math.floor(i / cols);
+        this.desktopIcons.moveIcon(sorted[i].id, col * ICON_WIDTH + 8, row * ICON_HEIGHT + 8);
+      }
+      this._renderIcons();
+      this.desktopIcons.saveLayout();
+    }
+
+    /* ── Resize handler ── */
+    _onResize() {
+      const rect = this.getBoundingClientRect();
+      this.desktopIcons.setDesktopDimensions(rect.width, rect.height);
+
+      const canvas = this.shadowRoot.getElementById('desktop-canvas');
+      if (canvas) {
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+      }
+
+      if (this.displayLayerId) {
+        GlobalDisplayAPI.instance.resizeLayer(this.displayLayerId, rect.width, rect.height);
+      }
+    }
+  }
+
+  customElements.define('nt-desktop', NtDesktop);
+</script>
+
+</body>
+</html>

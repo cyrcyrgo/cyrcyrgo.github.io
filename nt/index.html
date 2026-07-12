@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebNT Kernel v1.0.0</title>
+
+  <!-- ===== 1. Import Map: ES Module 路径映射 ===== -->
+  <script type="importmap" src="import-map.json"></script>
+
+  <!-- ===== 2. 全局系统样式 ===== -->
+  <link rel="stylesheet" href="ui/styles/Global.System.css">
+
+  <!-- ===== 3. 注册所有 Custom Elements ===== -->
+  <!-- 桌面组件 -->
+  <link rel="preload" href="ui/components/Desktop.ce.html" as="fetch" crossorigin="anonymous">
+  <!-- 任务栏组件 -->
+  <link rel="preload" href="ui/components/Taskbar.ce.html" as="fetch" crossorigin="anonymous">
+  <!-- 开始菜单组件 -->
+  <link rel="preload" href="ui/components/StartMenu.ce.html" as="fetch" crossorigin="anonymous">
+  <!-- 右键菜单组件 -->
+  <link rel="preload" href="ui/components/ContextMenu.ce.html" as="fetch" crossorigin="anonymous">
+  <!-- 终端窗口组件 -->
+  <link rel="preload" href="ui/components/TerminalWindow.ce.html" as="fetch" crossorigin="anonymous">
+  <!-- 标准应用窗口组件 -->
+  <link rel="preload" href="ui/components/WindowElement.ce.html" as="fetch" crossorigin="anonymous">
+
+  <style>
+    /* ===== 系统启动遮罩 / BIOS Boot Screen ===== */
+    #boot-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: #0a0a0a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Courier New', monospace;
+      color: #00ff00;
+      transition: opacity 0.5s ease-out;
+    }
+
+    #boot-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #boot-screen .boot-logo {
+      font-size: 28px;
+      font-weight: bold;
+      color: #00ff88;
+      margin-bottom: 8px;
+      letter-spacing: 4px;
+      text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+    }
+
+    #boot-screen .boot-subtitle {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 32px;
+      letter-spacing: 2px;
+    }
+
+    #boot-screen .boot-log {
+      width: 560px;
+      max-width: 90vw;
+      font-size: 13px;
+      line-height: 1.8;
+      color: #00cc00;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    #boot-screen .boot-log .log-line {
+      opacity: 0;
+      animation: logFadeIn 0.15s forwards;
+    }
+
+    #boot-screen .boot-log .log-line.ok {
+      color: #00ff00;
+    }
+
+    #boot-screen .boot-log .log-line.warn {
+      color: #ffcc00;
+    }
+
+    #boot-screen .boot-log .log-line.err {
+      color: #ff4444;
+    }
+
+    #boot-screen .boot-log .log-line.info {
+      color: #00aaff;
+    }
+
+    @keyframes logFadeIn {
+      to { opacity: 1; }
+    }
+
+    #boot-screen .boot-progress {
+      width: 400px;
+      max-width: 80vw;
+      height: 4px;
+      background: #1a1a1a;
+      border-radius: 2px;
+      margin-top: 24px;
+      overflow: hidden;
+    }
+
+    #boot-screen .boot-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00ff88, #00aaff);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+
+    #boot-screen .boot-status {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #666;
+    }
+
+    /* ===== 主容器：隐藏直到启动完成 ===== */
+    #app-root {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+      background: var(--sys-bg, #1a1a2e);
+    }
+
+    #app-root.ready {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================ -->
+  <!-- 系统启动引导画面 (BIOS-style Boot Screen)                    -->
+  <!-- ============================================================ -->
+  <div id="boot-screen">
+    <div class="boot-logo">WebNT Kernel</div>
+    <div class="boot-subtitle">HTML5 Hybrid Microkernel OS v1.0.0</div>
+    <div class="boot-log" id="boot-log"></div>
+    <div class="boot-progress">
+      <div class="boot-progress-bar" id="boot-progress-bar"></div>
+    </div>
+    <div class="boot-status" id="boot-status">Initializing...</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 主应用根容器 (启动完成后显示)                                -->
+  <!-- ============================================================ -->
+  <div id="app-root">
+    <!-- 桌面 + 任务栏 + 窗口由 UIMain.ts 动态创建 -->
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 系统启动脚本 (ES Module)                                     -->
+  <!-- ============================================================ -->
+  <script type="module">
+    /**
+     * WebNT Kernel Boot Sequence
+     * 系统启动引导流程，完成后移交 UIMain 初始化 UI 层
+     */
+
+    // ===== Boot Screen Elements =====
+    const bootScreen = document.getElementById('boot-screen');
+    const bootLog = document.getElementById('boot-log');
+    const bootProgressBar = document.getElementById('boot-progress-bar');
+    const bootStatus = document.getElementById('boot-status');
+    const appRoot = document.getElementById('app-root');
+
+    /**
+     * 写入启动日志
+     * @param {string} msg - 日志消息
+     * @param {string} type - 类型: 'ok' | 'warn' | 'err' | 'info' | ''
+     */
+    function bootLogLine(msg, type = '') {
+      const line = document.createElement('div');
+      line.className = `log-line ${type}`;
+      line.textContent = `[${new Date().toISOString().slice(11, 23)}] ${msg}`;
+      bootLog.appendChild(line);
+      bootLog.scrollTop = bootLog.scrollHeight;
+    }
+
+    /**
+     * 更新启动进度
+     * @param {number} percent - 进度百分比 0-100
+     * @param {string} status - 状态文字
+     */
+    function bootProgress(percent, status) {
+      bootProgressBar.style.width = percent + '%';
+      bootStatus.textContent = status;
+    }
+
+    /**
+     * 加载 Custom Element HTML 模板并注册
+     * @param {string} name - 组件名称
+     * @param {string} url - 模板文件 URL
+     */
+    async function registerComponent(name, url) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const html = await response.text();
+
+        // 解析 HTML 模板中的 <template> 和 <script>
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        const template = doc.querySelector('template');
+        const script = doc.querySelector('script');
+
+        if (!template) {
+          bootLogLine(`  [WARN] ${name}: no <template> found, skipping`, 'warn');
+          return;
+        }
+
+        // 用获取到的 template 和 script 定义 Custom Element
+        const TemplateClass = class extends HTMLElement {
+          constructor() {
+            super();
+            const shadow = this.attachShadow({ mode: 'open' });
+            shadow.appendChild(template.content.cloneNode(true));
+
+            // 如果模板自带 <script>，执行它
+            if (script && script.textContent) {
+              const fn = new Function('host', 'shadow', script.textContent);
+              fn(this, shadow);
+            }
+          }
+        };
+
+        customElements.define(name, TemplateClass);
+        bootLogLine(`  [OK] Registered <${name}>`, 'ok');
+      } catch (err) {
+        bootLogLine(`  [ERR] ${name}: ${err.message}`, 'err');
+      }
+    }
+
+    /**
+     * 主启动流程
+     */
+    async function boot() {
+      bootLogLine('WebNT Kernel v1.0.0 Starting...', 'info');
+      bootLogLine('Copyright (c) 2026 WebNT Project', '');
+      bootLogLine('', '');
+
+      // ===== Phase 0: 硬件检测 =====
+      bootProgress(5, 'Phase 0: Hardware Detection');
+      bootLogLine('Phase 0: Hardware Detection', 'info');
+      bootLogLine(`  CPU Cores: ${navigator.hardwareConcurrency || 'unknown'}`, '');
+      bootLogLine(`  Memory: ${navigator.deviceMemory || 'unknown'} GB`, '');
+      bootLogLine(`  Platform: ${navigator.platform}`, '');
+      bootLogLine(`  WebGPU: ${navigator.gpu ? 'Available' : 'Not Available'}`, navigator.gpu ? 'ok' : 'warn');
+      bootLogLine(`  SharedArrayBuffer: ${typeof SharedArrayBuffer !== 'undefined' ? 'Available' : 'Not Available'}`, 'ok');
+      bootLogLine(`  Service Worker: ${'serviceWorker' in navigator ? 'Available' : 'Not Available'}`, 'ok');
+      bootLogLine('', '');
+
+      await new Promise(r => setTimeout(r, 400));
+
+      // ===== Phase 1: 注册 Custom Elements =====
+      bootProgress(20, 'Phase 1: Registering Custom Elements');
+      bootLogLine('Phase 1: Registering Custom Elements', 'info');
+
+      await registerComponent('nt-desktop', 'ui/components/Desktop.ce.html');
+      await registerComponent('nt-taskbar', 'ui/components/Taskbar.ce.html');
+      await registerComponent('nt-startmenu', 'ui/components/StartMenu.ce.html');
+      await registerComponent('nt-contextmenu', 'ui/components/ContextMenu.ce.html');
+      await registerComponent('nt-terminal-window', 'ui/components/TerminalWindow.ce.html');
+      await registerComponent('nt-window', 'ui/components/WindowElement.ce.html');
+      bootLogLine('', '');
+
+      await new Promise(r => setTimeout(r, 300));
+
+      // ===== Phase 2: 初始化内核模块 =====
+      bootProgress(40, 'Phase 2: Loading Kernel Modules');
+      bootLogLine('Phase 2: Loading Kernel Modules', 'info');
+
+      try {
+        // 动态导入内核模块
+        const [GlobalDisplayModule, WindowManagerModule, SysCallModule, ProcessModule] =
+          await Promise.all([
+            import('/nt/subsystem/display-pipeline/GlobalDisplay.API.js'),
+            import('/nt/subsystem/window-manager/WindowManager.Core.js'),
+            import('/nt/kernel/syscall/SysCall.Bridge.js'),
+            import('/nt/kernel/executor/ProcessManager.js')
+          ]);
+
+        // 挂载到全局供 UI 组件使用
+        window.__WebNT__ = {
+          GlobalDisplayAPI: GlobalDisplayModule.default || GlobalDisplayModule.GlobalDisplayAPI,
+          WindowManager: WindowManagerModule.default || WindowManagerModule.WindowManager,
+          SysCallBridge: SysCallModule.default || SysCallModule.SysCallBridge,
+          ProcessManager: ProcessModule.default || ProcessModule.ProcessManager
+        };
+
+        bootLogLine(`  [OK] GlobalDisplay.API loaded`, 'ok');
+        bootLogLine(`  [OK] WindowManager.Core loaded`, 'ok');
+        bootLogLine(`  [OK] SysCall.Bridge loaded`, 'ok');
+        bootLogLine(`  [OK] ProcessManager loaded`, 'ok');
+      } catch (err) {
+        bootLogLine(`  [ERR] Failed to load kernel: ${err.message}`, 'err');
+      }
+      bootLogLine('', '');
+
+      await new Promise(r => setTimeout(r, 300));
+
+      // ===== Phase 3: 初始化 Display =====
+      bootProgress(60, 'Phase 3: Initializing Display Pipeline');
+      bootLogLine('Phase 3: Initializing Display Pipeline', 'info');
+
+      try {
+        const { GlobalDisplayAPI } = window.__WebNT__;
+        const canvas = document.createElement('canvas');
+        canvas.id = 'main-display-canvas';
+        canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:0;';
+        appRoot.appendChild(canvas);
+
+        await GlobalDisplayAPI.instance.initialize(canvas, {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          dpr: window.devicePixelRatio || 1
+        });
+        bootLogLine(`  [OK] Display initialized (${window.innerWidth}x${window.innerHeight})`, 'ok');
+      } catch (err) {
+        bootLogLine(`  [WARN] Display init: ${err.message}`, 'warn');
+      }
+      bootLogLine('', '');
+
+      await new Promise(r => setTimeout(r, 300));
+
+      // ===== Phase 4: 启动 UI 主入口 =====
+      bootProgress(80, 'Phase 4: Starting UI Subsystem');
+      bootLogLine('Phase 4: Starting UI Subsystem', 'info');
+
+      try {
+        const { default: UIMain } = await import('/nt/ui/UIMain.js');
+        const uiMain = UIMain.instance;
+        uiMain.setAppRoot(appRoot);
+        await uiMain.init();
+        bootLogLine(`  [OK] UI Subsystem started`, 'ok');
+      } catch (err) {
+        bootLogLine(`  [ERR] UI init failed: ${err.message}`, 'err');
+        console.error(err);
+      }
+      bootLogLine('', '');
+
+      await new Promise(r => setTimeout(r, 200));
+
+      // ===== Phase 5: 启动完成 =====
+      bootProgress(100, 'System Ready');
+      bootLogLine('', '');
+      bootLogLine('========================================', '');
+      bootLogLine('  WebNT Kernel v1.0.0 Ready', 'ok');
+      bootLogLine('  All systems operational', 'ok');
+      bootLogLine('========================================', '');
+
+      await new Promise(r => setTimeout(r, 800));
+
+      // 隐藏启动画面，显示主界面
+      bootScreen.classList.add('hidden');
+      appRoot.classList.add('ready');
+
+      // 移除启动画面 (延迟以完成过渡动画)
+      setTimeout(() => {
+        bootScreen.remove();
+      }, 600);
+
+      // 派发系统就绪事件
+      window.dispatchEvent(new CustomEvent('webnt-system-ready'));
+      console.log('%c🚀 WebNT Kernel v1.0.0 Ready %c| %cAll systems operational',
+        'color:#00ff88;font-size:16px;', '', 'color:#aaa;');
+    }
+
+    // 启动!
+    boot().catch(err => {
+      bootLogLine(`FATAL: Boot failed - ${err.message}`, 'err');
+      console.error('Boot failed:', err);
+    });
+  </script>
+
+</body>
+</html>

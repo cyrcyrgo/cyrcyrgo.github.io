@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+</head>
+<body>
+<!-- ============================================================
+     WindowElement.ce.html — WebNT-HTML5 Web OS Kernel Window Component
+     Custom Element: <nt-window>
+     Uses Shadow DOM (open mode) for style encapsulation.
+     【对接内核】Window state changes notify WindowManager.setWindowState()
+     【对接内核】Move/resize notify WindowManager.setWindowPosition() / setWindowSize()
+     ============================================================ -->
+
+<template id="nt-window-template">
+  <style>
+    :host {
+      --window-bg: #1e1e1e;
+      --window-border: #3c3c3c;
+      --titlebar-bg: #2d2d2d;
+      --titlebar-text: #cccccc;
+      --window-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      --window-radius: 8px;
+
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      background: var(--window-bg);
+      border: 1px solid var(--window-border);
+      border-radius: var(--window-radius);
+      box-shadow: var(--window-shadow);
+      overflow: hidden;
+      font-family: var(--sys-font-ui, 'Segoe UI', sans-serif);
+      font-size: 14px;
+      color: #e8eaed;
+      user-select: none;
+      -webkit-user-select: none;
+      transition: opacity 0.15s ease, box-shadow 0.15s ease;
+      min-width: 200px;
+      min-height: 150px;
+    }
+
+    :host(.minimized) {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.9) translateY(20px);
+      transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    :host(.maximized) {
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: calc(100% - var(--sys-taskbar-height, 48px)) !important;
+      border-radius: 0;
+      transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease, border-radius 0.2s ease;
+    }
+
+    :host(.focused) {
+      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    :host(.restoring) {
+      transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease, border-radius 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    /* ── Title Bar ──────────────────────────────────── */
+    .title-bar {
+      display: flex;
+      align-items: center;
+      height: 36px;
+      min-height: 36px;
+      background: var(--titlebar-bg);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 0 8px;
+      gap: 8px;
+      cursor: default;
+      flex-shrink: 0;
+    }
+
+    .title-bar .window-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
+    .title-bar .window-icon svg {
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .title-bar .window-title {
+      flex: 1;
+      font-size: 12px;
+      color: var(--titlebar-text);
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      pointer-events: none;
+      min-width: 0;
+    }
+
+    .title-bar .window-controls {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .title-bar .ctrl-btn {
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: transparent;
+      color: #999;
+      cursor: pointer;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      transition: background 0.1s, color 0.1s;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .title-bar .ctrl-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ddd;
+    }
+
+    .title-bar .ctrl-btn.close:hover {
+      background: #c0392b;
+      color: #fff;
+    }
+
+    /* ── Content Area ───────────────────────────────── */
+    .content-area {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Status Bar ─────────────────────────────────── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      height: 24px;
+      min-height: 24px;
+      background: #252525;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 0 8px;
+      font-size: 11px;
+      color: #888;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .status-bar ::slotted(*) {
+      font-size: 11px;
+      color: #888;
+    }
+
+    /* ── Resize Handles ─────────────────────────────── */
+    .resize-handle {
+      position: absolute;
+      z-index: 100;
+    }
+
+    .resize-handle.n {
+      top: 0;
+      left: 8px;
+      right: 8px;
+      height: 4px;
+      cursor: n-resize;
+    }
+
+    .resize-handle.ne {
+      top: 0;
+      right: 0;
+      width: 12px;
+      height: 12px;
+      cursor: ne-resize;
+    }
+
+    .resize-handle.e {
+      top: 8px;
+      right: 0;
+      bottom: 8px;
+      width: 4px;
+      cursor: e-resize;
+    }
+
+    .resize-handle.se {
+      bottom: 0;
+      right: 0;
+      width: 12px;
+      height: 12px;
+      cursor: se-resize;
+    }
+
+    .resize-handle.s {
+      bottom: 0;
+      left: 8px;
+      right: 8px;
+      height: 4px;
+      cursor: s-resize;
+    }
+
+    .resize-handle.sw {
+      bottom: 0;
+      left: 0;
+      width: 12px;
+      height: 12px;
+      cursor: sw-resize;
+    }
+
+    .resize-handle.w {
+      top: 8px;
+      left: 0;
+      bottom: 8px;
+      width: 4px;
+      cursor: w-resize;
+    }
+
+    .resize-handle.nw {
+      top: 0;
+      left: 0;
+      width: 12px;
+      height: 12px;
+      cursor: nw-resize;
+    }
+  </style>
+
+  <!-- Title Bar -->
+  <div class="title-bar" id="title-bar">
+    <div class="window-icon" id="window-icon">
+      <svg viewBox="0 0 24 24">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <line x1="9" y1="9" x2="15" y2="15"/>
+        <line x1="15" y1="9" x2="9" y2="15"/>
+      </svg>
+    </div>
+    <div class="window-title" id="window-title">Window</div>
+    <div class="window-controls">
+      <button class="ctrl-btn minimize" title="Minimize">&#x2014;</button>
+      <button class="ctrl-btn maximize" title="Maximize">&#x25A1;</button>
+      <button class="ctrl-btn close" title="Close">&times;</button>
+    </div>
+  </div>
+
+  <!-- Content Area -->
+  <div class="content-area" id="content-area">
+    <slot></slot>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="status-bar" id="status-bar">
+    <slot name="statusbar"></slot>
+  </div>
+
+  <!-- Resize Handles -->
+  <div class="resize-handle n" data-resize="n"></div>
+  <div class="resize-handle ne" data-resize="ne"></div>
+  <div class="resize-handle e" data-resize="e"></div>
+  <div class="resize-handle se" data-resize="se"></div>
+  <div class="resize-handle s" data-resize="s"></div>
+  <div class="resize-handle sw" data-resize="sw"></div>
+  <div class="resize-handle w" data-resize="w"></div>
+  <div class="resize-handle nw" data-resize="nw"></div>
+</template>
+
+<script type="module">
+  import WindowManager, { WindowState } from '../../subsystem/window-manager/WindowManager.Core.js';
+
+  /**
+   * SVG icon paths for various window types.
+   */
+  const WINDOW_ICONS = {
+    terminal: `<svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`,
+    explorer: `<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
+    settings: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+    webview: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+    notepad: `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+    folder: `<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
+    gear: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+    globe: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+    document: `<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+    monitor: `<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
+    bin: `<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+    calculator: `<svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/></svg>`,
+    taskmgr: `<svg viewBox="0 0 24 24"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>`,
+    default: `<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>`,
+  };
+
+  const MIN_WIDTH = 200;
+  const MIN_HEIGHT = 150;
+
+  class NtWindow extends HTMLElement {
+    constructor() {
+      super();
+      this.attachShadow({ mode: 'open' });
+
+      const template = document.getElementById('nt-window-template');
+      if (template) {
+        this.shadowRoot.appendChild(template.content.cloneNode(true));
+      }
+
+      // Window state
+      this._windowId = '';
+      this._state = 'NORMAL';
+      this._previousState = null;
+      this._previousBounds = null;
+      this._resizable = true;
+      this._minimizable = true;
+      this._maximizable = true;
+      this._closable = true;
+
+      // Drag state
+      this._isDragging = false;
+      this._dragStartX = 0;
+      this._dragStartY = 0;
+      this._windowStartX = 0;
+      this._windowStartY = 0;
+
+      // Resize state
+      this._isResizing = false;
+      this._resizeDirection = '';
+      this._resizeStartX = 0;
+      this._resizeStartY = 0;
+      this._resizeStartWidth = 0;
+      this._resizeStartHeight = 0;
+      this._resizeStartLeft = 0;
+      this._resizeStartTop = 0;
+
+      // Double-click detection
+      this._lastTitleClick = 0;
+    }
+
+    connectedCallback() {
+      this._bindEvents();
+    }
+
+    disconnectedCallback() {
+      this._unbindEvents();
+    }
+
+    /* ── Properties ── */
+
+    get windowId() {
+      return this._windowId;
+    }
+
+    set windowId(value) {
+      this._windowId = value;
+      this.setAttribute('data-window-id', value);
+    }
+
+    get windowState() {
+      return this._state;
+    }
+
+    /* ── Event Binding ── */
+
+    _bindEvents() {
+      const root = this.shadowRoot;
+
+      // Title bar drag
+      this._boundTitleMouseDown = this._onTitleMouseDown.bind(this);
+      this._boundMouseMove = this._onMouseMove.bind(this);
+      this._boundMouseUp = this._onMouseUp.bind(this);
+
+      const titleBar = root.getElementById('title-bar');
+      if (titleBar) {
+        titleBar.addEventListener('mousedown', this._boundTitleMouseDown);
+        titleBar.addEventListener('dblclick', (e) => this._onTitleDblClick(e));
+      }
+
+      document.addEventListener('mousemove', this._boundMouseMove);
+      document.addEventListener('mouseup', this._boundMouseUp);
+
+      // Window controls
+      const minimizeBtn = root.querySelector('.ctrl-btn.minimize');
+      const maximizeBtn = root.querySelector('.ctrl-btn.maximize');
+      const closeBtn = root.querySelector('.ctrl-btn.close');
+
+      if (minimizeBtn) {
+        minimizeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.minimize();
+        });
+      }
+      if (maximizeBtn) {
+        maximizeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.toggleMaximize();
+        });
+      }
+      if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.close();
+        });
+      }
+
+      // Focus on click
+      this.addEventListener('mousedown', (e) => {
+        this._bringToFront();
+      });
+
+      // Resize handles
+      const handles = root.querySelectorAll('.resize-handle');
+      for (const handle of handles) {
+        handle.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this._startResize(e, handle.getAttribute('data-resize'));
+        });
+      }
+    }
+
+    _unbindEvents() {
+      document.removeEventListener('mousemove', this._boundMouseMove);
+      document.removeEventListener('mouseup', this._boundMouseUp);
+    }
+
+    /* ── Title Bar Drag ── */
+
+    _onTitleMouseDown(e) {
+      if (e.target.closest('.ctrl-btn')) return;
+      if (e.button !== 0) return;
+
+      if (this._state === 'MAXIMIZED' || this._state === 'FULLSCREEN') {
+        // Don't drag when maximized; restore on drag
+        return;
+      }
+
+      this._isDragging = true;
+      this._dragStartX = e.clientX;
+      this._dragStartY = e.clientY;
+
+      const rect = this.getBoundingClientRect();
+      this._windowStartX = rect.left;
+      this._windowStartY = rect.top;
+
+      this._bringToFront();
+    }
+
+    _onTitleDblClick(e) {
+      if (e.target.closest('.ctrl-btn')) return;
+      this.toggleMaximize();
+    }
+
+    _onMouseMove(e) {
+      if (this._isDragging) {
+        this._handleDrag(e);
+      }
+      if (this._isResizing) {
+        this._handleResize(e);
+      }
+    }
+
+    _onMouseUp(e) {
+      if (this._isDragging) {
+        this._isDragging = false;
+        this._notifyPosition();
+      }
+      if (this._isResizing) {
+        this._isResizing = false;
+        this._resizeDirection = '';
+        this._notifySize();
+      }
+    }
+
+    _handleDrag(e) {
+      const dx = e.clientX - this._dragStartX;
+      const dy = e.clientY - this._dragStartY;
+
+      const newX = this._windowStartX + dx;
+      const newY = Math.max(0, this._windowStartY + dy);
+
+      this.style.left = `${newX}px`;
+      this.style.top = `${newY}px`;
+    }
+
+    _notifyPosition() {
+      const rect = this.getBoundingClientRect();
+      const wm = WindowManager.instance;
+      if (this._windowId) {
+        wm.setWindowPosition(this._windowId, rect.left, rect.top);
+      }
+    }
+
+    _notifySize() {
+      const rect = this.getBoundingClientRect();
+      const wm = WindowManager.instance;
+      if (this._windowId) {
+        wm.setWindowSize(this._windowId, rect.width, rect.height);
+      }
+    }
+
+    /* ── Resize ── */
+
+    _startResize(e, direction) {
+      if (!this._resizable) return;
+      if (this._state === 'MAXIMIZED' || this._state === 'FULLSCREEN') return;
+
+      this._isResizing = true;
+      this._resizeDirection = direction;
+
+      this._resizeStartX = e.clientX;
+      this._resizeStartY = e.clientY;
+
+      const rect = this.getBoundingClientRect();
+      this._resizeStartWidth = rect.width;
+      this._resizeStartHeight = rect.height;
+      this._resizeStartLeft = rect.left;
+      this._resizeStartTop = rect.top;
+    }
+
+    _handleResize(e) {
+      const dx = e.clientX - this._resizeStartX;
+      const dy = e.clientY - this._resizeStartY;
+      const dir = this._resizeDirection;
+
+      let newWidth = this._resizeStartWidth;
+      let newHeight = this._resizeStartHeight;
+      let newLeft = this._resizeStartLeft;
+      let newTop = this._resizeStartTop;
+
+      // East
+      if (dir.includes('e')) {
+        newWidth = Math.max(MIN_WIDTH, this._resizeStartWidth + dx);
+      }
+      // West
+      if (dir.includes('w')) {
+        newWidth = Math.max(MIN_WIDTH, this._resizeStartWidth - dx);
+        newLeft = this._resizeStartLeft + (this._resizeStartWidth - newWidth);
+      }
+      // South
+      if (dir.includes('s')) {
+        newHeight = Math.max(MIN_HEIGHT, this._resizeStartHeight + dy);
+      }
+      // North
+      if (dir.includes('n')) {
+        newHeight = Math.max(MIN_HEIGHT, this._resizeStartHeight - dy);
+        newTop = this._resizeStartTop + (this._resizeStartHeight - newHeight);
+      }
+
+      this.style.width = `${newWidth}px`;
+      this.style.height = `${newHeight}px`;
+      this.style.left = `${newLeft}px`;
+      this.style.top = `${newTop}px`;
+    }
+
+    /* ── Window Actions ── */
+
+    /**
+     * Minimize the window.
+     * 【对接内核】Notifies WindowManager.setWindowState().
+     */
+    minimize() {
+      if (!this._minimizable) return;
+
+      this._previousState = this._state;
+      this._state = 'MINIMIZED';
+      this.classList.add('minimized');
+
+      if (this._windowId) {
+        WindowManager.instance.setWindowState(this._windowId, WindowState.MINIMIZED);
+      }
+    }
+
+    /**
+     * Toggle maximize/restore.
+     * 【对接内核】Notifies WindowManager.setWindowState().
+     */
+    toggleMaximize() {
+      if (!this._maximizable) return;
+
+      if (this._state === 'MAXIMIZED') {
+        this.restore();
+      } else {
+        this.maximize();
+      }
+    }
+
+    /**
+     * Maximize the window.
+     */
+    maximize() {
+      if (!this._maximizable) return;
+
+      if (this._state !== 'MAXIMIZED') {
+        this._previousBounds = {
+          left: this.style.left || `${this.getBoundingClientRect().left}px`,
+          top: this.style.top || `${this.getBoundingClientRect().top}px`,
+          width: this.style.width || `${this.getBoundingClientRect().width}px`,
+          height: this.style.height || `${this.getBoundingClientRect().height}px`,
+        };
+      }
+
+      this._previousState = this._state;
+      this._state = 'MAXIMIZED';
+      this.classList.add('maximized');
+
+      if (this._windowId) {
+        WindowManager.instance.setWindowState(this._windowId, WindowState.MAXIMIZED);
+      }
+    }
+
+    /**
+     * Restore the window to normal state.
+     */
+    restore() {
+      this._state = 'NORMAL';
+      this.classList.remove('maximized', 'minimized');
+      this.classList.add('restoring');
+
+      if (this._previousBounds) {
+        this.style.left = this._previousBounds.left;
+        this.style.top = this._previousBounds.top;
+        this.style.width = this._previousBounds.width;
+        this.style.height = this._previousBounds.height;
+      }
+
+      // Remove restoring class after animation
+      setTimeout(() => {
+        this.classList.remove('restoring');
+      }, 250);
+
+      if (this._windowId) {
+        WindowManager.instance.setWindowState(this._windowId, WindowState.NORMAL);
+      }
+    }
+
+    /**
+     * Close the window.
+     * 【对接内核】Notifies WindowManager.setWindowState() and dispatches close event.
+     */
+    close() {
+      if (!this._closable) return;
+
+      // Dispatch event before removing
+      this.dispatchEvent(new CustomEvent('window-close', {
+        detail: { windowId: this._windowId },
+        bubbles: true,
+        composed: true,
+      }));
+
+      if (this._windowId) {
+        WindowManager.instance.destroyWindow(this._windowId);
+      }
+
+      this.remove();
+    }
+
+    /**
+     * Bring the window to front and focus.
+     * 【对接内核】Notifies WindowManager.bringToFront() and WindowManager.setFocus().
+     */
+    _bringToFront() {
+      if (this._state === 'MINIMIZED') {
+        this.restore();
+      }
+
+      this.classList.add('focused');
+
+      if (this._windowId) {
+        const wm = WindowManager.instance;
+        wm.bringToFront(this._windowId);
+        wm.setFocus(this._windowId);
+      }
+
+      this.style.zIndex = this._getNextZIndex();
+    }
+
+    _getNextZIndex() {
+      const current = parseInt(this.style.zIndex || '100', 10);
+      // Find the highest z-index among nt-window elements
+      let maxZ = current;
+      const windows = document.querySelectorAll('nt-window');
+      for (const w of windows) {
+        const z = parseInt(w.style.zIndex || '0', 10);
+        if (z > maxZ) maxZ = z;
+      }
+      return String(maxZ + 1);
+    }
+
+    /* ── Public API ── */
+
+    /**
+     * Set the window title.
+     * @param {string} title - The new title
+     */
+    setTitle(title) {
+      const titleEl = this.shadowRoot.getElementById('window-title');
+      if (titleEl) {
+        titleEl.textContent = title;
+      }
+    }
+
+    /**
+     * Set the window icon.
+     * @param {string} icon - Icon key from WINDOW_ICONS or raw SVG
+     */
+    setIcon(icon) {
+      const iconEl = this.shadowRoot.getElementById('window-icon');
+      if (!iconEl) return;
+
+      const svg = WINDOW_ICONS[icon] || icon || WINDOW_ICONS['default'];
+      iconEl.innerHTML = svg;
+    }
+
+    /**
+     * Set the window position.
+     * @param {number} x - Left position
+     * @param {number} y - Top position
+     */
+    setPosition(x, y) {
+      this.style.left = `${x}px`;
+      this.style.top = `${y}px`;
+    }
+
+    /**
+     * Set the window size.
+     * @param {number} width - Width in pixels
+     * @param {number} height - Height in pixels
+     */
+    setSize(width, height) {
+      this.style.width = `${Math.max(MIN_WIDTH, width)}px`;
+      this.style.height = `${Math.max(MIN_HEIGHT, height)}px`;
+    }
+
+    /**
+     * Set the window z-index.
+     * @param {number} zIndex - The z-index value
+     */
+    setZIndex(zIndex) {
+      this.style.zIndex = String(zIndex);
+    }
+
+    /**
+     * Set whether the window is resizable.
+     * @param {boolean} resizable
+     */
+    setResizable(resizable) {
+      this._resizable = resizable;
+      const handles = this.shadowRoot.querySelectorAll('.resize-handle');
+      for (const handle of handles) {
+        handle.style.display = resizable ? '' : 'none';
+      }
+    }
+
+    /**
+     * Set whether the window is minimizable.
+     * @param {boolean} minimizable
+     */
+    setMinimizable(minimizable) {
+      this._minimizable = minimizable;
+      const btn = this.shadowRoot.querySelector('.ctrl-btn.minimize');
+      if (btn) {
+        btn.style.display = minimizable ? '' : 'none';
+      }
+    }
+
+    /**
+     * Set whether the window is maximizable.
+     * @param {boolean} maximizable
+     */
+    setMaximizable(maximizable) {
+      this._maximizable = maximizable;
+      const btn = this.shadowRoot.querySelector('.ctrl-btn.maximize');
+      if (btn) {
+        btn.style.display = maximizable ? '' : 'none';
+      }
+    }
+
+    /**
+     * Set whether the window is closable.
+     * @param {boolean} closable
+     */
+    setClosable(closable) {
+      this._closable = closable;
+      const btn = this.shadowRoot.querySelector('.ctrl-btn.close');
+      if (btn) {
+        btn.style.display = closable ? '' : 'none';
+      }
+    }
+
+    /**
+     * Remove focus styling from this window.
+     */
+    blur() {
+      this.classList.remove('focused');
+    }
+
+    /**
+     * Get the window's current bounding rect.
+     * @returns {DOMRect}
+     */
+    getBounds() {
+      return this.getBoundingClientRect();
+    }
+  }
+
+  customElements.define('nt-window', NtWindow);
+</script>
+
+</body>
+</html>
