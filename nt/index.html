@@ -1144,7 +1144,7 @@ function launchApp(appId) {
             <button class="cal-nav">&gt;</button>
           </div>
           <div class="cal-grid">
-            ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>\`<div class="cal-day-hdr">\${d}</div>\`).join('')}
+            ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>'<div class="cal-day-hdr">'+d+'</div>').join('')}
             ${grid}
           </div>
         `);
@@ -1168,16 +1168,7 @@ function launchApp(appId) {
           <tr><td>1</td><td>System</td><td style="color:#81c995">Running</td><td>0.2%</td><td>4.2 MB</td><td></td></tr>
           <tr><td>2</td><td>Kernel</td><td style="color:#81c995">Running</td><td>0.5%</td><td>8.1 MB</td><td></td></tr>
           <tr><td>3</td><td>Desktop</td><td style="color:#81c995">Running</td><td>1.2%</td><td>12.4 MB</td><td></td></tr>
-          ${WindowManager.instance.getWindowList().map((w,i)=>\`
-            <tr>
-              <td>\${i+4}</td>
-              <td>\${w.title}</td>
-              <td style="color:#81c995">Running</td>
-              <td>\${(Math.random()*2).toFixed(1)}%</td>
-              <td>\${(Math.random()*20+5).toFixed(1)} MB</td>
-              <td><button class="tm-kill" onclick="document.getElementById('appwin_\${w.appId}')?.remove();updateTaskbarWindowButtons();this.closest('tr').remove()">End</button></td>
-            </tr>
-          \`).join('')}
+          ${WindowManager.instance.getWindowList().map((w,i)=>'<tr><td>'+(i+4)+'</td><td>'+w.title+'</td><td style="color:#81c995">Running</td><td>'+(Math.random()*2).toFixed(1)+'%</td><td>'+(Math.random()*20+5).toFixed(1)+' MB</td><td><button class="tm-kill" onclick="document.getElementById(\'appwin_'+w.appId+'\')?.remove();updateTaskbarWindowButtons();this.closest(\'tr\').remove()">End</button></td></tr>').join('')}
         </table>
       `);
       break;
@@ -1340,11 +1331,7 @@ function launchApp(appId) {
             {day:'Tue',icon:'\u26c5',hi:27,lo:18},
             {day:'Wed',icon:'\ud83c\udf27\ufe0f',hi:24,lo:16},
             {day:'Thu',icon:'\u2600\ufe0f',hi:29,lo:19},
-          ].map(f=>\`<div class="wx-fc">
-            <div class="wx-fc-day">\${f.day}</div>
-            <div class="wx-fc-icon">\${f.icon}</div>
-            <div class="wx-fc-temp"><span class="wx-fc-hi">\${f.hi}\u00b0</span><span class="wx-fc-lo">\${f.lo}\u00b0</span></div>
-          </div>\`).join('')}
+          ].map(f=>'<div class="wx-fc"><div class="wx-fc-day">'+f.day+'</div><div class="wx-fc-icon">'+f.icon+'</div><div class="wx-fc-temp"><span class="wx-fc-hi">'+f.hi+'\u00b0</span><span class="wx-fc-lo">'+f.lo+'\u00b0</span></div></div>').join('')}
         </div>
       `);
       break;
@@ -1391,7 +1378,7 @@ function launchApp(appId) {
             <button id="tm-reset">Reset</button>
           </div>
           <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
-            ${[1,3,5,10,15,30].map(m=>\`<button style="padding:6px 12px;background:rgba(255,255,255,0.06);border:none;color:#ccc;border-radius:6px;cursor:pointer;font-size:12px" onclick="document.getElementById('tm-time').textContent='\${String(m).padStart(2,'0')}:00';window.__tmTotal=\${m*60};window.__tmRemaining=\${m*60}">\${m} min</button>\`).join('')}
+            ${[1,3,5,10,15,30].map(m=>'<button style="padding:6px 12px;background:rgba(255,255,255,0.06);border:none;color:#ccc;border-radius:6px;cursor:pointer;font-size:12px" onclick="document.getElementById(\'tm-time\').textContent=\''+String(m).padStart(2,'0')+':00\';window.__tmTotal='+(m*60)+';window.__tmRemaining='+(m*60)+'">'+m+' min</button>').join('')}
           </div>
         </div>
       `);
@@ -1419,7 +1406,7 @@ function launchApp(appId) {
           const ms = Math.floor(total/10)%100;
           const s = Math.floor(total/1000)%60;
           const m = Math.floor(total/60000);
-          swTime.textContent = \`\${String(m).padStart(2,'0')}:\${String(s).padStart(2,'0')}.\${String(ms).padStart(2,'0')}\`;
+          swTime.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(ms).padStart(2,'0')}`;
         }
         swStart.addEventListener('click', () => {
           if(swRunning) { swElapsed += Date.now() - swStartTime; clearInterval(swInterval); swStart.textContent = 'Start'; swStart.classList.add('primary'); }
@@ -1429,7 +1416,7 @@ function launchApp(appId) {
         swLap.addEventListener('click', () => {
           if(!swRunning && swElapsed===0) return;
           const lap = document.createElement('div');
-          lap.textContent = \`#\${swLaps.children.length+1}  \${swTime.textContent}\`;
+          lap.textContent = `#${swLaps.children.length+1}  ${swTime.textContent}`;
           swLaps.appendChild(lap);
         });
         swReset.addEventListener('click', () => {
@@ -1450,7 +1437,7 @@ function launchApp(appId) {
         function updateTmDisplay() {
           const m = Math.floor(tmRemaining/60);
           const s = tmRemaining%60;
-          tmTime.textContent = \`\${String(m).padStart(2,'0')}:\${String(s).padStart(2,'0')}\`;
+          tmTime.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
         }
         tmStart.addEventListener('click', () => {
           if(tmRunning) { clearInterval(tmInterval); tmStart.textContent = 'Start'; tmStart.classList.add('primary'); }
@@ -1550,7 +1537,7 @@ function launchApp(appId) {
                 content = '\ud83d\udea9'; bg = 'rgba(255,200,50,0.1)';
               }
               if(gameOver && board[r][c] === -1 && !flagged[r][c]) { content = '\ud83d\udca3'; bg = 'rgba(255,0,0,0.2)'; }
-              html += \`<div data-r="\${r}" data-c="\${c}" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:16px;background:\${bg};color:\${color};border:1px solid rgba(255,255,255,0.04);cursor:pointer;user-select:none;border-radius:2px">\${content}</div>\`;
+              html += `<div data-r="${r}" data-c="${c}" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:16px;background:${bg};color:${color};border:1px solid rgba(255,255,255,0.04);cursor:pointer;user-select:none;border-radius:2px">${content}</div>`;
             }
             html += '</div>';
           }
@@ -1567,7 +1554,7 @@ function launchApp(appId) {
               if(status) {
                 if(gameOver && checkWin()) status.textContent = 'You Win! \ud83c\udf89';
                 else if(gameOver) status.textContent = 'Game Over \ud83d\udca5';
-                else status.textContent = \`Mines: \${MINES}\`;
+                else status.textContent = `Mines: ${MINES}`;
               }
             });
             cell.addEventListener('contextmenu', e => {
@@ -1599,7 +1586,7 @@ function launchApp(appId) {
               initBoard();
               renderBoard();
               const status = document.getElementById('ms-status');
-              if(status) status.textContent = \`Mines: \${MINES}\`;
+              if(status) status.textContent = `Mines: ${MINES}`;
             });
           }
         });
