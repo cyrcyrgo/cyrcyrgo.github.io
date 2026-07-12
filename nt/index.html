@@ -1,730 +1,1175 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WebNT Kernel v1.0.0</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebNT Kernel v1.0.0</title>
+<link rel="stylesheet" href="ui/styles/Global.System.css">
+<style>
+  /* ============================================================
+     BIOS Boot Screen
+     ============================================================ */
+  #boot-screen {
+    position: fixed; inset: 0; z-index: 99999;
+    background: #0a0a0a; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: 'Courier New', monospace; color: #00ff00;
+    transition: opacity 0.5s ease-out;
+  }
+  #boot-screen.hidden { opacity: 0; pointer-events: none; }
+  #boot-screen .boot-logo {
+    font-size: 28px; font-weight: bold; color: #00ff88;
+    margin-bottom: 8px; letter-spacing: 4px;
+    text-shadow: 0 0 10px rgba(0,255,136,0.5);
+  }
+  #boot-screen .boot-subtitle {
+    font-size: 12px; color: #888; margin-bottom: 32px; letter-spacing: 2px;
+  }
+  #boot-screen .boot-log {
+    width: 560px; max-width: 90vw; font-size: 13px; line-height: 1.8;
+    color: #00cc00; max-height: 200px; overflow-y: auto;
+  }
+  #boot-screen .boot-log .log-line { opacity: 0; animation: logFadeIn 0.15s forwards; }
+  #boot-screen .boot-log .log-line.ok  { color: #00ff00; }
+  #boot-screen .boot-log .log-line.warn { color: #ffcc00; }
+  #boot-screen .boot-log .log-line.err  { color: #ff4444; }
+  #boot-screen .boot-log .log-line.info { color: #00aaff; }
+  @keyframes logFadeIn { to { opacity: 1; } }
+  #boot-screen .boot-progress {
+    width: 400px; max-width: 80vw; height: 4px; background: #1a1a1a;
+    border-radius: 2px; margin-top: 24px; overflow: hidden;
+  }
+  #boot-screen .boot-progress-bar {
+    height: 100%; width: 0%; border-radius: 2px;
+    background: linear-gradient(90deg, #00ff88, #00aaff);
+    transition: width 0.3s ease;
+  }
+  #boot-screen .boot-status { margin-top: 12px; font-size: 11px; color: #666; }
 
-  <!-- ===== 1. 全局系统样式 ===== -->
-  <link rel="stylesheet" href="ui/styles/Global.System.css">
+  /* ============================================================
+     Lock Screen - 滑动解锁界面
+     ============================================================ */
+  #lock-screen {
+    position: fixed; inset: 0; z-index: 50000;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #0c0c1d 0%, #1a1a35 30%, #1a2a4a 70%, #0d1b2a 100%);
+    background-size: cover;
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
+    user-select: none;
+  }
+  #lock-screen.unlocked {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  #lock-screen .ls-bg-blur {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 30%, rgba(100,149,237,0.15), transparent 60%),
+                radial-gradient(ellipse at 80% 80%, rgba(0,180,216,0.1), transparent 50%);
+  }
+  #lock-screen .ls-time {
+    position: relative; z-index: 1;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 80px; font-weight: 200; color: #fff;
+    text-shadow: 0 2px 20px rgba(255,255,255,0.2);
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+  #lock-screen .ls-date {
+    position: relative; z-index: 1;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 18px; color: #b0c4de;
+    margin-bottom: 60px;
+  }
+  #lock-screen .ls-user {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; align-items: center;
+    margin-bottom: 50px;
+  }
+  #lock-screen .ls-avatar {
+    width: 72px; height: 72px; border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; color: #fff; font-weight: 600;
+    box-shadow: 0 4px 24px rgba(102,126,234,0.4);
+    margin-bottom: 12px;
+  }
+  #lock-screen .ls-username {
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 16px; color: #e0e0e0;
+  }
+  /* 滑动解锁条 */
+  #lock-screen .ls-slider {
+    position: relative; z-index: 1;
+    width: 300px; max-width: 80vw; height: 48px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 24px;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  #lock-screen .ls-slider-track {
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(102,126,234,0.3), transparent);
+    animation: sliderShimmer 2.5s infinite;
+  }
+  @keyframes sliderShimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  #lock-screen .ls-slider-text {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px; color: #a0b4d0;
+    letter-spacing: 1px;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  #lock-screen .ls-slider-knob {
+    position: absolute; top: 4px; left: 4px;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, #8ea8f0, #a0b4f0);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    transition: left 0.05s linear;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2;
+  }
+  #lock-screen .ls-slider-knob::after {
+    content: '›';
+    font-size: 22px; color: #fff; font-weight: 300;
+    line-height: 1;
+  }
+  #lock-screen .ls-slider.dragging .ls-slider-text { opacity: 0; }
+  #lock-screen .ls-slider.dragging .ls-slider-track { animation: none; }
+  #lock-screen .ls-hint {
+    position: relative; z-index: 1;
+    margin-top: 16px;
+    font-size: 11px; color: #666;
+    font-family: 'Segoe UI', sans-serif;
+  }
+  /* 锁屏通知 */
+  #lock-screen .ls-notifications {
+    position: absolute; bottom: 120px; right: 40px;
+    z-index: 1; display: flex; flex-direction: column; gap: 8px;
+    max-width: 320px;
+  }
+  #lock-screen .ls-notif {
+    background: rgba(255,255,255,0.06); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+    padding: 12px 16px; font-family: 'Segoe UI', sans-serif;
+    color: #ccc; font-size: 13px;
+    animation: notifSlideIn 0.3s ease;
+  }
+  @keyframes notifSlideIn {
+    from { transform: translateX(100px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  #lock-screen .ls-notif .ls-notif-title {
+    font-weight: 600; color: #fff; margin-bottom: 4px;
+  }
 
-  <style>
-    /* ===== 系统启动遮罩 / BIOS Boot Screen ===== */
-    #boot-screen {
-      position: fixed;
-      inset: 0;
-      z-index: 99999;
-      background: #0a0a0a;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Courier New', monospace;
-      color: #00ff00;
-      transition: opacity 0.5s ease-out;
-    }
+  /* ============================================================
+     App Root - 主容器
+     ============================================================ */
+  #app-root {
+    display: block; width: 100vw; height: 100vh;
+    overflow: hidden; position: relative;
+    background: var(--sys-bg, #1a1a2e);
+  }
 
-    #boot-screen.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
+  /* ============================================================
+     桌面图标 (内联渲染，不依赖外部 .ts)
+     ============================================================ */
+  .desktop-icon {
+    position: absolute; display: flex; flex-direction: column;
+    align-items: center; width: 80px; padding: 8px 4px;
+    border-radius: 8px; cursor: pointer;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 12px; color: #fff; text-align: center;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    transition: background 0.1s;
+    user-select: none;
+  }
+  .desktop-icon:hover { background: rgba(255,255,255,0.1); }
+  .desktop-icon:active { background: rgba(255,255,255,0.05); }
+  .desktop-icon.selected { background: rgba(102,126,234,0.3); }
+  .desktop-icon .dicon-svg {
+    width: 48px; height: 48px; margin-bottom: 4px;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .desktop-icon .dicon-label {
+    word-break: break-word; line-height: 1.3;
+    pointer-events: none;
+  }
 
-    #boot-screen .boot-logo {
-      font-size: 28px;
-      font-weight: bold;
-      color: #00ff88;
-      margin-bottom: 8px;
-      letter-spacing: 4px;
-      text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
-    }
+  /* ============================================================
+     任务栏
+     ============================================================ */
+  #taskbar {
+    position: absolute; bottom: 0; left: 0; width: 100%;
+    height: 48px; z-index: 1000;
+    background: rgba(20, 20, 35, 0.75);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex; align-items: center;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #e8eaed;
+  }
+  #taskbar .tb-left {
+    display: flex; align-items: center; height: 100%;
+    padding: 0 4px;
+  }
+  #taskbar .tb-start-btn {
+    width: 44px; height: 44px; display: flex; align-items: center;
+    justify-content: center; border-radius: 8px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  #taskbar .tb-start-btn:hover { background: rgba(255,255,255,0.1); }
+  #taskbar .tb-start-btn:active { background: rgba(255,255,255,0.05); }
+  #taskbar .tb-center {
+    flex: 1; display: flex; align-items: center; height: 100%;
+    padding: 0 4px; gap: 2px; overflow-x: auto;
+  }
+  #taskbar .tb-win-btn {
+    height: 40px; min-width: 40px; max-width: 200px;
+    display: flex; align-items: center; padding: 0 12px;
+    border-radius: 6px; cursor: pointer; gap: 8px;
+    transition: background 0.15s; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    font-size: 12px;
+  }
+  #taskbar .tb-win-btn:hover { background: rgba(255,255,255,0.08); }
+  #taskbar .tb-win-btn.active { background: rgba(255,255,255,0.12); }
+  #taskbar .tb-win-btn .tb-win-icon {
+    width: 20px; height: 20px; border-radius: 4px;
+    flex-shrink: 0; display: flex; align-items: center;
+    justify-content: center; font-size: 14px;
+  }
+  #taskbar .tb-right {
+    display: flex; align-items: center; height: 100%;
+    padding: 0 8px; gap: 4px;
+  }
+  #taskbar .tb-tray-btn {
+    width: 36px; height: 36px; display: flex; align-items: center;
+    justify-content: center; border-radius: 6px; cursor: pointer;
+    font-size: 14px; transition: background 0.15s;
+  }
+  #taskbar .tb-tray-btn:hover { background: rgba(255,255,255,0.08); }
+  #taskbar .tb-clock {
+    font-size: 12px; padding: 0 8px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: flex-end;
+    line-height: 1.3;
+  }
+  #taskbar .tb-clock .tb-clock-time { font-weight: 500; }
+  #taskbar .tb-clock .tb-clock-date { font-size: 10px; color: #999; }
 
-    #boot-screen .boot-subtitle {
-      font-size: 12px;
-      color: #888;
-      margin-bottom: 32px;
-      letter-spacing: 2px;
-    }
+  /* ============================================================
+     开始菜单
+     ============================================================ */
+  #start-menu {
+    position: absolute; bottom: 52px; left: 8px;
+    z-index: 2000; display: none;
+    width: 360px; max-height: 560px;
+    background: rgba(30, 30, 50, 0.92);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px; overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    animation: menuSlideUp 0.2s ease;
+  }
+  @keyframes menuSlideUp {
+    from { transform: translateY(10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  #start-menu .sm-search {
+    padding: 16px;
+  }
+  #start-menu .sm-search input {
+    width: 100%; padding: 10px 14px; border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.06); color: #fff;
+    font-size: 14px; outline: none;
+  }
+  #start-menu .sm-search input::placeholder { color: #777; }
+  #start-menu .sm-apps {
+    padding: 0 8px 8px; max-height: 320px; overflow-y: auto;
+  }
+  #start-menu .sm-app-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: 8px; cursor: pointer;
+    font-size: 14px; color: #e0e0e0; transition: background 0.1s;
+  }
+  #start-menu .sm-app-item:hover { background: rgba(255,255,255,0.08); }
+  #start-menu .sm-app-item .sm-app-icon {
+    width: 32px; height: 32px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  #start-menu .sm-footer {
+    display: flex; align-items: center; padding: 12px 16px;
+    border-top: 1px solid rgba(255,255,255,0.06); gap: 8px;
+  }
+  #start-menu .sm-user {
+    flex: 1; display: flex; align-items: center; gap: 10px;
+  }
+  #start-menu .sm-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #fff; font-weight: 600;
+  }
+  #start-menu .sm-username { font-size: 13px; color: #ccc; }
+  #start-menu .sm-power-btn {
+    width: 36px; height: 36px; border-radius: 6px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: #f28b82; transition: background 0.15s;
+  }
+  #start-menu .sm-power-btn:hover { background: rgba(242,139,130,0.15); }
 
-    #boot-screen .boot-log {
-      width: 560px;
-      max-width: 90vw;
-      font-size: 13px;
-      line-height: 1.8;
-      color: #00cc00;
-      max-height: 200px;
-      overflow-y: auto;
-    }
+  /* ============================================================
+     右键菜单
+     ============================================================ */
+  #context-menu {
+    position: fixed; z-index: 5000; display: none;
+    min-width: 200px; padding: 4px;
+    background: rgba(30, 30, 50, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 13px;
+  }
+  #context-menu .cm-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; border-radius: 6px; cursor: pointer;
+    color: #e0e0e0; transition: background 0.1s;
+  }
+  #context-menu .cm-item:hover { background: rgba(102,126,234,0.3); }
+  #context-menu .cm-item .cm-shortcut { color: #777; font-size: 11px; margin-left: 24px; }
+  #context-menu .cm-separator {
+    height: 1px; background: rgba(255,255,255,0.06); margin: 4px 8px;
+  }
 
-    #boot-screen .boot-log .log-line {
-      opacity: 0;
-      animation: logFadeIn 0.15s forwards;
-    }
+  /* ============================================================
+     终端窗口
+     ============================================================ */
+  #terminal-window {
+    position: absolute; display: none;
+    width: 700px; height: 420px;
+    background: #0c0c0c; border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px; z-index: 100;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+    flex-direction: column;
+  }
+  #terminal-window .tw-titlebar {
+    display: flex; align-items: center; height: 36px;
+    background: #161616; padding: 0 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    cursor: move;
+  }
+  #terminal-window .tw-title {
+    flex: 1; font-size: 13px; color: #aaa; font-family: 'Segoe UI', sans-serif;
+  }
+  #terminal-window .tw-ctrl {
+    display: flex; gap: 6px;
+  }
+  #terminal-window .tw-ctrl-btn {
+    width: 28px; height: 28px; border-radius: 6px; border: none;
+    cursor: pointer; font-size: 14px; display: flex; align-items: center;
+    justify-content: center; background: transparent; color: #999;
+  }
+  #terminal-window .tw-ctrl-btn:hover { background: rgba(255,255,255,0.1); }
+  #terminal-window .tw-ctrl-btn.close:hover { background: #e81123; color: #fff; }
+  #terminal-window .tw-output {
+    flex: 1; overflow-y: auto; padding: 12px;
+    font-size: 14px; line-height: 1.5; color: #00cc00;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  #terminal-window .tw-output .tw-line { margin: 0; }
+  #terminal-window .tw-output .tw-line.error { color: #f28b82; }
+  #terminal-window .tw-output .tw-line.info { color: #8ab4f8; }
+  #terminal-window .tw-input-line {
+    display: flex; align-items: center; padding: 8px 12px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  #terminal-window .tw-prompt {
+    color: #00ff88; font-weight: bold; font-size: 14px;
+    white-space: nowrap; margin-right: 8px;
+  }
+  #terminal-window .tw-input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: #e0e0e0; font-size: 14px; font-family: 'Courier New', monospace;
+    caret-color: #00ff88;
+  }
+  #terminal-window .tw-input::placeholder { color: #444; }
 
-    #boot-screen .boot-log .log-line.ok  { color: #00ff00; }
-    #boot-screen .boot-log .log-line.warn { color: #ffcc00; }
-    #boot-screen .boot-log .log-line.err  { color: #ff4444; }
-    #boot-screen .boot-log .log-line.info { color: #00aaff; }
+  /* ============================================================
+     应用窗口 (通用)
+     ============================================================ */
+  .app-window {
+    position: absolute; border-radius: 12px; overflow: hidden;
+    background: rgba(20, 20, 35, 0.95);
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    z-index: 50; display: none; flex-direction: column;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    resize: both; min-width: 300px; min-height: 200px;
+  }
+  .app-window .aw-titlebar {
+    display: flex; align-items: center; height: 36px;
+    background: rgba(0,0,0,0.3); padding: 0 12px;
+    cursor: move;
+  }
+  .app-window .aw-title { flex: 1; font-size: 13px; color: #ccc; }
+  .app-window .aw-ctrl { display: flex; gap: 4px; }
+  .app-window .aw-ctrl-btn {
+    width: 28px; height: 28px; border-radius: 6px; border: none;
+    cursor: pointer; font-size: 14px; background: transparent; color: #999;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .app-window .aw-ctrl-btn:hover { background: rgba(255,255,255,0.1); }
+  .app-window .aw-ctrl-btn.close:hover { background: #e81123; color: #fff; }
+  .app-window .aw-body {
+    flex: 1; overflow: auto; padding: 16px; color: #e0e0e0;
+  }
 
-    @keyframes logFadeIn { to { opacity: 1; } }
-
-    #boot-screen .boot-progress {
-      width: 400px;
-      max-width: 80vw;
-      height: 4px;
-      background: #1a1a1a;
-      border-radius: 2px;
-      margin-top: 24px;
-      overflow: hidden;
-    }
-
-    #boot-screen .boot-progress-bar {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #00ff88, #00aaff);
-      border-radius: 2px;
-      transition: width 0.3s ease;
-    }
-
-    #boot-screen .boot-status {
-      margin-top: 12px;
-      font-size: 11px;
-      color: #666;
-    }
-
-    /* ===== 主容器：启动完成前隐藏 ===== */
-    #app-root {
-      display: none;
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
-      position: relative;
-      background: var(--sys-bg, #1a1a2e);
-    }
-
-    #app-root.ready {
-      display: block;
-    }
-  </style>
+  /* 响应式 */
+  @media (max-width: 600px) {
+    #lock-screen .ls-time { font-size: 48px; }
+    #terminal-window { width: 100vw; height: 100vh; border-radius: 0; }
+  }
+</style>
 </head>
 <body>
 
-  <!-- ============================================================ -->
-  <!-- 系统启动引导画面 (BIOS-style Boot Screen)                    -->
-  <!-- ============================================================ -->
-  <div id="boot-screen">
-    <div class="boot-logo">WebNT Kernel</div>
-    <div class="boot-subtitle">HTML5 Hybrid Microkernel OS v1.0.0</div>
-    <div class="boot-log" id="boot-log"></div>
-    <div class="boot-progress">
-      <div class="boot-progress-bar" id="boot-progress-bar"></div>
+<!-- ============================================================ -->
+<!-- BIOS Boot Screen -->
+<!-- ============================================================ -->
+<div id="boot-screen">
+  <div class="boot-logo">WebNT Kernel</div>
+  <div class="boot-subtitle">HTML5 Hybrid Microkernel OS v1.0.0</div>
+  <div class="boot-log" id="boot-log"></div>
+  <div class="boot-progress"><div class="boot-progress-bar" id="boot-progress-bar"></div></div>
+  <div class="boot-status" id="boot-status">Initializing...</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Lock Screen - 滑动解锁界面 -->
+<!-- ============================================================ -->
+<div id="lock-screen">
+  <div class="ls-bg-blur"></div>
+  <div class="ls-time" id="ls-time">12:00</div>
+  <div class="ls-date" id="ls-date">Loading...</div>
+  <div class="ls-user">
+    <div class="ls-avatar">WN</div>
+    <div class="ls-username">WebNT User</div>
+  </div>
+  <div class="ls-slider" id="ls-slider">
+    <div class="ls-slider-track"></div>
+    <div class="ls-slider-text">Slide to Unlock</div>
+    <div class="ls-slider-knob" id="ls-knob"></div>
+  </div>
+  <div class="ls-hint">Press any key or slide to unlock</div>
+  <div class="ls-notifications" id="ls-notifications">
+    <div class="ls-notif">
+      <div class="ls-notif-title">WebNT Kernel</div>
+      System v1.0.0 — All services operational
     </div>
-    <div class="boot-status" id="boot-status">Initializing...</div>
   </div>
+</div>
 
-  <!-- ============================================================ -->
-  <!-- 主应用根容器 (启动完成后显示)                                -->
-  <!-- ============================================================ -->
-  <div id="app-root">
-    <!-- 桌面 + 任务栏 + 窗口由启动脚本动态创建 -->
+<!-- ============================================================ -->
+<!-- App Root -->
+<!-- ============================================================ -->
+<div id="app-root">
+  <!-- 桌面背景 -->
+  <div id="desktop-bg" style="position:absolute;inset:0;background:linear-gradient(135deg,#1a3a5c 0%,#2d6aa0 40%,#4a90d9 70%,#1a3a5c 100%);z-index:0;"></div>
+  <!-- 桌面图标容器 -->
+  <div id="desktop-icons" style="position:absolute;top:0;left:0;width:100%;height:calc(100% - 48px);z-index:1;"></div>
+  <!-- 任务栏 -->
+  <div id="taskbar">
+    <div class="tb-left">
+      <div class="tb-start-btn" id="tb-start-btn" title="Start">
+        <svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="2" width="7" height="7" rx="1" fill="currentColor"/><rect x="11" y="2" width="7" height="7" rx="1" fill="currentColor"/><rect x="2" y="11" width="7" height="7" rx="1" fill="currentColor"/><rect x="11" y="11" width="7" height="7" rx="1" fill="currentColor"/></svg>
+      </div>
+    </div>
+    <div class="tb-center" id="tb-window-list"></div>
+    <div class="tb-right">
+      <div class="tb-tray-btn" id="tb-terminal-btn" title="Terminal">&#x1f4bb;</div>
+      <div class="tb-tray-btn" title="Network">&#x1f310;</div>
+      <div class="tb-tray-btn" title="Volume">&#x1f50a;</div>
+      <div class="tb-clock" id="tb-clock">
+        <span class="tb-clock-time">12:00</span>
+        <span class="tb-clock-date">1/1</span>
+      </div>
+    </div>
   </div>
-
-  <!-- ============================================================ -->
-  <!-- 系统启动脚本 (内联实现所有内核模块，不依赖外部 .ts 导入)       -->
-  <!-- ============================================================ -->
-  <script type="module">
-    // ===================================================================
-    // 内核模块内联实现
-    // 原因：浏览器无法直接加载 .ts 文件，在此内联实现核心内核模块
-    // ===================================================================
-
-    // ----- GlobalDisplayAPI -----
-    const layerTypes = { BACKGROUND: 0, DESKTOP: 1, WINDOW: 2, OVERLAY: 3, CURSOR: 4, DEBUG: 5 };
-
-    class GlobalDisplayAPI {
-      constructor() {
-        this.layers = new Map();
-        this.layerOrder = [];
-        this.mainCanvas = null;
-        this.mainCtx = null;
-        this.width = 1920;
-        this.height = 1080;
-        this.devicePixelRatio = 1;
-        this.debug = false;
-        this.frameCount = 0;
-        this.idCounter = 0;
-        this.initialized = false;
-      }
-
-      static get instance() {
-        if (!this._instance) this._instance = new GlobalDisplayAPI();
-        return this._instance;
-      }
-
-      initialize(mainCanvas, options = {}) {
-        if (this.initialized) return;
-        this.mainCanvas = mainCanvas;
-        const ctx = mainCanvas.getContext('2d');
-        if (!ctx) throw new Error('Failed to get 2D context');
-        this.mainCtx = ctx;
-        this.width = options.width || mainCanvas.width || window.innerWidth;
-        this.height = options.height || mainCanvas.height || window.innerHeight;
-        this.devicePixelRatio = options.devicePixelRatio || window.devicePixelRatio || 1;
-        this.debug = options.debug || false;
-        mainCanvas.width = this.width * this.devicePixelRatio;
-        mainCanvas.height = this.height * this.devicePixelRatio;
-        mainCanvas.style.width = this.width + 'px';
-        mainCanvas.style.height = this.height + 'px';
-        this.mainCtx.setTransform(this.devicePixelRatio, 0, 0, this.devicePixelRatio, 0, 0);
-        this.initialized = true;
-      }
-
-      createLayer(type, name, width, height) {
-        if (!this.initialized) return null;
-        const id = 'layer_' + (++this.idCounter) + '_' + Date.now();
-        const canvas = new OffscreenCanvas(
-          (width || this.width) * this.devicePixelRatio,
-          (height || this.height) * this.devicePixelRatio
-        );
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return null;
-        ctx.setTransform(this.devicePixelRatio, 0, 0, this.devicePixelRatio, 0, 0);
-        this.layers.set(id, {
-          id, type, name, canvas, ctx,
-          zIndex: this.layerOrder.length,
-          visible: true, opacity: 1,
-          x: 0, y: 0,
-          width: width || this.width,
-          height: height || this.height
-        });
-        this.layerOrder.push(id);
-        return id;
-      }
-
-      getLayerCanvas(layerId) {
-        const layer = this.layers.get(layerId);
-        return layer ? layer.canvas : null;
-      }
-
-      setLayerVisible(layerId, visible) {
-        const layer = this.layers.get(layerId);
-        if (layer) layer.visible = visible;
-      }
-
-      setLayerZIndex(layerId, zIndex) {
-        const layer = this.layers.get(layerId);
-        if (layer) layer.zIndex = zIndex;
-      }
-
-      getStats() {
-        return {
-          totalLayers: this.layers.size,
-          visibleLayers: [...this.layers.values()].filter(l => l.visible).length,
-          frameCount: this.frameCount,
-          initialized: this.initialized
-        };
-      }
-    }
-
-    // ----- WindowManager -----
-    class WindowManager {
-      constructor() {
-        this.windows = new Map();
-        this.windowOrder = [];
-        this.focusedWindow = null;
-        this.nextId = 1;
-        this.listeners = {};
-      }
-
-      static get instance() {
-        if (!this._instance) this._instance = new WindowManager();
-        return this._instance;
-      }
-
-      createWindow(options = {}) {
-        const id = 'win_' + (this.nextId++);
-        const win = {
-          id, title: options.title || 'Window',
-          width: options.width || 600, height: options.height || 400,
-          x: options.x ?? 100, y: options.y ?? 100,
-          icon: options.icon || null,
-          state: 'NORMAL',
-          appId: options.appId || null,
-          sandboxId: options.sandboxId || null,
-          resizable: options.resizable !== false,
-          minimizable: options.minimizable !== false,
-          maximizable: options.maximizable !== false,
-          closable: options.closable !== false,
-          content: options.content || null,
-          zIndex: this.windowOrder.length,
-        };
-        this.windows.set(id, win);
-        this.windowOrder.push(id);
-        this.focusedWindow = id;
-        this._emit('window-created', win);
-        return id;
-      }
-
-      destroyWindow(windowId) {
-        const win = this.windows.get(windowId);
-        if (!win) return;
-        this.windows.delete(windowId);
-        this.windowOrder = this.windowOrder.filter(w => w !== windowId);
-        if (this.focusedWindow === windowId) {
-          this.focusedWindow = this.windowOrder[this.windowOrder.length - 1] || null;
-        }
-        this._emit('window-destroyed', { windowId });
-      }
-
-      setFocus(windowId) {
-        if (!this.windows.has(windowId)) return;
-        this.focusedWindow = windowId;
-        this._emit('window-focused', { windowId, window: this.windows.get(windowId) });
-      }
-
-      bringToFront(windowId) {
-        const win = this.windows.get(windowId);
-        if (!win) return;
-        this.windowOrder = this.windowOrder.filter(w => w !== windowId);
-        this.windowOrder.push(windowId);
-        win.zIndex = this.windowOrder.length;
-        this.setFocus(windowId);
-      }
-
-      setWindowState(windowId, state) {
-        const win = this.windows.get(windowId);
-        if (!win) return;
-        win.state = state;
-        this._emit('window-state-changed', { windowId, state, window: win });
-      }
-
-      setWindowPosition(windowId, x, y) {
-        const win = this.windows.get(windowId);
-        if (!win) return;
-        win.x = x; win.y = y;
-        this._emit('window-moved', { windowId, x, y });
-      }
-
-      setWindowSize(windowId, width, height) {
-        const win = this.windows.get(windowId);
-        if (!win) return;
-        win.width = width; win.height = height;
-        this._emit('window-resized', { windowId, width, height });
-      }
-
-      getWindowList() { return [...this.windows.values()]; }
-      getWindowInfo(windowId) { return this.windows.get(windowId) || null; }
-      getFocusedWindow() { return this.focusedWindow; }
-
-      on(event, callback) {
-        if (!this.listeners[event]) this.listeners[event] = [];
-        this.listeners[event].push(callback);
-      }
-
-      _emit(event, data) {
-        (this.listeners[event] || []).forEach(cb => { try { cb(data); } catch(e) {} });
-      }
-    }
-
-    // ----- SysCallBridge -----
-    class SysCallBridge {
-      constructor() {
-        this.handlers = {};
-        this.callCount = {};
-        this._registerDefaults();
-      }
-
-      static get instance() {
-        if (!this._instance) this._instance = new SysCallBridge();
-        return this._instance;
-      }
-
-      _registerDefaults() {
-        this.registerHandler('NtGetSystemInfo', () => ({
-          hostname: 'WebNT-Kernel',
-          version: '1.0.0',
-          platform: navigator.platform,
-          cpuCores: navigator.hardwareConcurrency || 1,
-          memory: navigator.deviceMemory || 4,
-          uptime: Math.floor(performance.now() / 1000),
-          gpu: navigator.gpu ? 'WebGPU Available' : 'Not Available',
-        }));
-        this.registerHandler('NtGetKernelStats', () => ({
-          processes: 5, threads: 12, handles: 48,
-          memoryUsed: 64 * 1024 * 1024,
-          memoryTotal: 1024 * 1024 * 1024,
-        }));
-        this.registerHandler('NtShutdown', () => { return { success: true }; });
-        this.registerHandler('NtReboot', () => { return { success: true }; });
-        this.registerHandler('NtCreateFile', (args) => ({ success: true, path: args.path }));
-        this.registerHandler('NtReadFile', (args) => ({ success: true, path: args.path, data: '' }));
-        this.registerHandler('NtWriteFile', (args) => ({ success: true, path: args.path }));
-        this.registerHandler('NtDeleteFile', (args) => ({ success: true, path: args.path }));
-        this.registerHandler('NtHttpRequest', () => ({ status: 200, data: '' }));
-        this.registerHandler('NtDnsResolve', (args) => ({ hostname: args.hostname, ip: '127.0.0.1' }));
-        this.registerHandler('NtRegistryRead', () => ({ value: null }));
-        this.registerHandler('NtRegistryWrite', () => ({ success: true }));
-      }
-
-      registerHandler(name, handler) {
-        this.handlers[name] = handler;
-      }
-
-      async call(name, ...args) {
-        this.callCount[name] = (this.callCount[name] || 0) + 1;
-        const handler = this.handlers[name];
-        if (!handler) throw new Error(`SysCall '${name}' not registered`);
-        return handler(args[0]);
-      }
-    }
-
-    // ----- ProcessManager -----
-    class ProcessManager {
-      constructor() {
-        this.processes = new Map();
-        this.nextPid = 1;
-        this._createKernelProcess();
-      }
-
-      static get instance() {
-        if (!this._instance) this._instance = new ProcessManager();
-        return this._instance;
-      }
-
-      _createKernelProcess() {
-        this.processes.set(1, { pid: 1, name: 'System', state: 'RUNNING', threads: 4, memory: 0 });
-        this.nextPid = 2;
-      }
-
-      createProcess(name, entry, options = {}) {
-        const pid = this.nextPid++;
-        const proc = { pid, name, entry, state: 'RUNNING', threads: 1, memory: 0, ...options };
-        this.processes.set(pid, proc);
-        return pid;
-      }
-
-      terminateProcess(pid) {
-        const proc = this.processes.get(pid);
-        if (!proc) return false;
-        proc.state = 'TERMINATED';
-        this.processes.delete(pid);
-        return true;
-      }
-
-      getProcessList() { return [...this.processes.values()]; }
-      getProcessInfo(pid) { return this.processes.get(pid) || null; }
-    }
-
-    // ----- Terminal Commands -----
-    class TerminalCommandRegistry {
-      constructor() {
-        this.commands = new Map();
-        this._registerBuiltins();
-      }
-
-      static get instance() {
-        if (!this._instance) this._instance = new TerminalCommandRegistry();
-        return this._instance;
-      }
-
-      _registerBuiltins() {
-        const cmds = [
-          ['help', 'Show available commands', 'SYSTEM', (args, out) => {
-            let text = 'Available commands:\n\n';
-            this.commands.forEach((cmd, name) => {
-              text += `  ${name.padEnd(12)} ${cmd.desc}\n`;
-            });
-            return text;
-          }],
-          ['ver', 'Kernel version info', 'SYSTEM', () => 'WebNT Kernel v1.0.0 (HTML5 Hybrid Microkernel)'],
-          ['sysinfo', 'System information', 'SYSTEM', () => {
-            const info = SysCallBridge.instance.call('NtGetSystemInfo');
-            return `Hostname: ${info.hostname}\nVersion: ${info.version}\nPlatform: ${info.platform}\nCPU: ${info.cpuCores} cores\nMemory: ${info.memory} GB\nGPU: ${info.gpu}\nUptime: ${info.uptime}s`;
-          }],
-          ['ps', 'List processes', 'PROCESS', () => {
-            const procs = ProcessManager.instance.getProcessList();
-            return procs.map(p => `  PID:${p.pid}  ${p.name}  [${p.state}]`).join('\n') || 'No processes';
-          }],
-          ['ls', 'List directory', 'FILE', (args) => {
-            const dir = args.join(' ') || '/';
-            return `Directory: ${dir}\n  Downloads/  Documents/  Desktop/  System/`;
-          }],
-          ['pwd', 'Print working directory', 'FILE', () => '/home/webnt'],
-          ['cd', 'Change directory', 'FILE', (args) => `Changed to: ${args.join(' ') || '/'}`],
-          ['cat', 'Print file content', 'FILE', (args) => `[File: ${args.join(' ')}] (empty)`],
-          ['mkdir', 'Create directory', 'FILE', (args) => `Created: ${args.join(' ')}`],
-          ['rm', 'Remove file/directory', 'FILE', (args) => `Removed: ${args.join(' ')}`],
-          ['clear', 'Clear terminal', 'UTILITY', () => '__CLEAR__'],
-          ['echo', 'Print text', 'UTILITY', (args) => args.join(' ')],
-          ['date', 'Show date', 'UTILITY', () => new Date().toString()],
-          ['uptime', 'System uptime', 'SYSTEM', () => `${Math.floor(performance.now()/1000)} seconds`],
-          ['whoami', 'Current user', 'SYSTEM', () => 'webnt'],
-          ['shutdown', 'Shutdown system', 'SYSTEM', () => { setTimeout(() => window.close(), 1000); return 'Shutting down...'; }],
-          ['reboot', 'Reboot system', 'SYSTEM', () => { location.reload(); return 'Rebooting...'; }],
-          ['netstat', 'Network statistics', 'NETWORK', () => 'Active connections: 0\nListening ports: none'],
-          ['mount', 'Mount filesystem', 'FILE', (args) => `Mounted: ${args.join(' ')}`],
-          ['unmount', 'Unmount filesystem', 'FILE', (args) => `Unmounted: ${args.join(' ')}`],
-          ['driver', 'Driver management', 'DEVICE', () => 'Loaded drivers:\n  display.webgpu  [OK]\n  file.fs  [OK]\n  net.stream  [OK]\n  terminal.cmd  [OK]\n  audio.wa  [OK]'],
-          ['display', 'Display info', 'DEVICE', () => `${window.innerWidth}x${window.innerHeight} @ ${window.devicePixelRatio}x`],
-          ['reg', 'Registry operations', 'REGISTRY', () => 'Registry: HKEY_LOCAL_MACHINE\\Software\\WebNT'],
-          ['tasklist', 'Task list', 'PROCESS', () => ProcessManager.instance.getProcessList().map(p => `  ${p.name}`).join('\n')],
-          ['tree', 'Directory tree', 'FILE', () => '/\n├── home/\n│   └── webnt/\n├── system/\n└── tmp/'],
-          ['grep', 'Search in files', 'UTILITY', (args) => `grep: no matches for "${args.join(' ')}"`],
-          ['history', 'Command history', 'UTILITY', () => '(no history)'],
-          ['export', 'Set environment variable', 'UTILITY', (args) => `export ${args[0]}=${args.slice(1).join(' ')}`],
-          ['unset', 'Unset variable', 'UTILITY', (args) => `Unset: ${args[0]}`],
-          ['alias', 'Create alias', 'UTILITY', (args) => `Alias: ${args[0]} -> ${args.slice(1).join(' ')}`],
-          ['unalias', 'Remove alias', 'UTILITY', (args) => `Removed alias: ${args[0]}`],
-          ['dns', 'DNS lookup', 'NETWORK', (args) => `${args[0]}: 127.0.0.1`],
-          ['ping', 'Network test', 'NETWORK', (args) => `PING ${args[0]} (127.0.0.1): 56 data bytes\n64 bytes: seq=0 ttl=64 time=0.5ms`],
-        ];
-        cmds.forEach(([name, desc, cat, handler]) => {
-          this.commands.set(name, { name, desc, category: cat, handler });
-        });
-      }
-
-      getCommand(name) { return this.commands.get(name) || null; }
-      getAllCommands() { return [...this.commands.keys()]; }
-      getCommandsByCategory() { return [...this.commands.values()]; }
-    }
-
-    class TerminalExecutor {
-      constructor() { this.history = []; }
-
-      static get instance() {
-        if (!this._instance) this._instance = new TerminalExecutor();
-        return this._instance;
-      }
-
-      async execute(commandLine, context = {}) {
-        const trimmed = commandLine.trim();
-        if (!trimmed) return { output: '', exitCode: 0 };
-        this.history.push(trimmed);
-
-        const parts = trimmed.split(/\s+/);
-        const cmdName = parts[0].toLowerCase();
-        const args = parts.slice(1);
-
-        const registry = TerminalCommandRegistry.instance;
-        const cmd = registry.getCommand(cmdName);
-
-        if (!cmd) {
-          return { output: `Command not found: ${cmdName}\nType 'help' for available commands.`, exitCode: 127 };
-        }
-
-        try {
-          const result = cmd.handler(args, {});
-          if (result === '__CLEAR__') {
-            return { output: '', exitCode: 0, clear: true };
-          }
-          return { output: String(result || ''), exitCode: 0 };
-        } catch (err) {
-          return { output: `Error: ${err.message}`, exitCode: 1 };
-        }
-      }
-
-      getHistory() { return [...this.history]; }
-    }
-
-    // ===================================================================
-    // 挂载内核模块到全局
-    // ===================================================================
-    window.__WebNT__ = {
-      GlobalDisplayAPI,
-      WindowManager,
-      SysCallBridge,
-      ProcessManager,
-      TerminalCommandRegistry,
-      TerminalExecutor,
-      layerTypes,
-    };
-
-    // ===================================================================
-    // Boot Screen Elements
-    // ===================================================================
-    const bootScreen = document.getElementById('boot-screen');
-    const bootLog = document.getElementById('boot-log');
-    const bootProgressBar = document.getElementById('boot-progress-bar');
-    const bootStatus = document.getElementById('boot-status');
-    const appRoot = document.getElementById('app-root');
-
-    function bootLogLine(msg, type = '') {
-      const line = document.createElement('div');
-      line.className = `log-line ${type}`;
-      line.textContent = `[${new Date().toISOString().slice(11, 23)}] ${msg}`;
-      bootLog.appendChild(line);
-      bootLog.scrollTop = bootLog.scrollHeight;
-    }
-
-    function bootProgress(percent, status) {
-      bootProgressBar.style.width = percent + '%';
-      bootStatus.textContent = status;
-    }
-
-    // ===================================================================
-    // Custom Element 注册
-    // ===================================================================
-    async function registerComponent(name, url) {
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const html = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const template = doc.querySelector('template');
-        const script = doc.querySelector('script');
-
-        if (!template) {
-          bootLogLine(`  [WARN] ${name}: no <template> found`, 'warn');
-          return;
-        }
-
-        const TemplateClass = class extends HTMLElement {
-          constructor() {
-            super();
-            const shadow = this.attachShadow({ mode: 'open' });
-            shadow.appendChild(template.content.cloneNode(true));
-            if (script && script.textContent) {
-              try {
-                const fn = new Function('host', 'shadow', script.textContent);
-                fn(this, shadow);
-              } catch (e) { /* script error, element still renders */ }
-            }
-          }
-        };
-
-        customElements.define(name, TemplateClass);
-        bootLogLine(`  [OK] Registered <${name}>`, 'ok');
-      } catch (err) {
-        bootLogLine(`  [ERR] ${name}: ${err.message}`, 'err');
-      }
-    }
-
-    // ===================================================================
-    // 主启动流程
-    // ===================================================================
-    async function boot() {
-      bootLogLine('WebNT Kernel v1.0.0 Starting...', 'info');
-      bootLogLine('Copyright (c) 2026 WebNT Project', '');
-      bootLogLine('', '');
-
-      // Phase 0: 硬件检测
-      bootProgress(5, 'Phase 0: Hardware Detection');
-      bootLogLine('Phase 0: Hardware Detection', 'info');
-      bootLogLine(`  CPU: ${navigator.hardwareConcurrency || '?'} cores`, '');
-      bootLogLine(`  Memory: ${navigator.deviceMemory || '?'} GB`, '');
-      bootLogLine(`  Platform: ${navigator.platform}`, '');
-      bootLogLine(`  WebGPU: ${navigator.gpu ? 'Available' : 'Not Available'}`, navigator.gpu ? 'ok' : 'warn');
-      bootLogLine(`  Kernel: Inline (no .ts dependency)`, 'ok');
-      bootLogLine('', '');
-      await new Promise(r => setTimeout(r, 300));
-
-      // Phase 1: 注册 Custom Elements
-      bootProgress(20, 'Phase 1: Registering Custom Elements');
-      bootLogLine('Phase 1: Registering Custom Elements', 'info');
-      await registerComponent('nt-desktop', 'ui/components/Desktop.ce.html');
-      await registerComponent('nt-taskbar', 'ui/components/Taskbar.ce.html');
-      await registerComponent('nt-startmenu', 'ui/components/StartMenu.ce.html');
-      await registerComponent('nt-contextmenu', 'ui/components/ContextMenu.ce.html');
-      await registerComponent('nt-terminal-window', 'ui/components/TerminalWindow.ce.html');
-      await registerComponent('nt-window', 'ui/components/WindowElement.ce.html');
-      bootLogLine('', '');
-      await new Promise(r => setTimeout(r, 200));
-
-      // Phase 2: 初始化 Display
-      bootProgress(45, 'Phase 2: Initializing Display Pipeline');
-      bootLogLine('Phase 2: Initializing Display Pipeline', 'info');
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.id = 'main-display-canvas';
-        canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;';
-        appRoot.appendChild(canvas);
-        GlobalDisplayAPI.instance.initialize(canvas, {
-          width: window.innerWidth,
-          height: window.innerHeight,
-          devicePixelRatio: window.devicePixelRatio || 1
-        });
-        bootLogLine(`  [OK] Display ${window.innerWidth}x${window.innerHeight}`, 'ok');
-      } catch (err) {
-        bootLogLine(`  [WARN] ${err.message}`, 'warn');
-      }
-      bootLogLine('', '');
-      await new Promise(r => setTimeout(r, 200));
-
-      // Phase 3: 创建桌面
-      bootProgress(60, 'Phase 3: Creating Desktop');
-      bootLogLine('Phase 3: Creating Desktop', 'info');
-      try {
-        const desktop = document.createElement('nt-desktop');
-        desktop.id = 'nt-desktop';
-        desktop.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:calc(100% - 48px);z-index:1;overflow:hidden;';
-        appRoot.appendChild(desktop);
-        bootLogLine('  [OK] Desktop created', 'ok');
-      } catch (err) {
-        bootLogLine(`  [ERR] ${err.message}`, 'err');
-      }
-      bootLogLine('', '');
-      await new Promise(r => setTimeout(r, 200));
-
-      // Phase 4: 创建任务栏
-      bootProgress(75, 'Phase 4: Creating Taskbar');
-      bootLogLine('Phase 4: Creating Taskbar', 'info');
-      try {
-        const taskbar = document.createElement('nt-taskbar');
-        taskbar.id = 'nt-taskbar';
-        taskbar.style.cssText = 'position:absolute;bottom:0;left:0;width:100%;z-index:1000;';
-        appRoot.appendChild(taskbar);
-
-        // 创建开始菜单
-        const startMenu = document.createElement('nt-startmenu');
-        startMenu.id = 'nt-startmenu';
-        startMenu.style.cssText = 'position:absolute;bottom:48px;left:4px;z-index:2000;display:none;';
-        appRoot.appendChild(startMenu);
-
-        // 开始菜单切换
-        window._toggleStartMenu = function() {
-          startMenu.style.display = (startMenu.style.display === 'block') ? 'none' : 'block';
-        };
-
-        bootLogLine('  [OK] Taskbar created', 'ok');
-      } catch (err) {
-        bootLogLine(`  [ERR] ${err.message}`, 'err');
-      }
-      bootLogLine('', '');
-      await new Promise(r => setTimeout(r, 200));
-
-      // Phase 5: 启动完成
-      bootProgress(100, 'System Ready');
-      bootLogLine('', '');
-      bootLogLine('========================================', '');
-      bootLogLine('  WebNT Kernel v1.0.0 Ready', 'ok');
-      bootLogLine('  All systems operational', 'ok');
-      bootLogLine('========================================', '');
-
-      await new Promise(r => setTimeout(r, 600));
-
-      // 隐藏启动画面，显示主界面
-      bootScreen.classList.add('hidden');
-      appRoot.classList.add('ready');
-
-      setTimeout(() => {
-        if (bootScreen.parentNode) bootScreen.remove();
-      }, 600);
-
-      window.dispatchEvent(new CustomEvent('webnt-system-ready'));
-      console.log('%c WebNT Kernel v1.0.0 Ready %c| %cAll systems operational',
-        'color:#00ff88;font-size:16px;', '', 'color:#aaa;');
-    }
-
-    // 启动！
-    boot().catch(err => {
-      bootLogLine(`FATAL: Boot failed - ${err.message}`, 'err');
-      console.error('Boot failed:', err);
-      // 即使出错也显示界面
-      bootScreen.classList.add('hidden');
-      appRoot.classList.add('ready');
-      appRoot.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#f28b82;font-family:monospace;font-size:18px;">WebNT Kernel Error<br><small>' + err.message + '</small></div>';
+  <!-- 开始菜单 -->
+  <div id="start-menu">
+    <div class="sm-search"><input type="text" placeholder="Type to search..." id="sm-search-input"></div>
+    <div class="sm-apps" id="sm-app-list"></div>
+    <div class="sm-footer">
+      <div class="sm-user">
+        <div class="sm-avatar">WN</div>
+        <div class="sm-username">WebNT User</div>
+      </div>
+      <div class="sm-power-btn" id="sm-shutdown" title="Shutdown">&#x23fb;</div>
+    </div>
+  </div>
+  <!-- 终端窗口 -->
+  <div id="terminal-window">
+    <div class="tw-titlebar" id="tw-titlebar">
+      <div class="tw-title">Terminal</div>
+      <div class="tw-ctrl">
+        <button class="tw-ctrl-btn" id="tw-minimize">&#x2014;</button>
+        <button class="tw-ctrl-btn" id="tw-maximize">&#x25a1;</button>
+        <button class="tw-ctrl-btn close" id="tw-close">&#x2715;</button>
+      </div>
+    </div>
+    <div class="tw-output" id="tw-output"></div>
+    <div class="tw-input-line">
+      <span class="tw-prompt">webnt@kernel:~$</span>
+      <input type="text" class="tw-input" id="tw-input" placeholder="Type 'help'..." autofocus>
+    </div>
+  </div>
+  <!-- 右键菜单 -->
+  <div id="context-menu"></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 系统脚本 -->
+<!-- ============================================================ -->
+<script type="module">
+// ===================================================================
+// 内核模块内联实现
+// ===================================================================
+class GlobalDisplayAPI {
+  constructor() { this.initialized = false; }
+  static get instance() { if(!this._i) this._i=new GlobalDisplayAPI(); return this._i; }
+  initialize(c,o={}) {
+    if(this.initialized) return;
+    this.initialized = true;
+    c.width = (o.width||window.innerWidth) * (o.dpr||1);
+    c.height = (o.height||window.innerHeight) * (o.dpr||1);
+    c.style.width = (o.width||window.innerWidth)+'px';
+    c.style.height = (o.height||window.innerHeight)+'px';
+  }
+}
+
+class WindowManager {
+  constructor() { this.wins=new Map(); this.order=[]; this.focus=null; this.nid=1; this.ls={}; }
+  static get instance() { if(!this._i) this._i=new WindowManager(); return this._i; }
+  createWindow(o={}) {
+    const id='win_'+this.nid++;
+    const w={id,title:o.title||'Window',w:o.width||600,h:o.height||400,x:o.x??100,y:o.y??100,state:'NORMAL',appId:o.appId||null,minimized:false};
+    this.wins.set(id,w); this.order.push(id); this.focus=id;
+    this._emit('window-created',w); return id;
+  }
+  destroyWindow(id) { this.wins.delete(id); this.order=this.order.filter(w=>w!==id); if(this.focus===id) this.focus=this.order[this.order.length-1]||null; this._emit('window-destroyed',{windowId:id}); }
+  setFocus(id) { if(this.wins.has(id)) { this.focus=id; this._emit('window-focused',{windowId:id}); } }
+  bringToFront(id) { if(!this.wins.has(id)) return; this.order=this.order.filter(w=>w!==id); this.order.push(id); this.setFocus(id); }
+  getWindowList() { return [...this.wins.values()]; }
+  on(e,cb) { if(!this.ls[e]) this.ls[e]=[]; this.ls[e].push(cb); }
+  _emit(e,d) { (this.ls[e]||[]).forEach(cb=>{try{cb(d)}catch(e){}}); }
+}
+
+class SysCallBridge {
+  constructor() { this.h={}; this._reg(); }
+  static get instance() { if(!this._i) this._i=new SysCallBridge(); return this._i; }
+  _reg() {
+    this.h.NtGetSystemInfo=()=>({hostname:'WebNT-Kernel',version:'1.0.0',platform:navigator.platform,cpuCores:navigator.hardwareConcurrency||1,memory:navigator.deviceMemory||4,uptime:Math.floor(performance.now()/1000)});
+    this.h.NtShutdown=()=>({success:true});
+    this.h.NtReboot=()=>({success:true});
+  }
+  async call(name,...args) { const h=this.h[name]; if(!h) throw new Error(`SysCall '${name}' not found`); return h(args[0]); }
+}
+
+class TerminalCommandRegistry {
+  constructor() { this.cmds=new Map(); this._init(); }
+  static get instance() { if(!this._i) this._i=new TerminalCommandRegistry(); return this._i; }
+  _init() {
+    const add=(name,desc,cat,fn)=>this.cmds.set(name,{name,desc,cat,fn});
+    add('help','Show available commands','SYSTEM',(a,o)=>{let t='Available commands:\n\n';this.cmds.forEach((c,n)=>{t+=`  ${n.padEnd(12)}${c.desc}\n`;});return t;});
+    add('ver','Kernel version','SYSTEM',()=>'WebNT Kernel v1.0.0');
+    add('sysinfo','System info','SYSTEM',()=>`WebNT Kernel v1.0.0\nCPU: ${navigator.hardwareConcurrency||'?'} cores\nMemory: ${navigator.deviceMemory||'?'} GB\nPlatform: ${navigator.platform}\nGPU: ${navigator.gpu?'WebGPU':'Canvas2D'}\nUptime: ${Math.floor(performance.now()/1000)}s`);
+    add('ps','List processes','PROCESS',()=>'  PID:1  System  [RUNNING]');
+    add('ls','List directory','FILE',(a)=>(a.length?`Directory: ${a[0]}`:'/')+'\n  Downloads/  Documents/  Desktop/');
+    add('pwd','Print working directory','FILE',()=>'/home/webnt');
+    add('cd','Change directory','FILE',(a)=>`Changed to: ${a[0]||'/'}`);
+    add('clear','Clear terminal','UTILITY',()=>'__CLEAR__');
+    add('echo','Print text','UTILITY',(a)=>a.join(' '));
+    add('date','Show date','UTILITY',()=>new Date().toString());
+    add('uptime','System uptime','SYSTEM',()=>`${Math.floor(performance.now()/1000)} seconds`);
+    add('whoami','Current user','SYSTEM',()=>'webnt');
+    add('shutdown','Shutdown','SYSTEM',()=>{setTimeout(()=>location.reload(),500);return'Shutting down...';});
+    add('reboot','Reboot','SYSTEM',()=>{location.reload();return'Rebooting...';});
+    add('netstat','Network stats','NETWORK',()=>'Active connections: 0');
+    add('driver','Driver management','DEVICE',()=>'display.webgpu [OK]\nfile.fs [OK]\nnet.stream [OK]\nterminal.cmd [OK]');
+    add('display','Display info','DEVICE',()=>`${window.innerWidth}x${window.innerHeight} @ ${window.devicePixelRatio}x`);
+    add('tree','Directory tree','FILE',()=>'/\n├── home/\n│   └── webnt/\n├── system/\n└── tmp/');
+    add('grep','Search in files','UTILITY',(a)=>`grep: no matches for "${a.join(' ')}"`);
+    add('history','Command history','UTILITY',()=>'');
+    add('dns','DNS lookup','NETWORK',(a)=>`${a[0]}: 127.0.0.1`);
+    add('ping','Network test','NETWORK',(a)=>`PING ${a[0]} (127.0.0.1): 56 data bytes\n64 bytes: seq=0 ttl=64 time=0.5ms`);
+  }
+  getCommand(n) { return this.cmds.get(n)||null; }
+  getAllCommands() { return [...this.cmds.keys()]; }
+}
+
+class TerminalExecutor {
+  constructor() { this.history=[]; }
+  static get instance() { if(!this._i) this._i=new TerminalExecutor(); return this._i; }
+  async execute(line) {
+    const t=line.trim(); if(!t) return {output:'',exitCode:0};
+    this.history.push(t);
+    const parts=t.split(/\s+/), name=parts[0].toLowerCase(), args=parts.slice(1);
+    const cmd=TerminalCommandRegistry.instance.getCommand(name);
+    if(!cmd) return {output:`Command not found: ${name}\nType 'help' for available commands.`,exitCode:127};
+    try {
+      const r=cmd.fn(args,{});
+      if(r==='__CLEAR__') return {output:'',exitCode:0,clear:true};
+      return {output:String(r||''),exitCode:0};
+    } catch(e) { return {output:`Error: ${e.message}`,exitCode:1}; }
+  }
+  getHistory() { return [...this.history]; }
+}
+
+window.__WebNT__ = { GlobalDisplayAPI, WindowManager, SysCallBridge, TerminalCommandRegistry, TerminalExecutor };
+
+// ===================================================================
+// DOM Refs
+// ===================================================================
+const bootScreen = document.getElementById('boot-screen');
+const bootLog = document.getElementById('boot-log');
+const bootProgressBar = document.getElementById('boot-progress-bar');
+const bootStatus = document.getElementById('boot-status');
+const lockScreen = document.getElementById('lock-screen');
+const appRoot = document.getElementById('app-root');
+const desktopIcons = document.getElementById('desktop-icons');
+const taskbar = document.getElementById('taskbar');
+const startMenu = document.getElementById('start-menu');
+const tw = document.getElementById('terminal-window');
+const twOutput = document.getElementById('tw-output');
+const twInput = document.getElementById('tw-input');
+const contextMenu = document.getElementById('context-menu');
+
+function bootLogLine(msg, type='') {
+  const l=document.createElement('div'); l.className=`log-line ${type}`;
+  l.textContent=`[${new Date().toISOString().slice(11,23)}] ${msg}`;
+  bootLog.appendChild(l); bootLog.scrollTop=bootLog.scrollHeight;
+}
+function bootProgress(p, s) { bootProgressBar.style.width=p+'%'; bootStatus.textContent=s; }
+
+// ===================================================================
+// 时间更新
+// ===================================================================
+function updateAllClocks() {
+  const now=new Date();
+  const h=String(now.getHours()).padStart(2,'0'), m=String(now.getMinutes()).padStart(2,'0');
+  // 锁屏时钟
+  const lsTime=document.getElementById('ls-time'), lsDate=document.getElementById('ls-date');
+  if(lsTime) lsTime.textContent=`${h}:${m}`;
+  if(lsDate) lsDate.textContent=now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  // 任务栏时钟
+  const tbc=document.querySelector('#taskbar .tb-clock-time'), tbcd=document.querySelector('#taskbar .tb-clock-date');
+  if(tbc) tbc.textContent=`${h}:${m}`;
+  if(tbcd) tbcd.textContent=`${now.getMonth()+1}/${now.getDate()}`;
+}
+updateAllClocks(); setInterval(updateAllClocks, 1000);
+
+// ===================================================================
+// 锁屏滑动解锁
+// ===================================================================
+let lsDragging=false, lsStartX=0, lsKnobX=0;
+const lsSlider=document.getElementById('ls-slider');
+const lsKnob=document.getElementById('ls-knob');
+const maxSlide=lsSlider?lsSlider.offsetWidth-44:256;
+
+function resetKnob() { if(lsKnob) lsKnob.style.left='4px'; }
+
+function unlockDesktop() {
+  lockScreen.classList.add('unlocked');
+  setTimeout(() => { lockScreen.style.display='none'; }, 500);
+}
+
+lsSlider.addEventListener('pointerdown', e => {
+  lsDragging=true; lsStartX=e.clientX; lsKnobX=4;
+  lsSlider.classList.add('dragging');
+  lsSlider.setPointerCapture(e.pointerId);
+});
+lsSlider.addEventListener('pointermove', e => {
+  if(!lsDragging) return;
+  const dx=e.clientX-lsStartX;
+  lsKnobX=Math.max(4, Math.min(maxSlide, 4+dx));
+  lsKnob.style.left=lsKnobX+'px';
+  if(lsKnobX>=maxSlide-10) { lsDragging=false; lsSlider.classList.remove('dragging'); unlockDesktop(); }
+});
+lsSlider.addEventListener('pointerup', () => {
+  lsDragging=false; lsSlider.classList.remove('dragging');
+  if(lsKnobX<maxSlide-10) resetKnob();
+});
+lsSlider.addEventListener('pointerleave', () => {
+  if(lsDragging) { lsDragging=false; lsSlider.classList.remove('dragging'); resetKnob(); }
+});
+
+// 按任意键解锁
+document.addEventListener('keydown', function unlockByKey(e) {
+  if(lockScreen.style.display!=='none') { unlockDesktop(); }
+}, {once:false});
+
+// ===================================================================
+// 桌面图标
+// ===================================================================
+const desktopApps = [
+  { id:'computer', name:'Computer', icon:'\ud83d\udda5\ufe0f', color:'#667eea', appId:'computer' },
+  { id:'terminal', name:'Terminal', icon:'\u2328\ufe0f', color:'#00ff88', appId:'terminal' },
+  { id:'explorer', name:'File Explorer', icon:'\ud83d\udcc1', color:'#ffd700', appId:'explorer' },
+  { id:'settings', name:'Settings', icon:'\u2699\ufe0f', color:'#ccc', appId:'settings' },
+  { id:'notepad', name:'Notepad', icon:'\ud83d\udcc4', color:'#8ab4f8', appId:'notepad' },
+  { id:'webview', name:'Web View', icon:'\ud83c\udf10', color:'#4fc3f7', appId:'webview' },
+  { id:'recycle', name:'Recycle Bin', icon:'\ud83d\uddd1\ufe0f', color:'#aaa', appId:'recycle' },
+];
+let selectedIcon=null;
+
+function renderDesktopIcons() {
+  desktopIcons.innerHTML='';
+  desktopApps.forEach((app, i) => {
+    const icon=document.createElement('div');
+    icon.className='desktop-icon';
+    icon.style.left=(20+(i%4)*100)+'px';
+    icon.style.top=(20+Math.floor(i/4)*100)+'px';
+    icon.dataset.appId=app.id;
+    icon.innerHTML=`<div class="dicon-svg" style="font-size:36px;color:${app.color}">${app.icon}</div><div class="dicon-label">${app.name}</div>`;
+    icon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if(selectedIcon) selectedIcon.classList.remove('selected');
+      icon.classList.add('selected');
+      selectedIcon=icon;
     });
-  </script>
+    icon.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      launchApp(app.appId);
+    });
+    icon.addEventListener('contextmenu', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      showContextMenu(e.clientX, e.clientY, [
+        {label:'Open', action:()=>launchApp(app.appId)},
+        {label:'Open in Terminal', action:()=>{launchApp('terminal'); writeTerminal(`Opening ${app.name}...\n`);}},
+        {separator:true},
+        {label:'Pin to Start', action:()=>{}},
+        {label:'Properties', action:()=>{}},
+      ]);
+    });
+    // 拖拽
+    let dragging=false, sx=0, sy=0, ox=0, oy=0;
+    icon.addEventListener('pointerdown', ed => {
+      if(ed.button!==0) return;
+      dragging=true; sx=ed.clientX; sy=ed.clientY;
+      ox=icon.offsetLeft; oy=icon.offsetTop;
+      icon.setPointerCapture(ed.pointerId);
+    });
+    icon.addEventListener('pointermove', ed => {
+      if(!dragging) return;
+      icon.style.left=(ox+ed.clientX-sx)+'px';
+      icon.style.top=(oy+ed.clientY-sy)+'px';
+    });
+    icon.addEventListener('pointerup', () => { dragging=false; });
+    desktopIcons.appendChild(icon);
+  });
+}
+renderDesktopIcons();
+
+// 桌面右键菜单
+desktopIcons.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  showContextMenu(e.clientX, e.clientY, [
+    {label:'View', action:()=>{}},
+    {label:'Sort by', action:()=>{}},
+    {separator:true},
+    {label:'Refresh', action:()=>renderDesktopIcons()},
+    {separator:true},
+    {label:'Display Settings', action:()=>launchApp('settings')},
+    {label:'Personalize', action:()=>{}},
+  ]);
+});
+
+// 点击空白取消选择
+desktopIcons.addEventListener('click', e => {
+  if(e.target===desktopIcons) {
+    if(selectedIcon) selectedIcon.classList.remove('selected');
+    selectedIcon=null;
+  }
+});
+
+// ===================================================================
+// 右键菜单
+// ===================================================================
+function showContextMenu(x, y, items) {
+  contextMenu.innerHTML='';
+  items.forEach(item => {
+    if(item.separator) { const s=document.createElement('div'); s.className='cm-separator'; contextMenu.appendChild(s); return; }
+    const el=document.createElement('div');
+    el.className='cm-item';
+    el.innerHTML=`<span>${item.label}</span>${item.shortcut?`<span class="cm-shortcut">${item.shortcut}</span>`:''}`;
+    el.addEventListener('click', () => { if(item.action) item.action(); hideContextMenu(); });
+    contextMenu.appendChild(el);
+  });
+  contextMenu.style.display='block';
+  contextMenu.style.left=Math.min(x, window.innerWidth-220)+'px';
+  contextMenu.style.top=Math.min(y, window.innerHeight-contextMenu.offsetHeight-10)+'px';
+}
+function hideContextMenu() { contextMenu.style.display='none'; }
+document.addEventListener('click', () => hideContextMenu());
+
+// ===================================================================
+// 开始菜单
+// ===================================================================
+const smAppList = document.getElementById('sm-app-list');
+function renderStartMenu() {
+  smAppList.innerHTML='';
+  const apps=[
+    {name:'Terminal', icon:'\u2328\ufe0f', color:'#00ff88', appId:'terminal'},
+    {name:'File Explorer', icon:'\ud83d\udcc1', color:'#ffd700', appId:'explorer'},
+    {name:'Settings', icon:'\u2699\ufe0f', color:'#ccc', appId:'settings'},
+    {name:'Web View', icon:'\ud83c\udf10', color:'#4fc3f7', appId:'webview'},
+    {name:'Notepad', icon:'\ud83d\udcc4', color:'#8ab4f8', appId:'notepad'},
+    {name:'Computer', icon:'\ud83d\udda5\ufe0f', color:'#667eea', appId:'computer'},
+    {name:'Task Manager', icon:'\ud83d\udcca', color:'#fdd663', appId:'taskmgr'},
+    {name:'System Monitor', icon:'\ud83d\udcbb', color:'#81c995', appId:'sysmon'},
+  ];
+  apps.forEach(app => {
+    const el=document.createElement('div');
+    el.className='sm-app-item';
+    el.innerHTML=`<span class="sm-app-icon" style="background:${app.color}22;color:${app.color}">${app.icon}</span>${app.name}`;
+    el.addEventListener('click', () => { launchApp(app.appId); toggleStartMenu(); });
+    smAppList.appendChild(el);
+  });
+}
+renderStartMenu();
+
+function toggleStartMenu() {
+  startMenu.style.display=(startMenu.style.display==='block')?'none':'block';
+}
+document.getElementById('tb-start-btn').addEventListener('click', e => { e.stopPropagation(); toggleStartMenu(); });
+document.getElementById('sm-shutdown').addEventListener('click', () => {
+  if(confirm('Shut down WebNT?')) location.reload();
+});
+
+// 搜索过滤
+document.getElementById('sm-search-input').addEventListener('input', e => {
+  const q=e.target.value.toLowerCase();
+  smAppList.querySelectorAll('.sm-app-item').forEach(el => {
+    el.style.display=el.textContent.toLowerCase().includes(q)?'flex':'none';
+  });
+});
+
+// 点击其他地方关闭开始菜单
+document.addEventListener('click', e => {
+  if(!startMenu.contains(e.target) && e.target.id!=='tb-start-btn' && !document.getElementById('tb-start-btn').contains(e.target)) {
+    startMenu.style.display='none';
+  }
+});
+
+// ===================================================================
+// 任务栏窗口按钮
+// ===================================================================
+function updateTaskbarWindowButtons() {
+  const list=document.getElementById('tb-window-list');
+  const wins=WindowManager.instance.getWindowList();
+  list.innerHTML='';
+  wins.forEach(w => {
+    const btn=document.createElement('div');
+    btn.className='tb-win-btn'+(WindowManager.instance.focus===w.id?' active':'');
+    btn.innerHTML=`<span class="tb-win-icon">${w.icon||'\ud83d\uddd1\ufe0f'}</span><span>${w.title}</span>`;
+    btn.addEventListener('click', () => {
+      WindowManager.instance.bringToFront(w.id);
+      if(w.appId==='terminal') { tw.style.display='flex'; tw.style.zIndex=100; }
+    });
+    list.appendChild(btn);
+  });
+}
+
+// ===================================================================
+// 应用启动
+// ===================================================================
+function launchApp(appId) {
+  switch(appId) {
+    case 'terminal':
+      tw.style.display='flex';
+      tw.style.left='150px'; tw.style.top='80px';
+      tw.style.zIndex=100;
+      twInput.focus();
+      WindowManager.instance.createWindow({title:'Terminal',appId:'terminal',icon:'\u2328\ufe0f'});
+      break;
+    case 'explorer':
+      showAppWindow('File Explorer', '\ud83d\udcc1', `
+        <div style="display:flex;flex-wrap:wrap;gap:16px;padding:8px;">
+          ${['Downloads','Documents','Desktop','System','tmp'].map(f=>`<div style="display:flex;flex-direction:column;align-items:center;width:80px;cursor:pointer;padding:8px;border-radius:8px" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background=''"><span style="font-size:36px">${f==='Downloads'?'\ud83d\udce5':f==='Documents'?'\ud83d\udcc4':f==='Desktop'?'\ud83d\udda5\ufe0f':f==='System'?'\u2699\ufe0f':'\ud83d\udcc1'}</span><span style="font-size:12px;margin-top:4px">${f}</span></div>`).join('')}
+        </div>
+      `);
+      break;
+    case 'settings':
+      showAppWindow('Settings', '\u2699\ufe0f', `
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <h3 style="margin:0;color:#8ab4f8">System</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+            <div>Kernel:</div><div>WebNT v1.0.0</div>
+            <div>CPU:</div><div>${navigator.hardwareConcurrency||'?'} cores</div>
+            <div>Memory:</div><div>${navigator.deviceMemory||'?'} GB</div>
+            <div>Platform:</div><div>${navigator.platform}</div>
+            <div>GPU:</div><div>${navigator.gpu?'WebGPU':'Canvas2D'}</div>
+            <div>Uptime:</div><div>${Math.floor(performance.now()/1000)}s</div>
+          </div>
+          <hr style="border-color:rgba(255,255,255,0.06)">
+          <h3 style="margin:0;color:#8ab4f8">Display</h3>
+          <div style="font-size:13px">${window.innerWidth} × ${window.innerHeight} @ ${window.devicePixelRatio}x</div>
+          <div style="font-size:13px">Theme: <strong>Dark</strong></div>
+        </div>
+      `);
+      break;
+    case 'notepad':
+      showAppWindow('Notepad', '\ud83d\udcc4', `
+        <textarea style="width:100%;height:calc(100% - 8px);background:transparent;border:none;color:#e0e0e0;font-family:'Courier New',monospace;font-size:14px;resize:none;outline:none" placeholder="Start typing..."></textarea>
+      `);
+      break;
+    case 'webview':
+      showAppWindow('Web View', '\ud83c\udf10', `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px">
+          <div style="font-size:48px">\ud83c\udf10</div>
+          <input type="text" placeholder="Enter URL..." style="width:60%;padding:10px;border-radius:20px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.06);color:#fff;text-align:center;outline:none" onkeydown="if(event.key==='Enter'){this.nextElementSibling.textContent='Opening '+this.value+'...';}">
+          <div style="font-size:12px;color:#777"></div>
+        </div>
+      `);
+      break;
+    case 'computer':
+      showAppWindow('This PC', '\ud83d\udda5\ufe0f', `
+        <div style="font-size:13px;line-height:1.8">
+          <strong>WebNT Kernel v1.0.0</strong><br>
+          CPU: ${navigator.hardwareConcurrency||'?'} cores<br>
+          Memory: ${navigator.deviceMemory||'?'} GB<br>
+          Platform: ${navigator.platform}<br>
+          GPU: ${navigator.gpu?'WebGPU':'Canvas2D'}<br>
+          User Agent: ${navigator.userAgent.substring(0,50)}...
+        </div>
+      `);
+      break;
+    case 'recycle':
+      showAppWindow('Recycle Bin', '\ud83d\uddd1\ufe0f', `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#777">Recycle Bin is empty</div>`);
+      break;
+    default:
+      showAppWindow(appId, '\ud83d\udcc4', `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#777">${appId} is running</div>`);
+  }
+  updateTaskbarWindowButtons();
+}
+
+let appWinCounter=0;
+function showAppWindow(title, icon, bodyHTML) {
+  const id='appwin_'+ (++appWinCounter);
+  const win=document.createElement('div');
+  win.className='app-window';
+  win.id=id;
+  win.style.display='flex';
+  win.style.width='500px'; win.style.height='400px';
+  win.style.left=(200+appWinCounter*30)+'px';
+  win.style.top=(60+appWinCounter*30)+'px';
+  win.style.zIndex=50+appWinCounter;
+  win.innerHTML=`
+    <div class="aw-titlebar" data-winid="${id}">
+      <span style="margin-right:8px">${icon}</span>
+      <span class="aw-title">${title}</span>
+      <div class="aw-ctrl">
+        <button class="aw-ctrl-btn" onclick="this.closest('.app-window').style.display='none'">&#x2014;</button>
+        <button class="aw-ctrl-btn" onclick="const w=this.closest('.app-window');w.style.width='100vw';w.style.height='calc(100vh - 48px)';w.style.left='0';w.style.top='0'">&#x25a1;</button>
+        <button class="aw-ctrl-btn close" onclick="this.closest('.app-window').remove();updateTaskbarWindowButtons()">&#x2715;</button>
+      </div>
+    </div>
+    <div class="aw-body">${bodyHTML}</div>
+  `;
+  // 拖拽
+  let dragging=false, sx=0, sy=0, ox=0, oy=0;
+  win.querySelector('.aw-titlebar').addEventListener('pointerdown', e => {
+    dragging=true; sx=e.clientX; sy=e.clientY;
+    ox=win.offsetLeft; oy=win.offsetTop;
+    win.setPointerCapture(e.pointerId);
+  });
+  win.addEventListener('pointermove', e => {
+    if(!dragging) return;
+    win.style.left=(ox+e.clientX-sx)+'px';
+    win.style.top=(oy+e.clientY-sy)+'px';
+  });
+  win.addEventListener('pointerup', () => { dragging=false; });
+  // 聚焦
+  win.addEventListener('pointerdown', () => {
+    document.querySelectorAll('.app-window').forEach(w=>w.style.zIndex=Math.min(50,w.style.zIndex||50));
+    win.style.zIndex=100;
+  });
+  appRoot.appendChild(win);
+  WindowManager.instance.createWindow({title,appId:id,icon});
+  updateTaskbarWindowButtons();
+}
+
+// ===================================================================
+// 终端
+// ===================================================================
+const twHistory=[];
+let twHistoryIdx=-1;
+
+function writeTerminal(text, cls='') {
+  const lines=text.split('\n');
+  lines.forEach(line => {
+    const l=document.createElement('div');
+    l.className='tw-line'+(cls?' '+cls:'');
+    l.textContent=line||' ';
+    twOutput.appendChild(l);
+  });
+  twOutput.scrollTop=twOutput.scrollHeight;
+}
+
+function writeWelcome() {
+  twOutput.innerHTML='';
+  writeTerminal('WebNT Kernel v1.0.0 [HTML5 Hybrid Microkernel]', 'info');
+  writeTerminal('Type "help" for available commands.');
+  writeTerminal('');
+}
+
+writeWelcome();
+
+twInput.addEventListener('keydown', async e => {
+  if(e.key==='Enter') {
+    const cmd=twInput.value.trim();
+    if(!cmd) return;
+    writeTerminal(`webnt@kernel:~$ ${cmd}`, '');
+    twInput.value='';
+    if(cmd!=='clear') twHistory.push(cmd);
+    twHistoryIdx=twHistory.length;
+    const result=await TerminalExecutor.instance.execute(cmd);
+    if(result.clear) { twOutput.innerHTML=''; return; }
+    writeTerminal(result.output, result.exitCode!==0?'error':'');
+  } else if(e.key==='ArrowUp') {
+    e.preventDefault();
+    if(twHistoryIdx>0) { twHistoryIdx--; twInput.value=twHistory[twHistoryIdx]||''; }
+  } else if(e.key==='ArrowDown') {
+    e.preventDefault();
+    if(twHistoryIdx<twHistory.length-1) { twHistoryIdx++; twInput.value=twHistory[twHistoryIdx]||''; }
+    else { twHistoryIdx=twHistory.length; twInput.value=''; }
+  } else if(e.key==='Tab') {
+    e.preventDefault();
+    const input=twInput.value.trim().split(/\s+/)[0];
+    const cmds=TerminalCommandRegistry.instance.getAllCommands();
+    const matches=cmds.filter(c=>c.startsWith(input));
+    if(matches.length===1) twInput.value=matches[0]+' ';
+    else if(matches.length>1) writeTerminal(matches.join('  '),'');
+  }
+});
+
+// 终端按钮
+document.getElementById('tb-terminal-btn').addEventListener('click', () => launchApp('terminal'));
+document.getElementById('tw-close').addEventListener('click', () => tw.style.display='none');
+document.getElementById('tw-minimize').addEventListener('click', () => tw.style.display='none');
+document.getElementById('tw-maximize').addEventListener('click', () => {
+  if(tw.style.width==='100vw') {
+    tw.style.width='700px'; tw.style.height='420px'; tw.style.left='150px'; tw.style.top='80px';
+  } else {
+    tw.style.width='100vw'; tw.style.height='calc(100vh - 48px)'; tw.style.left='0'; tw.style.top='0';
+  }
+});
+
+// 终端拖拽
+let twDragging=false, twSx=0, twSy=0, twOx=0, twOy=0;
+document.getElementById('tw-titlebar').addEventListener('pointerdown', e => {
+  twDragging=true; twSx=e.clientX; twSy=e.clientY;
+  twOx=tw.offsetLeft; twOy=tw.offsetTop;
+  tw.setPointerCapture(e.pointerId);
+});
+tw.addEventListener('pointermove', e => {
+  if(!twDragging) return;
+  tw.style.left=(twOx+e.clientX-twSx)+'px';
+  tw.style.top=(twOy+e.clientY-twSy)+'px';
+});
+tw.addEventListener('pointerup', () => { twDragging=false; });
+
+// ===================================================================
+// 启动流程
+// ===================================================================
+async function boot() {
+  bootLogLine('WebNT Kernel v1.0.0 Starting...', 'info');
+  bootLogLine('Copyright (c) 2026 WebNT Project', '');
+  bootLogLine('', '');
+
+  // Phase 0: 硬件检测
+  bootProgress(10, 'Phase 0: Hardware Detection');
+  bootLogLine('Phase 0: Hardware Detection', 'info');
+  bootLogLine(`  CPU: ${navigator.hardwareConcurrency||'?'} cores`, '');
+  bootLogLine(`  Memory: ${navigator.deviceMemory||'?'} GB`, '');
+  bootLogLine(`  WebGPU: ${navigator.gpu?'Available':'Not Available'}`, navigator.gpu?'ok':'warn');
+  bootLogLine('', '');
+  await new Promise(r=>setTimeout(r,300));
+
+  // Phase 1: 初始化内核
+  bootProgress(35, 'Phase 1: Kernel Initialization');
+  bootLogLine('Phase 1: Kernel Initialization', 'info');
+  bootLogLine('  [OK] ObjectManager initialized', 'ok');
+  bootLogLine('  [OK] HandleTable ready', 'ok');
+  bootLogLine('  [OK] Scheduler.SMP started', 'ok');
+  bootLogLine('  [OK] InterruptController online', 'ok');
+  bootLogLine('', '');
+  await new Promise(r=>setTimeout(r,200));
+
+  // Phase 2: 加载驱动
+  bootProgress(55, 'Phase 2: Loading Drivers');
+  bootLogLine('Phase 2: Loading Drivers', 'info');
+  bootLogLine('  [OK] Driver.Display.WebGPU', 'ok');
+  bootLogLine('  [OK] Driver.File.FS', 'ok');
+  bootLogLine('  [OK] Driver.Net.Stream', 'ok');
+  bootLogLine('  [OK] Driver.Terminal.Cmd', 'ok');
+  bootLogLine('  [OK] Driver.Audio.WA', 'ok');
+  bootLogLine('', '');
+  await new Promise(r=>setTimeout(r,200));
+
+  // Phase 3: 启动用户态
+  bootProgress(75, 'Phase 3: Starting User Session');
+  bootLogLine('Phase 3: Starting User Session', 'info');
+  bootLogLine('  [OK] Session Manager started', 'ok');
+  bootLogLine('  [OK] Desktop subsystem loaded', 'ok');
+  bootLogLine('  [OK] WinHTML display pipeline ready', 'ok');
+  bootLogLine('', '');
+  await new Promise(r=>setTimeout(r,200));
+
+  // Phase 4: 完成
+  bootProgress(100, 'System Ready');
+  bootLogLine('', '');
+  bootLogLine('========================================', '');
+  bootLogLine('  WebNT Kernel v1.0.0 Ready', 'ok');
+  bootLogLine('  All systems operational', 'ok');
+  bootLogLine('========================================', '');
+
+  await new Promise(r=>setTimeout(r,400));
+
+  // 隐藏 BIOS 启动画面，显示锁屏
+  bootScreen.classList.add('hidden');
+  appRoot.style.display='block';
+  updateAllClocks();
+
+  setTimeout(() => { if(bootScreen.parentNode) bootScreen.remove(); }, 600);
+
+  console.log('%c WebNT Kernel v1.0.0 Ready %c| %cSlide to unlock',
+    'color:#00ff88;font-size:16px;', '', 'color:#aaa;');
+}
+
+boot().catch(err => {
+  bootLogLine(`FATAL: ${err.message}`, 'err');
+  console.error(err);
+  bootScreen.classList.add('hidden');
+  unlockDesktop();
+});
+</script>
 
 </body>
 </html>
