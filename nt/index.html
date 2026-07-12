@@ -1795,142 +1795,320 @@ function launchApp(appId) {
       });
       break;
     case 'appstore':
+      // ============================================================
+      // 应用商店注册表 — 第三方官方应用
+      // ============================================================
+      const storeRegistry = [
+        {
+          id: 'snake', name: '贪吃蛇', icon: '\ud83d\udc0d', color: '#81c995',
+          version: '2.1.0', author: 'WebNT Labs', category: '游戏',
+          url: 'https://cdn.jsdelivr.net/gh/topics/snake-game/snake.js',
+          description: '经典贪吃蛇游戏，WebNT 官方移植版。使用方向键控制蛇的移动，吃到食物得分，撞墙或撞到自己则游戏结束。',
+          features: ['经典街机玩法','5 档难度选择','本地排行榜','键盘/触摸双模式','暗色主题适配'],
+          permissions: ['storage: 存储排行榜数据'],
+          images: ['data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150" viewBox="0 0 300 150"><rect width="300" height="150" fill="#1a1a2e"/><rect x="30" y="30" width="20" height="20" fill="#81c995" rx="2"/><rect x="50" y="30" width="20" height="20" fill="#81c995" rx="2"/><rect x="70" y="30" width="20" height="20" fill="#81c995" rx="2"/><rect x="70" y="10" width="20" height="20" fill="#81c995" rx="2"/><rect x="90" y="10" width="20" height="20" fill="#81c995" rx="2"/><circle cx="180" cy="60" r="8" fill="#f28b82"/><text x="30" y="120" fill="#888" font-size="11">Snake Game v2.1.0</text></svg>')],
+        },
+        {
+          id: '2048', name: '2048', icon: '\ud83d\udd32', color: '#fdd663',
+          version: '1.3.0', author: 'WebNT Labs', category: '游戏',
+          url: 'https://cdn.jsdelivr.net/gh/gabrielecirulli/2048/index.html',
+          description: '风靡全球的数字合并游戏。通过滑动合并相同数字，目标是合成 2048 方块。',
+          features: ['4x4 经典棋盘','滑动合并操作','撤销功能','分数统计','动画效果'],
+          permissions: ['storage: 存储游戏进度'],
+          images: ['data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150" viewBox="0 0 300 150"><rect width="300" height="150" fill="#1a1a2e"/><rect x="30" y="20" width="50" height="50" fill="#fdd663" rx="4"/><text x="55" y="52" text-anchor="middle" fill="#1a1a2e" font-size="20" font-weight="bold">2</text><rect x="90" y="20" width="50" height="50" fill="#ff9800" rx="4"/><text x="115" y="52" text-anchor="middle" fill="#1a1a2e" font-size="20" font-weight="bold">4</text><rect x="150" y="20" width="50" height="50" fill="#e0e0e0" rx="4"/><text x="175" y="52" text-anchor="middle" fill="#1a1a2e" font-size="14">8</text><rect x="210" y="20" width="50" height="50" fill="#e0e0e0" rx="4"/><text x="235" y="52" text-anchor="middle" fill="#1a1a2e" font-size="14">16</text><text x="30" y="120" fill="#888" font-size="11">2048 Game v1.3.0</text></svg>')],
+        },
+        {
+          id: 'tetris', name: '俄罗斯方块', icon: '\ud83e\udde9', color: '#ce93d8',
+          version: '1.0.0', author: 'WebNT Labs', category: '游戏',
+          url: 'https://cdn.jsdelivr.net/gh/chvin/react-tetris/index.html',
+          description: '经典俄罗斯方块，7 种方块类型，消除整行得分。',
+          features: ['7 种标准方块','旋转/加速下落','分数系统','等级递增','预览下一个方块'],
+          permissions: ['storage: 存储高分记录'],
+          images: ['data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150" viewBox="0 0 300 150"><rect width="300" height="150" fill="#1a1a2e"/><rect x="110" y="10" width="20" height="20" fill="#ce93d8" rx="2"/><rect x="130" y="10" width="20" height="20" fill="#ce93d8" rx="2"/><rect x="150" y="10" width="20" height="20" fill="#ce93d8" rx="2"/><rect x="170" y="10" width="20" height="20" fill="#ce93d8" rx="2"/><rect x="110" y="50" width="20" height="20" fill="#81c995" rx="2"/><rect x="130" y="50" width="20" height="20" fill="#81c995" rx="2"/><rect x="110" y="70" width="20" height="20" fill="#81c995" rx="2"/><rect x="90" y="100" width="20" height="20" fill="#fdd663" rx="2"/><rect x="110" y="100" width="20" height="20" fill="#fdd663" rx="2"/><text x="30" y="120" fill="#888" font-size="11">Tetris v1.0.0</text></svg>')],
+        },
+        {
+          id: 'mdeditor', name: 'Markdown 编辑器', icon: '\ud83d\udcdd', color: '#8ab4f8',
+          version: '1.2.0', author: 'WebNT Labs', category: '工具',
+          url: 'https://cdn.jsdelivr.net/gh/nicehash/md-editor/index.html',
+          description: '轻量级 Markdown 编辑器，支持实时预览和语法高亮。',
+          features: ['实时预览','语法高亮','导出 HTML','暗色主题','自动保存'],
+          permissions: ['storage: 存储文档','clipboard: 复制导出内容'],
+          images: ['data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150" viewBox="0 0 300 150"><rect width="300" height="150" fill="#1a1a2e"/><rect x="20" y="15" width="125" height="120" fill="rgba(255,255,255,0.04)" rx="4"/><text x="30" y="35" fill="#8ab4f8" font-size="10"># Hello World</text><text x="30" y="52" fill="#ccc" font-size="9">This is **bold** text</text><text x="30" y="68" fill="#81c995" font-size="9">- List item 1</text><text x="30" y="84" fill="#81c995" font-size="9">- List item 2</text><text x="30" y="100" fill="#888" font-size="9">\`\`\`js</text><text x="30" y="116" fill="#888" font-size="9">console.log()</text><rect x="155" y="15" width="125" height="120" fill="rgba(255,255,255,0.04)" rx="4"/><text x="165" y="35" fill="#fff" font-size="14" font-weight="bold">Hello World</text><text x="165" y="55" fill="#ccc" font-size="11">This is <b>bold</b> text</text><text x="165" y="75" fill="#ccc" font-size="10">\u2022 List item 1</text><text x="165" y="92" fill="#ccc" font-size="10">\u2022 List item 2</text></svg>')],
+        },
+        {
+          id: 'notepadpro', name: '记事本 Pro', icon: '\ud83d\udcdd', color: '#64b5f6',
+          version: '1.0.0', author: 'WebNT Labs', category: '工具',
+          url: 'https://cdn.jsdelivr.net/gh/example/notepad-pro/index.html',
+          description: '增强版记事本，支持多标签页、语法高亮和代码片段管理。',
+          features: ['多标签页编辑','语法高亮','代码片段','搜索替换','自动保存'],
+          permissions: ['storage: 存储文档','tabs: 多标签管理'],
+          images: ['data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150" viewBox="0 0 300 150"><rect width="300" height="150" fill="#1a1a2e"/><rect x="20" y="10" width="260" height="130" fill="rgba(255,255,255,0.04)" rx="6"/><rect x="20" y="10" width="80" height="24" fill="#64b5f6" rx="4"/><text x="60" y="27" text-anchor="middle" fill="#fff" font-size="10">script.js</text><rect x="102" y="10" width="70" height="24" fill="rgba(255,255,255,0.06)" rx="4"/><text x="137" y="27" text-anchor="middle" fill="#888" font-size="10">style.css</text><text x="32" y="52" fill="#8ab4f8" font-size="10">function</text><text x="75" y="52" fill="#fdd663" font-size="10">hello</text><text x="101" y="52" fill="#ccc" font-size="10">() {</text><text x="40" y="68" fill="#81c995" font-size="10">console</text><text x="85" y="68" fill="#ccc" font-size="10">.log(</text><text x="110" y="68" fill="#f28b82" font-size="10">"Hello"</text><text x="150" y="68" fill="#ccc" font-size="10">);</text><text x="32" y="84" fill="#ccc" font-size="10">}</text></svg>')],
+        },
+        {
+          id: 'weatherwidget', name: '天气 Widget', icon: '\u2600\ufe0f', color: '#ffcc02',
+          version: '1.0.0', author: 'WebNT Labs', category: '生活',
+          url: 'https://cdn.jsdelivr.net/gh/example/weather-widget/index.html',
+          description: '桌面天气小部件，支持多城市切换和实时天气数据。',
+          features: ['实时天气数据','多城市支持','5 日预报','空气质量指数','桌面 Widget'],
+          permissions: ['network: 获取天气 API 数据','location: 自动定位城市'],
+          images: ['data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150" viewBox="0 0 300 150"><rect width="300" height="150" fill="#1a1a2e"/><circle cx="60" cy="50" r="30" fill="#ffcc02"/><line x1="60" y1="85" x2="60" y2="95" stroke="#ffcc02" stroke-width="2"/><line x1="40" y1="85" x2="35" y2="95" stroke="#ffcc02" stroke-width="2"/><line x1="80" y1="85" x2="85" y2="95" stroke="#ffcc02" stroke-width="2"/><text x="120" y="45" fill="#fff" font-size="28" font-weight="200">28\u00b0</text><text x="120" y="65" fill="#ccc" font-size="12">晴</text><text x="120" y="85" fill="#888" font-size="11">湿度 45%</text><text x="220" y="45" fill="#888" font-size="11">周一 30\u00b0 / 20\u00b0</text><text x="220" y="65" fill="#888" font-size="11">周二 27\u00b0 / 18\u00b0</text><text x="220" y="85" fill="#888" font-size="11">周三 24\u00b0 / 16\u00b0</text></svg>')],
+        },
+      ];
+
       showAppWindow('应用商店', '\ud83d\uded2', `
         <style>
-          .store-tabs { display:flex;gap:4px;margin-bottom:16px; }
-          .store-tab { flex:1;padding:8px;text-align:center;background:rgba(255,255,255,0.04);border:none;color:#888;border-radius:8px;cursor:pointer;font-size:13px; }
-          .store-tab.active { background:rgba(255,112,67,0.3);color:#fff; }
+          .store-wrap { height:100%;display:flex;flex-direction:column; }
+          .store-main { flex:1;overflow-y:auto;padding:12px; }
+          .store-tabs { display:flex;gap:0;border-top:1px solid rgba(255,255,255,0.08); }
+          .store-tab { flex:1;padding:12px;text-align:center;background:rgba(255,255,255,0.02);border:none;color:#888;cursor:pointer;font-size:13px;transition:0.2s; }
+          .store-tab.active { background:rgba(255,112,67,0.15);color:#ff7043;border-top:2px solid #ff7043; }
           .store-panel { display:none; }
           .store-panel.active { display:block; }
-          .store-install-box { background:rgba(255,255,255,0.04);border-radius:12px;padding:16px;margin-bottom:16px; }
-          .store-install-box label { display:block;font-size:13px;color:#888;margin-bottom:8px; }
-          .store-url-row { display:flex;gap:8px; }
-          .store-url-row input { flex:1;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:13px;outline:none; }
-          .store-url-row input:focus { border-color:rgba(255,112,67,0.5); }
-          .store-url-row button { padding:10px 20px;background:rgba(255,112,67,0.5);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:13px;white-space:nowrap; }
-          .store-url-row button:hover { background:rgba(255,112,67,0.7); }
-          .store-app-card { display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;margin-bottom:8px; }
-          .store-app-card .sa-icon { width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0; }
-          .store-app-card .sa-info { flex:1;min-width:0; }
-          .store-app-card .sa-name { font-size:14px;color:#e0e0e0; }
-          .store-app-card .sa-url { font-size:11px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-          .store-app-card .sa-del { background:none;border:none;color:#f28b82;cursor:pointer;font-size:18px;padding:4px 8px; }
-          .store-empty { text-align:center;color:#666;padding:40px 0;font-size:13px; }
-          .store-msg { font-size:12px;margin-top:8px;min-height:18px; }
-          .store-msg.success { color:#81c995; }
-          .store-msg.error { color:#f28b82; }
+          /* 应用卡片 */
+          .st-card { display:flex;align-items:center;gap:14px;padding:14px;background:rgba(255,255,255,0.04);border-radius:12px;margin-bottom:10px;cursor:pointer;transition:0.15s; }
+          .st-card:hover { background:rgba(255,255,255,0.08); }
+          .st-card .st-icon { width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0; }
+          .st-card .st-info { flex:1;min-width:0; }
+          .st-card .st-name { font-size:15px;color:#e0e0e0;font-weight:500; }
+          .st-card .st-desc { font-size:12px;color:#777;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+          .st-card .st-meta { font-size:11px;color:#666;margin-top:2px; }
+          .st-card .st-arrow { color:#555;font-size:16px; }
+          .st-card.installed { border-left:3px solid #81c995; }
+          /* 详情页 */
+          .st-detail { padding:4px; }
+          .st-detail .st-back { background:none;border:none;color:#8ab4f8;cursor:pointer;font-size:13px;padding:4px 0;margin-bottom:12px;display:flex;align-items:center;gap:4px; }
+          .st-detail .st-hero { width:100%;height:160px;border-radius:12px;object-fit:cover;margin-bottom:16px;background:rgba(255,255,255,0.04); }
+          .st-detail .st-d-header { display:flex;align-items:center;gap:14px;margin-bottom:16px; }
+          .st-detail .st-d-icon { width:64px;height:64px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0; }
+          .st-detail .st-d-name { font-size:20px;font-weight:600;color:#fff; }
+          .st-detail .st-d-author { font-size:12px;color:#888; }
+          .st-detail .st-d-version { font-size:11px;color:#666;margin-top:2px; }
+          .st-detail .st-section { margin-bottom:16px; }
+          .st-detail .st-section h4 { font-size:12px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px; }
+          .st-detail .st-section p { font-size:13px;color:#ccc;line-height:1.6; }
+          .st-detail .st-features { display:flex;flex-wrap:wrap;gap:6px; }
+          .st-detail .st-feature { padding:4px 10px;background:rgba(255,255,255,0.06);border-radius:20px;font-size:12px;color:#ccc; }
+          .st-detail .st-perm { display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(255,152,0,0.08);border-radius:6px;margin-bottom:4px;font-size:12px;color:#ff9800; }
+          .st-detail .st-actions { display:flex;gap:8px;margin-top:16px; }
+          .st-detail .st-actions button { flex:1;padding:12px;border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:500;transition:0.15s; }
+          .st-detail .st-btn-install { background:#ff7043;color:#fff; }
+          .st-detail .st-btn-install:hover { background:#f4511e; }
+          .st-detail .st-btn-update { background:rgba(102,126,234,0.5);color:#fff; }
+          .st-detail .st-btn-update:hover { background:rgba(102,126,234,0.7); }
+          .st-detail .st-btn-delete { background:rgba(244,67,54,0.2);color:#f28b82; }
+          .st-detail .st-btn-delete:hover { background:rgba(244,67,54,0.4); }
+          .st-detail .st-btn-launch { background:rgba(129,201,149,0.3);color:#81c995; }
+          .st-detail .st-btn-launch:hover { background:rgba(129,201,149,0.5); }
+          /* 链接扫描 */
+          .st-scan-box { background:rgba(255,255,255,0.04);border-radius:12px;padding:16px;margin-bottom:16px; }
+          .st-scan-box label { display:block;font-size:13px;color:#888;margin-bottom:8px; }
+          .st-scan-row { display:flex;gap:8px; }
+          .st-scan-row input { flex:1;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:13px;outline:none; }
+          .st-scan-row input:focus { border-color:rgba(255,112,67,0.5); }
+          .st-scan-row button { padding:10px 18px;background:rgba(255,112,67,0.4);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:13px; }
+          .st-scan-row button:hover { background:rgba(255,112,67,0.6); }
+          .st-scan-result { margin-top:12px; }
+          .st-empty { text-align:center;color:#666;padding:40px 0;font-size:13px; }
+          .st-msg { font-size:12px;margin-top:8px;min-height:18px; }
+          .st-msg.success { color:#81c995; }
+          .st-msg.error { color:#f28b82; }
         </style>
-        <div class="store-tabs">
-          <button class="store-tab active" data-panel="store-install">安装</button>
-          <button class="store-tab" data-panel="store-installed">已安装</button>
-        </div>
-        <div class="store-panel active" id="panel-store-install">
-          <div class="store-install-box">
-            <label>输入应用链接进行安装</label>
-            <div class="store-url-row">
-              <input type="text" id="store-url-input" placeholder="https://example.com/app.js 或 HTML 链接">
-              <button id="store-install-btn">安装</button>
-            </div>
-            <div class="store-msg" id="store-msg"></div>
+        <div class="store-wrap">
+          <div class="store-main" id="store-main"><div class="st-empty">加载中...</div></div>
+          <div class="store-tabs">
+            <button class="store-tab active" data-tab="official">官方应用</button>
+            <button class="store-tab" data-tab="scan">链接扫描</button>
           </div>
-          <div style="font-size:12px;color:#888;margin-bottom:8px;">推荐应用:</div>
-          ${[
-            {name:'HH绘画', icon:'\ud83c\udfa8', color:'#ce93d8', url:'kzk/gf/hh/index.html'},
-            {name:'音乐播放器', icon:'\ud83c\udfb5', color:'#4fc3f7', url:'kzk/music/index.html'},
-            {name:'待办事项', icon:'\u2705', color:'#ff9800', url:'kzk/todo/index.html'},
-            {name:'密码生成器', icon:'\ud83d\udd12', color:'#81c995', url:'kzk/password/index.html'},
-            {name:'单位转换器', icon:'\ud83d\udccf', color:'#fdd663', url:'kzk/converter/index.html'},
-            {name:'倒计时器', icon:'\u23f1\ufe0f', color:'#f28b82', url:'kzk/timer/index.html'},
-            {name:'便签', icon:'\ud83d\udcdd', color:'#ffcc02', url:'kzk/notes/index.html'},
-            {name:'像素画板', icon:'\ud83d\udd8c\ufe0f', color:'#ce93d8', url:'kzk/pixelart/index.html'},
-            {name:'JSON格式化', icon:'\ud83d\udcca', color:'#8ab4f8', url:'kzk/jsonfmt/index.html'},
-            {name:'颜色工具', icon:'\ud83c\udfa8', color:'#9b59b6', url:'kzk/colortool/index.html'},
-            {name:'打字练习', icon:'\u2328\ufe0f', color:'#64b5f6', url:'kzk/typing/index.html'},
-            {name:'贪吃蛇', icon:'\ud83d\udc0d', color:'#81c995', url:'https://cdn.jsdelivr.net/gh/topics/snake-game/snake.js'},
-            {name:'2048', icon:'\ud83d\udd32', color:'#fdd663', url:'2048'},
-            {name:'俄罗斯方块', icon:'\ud83e\udde9', color:'#ce93d8', url:'tetris'},
-            {name:'Markdown编辑器', icon:'\ud83d\udcdd', color:'#8ab4f8', url:'md-editor'},
-          ].map(a=>'<div class="store-app-card" style="cursor:pointer" onclick="document.getElementById(\'store-url-input\').value=\''+a.url+'\'"><div class="sa-icon" style="background:'+a.color+'22;color:'+a.color+'">'+a.icon+'</div><div class="sa-info"><div class="sa-name">'+a.name+'</div><div class="sa-url">点击填写链接</div></div></div>').join('')}
-        </div>
-        <div class="store-panel" id="panel-store-installed">
-          <div id="store-installed-list"></div>
         </div>
       `);
-      // Initialize store
-      requestAnimationFrame(() => {
-        const installBtn = document.getElementById('store-install-btn');
-        const urlInput = document.getElementById('store-url-input');
-        const msg = document.getElementById('store-msg');
-        const installedList = document.getElementById('store-installed-list');
 
-        function loadInstalledApps() {
-          try { return JSON.parse(localStorage.getItem('webnt_installed_apps') || '[]'); }
-          catch(e) { return []; }
-        }
-        function saveInstalledApps(apps) {
-          localStorage.setItem('webnt_installed_apps', JSON.stringify(apps));
-        }
-        function renderInstalled() {
-          if(!installedList) return;
-          const apps = loadInstalledApps();
-          if(apps.length === 0) {
-            installedList.innerHTML = '<div class="store-empty">暂无已安装的第三方应用<br><br>输入链接后点击"安装"添加</div>';
-            return;
-          }
-          installedList.innerHTML = apps.map((a,i) => '<div class="store-app-card"><div class="sa-icon" style="background:'+a.color+'22;color:'+a.color+'">'+a.icon+'</div><div class="sa-info"><div class="sa-name">'+a.name+'</div><div class="sa-url" title="'+a.url+'">'+a.url+'</div></div><div style="display:flex;gap:6px"><button style="padding:6px 12px;background:rgba(255,255,255,0.08);border:none;color:#e0e0e0;border-radius:6px;cursor:pointer;font-size:12px" onclick="window.__launchInstalledApp(\''+a.id+'\')">启动</button><button class="sa-del" onclick="window.__uninstallApp(\''+a.id+'\')">\u2715</button></div></div>').join('');
-        }
+      requestAnimationFrame(() => {
+        const storeMain = document.getElementById('store-main');
+        if(!storeMain) return;
+
+        // ============================================================
+        // 数据层
+        // ============================================================
+        function loadInstalled() { try { return JSON.parse(localStorage.getItem('webnt_installed_apps') || '[]'); } catch(e) { return []; } }
+        function saveInstalled(apps) { localStorage.setItem('webnt_installed_apps', JSON.stringify(apps)); }
+        function isInstalled(storeId) { return loadInstalled().some(a => a.storeId === storeId); }
+        function getInstalled(storeId) { return loadInstalled().find(a => a.storeId === storeId); }
+
+        // ============================================================
+        // 全局函数
+        // ============================================================
         window.__launchInstalledApp = function(appId) {
-          const apps = loadInstalledApps();
-          const app = apps.find(a => a.id === appId);
+          const app = loadInstalled().find(a => a.id === appId);
           if(!app) return;
-          showAppWindow(app.name, app.icon, '<div style="width:100%;height:100%;display:flex;flex-direction:column"><div style="font-size:32px;text-align:center;padding:20px">'+app.icon+'</div><div style="text-align:center;color:#888;font-size:13px">第三方应用</div><div style="text-align:center;color:#666;font-size:11px;margin-top:4px">'+app.url+'</div><iframe style="flex:1;width:100%;border:none;margin-top:12px;border-radius:8px;background:#fff" sandbox="allow-scripts allow-same-origin" src="'+app.url+'"></iframe></div>');
+          showAppWindow(app.name, app.icon, '<div style="width:100%;height:100%;display:flex;flex-direction:column"><div style="font-size:32px;text-align:center;padding:20px">'+app.icon+'</div><div style="text-align:center;color:#888;font-size:13px">第三方应用</div><div style="text-align:center;color:#666;font-size:11px;margin-top:4px;word-break:break-all">'+app.url+'</div><iframe style="flex:1;width:100%;border:none;margin-top:12px;border-radius:8px;background:#fff" sandbox="allow-scripts allow-same-origin" src="'+app.url+'"></iframe></div>');
         };
         window.__uninstallApp = function(appId) {
           if(!confirm('确定要卸载此应用吗？')) return;
-          let apps = loadInstalledApps();
+          let apps = loadInstalled();
           apps = apps.filter(a => a.id !== appId);
-          saveInstalledApps(apps);
-          renderInstalled();
-          // Remove from desktop
+          saveInstalled(apps);
           const existing = document.querySelector('.desktop-icon[data-app-id="'+appId+'"]');
+          if(existing) existing.remove();
+          if(storeMain) renderOfficial();
+        };
+
+        // ============================================================
+        // 官方应用列表
+        // ============================================================
+        function renderOfficial() {
+          const installed = loadInstalled();
+          storeMain.innerHTML = storeRegistry.map(app => {
+            const inst = installed.find(a => a.storeId === app.id);
+            return '<div class="st-card'+(inst?' installed':'')+'" onclick="window.__showDetail(\''+app.id+'\')">'
+              + '<div class="st-icon" style="background:'+app.color+'22;color:'+app.color+'">'+app.icon+'</div>'
+              + '<div class="st-info"><div class="st-name">'+app.name+'</div><div class="st-desc">'+app.description+'</div><div class="st-meta">'+app.author+' \u00b7 v'+app.version+' '+(inst?'\u00b7 <span style="color:#81c995">已安装</span>':'')+'</div></div>'
+              + '<div class="st-arrow">\u276f</div></div>';
+          }).join('') || '<div class="st-empty">暂无官方应用</div>';
+        }
+
+        // ============================================================
+        // 应用详情页
+        // ============================================================
+        window.__showDetail = function(storeId) {
+          const app = storeRegistry.find(a => a.id === storeId);
+          if(!app) return;
+          const inst = getInstalled(storeId);
+          const hasUpdate = inst && inst.version !== app.version;
+          storeMain.innerHTML = '<div class="st-detail">'
+            + '<button class="st-back" onclick="window.__storeGoBack()">\u2190 返回应用列表</button>'
+            + (app.images.length? '<img class="st-hero" src="'+app.images[0]+'" alt="'+app.name+'">' : '')
+            + '<div class="st-d-header"><div class="st-d-icon" style="background:'+app.color+'22;color:'+app.color+'">'+app.icon+'</div><div><div class="st-d-name">'+app.name+'</div><div class="st-d-author">'+app.author+'</div><div class="st-d-version">版本 '+app.version+' \u00b7 '+app.category+'</div></div></div>'
+            + '<div class="st-section"><h4>简介</h4><p>'+app.description+'</p></div>'
+            + '<div class="st-section"><h4>功能特性</h4><div class="st-features">'+app.features.map(f=>'<span class="st-feature">'+f+'</span>').join('')+'</div></div>'
+            + '<div class="st-section"><h4>所需权限</h4>'+app.permissions.map(p=>'<div class="st-perm">\u26a0 '+p+'</div>').join('')+'</div>'
+            + '<div class="st-actions">'
+            + (inst
+              ? (hasUpdate
+                ? '<button class="st-btn-update" onclick="window.__updateApp(\''+storeId+'\')">更新至 v'+app.version+'</button>'
+                : '<button class="st-btn-launch" onclick="window.__launchInstalledApp(\''+inst.id+'\')">启动</button>')
+                + '<button class="st-btn-delete" onclick="window.__deleteApp(\''+storeId+'\');window.__showDetail(\''+storeId+'\')">删除</button>'
+              : '<button class="st-btn-install" onclick="window.__installFromStore(\''+storeId+'\')">安装</button>')
+            + '</div></div>';
+        };
+        window.__storeGoBack = function() { renderOfficial(); };
+
+        window.__installFromStore = function(storeId) {
+          const app = storeRegistry.find(a => a.id === storeId);
+          if(!app) return;
+          if(isInstalled(storeId)) return;
+          const appId = 'ext_' + storeId + '_' + Date.now();
+          const newApp = { id: appId, storeId: app.id, name: app.name, url: app.url, icon: app.icon, color: app.color, version: app.version };
+          const apps = loadInstalled();
+          apps.push(newApp);
+          saveInstalled(apps);
+          addDesktopIcon(appId, app.name, app.icon, app.color, appId);
+          renderDesktopIcons();
+          window.__showDetail(storeId);
+        };
+
+        window.__updateApp = function(storeId) {
+          const app = storeRegistry.find(a => a.id === storeId);
+          if(!app) return;
+          let apps = loadInstalled();
+          const idx = apps.findIndex(a => a.storeId === storeId);
+          if(idx === -1) return;
+          apps[idx].version = app.version;
+          apps[idx].url = app.url;
+          saveInstalled(apps);
+          window.__showDetail(storeId);
+        };
+
+        window.__deleteApp = function(storeId) {
+          if(!confirm('确定要删除此应用吗？')) return;
+          let apps = loadInstalled();
+          const app = apps.find(a => a.storeId === storeId);
+          if(!app) return;
+          apps = apps.filter(a => a.storeId !== storeId);
+          saveInstalled(apps);
+          const existing = document.querySelector('.desktop-icon[data-app-id="'+app.id+'"]');
           if(existing) existing.remove();
         };
 
-        installBtn.addEventListener('click', () => {
-          const url = urlInput.value.trim();
-          if(!url) { msg.textContent = '请输入应用链接'; msg.className = 'store-msg error'; return; }
-          const apps = loadInstalledApps();
-          if(apps.some(a => a.url === url)) { msg.textContent = '该链接已安装'; msg.className = 'store-msg error'; return; }
-          // Generate app info from URL
-          const urlObj = (() => { try { return new URL(url); } catch(e) { return null; } })();
-          const name = urlObj ? urlObj.hostname.replace('www.','') : url.substring(0,30);
-          const id = 'ext_' + Date.now();
-          const colors = ['#667eea','#ffd700','#f28b82','#81c995','#ce93d8','#ff9800','#4fc3f7','#ffcc02'];
-          const color = colors[Math.floor(Math.random()*colors.length)];
-          apps.push({ id, name, url, icon:'\ud83d\udce6', color });
-          saveInstalledApps(apps);
-          msg.textContent = '应用安装成功！';
-          msg.className = 'store-msg success';
-          urlInput.value = '';
-          renderInstalled();
-          // Add to desktop
-          addDesktopIcon(id, name, '\ud83d\udce6', color, id);
-          renderDesktopIcons();
-        });
+        // ============================================================
+        // 链接扫描
+        // ============================================================
+        function renderScan() {
+          storeMain.innerHTML = ''
+            + '<div class="st-scan-box">'
+            + '<label>输入链接，自动扫描 SDK 特征码匹配应用</label>'
+            + '<div class="st-scan-row"><input type="text" id="scan-url-input" placeholder="https://example.com/app 或粘贴 SDK 特征码"><button id="scan-btn">扫描</button></div>'
+            + '<div class="st-msg" id="scan-msg"></div>'
+            + '</div>'
+            + '<div id="scan-result"></div>'
+            + '<div style="font-size:11px;color:#555;margin-top:12px;padding:12px;background:rgba(255,255,255,0.02);border-radius:8px;line-height:1.6">'
+            + '<strong>SDK 特征码说明：</strong><br>'
+            + '特征码格式: <code style="color:#8ab4f8">webnt-app:&lt;app-id&gt;:&lt;version&gt;</code><br>'
+            + '开发者可在应用页面 HTML 的 meta 标签中声明特征码：<br>'
+            + '<code style="color:#81c995">&lt;meta name="webnt-app" content="snake:2.1.0"&gt;</code><br>'
+            + '应用商店将自动识别并匹配已注册应用。'
+            + '</div>';
 
-        // Tab switching
+          const scanInput = document.getElementById('scan-url-input');
+          const scanBtn = document.getElementById('scan-btn');
+          const scanMsg = document.getElementById('scan-msg');
+          const scanResult = document.getElementById('scan-result');
+
+          scanBtn.addEventListener('click', () => {
+            const input = scanInput.value.trim();
+            if(!input) { scanMsg.textContent = '请输入链接或特征码'; scanMsg.className = 'st-msg error'; return; }
+            scanResult.innerHTML = '';
+
+            // 扫描特征码
+            let matched = null;
+            // 尝试直接匹配特征码格式: webnt-app:<id>:<version>
+            const codeMatch = input.match(/webnt-app:([a-zA-Z0-9_-]+):?([\d.]+)?/);
+            if(codeMatch) {
+              const appId = codeMatch[1];
+              const version = codeMatch[2];
+              matched = storeRegistry.find(a => a.id === appId);
+              if(matched) {
+                scanMsg.textContent = '找到匹配应用！';
+                scanMsg.className = 'st-msg success';
+              }
+            }
+            // 尝试从 URL 中提取特征码（模拟扫描页面 meta）
+            if(!matched) {
+              const urlMatch = input.match(/([a-zA-Z0-9_-]+)\.html?$/);
+              if(urlMatch) {
+                const name = urlMatch[1].toLowerCase();
+                matched = storeRegistry.find(a => a.id === name || a.name.toLowerCase().includes(name));
+                if(matched) { scanMsg.textContent = '根据链接名称匹配到应用'; scanMsg.className = 'st-msg success'; }
+              }
+            }
+            if(!matched) {
+              scanMsg.textContent = '未找到匹配的应用，请检查链接或特征码';
+              scanMsg.className = 'st-msg error';
+              return;
+            }
+            const inst = getInstalled(matched.id);
+            const hasUpdate = inst && inst.version !== matched.version;
+            scanResult.innerHTML = '<div class="st-card" onclick="window.__showDetail(\''+matched.id+'\')">'
+              + '<div class="st-icon" style="background:'+matched.color+'22;color:'+matched.color+'">'+matched.icon+'</div>'
+              + '<div class="st-info"><div class="st-name">'+matched.name+'</div><div class="st-desc">'+matched.description+'</div><div class="st-meta">'+matched.author+' \u00b7 v'+matched.version+' '+(inst?(hasUpdate?'<span style="color:#ff9800">可更新</span>':'<span style="color:#81c995">已安装</span>'):'<span style="color:#ff7043">未安装</span>')+'</div></div>'
+              + '<div class="st-arrow">\u276f</div></div>';
+          });
+        }
+
+        // ============================================================
+        // 标签切换
+        // ============================================================
+        let currentTab = 'official';
         document.querySelectorAll('.store-tab').forEach(tab => {
           tab.addEventListener('click', () => {
             document.querySelectorAll('.store-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.store-panel').forEach(p => p.classList.remove('active'));
             tab.classList.add('active');
-            const panel = document.getElementById('panel-' + tab.dataset.panel);
-            if(panel) panel.classList.add('active');
-            if(tab.dataset.panel === 'store-installed') renderInstalled();
+            currentTab = tab.dataset.tab;
+            if(currentTab === 'official') renderOfficial();
+            else renderScan();
           });
         });
 
-        renderInstalled();
+        renderOfficial();
       });
       break;
     default:
