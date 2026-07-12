@@ -57,6 +57,7 @@
     background-size: cover;
     transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
     user-select: none;
+    touch-action: none;
   }
   #lock-screen.unlocked {
     transform: translateY(-100%);
@@ -107,6 +108,7 @@
     border-radius: 24px;
     overflow: hidden;
     cursor: pointer;
+    touch-action: none;
   }
   #lock-screen .ls-slider-track {
     position: absolute; inset: 0;
@@ -440,10 +442,69 @@
     flex: 1; overflow: auto; padding: 16px; color: #e0e0e0;
   }
 
-  /* 响应式 */
-  @media (max-width: 600px) {
-    #lock-screen .ls-time { font-size: 48px; }
-    #terminal-window { width: 100vw; height: 100vh; border-radius: 0; }
+  /* ============================================================
+     响应式
+     ============================================================ */
+  @media (max-width: 768px) {
+    /* 锁屏 */
+    #lock-screen .ls-time { font-size: clamp(40px, 12vw, 60px); }
+    #lock-screen .ls-date { font-size: 14px; margin-bottom: 40px; }
+    #lock-screen .ls-avatar { width: 56px; height: 56px; font-size: 22px; }
+    #lock-screen .ls-username { font-size: 14px; }
+    #lock-screen .ls-user { margin-bottom: 32px; }
+    #lock-screen .ls-slider { width: 260px; max-width: 80vw; }
+    #lock-screen .ls-hint { font-size: 10px; }
+    #lock-screen .ls-notifications {
+      bottom: 100px; right: 12px; left: 12px;
+      max-width: none; font-size: 12px;
+    }
+    /* 桌面图标缩小 */
+    #desktop-icons { bottom: 44px; }
+    .desktop-icon { width: 68px; font-size: 11px; padding: 6px 2px; }
+    .desktop-icon .dicon-svg { width: 40px; height: 40px; font-size: 28px !important; }
+    /* 任务栏 */
+    #taskbar { height: 44px; }
+    #taskbar .tb-win-btn { font-size: 11px; padding: 0 8px; min-width: 32px; }
+    #taskbar .tb-clock { font-size: 11px; }
+    #taskbar .tb-clock .tb-clock-date { font-size: 9px; }
+    /* 开始菜单 */
+    #start-menu { width: 280px; max-height: 420px; left: 4px; }
+    #start-menu .sm-app-item { font-size: 13px; padding: 8px 10px; }
+    /* 终端 */
+    #terminal-window { width: 100vw; height: 100vh; border-radius: 0; left: 0 !important; top: 0 !important; }
+    /* 应用窗口 */
+    .app-window { width: 100vw !important; height: calc(100vh - 44px) !important; left: 0 !important; top: 0 !important; border-radius: 0; min-width: auto; min-height: auto; }
+    /* 右键菜单 */
+    #context-menu { min-width: 180px; font-size: 12px; }
+  }
+
+  @media (max-width: 400px) {
+    #lock-screen .ls-time { font-size: clamp(32px, 10vw, 48px); }
+    #lock-screen .ls-date { font-size: 12px; margin-bottom: 28px; }
+    #lock-screen .ls-avatar { width: 44px; height: 44px; font-size: 18px; }
+    #lock-screen .ls-username { font-size: 12px; }
+    #lock-screen .ls-user { margin-bottom: 24px; }
+    #lock-screen .ls-slider { width: 220px; height: 42px; }
+    #lock-screen .ls-slider-knob { width: 34px; height: 34px; top: 4px; left: 4px; }
+    #lock-screen .ls-slider-text { font-size: 12px; }
+    #lock-screen .ls-hint { font-size: 9px; margin-top: 12px; }
+    #lock-screen .ls-notifications { bottom: 80px; right: 8px; left: 8px; }
+    #lock-screen .ls-notif { padding: 10px 12px; font-size: 11px; }
+    /* 桌面 */
+    #desktop-icons { bottom: 40px; }
+    .desktop-icon { width: 60px; font-size: 10px; padding: 4px 2px; }
+    .desktop-icon .dicon-svg { width: 34px; height: 34px; font-size: 24px !important; }
+    /* 任务栏 */
+    #taskbar { height: 40px; }
+    #taskbar .tb-start-btn { width: 36px; height: 36px; }
+    #taskbar .tb-win-btn { font-size: 10px; padding: 0 6px; min-width: 28px; max-width: 100px; }
+    #taskbar .tb-tray-btn { width: 28px; height: 28px; font-size: 12px; }
+    #taskbar .tb-clock { font-size: 10px; padding: 0 4px; }
+    #taskbar .tb-clock .tb-clock-date { font-size: 8px; }
+    /* 开始菜单 */
+    #start-menu { width: 240px; max-height: 360px; left: 2px; }
+    #start-menu .sm-search input { font-size: 13px; padding: 8px 12px; }
+    #start-menu .sm-app-item { font-size: 12px; padding: 6px 8px; gap: 8px; }
   }
 </style>
 </head>
@@ -492,7 +553,7 @@
   <!-- 桌面背景 -->
   <div id="desktop-bg" style="position:absolute;inset:0;background:linear-gradient(135deg,#1a3a5c 0%,#2d6aa0 40%,#4a90d9 70%,#1a3a5c 100%);z-index:0;"></div>
   <!-- 桌面图标容器 -->
-  <div id="desktop-icons" style="position:absolute;top:0;left:0;width:100%;height:calc(100% - 48px);z-index:1;"></div>
+  <div id="desktop-icons" style="position:absolute;top:0;left:0;right:0;bottom:48px;z-index:1;"></div>
   <!-- 任务栏 -->
   <div id="taskbar">
     <div class="tb-left">
@@ -690,7 +751,8 @@ updateAllClocks(); setInterval(updateAllClocks, 1000);
 let lsDragging=false, lsStartX=0, lsKnobX=0;
 const lsSlider=document.getElementById('ls-slider');
 const lsKnob=document.getElementById('ls-knob');
-const maxSlide=lsSlider?lsSlider.offsetWidth-44:256;
+
+function getMaxSlide() { if(!lsSlider) return 256; const kw=lsKnob?lsKnob.offsetWidth:40; return lsSlider.offsetWidth-kw-4; }
 
 function resetKnob() { if(lsKnob) lsKnob.style.left='4px'; }
 
@@ -702,20 +764,25 @@ function unlockDesktop() {
 lsSlider.addEventListener('pointerdown', e => {
   lsDragging=true; lsStartX=e.clientX; lsKnobX=4;
   lsSlider.classList.add('dragging');
-  lsSlider.setPointerCapture(e.pointerId);
+  e.preventDefault();
 });
-lsSlider.addEventListener('pointermove', e => {
+// 绑定到 document 确保手指移出滑块后仍能追踪
+document.addEventListener('pointermove', e => {
   if(!lsDragging) return;
   const dx=e.clientX-lsStartX;
+  const maxSlide=getMaxSlide();
   lsKnobX=Math.max(4, Math.min(maxSlide, 4+dx));
   lsKnob.style.left=lsKnobX+'px';
   if(lsKnobX>=maxSlide-10) { lsDragging=false; lsSlider.classList.remove('dragging'); unlockDesktop(); }
 });
-lsSlider.addEventListener('pointerup', () => {
+document.addEventListener('pointerup', () => {
+  if(!lsDragging) return;
   lsDragging=false; lsSlider.classList.remove('dragging');
+  const maxSlide=getMaxSlide();
   if(lsKnobX<maxSlide-10) resetKnob();
 });
-lsSlider.addEventListener('pointerleave', () => {
+// 触摸取消时也重置
+document.addEventListener('pointercancel', () => {
   if(lsDragging) { lsDragging=false; lsSlider.classList.remove('dragging'); resetKnob(); }
 });
 
