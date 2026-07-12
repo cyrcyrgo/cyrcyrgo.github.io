@@ -704,6 +704,39 @@ class TerminalExecutor {
 
 window.__WebNT__ = { GlobalDisplayAPI, WindowManager, SysCallBridge, TerminalCommandRegistry, TerminalExecutor };
 
+// 计算器全局辅助函数
+window.__calcState = {};
+window.__calcInput = function(idSuffix, val) {
+  const state = window.__calcState[idSuffix] = window.__calcState[idSuffix] || { expr: '', result: '0' };
+  state.expr += val;
+  state.result = state.expr;
+  const exprEl = document.getElementById('calc-expr-' + idSuffix);
+  const resultEl = document.getElementById('calc-result-' + idSuffix);
+  if (exprEl) exprEl.textContent = state.expr;
+  if (resultEl) resultEl.textContent = state.expr || '0';
+};
+window.__calcEval = function(idSuffix) {
+  const state = window.__calcState[idSuffix] = window.__calcState[idSuffix] || { expr: '', result: '0' };
+  const exprEl = document.getElementById('calc-expr-' + idSuffix);
+  const resultEl = document.getElementById('calc-result-' + idSuffix);
+  try {
+    const r = Function('"use strict"; return (' + (state.expr || '0') + ')')();
+    state.result = String(r);
+    if (exprEl) exprEl.textContent = state.expr + ' =';
+    if (resultEl) resultEl.textContent = r;
+    state.expr = String(r);
+  } catch(e) {
+    if (resultEl) resultEl.textContent = 'Error';
+  }
+};
+window.__calcClear = function(idSuffix) {
+  window.__calcState[idSuffix] = { expr: '', result: '0' };
+  const exprEl = document.getElementById('calc-expr-' + idSuffix);
+  const resultEl = document.getElementById('calc-result-' + idSuffix);
+  if (exprEl) exprEl.textContent = '';
+  if (resultEl) resultEl.textContent = '0';
+};
+
 // ===================================================================
 // DOM Refs
 // ===================================================================
@@ -801,6 +834,10 @@ const desktopApps = [
   { id:'settings', name:'Settings', icon:'\u2699\ufe0f', color:'#ccc', appId:'settings' },
   { id:'notepad', name:'Notepad', icon:'\ud83d\udcc4', color:'#8ab4f8', appId:'notepad' },
   { id:'webview', name:'Web View', icon:'\ud83c\udf10', color:'#4fc3f7', appId:'webview' },
+  { id:'calculator', name:'Calculator', icon:'\ud83d\uddd2\ufe0f', color:'#fdd663', appId:'calculator' },
+  { id:'calendar', name:'Calendar', icon:'\ud83d\udcc5', color:'#f28b82', appId:'calendar' },
+  { id:'taskmgr', name:'Task Manager', icon:'\ud83d\udcca', color:'#ff9800', appId:'taskmgr' },
+  { id:'sysmon', name:'Sys Monitor', icon:'\ud83d\udcbb', color:'#81c995', appId:'sysmon' },
   { id:'recycle', name:'Recycle Bin', icon:'\ud83d\uddd1\ufe0f', color:'#aaa', appId:'recycle' },
 ];
 let selectedIcon=null;
@@ -907,8 +944,10 @@ function renderStartMenu() {
     {name:'Settings', icon:'\u2699\ufe0f', color:'#ccc', appId:'settings'},
     {name:'Web View', icon:'\ud83c\udf10', color:'#4fc3f7', appId:'webview'},
     {name:'Notepad', icon:'\ud83d\udcc4', color:'#8ab4f8', appId:'notepad'},
+    {name:'Calculator', icon:'\ud83d\uddd2\ufe0f', color:'#fdd663', appId:'calculator'},
+    {name:'Calendar', icon:'\ud83d\udcc5', color:'#f28b82', appId:'calendar'},
     {name:'Computer', icon:'\ud83d\udda5\ufe0f', color:'#667eea', appId:'computer'},
-    {name:'Task Manager', icon:'\ud83d\udcca', color:'#fdd663', appId:'taskmgr'},
+    {name:'Task Manager', icon:'\ud83d\udcca', color:'#ff9800', appId:'taskmgr'},
     {name:'System Monitor', icon:'\ud83d\udcbb', color:'#81c995', appId:'sysmon'},
   ];
   apps.forEach(app => {
@@ -1029,6 +1068,171 @@ function launchApp(appId) {
       break;
     case 'recycle':
       showAppWindow('Recycle Bin', '\ud83d\uddd1\ufe0f', `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#777">Recycle Bin is empty</div>`);
+      break;
+    case 'calculator':
+      showAppWindow('Calculator', '\ud83d\uddd2\ufe0f', `
+        <style>
+          .calc-display { background:rgba(0,0,0,0.3); border-radius:8px; padding:12px 16px; margin-bottom:12px; text-align:right; min-height:60px; display:flex;flex-direction:column;justify-content:flex-end; }
+          .calc-expr { font-size:13px; color:#888; min-height:20px; word-break:break-all; }
+          .calc-result { font-size:28px; font-weight:300; color:#fff; }
+          .calc-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+          .calc-btn { padding:14px; font-size:18px; border:none; border-radius:8px; cursor:pointer; background:rgba(255,255,255,0.08); color:#e0e0e0; transition:background 0.1s; }
+          .calc-btn:hover { background:rgba(255,255,255,0.15); }
+          .calc-btn:active { background:rgba(255,255,255,0.05); }
+          .calc-btn.op { background:rgba(102,126,234,0.3); color:#a0b4f0; }
+          .calc-btn.op:hover { background:rgba(102,126,234,0.45); }
+          .calc-btn.eq { background:rgba(102,126,234,0.5); color:#fff; }
+          .calc-btn.eq:hover { background:rgba(102,126,234,0.65); }
+          .calc-btn.fn { background:rgba(255,255,255,0.04); color:#999; }
+        </style>
+        <div class="calc-display"><div class="calc-expr" id="calc-expr-${appWinCounter+1}"></div><div class="calc-result" id="calc-result-${appWinCounter+1}">0</div></div>
+        <div class="calc-grid">
+          <button class="calc-btn fn" onclick="window.__calcClear('${appWinCounter+1}')">C</button>
+          <button class="calc-btn fn" onclick="window.__calcInput('${appWinCounter+1}','(')">(</button>
+          <button class="calc-btn fn" onclick="window.__calcInput('${appWinCounter+1}',')')">)</button>
+          <button class="calc-btn op" onclick="window.__calcInput('${appWinCounter+1}','/')">/</button>
+          <button class="calc-btn" onclick="window.__calcInput('${appWinCounter+1}','7')">7</button>
+          <button class="calc-btn" onclick="window.__calcInput('${appWinCounter+1}','8')">8</button>
+          <button class="calc-btn" onclick="window.__calcInput('${appWinCounter+1}','9')">9</button>
+          <button class="calc-btn op" onclick="window.__calcInput('${appWinCounter+1}','*')">*</button>
+          <button class="calc-btn" onclick="window.__calcInput('${appWinCounter+1}','4')">4</button>
+          <button class="calc-btn" onclick="window.__calcInput('${appWinCounter+1}','5')">5</button>
+          <button class="calc-btn" onclick="window.__calcInput('${appWinCounter+1}','6')">6</button>
+          <button class="calc-btn op" onclick="window.__calcInput('${appWinCounter+1}','-')">-</button>
+          <button class="calc-btn" onclick="window.__calcInput('${appWinCounter+1}','1')">1</button>
+          <button class="calc-btn" onclick="window.__calcInput('${appWinCounter+1}','2')">2</button>
+          <button class="calc-btn" onclick="window.__calcInput('${appWinCounter+1}','3')">3</button>
+          <button class="calc-btn op" onclick="window.__calcInput('${appWinCounter+1}','+')">+</button>
+          <button class="calc-btn" onclick="window.__calcInput('${appWinCounter+1}','0')" style="grid-column:span 2">0</button>
+          <button class="calc-btn" onclick="window.__calcInput('${appWinCounter+1}','.')">.</button>
+          <button class="calc-btn eq" onclick="window.__calcEval('${appWinCounter+1}')">=</button>
+        </div>
+      `);
+      break;
+    case 'calendar':
+      (() => {
+        const now=new Date();
+        const y=now.getFullYear(), m=now.getMonth();
+        const firstDay=new Date(y,m,1).getDay();
+        const daysInMonth=new Date(y,m+1,0).getDate();
+        const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+        let grid='';
+        for(let i=0;i<firstDay;i++) grid+='<div></div>';
+        for(let d=1;d<=daysInMonth;d++) {
+          const isToday=(d===now.getDate()&&m===now.getMonth()&&y===now.getFullYear());
+          grid+=`<div style="padding:8px;text-align:center;border-radius:6px;${isToday?'background:rgba(102,126,234,0.5);font-weight:600;':''}">${d}</div>`;
+        }
+        showAppWindow('Calendar', '\ud83d\udcc5', `
+          <style>
+            .cal-header { display:flex;align-items:center;justify-content:space-between;margin-bottom:12px; }
+            .cal-title { font-size:18px;font-weight:600; }
+            .cal-nav { background:rgba(255,255,255,0.08);border:none;color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer; }
+            .cal-grid { display:grid;grid-template-columns:repeat(7,1fr);gap:2px; }
+            .cal-day-hdr { text-align:center;font-size:11px;color:#888;padding:4px; }
+          </style>
+          <div class="cal-header">
+            <button class="cal-nav">&lt;</button>
+            <div class="cal-title">${monthNames[m]} ${y}</div>
+            <button class="cal-nav">&gt;</button>
+          </div>
+          <div class="cal-grid">
+            ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>\`<div class="cal-day-hdr">\${d}</div>\`).join('')}
+            ${grid}
+          </div>
+        `);
+      })();
+      break;
+    case 'taskmgr':
+      showAppWindow('Task Manager', '\ud83d\udcca', `
+        <style>
+          .tm-table { width:100%;border-collapse:collapse;font-size:13px; }
+          .tm-table th { text-align:left;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.1);color:#888;font-weight:500; }
+          .tm-table td { padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.04); }
+          .tm-kill { background:#e8112322;color:#f28b82;border:1px solid #e8112344;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px; }
+          .tm-kill:hover { background:#e8112344; }
+        </style>
+        <div style="margin-bottom:12px;font-size:13px;color:#888;">
+          Processes: <strong style="color:#fff">${WindowManager.instance.getWindowList().length+1}</strong> | 
+          Kernel: <strong style="color:#81c995">Running</strong>
+        </div>
+        <table class="tm-table">
+          <tr><th>PID</th><th>Name</th><th>Status</th><th>CPU</th><th>Memory</th><th></th></tr>
+          <tr><td>1</td><td>System</td><td style="color:#81c995">Running</td><td>0.2%</td><td>4.2 MB</td><td></td></tr>
+          <tr><td>2</td><td>Kernel</td><td style="color:#81c995">Running</td><td>0.5%</td><td>8.1 MB</td><td></td></tr>
+          <tr><td>3</td><td>Desktop</td><td style="color:#81c995">Running</td><td>1.2%</td><td>12.4 MB</td><td></td></tr>
+          ${WindowManager.instance.getWindowList().map((w,i)=>\`
+            <tr>
+              <td>\${i+4}</td>
+              <td>\${w.title}</td>
+              <td style="color:#81c995">Running</td>
+              <td>\${(Math.random()*2).toFixed(1)}%</td>
+              <td>\${(Math.random()*20+5).toFixed(1)} MB</td>
+              <td><button class="tm-kill" onclick="document.getElementById('appwin_\${w.appId}')?.remove();updateTaskbarWindowButtons();this.closest('tr').remove()">End</button></td>
+            </tr>
+          \`).join('')}
+        </table>
+      `);
+      break;
+    case 'sysmon':
+      showAppWindow('System Monitor', '\ud83d\udcbb', `
+        <style>
+          .sm-bar-wrap { display:flex;align-items:center;gap:12px;margin-bottom:10px; }
+          .sm-label { width:70px;font-size:12px;color:#888;flex-shrink:0; }
+          .sm-bar-bg { flex:1;height:20px;background:rgba(255,255,255,0.06);border-radius:10px;overflow:hidden; }
+          .sm-bar-fill { height:100%;border-radius:10px;transition:width 0.5s; }
+          .sm-val { width:48px;font-size:12px;text-align:right;flex-shrink:0; }
+          .sm-chart { display:flex;align-items:flex-end;gap:3px;height:80px;margin-top:16px;padding:0 4px; }
+          .sm-chart-bar { flex:1;background:linear-gradient(to top,rgba(102,126,234,0.6),rgba(102,126,234,0.2));border-radius:2px 2px 0 0;min-height:2px;transition:height 0.5s; }
+        </style>
+        <div style="font-size:13px;font-weight:600;margin-bottom:16px;color:#8ab4f8">Real-time Performance</div>
+        <div class="sm-bar-wrap">
+          <span class="sm-label">CPU</span>
+          <div class="sm-bar-bg"><div class="sm-bar-fill" id="sm-cpu-bar" style="width:25%;background:linear-gradient(90deg,#667eea,#8ab4f8)"></div></div>
+          <span class="sm-val" id="sm-cpu-val">25%</span>
+        </div>
+        <div class="sm-bar-wrap">
+          <span class="sm-label">Memory</span>
+          <div class="sm-bar-bg"><div class="sm-bar-fill" id="sm-mem-bar" style="width:42%;background:linear-gradient(90deg,#81c995,#4fc3f7)"></div></div>
+          <span class="sm-val" id="sm-mem-val">42%</span>
+        </div>
+        <div class="sm-bar-wrap">
+          <span class="sm-label">Disk</span>
+          <div class="sm-bar-bg"><div class="sm-bar-fill" id="sm-disk-bar" style="width:18%;background:linear-gradient(90deg,#fdd663,#ff9800)"></div></div>
+          <span class="sm-val" id="sm-disk-val">18%</span>
+        </div>
+        <div class="sm-bar-wrap">
+          <span class="sm-label">Network</span>
+          <div class="sm-bar-bg"><div class="sm-bar-fill" id="sm-net-bar" style="width:8%;background:linear-gradient(90deg,#f28b82,#e81123)"></div></div>
+          <span class="sm-val" id="sm-net-val">8%</span>
+        </div>
+        <div class="sm-chart" id="sm-chart"></div>
+        <div style="font-size:10px;color:#666;margin-top:8px;text-align:center">CPU History (last 20s)</div>
+      `);
+      // Start live updates
+      (function updateSysMon() {
+        const cpuBar=document.getElementById('sm-cpu-bar'), cpuVal=document.getElementById('sm-cpu-val');
+        const memBar=document.getElementById('sm-mem-bar'), memVal=document.getElementById('sm-mem-val');
+        const diskBar=document.getElementById('sm-disk-bar'), diskVal=document.getElementById('sm-disk-val');
+        const netBar=document.getElementById('sm-net-bar'), netVal=document.getElementById('sm-net-val');
+        const chart=document.getElementById('sm-chart');
+        if(!cpuBar) return;
+        const cpu=(10+Math.random()*40).toFixed(0);
+        const mem=(30+Math.random()*30).toFixed(0);
+        const disk=(10+Math.random()*20).toFixed(0);
+        const net=(3+Math.random()*15).toFixed(0);
+        cpuBar.style.width=cpu+'%'; cpuVal.textContent=cpu+'%';
+        memBar.style.width=mem+'%'; memVal.textContent=mem+'%';
+        diskBar.style.width=disk+'%'; diskVal.textContent=disk+'%';
+        netBar.style.width=net+'%'; netVal.textContent=net+'%';
+        // Update chart
+        if(chart) {
+          const bar=document.createElement('div'); bar.className='sm-chart-bar';
+          bar.style.height=(10+Math.random()*70)+'px';
+          chart.appendChild(bar);
+          if(chart.children.length>20) chart.firstChild.remove();
+        }
+        setTimeout(updateSysMon, 1000);
+      })();
       break;
     default:
       showAppWindow(appId, '\ud83d\udcc4', `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#777">${appId} is running</div>`);
