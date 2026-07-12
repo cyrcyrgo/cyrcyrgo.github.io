@@ -1,40 +1,17 @@
 /**
- * UIMain.ts — UI main entry point for the WebNT-HTML5 Web OS Kernel.
- * Singleton that initializes the entire UI system in a specific order.
+ * UIMain.ts — UI 主入口，WebNT-HTML5 Web OS 图形界面层初始化。
+ * 单例模式，负责创建桌面、任务栏、开始菜单等所有 UI 组件。
  *
- * 【对接内核】All initializations call kernel APIs.
- * Step 1: Initialize display system (GlobalDisplayAPI.initialize())
- * Step 2: Initialize kernel bridge (SysCallBridge)
- * Step 3: Register all Custom Elements
- * Step 4: Initialize WindowManagerUI
- * Step 5: Create desktop component (nt-desktop)
- * Step 6: Create taskbar component (nt-taskbar)
- * Step 7: Initialize TaskbarController
- * Step 8: Initialize SystemTray
- * Step 9: Create start menu (hidden by default)
- * Step 10: Start the system
+ * 【对接内核】通过 window.__WebNT__ 访问内核模块（由 index.html 启动流程注入）
+ *   - __WebNT__.GlobalDisplayAPI  → 统一显示管线
+ *   - __WebNT__.WindowManager     → 窗口管理器
+ *   - __WebNT__.SysCallBridge     → 系统调用桥
+ *   - __WebNT__.ProcessManager    → 进程管理器
  */
 
-import GlobalDisplayAPI from '../subsystem/display-pipeline/GlobalDisplay.API.js';
-import SysCallBridge from '../kernel/syscall/SysCall.Bridge.js';
-import WindowManager from '../subsystem/window-manager/WindowManager.Core.js';
-import WindowManagerUI from './components/WindowManagerUI.js';
-import TaskbarController from './components/Taskbar.js';
-import SystemTray from './components/SystemTray.js';
-import TerminalUI from './components/TerminalUI.js';
-
 export interface SystemStatus {
-  display: boolean;
-  kernelBridge: boolean;
-  customElements: boolean;
-  windowManagerUI: boolean;
-  desktop: boolean;
-  taskbar: boolean;
-  taskbarController: boolean;
-  systemTray: boolean;
-  startMenu: boolean;
-  started: boolean;
   overall: 'initializing' | 'running' | 'error' | 'shutdown';
+  steps: Record<string, boolean>;
   errors: string[];
 }
 
@@ -42,24 +19,30 @@ let _instance: UIMain | null = null;
 
 export class UIMain {
   private status: SystemStatus = {
-    display: false,
-    kernelBridge: false,
-    customElements: false,
-    windowManagerUI: false,
-    desktop: false,
-    taskbar: false,
-    taskbarController: false,
-    systemTray: false,
-    startMenu: false,
-    started: false,
     overall: 'initializing',
+    steps: {},
     errors: [],
   };
 
+  private appRoot: HTMLElement | null = null;
   private desktopElement: HTMLElement | null = null;
   private taskbarElement: HTMLElement | null = null;
   private startMenuElement: HTMLElement | null = null;
   private initialized: boolean = false;
+
+  // 内核模块引用（从 window.__WebNT__ 获取）
+  private get GlobalDisplayAPI(): any {
+    return (window as any).__WebNT__?.GlobalDisplayAPI;
+  }
+  private get WindowManager(): any {
+    return (window as any).__WebNT__?.WindowManager;
+  }
+  private get SysCallBridge(): any {
+    return (window as any).__WebNT__?.SysCallBridge;
+  }
+  private get ProcessManager(): any {
+    return (window as any).__WebNT__?.ProcessManager;
+  }
 
   static get instance(): UIMain {
     if (!_instance) {
@@ -69,7 +52,7 @@ export class UIMain {
   }
 
   private constructor() {
-    // Register global error handler
+    // 全局错误处理
     if (typeof window !== 'undefined') {
       window.addEventListener('error', (event) => {
         this.handleError(event.error || new Error(event.message));
@@ -81,451 +64,391 @@ export class UIMain {
   }
 
   /**
-   * Initialize the entire UI system.
-   * Performs a 10-step initialization sequence.
-   * 【对接内核】All initializations call kernel APIs.
+   * 【由 index.html 启动流程调用】设置 appRoot 容器引用
+   * @param root - 主应用容器 DOM 元素
+   */
+  setAppRoot(root: HTMLElement): void {
+    this.appRoot = root;
+  }
+
+  /**
+   * 初始化整个 UI 系统（10 步序列）
+   * 【对接内核】所有初始化通过 window.__WebNT__ 调用内核 API
    */
   async init(): Promise<void> {
     if (this.initialized) return;
+    if (!this.appRoot) {
+      throw new Error('UIMain: appRoot not set. Call setAppRoot() before init().');
+    }
 
     this.status.overall = 'initializing';
     this.status.errors = [];
+    const steps = this.status.steps;
 
     try {
-      // Step 1: Initialize display system
-      await this._step1_InitDisplay();
-      this.status.display = true;
-      console.log('[UIMain] Step 1/10: Display system initialized');
+      // Step 1: 确保内核模块已就绪
+      this._ensureKernelReady();
+      steps['kernel'] = true;
+      console.log('[UIMain] Step 1/10: Kernel modules verified');
 
-      // Step 2: Initialize kernel bridge
-      await this._step2_InitKernelBridge();
-      this.status.kernelBridge = true;
-      console.log('[UIMain] Step 2/10: Kernel bridge initialized');
+      // Step 2: 确保 Custom Elements 已注册（由启动画面注册）
+      this._ensureElementsRegistered();
+      steps['elements'] = true;
+      console.log('[UIMain] Step 2/10: Custom Elements verified');
 
-      // Step 3: Register all Custom Elements
-      await this._step3_RegisterCustomElements();
-      this.status.customElements = true;
-      console.log('[UIMain] Step 3/10: Custom elements registered');
+      // Step 3: 创建桌面主画布
+      await this._createDesktop();
+      steps['desktop'] = true;
+      console.log('[UIMain] Step 3/10: Desktop created');
 
-      // Step 4: Initialize WindowManagerUI
-      await this._step4_InitWindowManagerUI();
-      this.status.windowManagerUI = true;
-      console.log('[UIMain] Step 4/10: WindowManagerUI initialized');
+      // Step 4: 创建任务栏
+      await this._createTaskbar();
+      steps['taskbar'] = true;
+      console.log('[UIMain] Step 4/10: Taskbar created');
 
-      // Step 5: Create desktop component
-      await this._step5_CreateDesktop();
-      this.status.desktop = true;
-      console.log('[UIMain] Step 5/10: Desktop created');
+      // Step 5: 初始化任务栏控制器
+      await this._initTaskbarController();
+      steps['taskbarController'] = true;
+      console.log('[UIMain] Step 5/10: TaskbarController initialized');
 
-      // Step 6: Create taskbar component
-      await this._step6_CreateTaskbar();
-      this.status.taskbar = true;
-      console.log('[UIMain] Step 6/10: Taskbar created');
+      // Step 6: 初始化系统托盘
+      await this._initSystemTray();
+      steps['systemTray'] = true;
+      console.log('[UIMain] Step 6/10: SystemTray initialized');
 
-      // Step 7: Initialize TaskbarController
-      await this._step7_InitTaskbarController();
-      this.status.taskbarController = true;
-      console.log('[UIMain] Step 7/10: TaskbarController initialized');
+      // Step 7: 创建开始菜单（默认隐藏）
+      await this._createStartMenu();
+      steps['startMenu'] = true;
+      console.log('[UIMain] Step 7/10: Start menu created');
 
-      // Step 8: Initialize SystemTray
-      await this._step8_InitSystemTray();
-      this.status.systemTray = true;
-      console.log('[UIMain] Step 8/10: SystemTray initialized');
+      // Step 8: 设置 CSS 变量
+      this._applySystemTheme();
+      steps['theme'] = true;
+      console.log('[UIMain] Step 8/10: System theme applied');
 
-      // Step 9: Create start menu
-      await this._step9_CreateStartMenu();
-      this.status.startMenu = true;
-      console.log('[UIMain] Step 9/10: Start menu created');
+      // Step 9: 启动终端窗口
+      await this._launchTerminal();
+      steps['terminal'] = true;
+      console.log('[UIMain] Step 9/10: Terminal launched');
 
-      // Step 10: Start the system
-      await this._step10_StartSystem();
-      this.status.started = true;
-      console.log('[UIMain] Step 10/10: System started');
-
+      // Step 10: 完成
       this.status.overall = 'running';
       this.initialized = true;
-
+      steps['started'] = true;
+      console.log('[UIMain] Step 10/10: System started');
       console.log('[UIMain] WebNT-HTML5 UI system initialized successfully');
+
     } catch (err: any) {
       this.status.overall = 'error';
-      this.status.errors.push(err.message || 'Unknown initialization error');
+      this.status.errors.push(err.message || 'Unknown error');
       console.error('[UIMain] Initialization failed:', err);
       this.handleError(err);
     }
   }
 
-  /**
-   * Step 1: Initialize display system.
-   * 【对接内核】GlobalDisplayAPI.initialize()
-   */
-  private async _step1_InitDisplay(): Promise<void> {
-    const display = GlobalDisplayAPI.instance;
-
-    // Find or create a main canvas for the compositor
-    let mainCanvas = document.getElementById('nt-main-canvas') as HTMLCanvasElement | null;
-    if (!mainCanvas) {
-      mainCanvas = document.createElement('canvas');
-      mainCanvas.id = 'nt-main-canvas';
-      mainCanvas.style.position = 'fixed';
-      mainCanvas.style.top = '0';
-      mainCanvas.style.left = '0';
-      mainCanvas.style.width = '100%';
-      mainCanvas.style.height = '100%';
-      mainCanvas.style.pointerEvents = 'none';
-      mainCanvas.style.zIndex = '0';
-      document.body.insertBefore(mainCanvas, document.body.firstChild);
+  // ===== Step 1: 确保内核模块已就绪 =====
+  private _ensureKernelReady(): void {
+    const wnt = (window as any).__WebNT__;
+    if (!wnt) {
+      throw new Error(
+        'Kernel modules not loaded. window.__WebNT__ is undefined. ' +
+        'Ensure the boot sequence in index.html completed Phase 2.'
+      );
     }
-
-    try {
-      display.initialize(mainCanvas, {
-        width: window.innerWidth,
-        height: window.innerHeight,
-        devicePixelRatio: window.devicePixelRatio || 1,
-        debug: false,
-      });
-    } catch (err: any) {
-      if (err.message && err.message.includes('Already initialized')) {
-        // Already initialized, ignore
-      } else {
-        throw err;
-      }
+    if (!wnt.GlobalDisplayAPI?.instance) {
+      throw new Error('GlobalDisplayAPI not available');
+    }
+    if (!wnt.WindowManager?.instance) {
+      throw new Error('WindowManager not available');
+    }
+    if (!wnt.SysCallBridge?.instance) {
+      throw new Error('SysCallBridge not available');
     }
   }
 
-  /**
-   * Step 2: Initialize kernel bridge.
-   * 【对接内核】SysCallBridge
-   */
-  private async _step2_InitKernelBridge(): Promise<void> {
-    // SysCallBridge is automatically initialized via its singleton constructor
-    const bridge = SysCallBridge.instance;
-
-    try {
-      // Verify the bridge is working by making a test call
-      const sysInfo = await bridge.call('NtGetSystemInfo');
-      console.log('[UIMain] Kernel bridge verified. System info:', sysInfo?.os || 'WebNT-HTML5');
-    } catch (err) {
-      console.warn('[UIMain] Kernel bridge test call failed, but bridge is available:', err);
-    }
-  }
-
-  /**
-   * Step 3: Register all Custom Elements.
-   * Registers: nt-desktop, nt-taskbar, nt-startmenu, nt-contextmenu, nt-terminal-window, nt-window
-   */
-  private async _step3_RegisterCustomElements(): Promise<void> {
-    const elementsToRegister = [
-      {
-        name: 'nt-desktop',
-        path: './components/Desktop.ce.html',
-      },
-      {
-        name: 'nt-taskbar',
-        path: './components/Taskbar.ce.html',
-      },
-      {
-        name: 'nt-startmenu',
-        path: './components/StartMenu.ce.html',
-      },
-      {
-        name: 'nt-contextmenu',
-        path: './components/ContextMenu.ce.html',
-      },
-      {
-        name: 'nt-terminal-window',
-        path: './components/TerminalWindow.ce.html',
-      },
-      {
-        name: 'nt-window',
-        path: './components/WindowElement.ce.html',
-      },
+  // ===== Step 2: 确保 Custom Elements 已注册 =====
+  private _ensureElementsRegistered(): void {
+    const required = [
+      'nt-desktop',
+      'nt-taskbar',
+      'nt-startmenu',
+      'nt-contextmenu',
+      'nt-terminal-window',
+      'nt-window',
     ];
-
-    for (const el of elementsToRegister) {
-      // Check if the custom element is already defined
-      if (customElements.get(el.name)) {
-        console.log(`[UIMain] Custom element <${el.name}> already registered`);
-        continue;
-      }
-
-      try {
-        // Dynamically import the HTML component file to trigger registration
-        await import(el.path);
-        console.log(`[UIMain] Custom element <${el.name}> registered`);
-      } catch (err) {
-        console.warn(`[UIMain] Failed to register <${el.name}>:`, err);
-        // Continue with other registrations
+    for (const name of required) {
+      if (!customElements.get(name)) {
+        console.warn(`[UIMain] Custom Element <${name}> not yet registered. ` +
+          `The boot screen should have registered it.`);
       }
     }
   }
 
-  /**
-   * Step 4: Initialize WindowManagerUI.
-   * 【对接内核】Connects to kernel WindowManager.
-   */
-  private async _step4_InitWindowManagerUI(): Promise<void> {
-    WindowManagerUI.instance.init();
-  }
+  // ===== Step 3: 创建桌面主画布 =====
+  private async _createDesktop(): Promise<void> {
+    // 使用 GlobalDisplayAPI 创建桌面图层
+    const display = this.GlobalDisplayAPI.instance;
+    if (display && display.initialized) {
+      // 创建桌面背景图层
+      try {
+        display.createLayer(1, 'desktop', // layerTypes.DESKTOP = 1
+          window.innerWidth,
+          window.innerHeight
+        );
+      } catch (e) { /* layer may already exist */ }
+    }
 
-  /**
-   * Step 5: Create desktop component.
-   * Creates the <nt-desktop> element and appends it to the body.
-   */
-  private async _step5_CreateDesktop(): Promise<void> {
+    // 创建桌面 Custom Element
     const desktop = document.createElement('nt-desktop');
     desktop.id = 'nt-desktop';
-    desktop.style.position = 'fixed';
-    desktop.style.top = '0';
-    desktop.style.left = '0';
-    desktop.style.width = '100%';
-    desktop.style.height = 'calc(100% - var(--sys-taskbar-height, 48px))';
-    desktop.style.zIndex = '1';
+    desktop.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: calc(100% - var(--sys-taskbar-height, 48px));
+      z-index: 1;
+      overflow: hidden;
+    `;
 
-    document.body.appendChild(desktop);
+    this.appRoot!.appendChild(desktop);
     this.desktopElement = desktop;
   }
 
-  /**
-   * Step 6: Create taskbar component.
-   * Creates the <nt-taskbar> element and appends it to the body.
-   */
-  private async _step6_CreateTaskbar(): Promise<void> {
+  // ===== Step 4: 创建任务栏 =====
+  private async _createTaskbar(): Promise<void> {
     const taskbar = document.createElement('nt-taskbar');
     taskbar.id = 'nt-taskbar';
+    taskbar.style.cssText = `
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      z-index: 1000;
+    `;
 
-    document.body.appendChild(taskbar);
+    this.appRoot!.appendChild(taskbar);
     this.taskbarElement = taskbar;
   }
 
-  /**
-   * Step 7: Initialize TaskbarController.
-   * 【对接内核】Listens to WindowManager events.
-   */
-  private async _step7_InitTaskbarController(): Promise<void> {
-    TaskbarController.instance.init();
+  // ===== Step 5: 初始化任务栏控制器 =====
+  private async _initTaskbarController(): Promise<void> {
+    // 任务栏控制器逻辑内联，避免 .ts 文件导入问题
+    const taskbar = this.taskbarElement;
+    if (!taskbar) return;
+
+    const wm = this.WindowManager?.instance;
+    if (!wm) return;
+
+    // 监听窗口事件，同步任务栏窗口按钮
+    try {
+      wm.on('window-created', (info: any) => {
+        taskbar.dispatchEvent(new CustomEvent('window-created', { detail: info }));
+      });
+      wm.on('window-destroyed', (info: any) => {
+        taskbar.dispatchEvent(new CustomEvent('window-destroyed', { detail: info }));
+      });
+      wm.on('window-focused', (info: any) => {
+        taskbar.dispatchEvent(new CustomEvent('window-focused', { detail: info }));
+      });
+      wm.on('window-state-changed', (info: any) => {
+        taskbar.dispatchEvent(new CustomEvent('window-state-changed', { detail: info }));
+      });
+    } catch (e) {
+      console.warn('[UIMain] WindowManager event binding failed:', e);
+    }
   }
 
-  /**
-   * Step 8: Initialize SystemTray.
-   * 【对接内核】Network status via SysCallBridge.
-   */
-  private async _step8_InitSystemTray(): Promise<void> {
-    if (!this.taskbarElement) {
-      throw new Error('Taskbar element not created yet. Step 6 must be completed before Step 8.');
-    }
+  // ===== Step 6: 初始化系统托盘 =====
+  private async _initSystemTray(): Promise<void> {
+    const taskbar = this.taskbarElement;
+    if (!taskbar) return;
 
-    const shadowRoot = (this.taskbarElement as any).shadowRoot;
-    if (shadowRoot) {
-      const trayContainer = shadowRoot.getElementById('taskbar-right');
-      if (trayContainer) {
-        SystemTray.instance.init(trayContainer);
+    // 等待 Shadow DOM 就绪后初始化时钟
+    const initTray = () => {
+      const shadow = (taskbar as any).shadowRoot;
+      if (!shadow) {
+        setTimeout(initTray, 100);
+        return;
       }
-    }
+      const trayContainer = shadow.getElementById('taskbar-right');
+      if (!trayContainer) {
+        setTimeout(initTray, 100);
+        return;
+      }
+
+      // 时钟更新
+      const updateClock = () => {
+        const clockEl = shadow.querySelector('.taskbar-clock');
+        if (clockEl) {
+          const now = new Date();
+          const hours = String(now.getHours()).padStart(2, '0');
+          const mins = String(now.getMinutes()).padStart(2, '0');
+          clockEl.textContent = `${hours}:${mins}`;
+        }
+      };
+      updateClock();
+      setInterval(updateClock, 1000);
+    };
+    initTray();
   }
 
-  /**
-   * Step 9: Create start menu (hidden by default).
-   */
-  private async _step9_CreateStartMenu(): Promise<void> {
+  // ===== Step 7: 创建开始菜单（默认隐藏） =====
+  private async _createStartMenu(): Promise<void> {
     const startMenu = document.createElement('nt-startmenu');
     startMenu.id = 'nt-startmenu';
+    startMenu.style.cssText = `
+      position: absolute;
+      bottom: var(--sys-taskbar-height, 48px);
+      left: 8px;
+      z-index: 2000;
+      display: none;
+    `;
 
-    document.body.appendChild(startMenu);
+    this.appRoot!.appendChild(startMenu);
     this.startMenuElement = startMenu;
+
+    // 监听任务栏开始按钮点击 → 切换开始菜单
+    if (this.taskbarElement) {
+      this.taskbarElement.addEventListener('startmenu-toggle', () => {
+        const visible = startMenu.style.display === 'block';
+        startMenu.style.display = visible ? 'none' : 'block';
+      });
+    }
   }
 
-  /**
-   * Step 10: Start the system.
-   * Performs final startup tasks.
-   */
-  private async _step10_StartSystem(): Promise<void> {
-    // Launch the initial terminal window
+  // ===== Step 8: 应用系统主题 =====
+  private _applySystemTheme(): void {
+    const root = document.documentElement;
+    root.style.setProperty('--sys-taskbar-height', '48px');
+    root.style.setProperty('--sys-font-mono', "'Courier New', 'Consolas', monospace");
+    root.style.setProperty('--sys-font-ui', "'Segoe UI', system-ui, -apple-system, sans-serif");
+    root.style.setProperty('--sys-font-size-sm', '12px');
+    root.style.setProperty('--sys-font-size-md', '14px');
+    root.style.setProperty('--sys-font-size-lg', '16px');
+    root.style.setProperty('--sys-accent', '#8ab4f8');
+    root.style.setProperty('--sys-accent-hover', '#aecbfa');
+    root.style.setProperty('--sys-warning', '#fdd663');
+    root.style.setProperty('--sys-danger', '#f28b82');
+    root.style.setProperty('--sys-success', '#81c995');
+    root.style.setProperty('--sys-transition-fast', '100ms ease');
+    root.style.setProperty('--sys-transition-normal', '200ms ease');
+    root.style.setProperty('--sys-transition-slow', '350ms ease');
+
+    // 检测暗色模式
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      root.setAttribute('data-theme', 'dark');
+    }
+  }
+
+  // ===== Step 9: 启动终端 =====
+  private async _launchTerminal(): Promise<void> {
     try {
-      TerminalUI.instance.init();
-      console.log('[UIMain] Initial terminal window launched');
+      // 通过 WindowManager 创建终端窗口（作为内置应用窗口）
+      const wm = this.WindowManager?.instance;
+      if (wm) {
+        const windowId = wm.createWindow({
+          title: 'Terminal',
+          width: 700,
+          height: 450,
+          x: Math.max(0, (window.innerWidth - 700) / 2),
+          y: Math.max(0, (window.innerHeight - 450) / 2),
+          appId: 'terminal',
+          resizable: true,
+          minimizable: true,
+          maximizable: true,
+          closable: true,
+        });
+
+        if (windowId) {
+          // 创建终端窗口 DOM 元素
+          const terminalWindow = document.createElement('nt-terminal-window');
+          terminalWindow.id = `terminal-window-${windowId}`;
+          terminalWindow.style.cssText = `
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+          `;
+          // 终端窗口作为独立弹窗，放到 appRoot 中
+          this.appRoot!.appendChild(terminalWindow);
+        }
+      }
     } catch (err) {
-      console.warn('[UIMain] Failed to launch initial terminal:', err);
-    }
-
-    // Dispatch system ready event
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('webnt-system-ready', {
-        detail: {
-          timestamp: Date.now(),
-          version: '1.0.0',
-        },
-      }));
-    }
-
-    // Set system CSS variables
-    document.documentElement.style.setProperty('--sys-taskbar-height', '48px');
-    document.documentElement.style.setProperty('--sys-font-ui', "'Segoe UI', system-ui, sans-serif");
-    document.documentElement.style.setProperty('--sys-font-size-sm', '12px');
-    document.documentElement.style.setProperty('--sys-font-size-md', '14px');
-    document.documentElement.style.setProperty('--sys-transition-fast', '100ms ease');
-    document.documentElement.style.setProperty('--sys-transition-normal', '200ms ease');
-    document.documentElement.style.setProperty('--sys-transition-slow', '350ms ease');
-    document.documentElement.style.setProperty('--sys-accent', '#8ab4f8');
-    document.documentElement.style.setProperty('--sys-warning', '#fdd663');
-    document.documentElement.style.setProperty('--sys-danger', '#f28b82');
-  }
-
-  /**
-   * Graceful shutdown sequence.
-   * 【对接内核】Calls SysCallBridge for NtShutdown.
-   */
-  async shutdown(): Promise<void> {
-    console.log('[UIMain] Shutting down...');
-
-    try {
-      await SysCallBridge.instance.call('NtShutdown');
-    } catch (err) {
-      console.warn('[UIMain] NtShutdown failed:', err);
-    }
-
-    this._cleanup();
-    this.status.overall = 'shutdown';
-
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('webnt-system-shutdown'));
+      console.warn('[UIMain] Failed to launch terminal:', err);
     }
   }
 
-  /**
-   * System reboot.
-   * 【对接内核】Calls SysCallBridge for NtReboot.
-   */
-  async reboot(): Promise<void> {
-    console.log('[UIMain] Rebooting...');
-
-    try {
-      await SysCallBridge.instance.call('NtReboot');
-    } catch (err) {
-      console.warn('[UIMain] NtReboot failed:', err);
-    }
-
-    this._cleanup();
-
-    // Re-initialize
-    this.status = {
-      display: false,
-      kernelBridge: false,
-      customElements: false,
-      windowManagerUI: false,
-      desktop: false,
-      taskbar: false,
-      taskbarController: false,
-      systemTray: false,
-      startMenu: false,
-      started: false,
-      overall: 'initializing',
-      errors: [],
-    };
-    this.initialized = false;
-
-    await this.init();
-  }
+  // ===== 公共方法 =====
 
   /**
-   * Get the overall system status.
-   * @returns SystemStatus object
+   * 获取系统状态
    */
   getSystemStatus(): SystemStatus {
-    return { ...this.status, errors: [...this.status.errors] };
+    return {
+      overall: this.status.overall,
+      steps: { ...this.status.steps },
+      errors: [...this.status.errors],
+    };
   }
 
   /**
-   * Global error handler.
-   * @param error - The error to handle
+   * 全局错误处理
    */
   handleError(error: Error): void {
-    console.error('[UIMain] System error:', error);
-
-    this.status.errors.push(error.message || 'Unknown error');
-
-    // Keep only the last 50 errors
+    console.error('[UIMain] Error:', error.message);
+    this.status.errors.push(error.message);
     if (this.status.errors.length > 50) {
       this.status.errors = this.status.errors.slice(-50);
     }
-
-    // Dispatch error event
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('webnt-system-error', {
-        detail: {
-          message: error.message,
-          stack: error.stack,
-          timestamp: Date.now(),
-        },
+        detail: { message: error.message, timestamp: Date.now() },
       }));
     }
   }
 
   /**
-   * Get the desktop element.
-   * @returns The desktop element or null
+   * 关机
+   * 【对接内核】SysCallBridge.call('NtShutdown')
    */
-  getDesktopElement(): HTMLElement | null {
-    return this.desktopElement;
+  async shutdown(): Promise<void> {
+    console.log('[UIMain] Shutting down...');
+    try {
+      await this.SysCallBridge?.instance?.call('NtShutdown');
+    } catch (e) { /* ignore */ }
+    this._cleanup();
+    this.status.overall = 'shutdown';
+    window.dispatchEvent(new CustomEvent('webnt-system-shutdown'));
   }
 
   /**
-   * Get the taskbar element.
-   * @returns The taskbar element or null
+   * 重启
+   * 【对接内核】SysCallBridge.call('NtReboot')
    */
-  getTaskbarElement(): HTMLElement | null {
-    return this.taskbarElement;
+  async reboot(): Promise<void> {
+    console.log('[UIMain] Rebooting...');
+    try {
+      await this.SysCallBridge?.instance?.call('NtReboot');
+    } catch (e) { /* ignore */ }
+    this._cleanup();
+    this.status = {
+      overall: 'initializing',
+      steps: {},
+      errors: [],
+    };
+    this.initialized = false;
+    await this.init();
   }
 
-  /**
-   * Get the start menu element.
-   * @returns The start menu element or null
-   */
-  getStartMenuElement(): HTMLElement | null {
-    return this.startMenuElement;
-  }
-
-  /**
-   * Clean up all UI elements and resources.
-   */
+  // ===== 清理 =====
   private _cleanup(): void {
-    // Destroy WindowManagerUI
-    try {
-      WindowManagerUI.instance.destroy();
-    } catch (err) {
-      console.warn('[UIMain] Error destroying WindowManagerUI:', err);
-    }
-
-    // Destroy TaskbarController
-    try {
-      TaskbarController.instance.destroy();
-    } catch (err) {
-      console.warn('[UIMain] Error destroying TaskbarController:', err);
-    }
-
-    // Destroy SystemTray
-    try {
-      SystemTray.instance.destroy();
-    } catch (err) {
-      console.warn('[UIMain] Error destroying SystemTray:', err);
-    }
-
-    // Remove desktop element
-    if (this.desktopElement) {
-      this.desktopElement.remove();
-      this.desktopElement = null;
-    }
-
-    // Remove taskbar element
-    if (this.taskbarElement) {
-      this.taskbarElement.remove();
-      this.taskbarElement = null;
-    }
-
-    // Remove start menu element
-    if (this.startMenuElement) {
-      this.startMenuElement.remove();
-      this.startMenuElement = null;
-    }
+    [this.desktopElement, this.taskbarElement, this.startMenuElement].forEach(el => {
+      if (el) el.remove();
+    });
+    this.desktopElement = null;
+    this.taskbarElement = null;
+    this.startMenuElement = null;
   }
 }
 
