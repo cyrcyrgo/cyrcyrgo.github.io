@@ -53,7 +53,7 @@
     position: fixed; inset: 0; z-index: 50000;
     display: flex; flex-direction: column; align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #0c0c1d 0%, #1a1a35 30%, #1a2a4a 70%, #0d1b2a 100%);
+    background: linear-gradient(135deg, #070b14 0%, #0b1221 35%, #0f223d 65%, #0a1628 100%);
     background-size: cover;
     transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
     user-select: none;
@@ -65,8 +65,9 @@
   }
   #lock-screen .ls-bg-blur {
     position: absolute; inset: 0;
-    background: radial-gradient(ellipse at 50% 30%, rgba(100,149,237,0.15), transparent 60%),
-                radial-gradient(ellipse at 80% 80%, rgba(0,180,216,0.1), transparent 50%);
+    background: radial-gradient(ellipse at 50% 25%, rgba(56,189,248,0.14), transparent 55%),
+                radial-gradient(ellipse at 80% 80%, rgba(14,165,233,0.1), transparent 50%),
+                radial-gradient(ellipse at 20% 85%, rgba(99,102,241,0.08), transparent 45%);
   }
   #lock-screen .ls-time {
     position: relative; z-index: 1;
@@ -212,25 +213,44 @@
   #taskbar {
     position: absolute; bottom: 0; left: 0; width: 100%;
     height: 48px; z-index: 1000;
-    background: rgba(20, 20, 35, 0.75);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border-top: 1px solid rgba(255,255,255,0.08);
+    background: rgba(11, 16, 30, 0.78);
+    backdrop-filter: blur(24px) saturate(200%);
+    -webkit-backdrop-filter: blur(24px) saturate(200%);
+    border-top: 1px solid rgba(255,255,255,0.07);
     display: flex; align-items: center;
     font-family: 'Segoe UI', system-ui, sans-serif;
     color: #e8eaed;
   }
   #taskbar .tb-left {
     display: flex; align-items: center; height: 100%;
-    padding: 0 4px;
+    padding: 0 4px; flex-shrink: 0;
   }
   #taskbar .tb-start-btn {
     width: 44px; height: 44px; display: flex; align-items: center;
-    justify-content: center; border-radius: 8px; cursor: pointer;
+    justify-content: center; border-radius: 10px; cursor: pointer;
     transition: background 0.15s;
+    color: #38bdf8;
   }
-  #taskbar .tb-start-btn:hover { background: rgba(255,255,255,0.1); }
-  #taskbar .tb-start-btn:active { background: rgba(255,255,255,0.05); }
+  #taskbar .tb-start-btn:hover { background: rgba(56,189,248,0.12); }
+  #taskbar .tb-start-btn:active { background: rgba(56,189,248,0.06); }
+  #taskbar .tb-pinned {
+    display: flex; align-items: center; height: 100%;
+    padding: 0 6px; gap: 4px; flex-shrink: 0;
+    border-right: 1px solid rgba(255,255,255,0.06);
+  }
+  #taskbar .tb-pin-btn {
+    width: 40px; height: 40px; display: flex; align-items: center;
+    justify-content: center; border-radius: 8px; cursor: pointer;
+    font-size: 20px; transition: background 0.15s, transform 0.1s;
+    position: relative;
+  }
+  #taskbar .tb-pin-btn:hover { background: rgba(255,255,255,0.08); transform: translateY(-1px); }
+  #taskbar .tb-pin-btn:active { transform: translateY(0); }
+  #taskbar .tb-pin-btn::after {
+    content: ''; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+    width: 16px; height: 3px; border-radius: 2px; background: transparent; transition: background 0.15s;
+  }
+  #taskbar .tb-pin-btn.running::after { background: rgba(56,189,248,0.8); }
   #taskbar .tb-center {
     flex: 1; display: flex; align-items: center; height: 100%;
     padding: 0 4px; gap: 2px; overflow-x: auto;
@@ -252,7 +272,7 @@
   }
   #taskbar .tb-right {
     display: flex; align-items: center; height: 100%;
-    padding: 0 8px; gap: 4px;
+    padding: 0 8px; gap: 4px; flex-shrink: 0;
   }
   #taskbar .tb-tray-btn {
     width: 36px; height: 36px; display: flex; align-items: center;
@@ -260,6 +280,12 @@
     font-size: 14px; transition: background 0.15s;
   }
   #taskbar .tb-tray-btn:hover { background: rgba(255,255,255,0.08); }
+  #taskbar .tb-power-btn {
+    width: 36px; height: 36px; display: flex; align-items: center;
+    justify-content: center; border-radius: 6px; cursor: pointer;
+    font-size: 16px; color: #f28b82; transition: background 0.15s;
+  }
+  #taskbar .tb-power-btn:hover { background: rgba(242,139,130,0.15); }
   #taskbar .tb-clock {
     font-size: 12px; padding: 0 8px; cursor: pointer;
     display: flex; flex-direction: column; align-items: flex-end;
@@ -274,8 +300,8 @@
   #start-menu {
     position: absolute; bottom: 52px; left: 8px;
     z-index: 2000; display: none;
-    width: 360px; max-height: 560px;
-    background: rgba(30, 30, 50, 0.92);
+    width: min(360px, calc(100vw - 16px)); max-height: min(560px, calc(100vh - 80px));
+    background: rgba(15, 23, 42, 0.95);
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);
     border: 1px solid rgba(255,255,255,0.1);
@@ -356,6 +382,72 @@
   #context-menu .cm-separator {
     height: 1px; background: rgba(255,255,255,0.06); margin: 4px 8px;
   }
+
+  /* ============================================================
+     电源菜单
+     ============================================================ */
+  #power-menu {
+    position: absolute; bottom: 52px; right: 8px;
+    z-index: 2001; display: none; min-width: 180px;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 13px;
+  }
+  #power-menu .pm-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; cursor: pointer; color: #e0e0e0;
+    transition: background 0.1s;
+  }
+  #power-menu .pm-item:hover { background: rgba(255,255,255,0.08); }
+  #power-menu .pm-icon { font-size: 16px; width: 20px; text-align: center; }
+  #power-menu .pm-shutdown { color: #f28b82; }
+  #power-menu .pm-reboot { color: #fdd663; }
+  #power-menu .pm-sleep { color: #8ab4f8; }
+
+  /* ============================================================
+     壁纸设置弹窗
+     ============================================================ */
+  #wallpaper-dialog {
+    position: fixed; inset: 0; z-index: 6000;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+  }
+  #wallpaper-dialog .wp-box {
+    width: 360px; max-width: 90vw;
+    background: rgba(15, 23, 42, 0.98);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px; padding: 20px;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+  }
+  #wallpaper-dialog .wp-title {
+    font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 14px;
+  }
+  #wallpaper-dialog .wp-label {
+    display: block; font-size: 12px; color: #888; margin-bottom: 6px; margin-top: 12px;
+  }
+  #wallpaper-dialog .wp-input {
+    width: 100%; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05); color: #fff; font-size: 13px; outline: none;
+  }
+  #wallpaper-dialog .wp-input:focus { border-color: rgba(56,189,248,0.5); }
+  #wallpaper-dialog .wp-file {
+    display: block; width: 100%; padding: 8px 0; color: #aaa; font-size: 13px;
+  }
+  #wallpaper-dialog .wp-btns {
+    display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;
+  }
+  #wallpaper-dialog .wp-btns button {
+    padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px;
+  }
+  #wallpaper-dialog .wp-cancel { background: rgba(255,255,255,0.08); color: #ccc; }
+  #wallpaper-dialog .wp-ok { background: rgba(56,189,248,0.85); color: #fff; }
 
   /* ============================================================
      终端窗口
@@ -468,7 +560,7 @@
     #taskbar .tb-clock { font-size: 11px; }
     #taskbar .tb-clock .tb-clock-date { font-size: 9px; }
     /* 开始菜单 */
-    #start-menu { width: 280px; max-height: 420px; left: 4px; }
+    #start-menu { width: min(280px, calc(100vw - 8px)); max-height: 420px; left: 4px; }
     #start-menu .sm-app-item { font-size: 13px; padding: 8px 10px; }
     /* 终端 */
     #terminal-window { width: 100vw; height: 100vh; border-radius: 0; left: 0 !important; top: 0 !important; }
@@ -502,7 +594,7 @@
     #taskbar .tb-clock { font-size: 10px; padding: 0 4px; }
     #taskbar .tb-clock .tb-clock-date { font-size: 8px; }
     /* 开始菜单 */
-    #start-menu { width: 240px; max-height: 360px; left: 2px; }
+    #start-menu { width: min(240px, calc(100vw - 4px)); max-height: 360px; left: 2px; }
     #start-menu .sm-search input { font-size: 13px; padding: 8px 12px; }
     #start-menu .sm-app-item { font-size: 12px; padding: 6px 8px; gap: 8px; }
   }
@@ -551,7 +643,7 @@
 <!-- ============================================================ -->
 <div id="app-root">
   <!-- 桌面背景 -->
-  <div id="desktop-bg" style="position:absolute;inset:0;background:linear-gradient(135deg,#1a3a5c 0%,#2d6aa0 40%,#4a90d9 70%,#1a3a5c 100%);z-index:0;"></div>
+  <div id="desktop-bg" style="position:absolute;inset:0;background:linear-gradient(135deg,#070b14 0%,#0b1221 35%,#0f223d 65%,#0a1628 100%);background-size:cover;z-index:0;"></div>
   <!-- 桌面图标容器 -->
   <div id="desktop-icons" style="position:absolute;top:0;left:0;right:0;bottom:48px;z-index:1;"></div>
   <!-- 任务栏 -->
@@ -561,11 +653,13 @@
         <svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="2" width="7" height="7" rx="1" fill="currentColor"/><rect x="11" y="2" width="7" height="7" rx="1" fill="currentColor"/><rect x="2" y="11" width="7" height="7" rx="1" fill="currentColor"/><rect x="11" y="11" width="7" height="7" rx="1" fill="currentColor"/></svg>
       </div>
     </div>
+    <div class="tb-pinned" id="tb-pinned"></div>
     <div class="tb-center" id="tb-window-list"></div>
     <div class="tb-right">
       <div class="tb-tray-btn" id="tb-terminal-btn" title="终端">&#x1f4bb;</div>
       <div class="tb-tray-btn" title="网络">&#x1f310;</div>
       <div class="tb-tray-btn" title="音量">&#x1f50a;</div>
+      <div class="tb-power-btn" id="tb-power-btn" title="电源">&#x23fb;</div>
       <div class="tb-clock" id="tb-clock">
         <span class="tb-clock-time">12:00</span>
         <span class="tb-clock-date">1/1</span>
@@ -600,6 +694,28 @@
       <input type="text" class="tw-input" id="tw-input" placeholder="输入 help 查看命令..." autofocus>
     </div>
   </div>
+  <!-- 电源菜单 -->
+  <div id="power-menu">
+    <div class="pm-item pm-sleep" id="pm-sleep"><span class="pm-icon">&#x263e;</span> 睡眠</div>
+    <div class="pm-item pm-reboot" id="pm-reboot"><span class="pm-icon">&#x21bb;</span> 重启</div>
+    <div class="pm-item pm-shutdown" id="pm-shutdown"><span class="pm-icon">&#x23fb;</span> 关机</div>
+  </div>
+
+  <!-- 壁纸设置弹窗 -->
+  <div id="wallpaper-dialog">
+    <div class="wp-box">
+      <div class="wp-title">更换桌面壁纸</div>
+      <label class="wp-label">图片地址</label>
+      <input type="text" class="wp-input" id="wp-url-input" placeholder="https://example.com/wallpaper.jpg">
+      <label class="wp-label">或上传本地图片</label>
+      <input type="file" class="wp-file" id="wp-file-input" accept="image/*">
+      <div class="wp-btns">
+        <button class="wp-cancel" id="wp-cancel">取消</button>
+        <button class="wp-ok" id="wp-ok">应用</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 右键菜单 -->
   <div id="context-menu"></div>
 </div>
@@ -679,6 +795,23 @@ class TerminalCommandRegistry {
     add('history','命令历史','工具',()=>'');
     add('dns','DNS查询','网络',(a)=>`${a[0]}: 127.0.0.1`);
     add('ping','网络测试','网络',(a)=>`PING ${a[0]} (127.0.0.1): 56 字节\n64 字节: seq=0 ttl=64 时间=0.5ms`);
+    add('calc','计算器','工具',(a)=>{ const expr=a.join(' '); try{ return `${expr} = ${Function('"use strict"; return ('+expr+')')()}`; }catch(e){ return `错误: ${e.message}`; } });
+    add('base64','Base64 编解码','工具',(a)=>{ const mode=a[0], text=a.slice(1).join(' '); if(!text) return '用法: base64 encode|decode <text>'; try{ if(mode==='encode') return btoa(unescape(encodeURIComponent(text))); if(mode==='decode') return decodeURIComponent(escape(atob(text))); return '用法: base64 encode|decode <text>'; }catch(e){ return `错误: ${e.message}`; } });
+    add('urlencode','URL 编码','工具',(a)=>{ const t=a.join(' '); return t?encodeURIComponent(t):'用法: urlencode <text>'; });
+    add('urldecode','URL 解码','工具',(a)=>{ const t=a.join(' '); try{return t?decodeURIComponent(t):'用法: urldecode <text>';}catch(e){return `错误: ${e.message}`;} });
+    add('uuid','生成 UUID','工具',()=>'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{ const r=Math.random()*16|0; return (c==='x'?r:(r&0x3|0x8)).toString(16); }));
+    add('rand','随机数','工具',(a)=>{ const min=parseFloat(a[0])||0, max=parseFloat(a[1])||(min+1); return String(Math.floor(Math.random()*(max-min+1))+min); });
+    add('hash','简单哈希','工具',(a)=>{ let h=5381; const s=a.join(' '); for(let i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(16); });
+    add('time','当前时间','工具',()=>new Date().toLocaleString('zh-CN',{hour12:false}));
+    add('neofetch','系统信息','工具',()=>{
+      const logo='    ___       ___       ___\n   /\\__\\     /\\__\\     /\\__\\\n  /:/  /__   /:/ _/_   /:/ _/_\n /:/_/\\__\\ /:/_/\\__\\ /:/_/\\__\\\n \\:\\\\/__/ \\:\\/__/ \\:\\\\/__/\n  \\:\\\\__\\  \\:\\\\__\\  \\:\\\\__\\\n   \\/__/    \\/__/    \\/__/';
+      return `${logo}\n  系统: WebNT 内核 v1.0.0\n  平台: ${navigator.platform}\n  内核: ${navigator.hardwareConcurrency||'?'} 核\n  内存: ${navigator.deviceMemory||'?'} GB\n  分辨率: ${window.innerWidth}x${window.innerHeight}\n  运行时间: ${Math.floor(performance.now()/1000)} 秒`;
+    });
+    add('cowsay','奶牛说话','娱乐',(a)=>{ const text=a.join(' ')||'哞~'; const pad=Math.max(2,text.length+2); const line='-'.repeat(pad); return `${line}\n< ${text} >\n${line}\n        \\   ^__^\n         \\  (oo)\\_______\n            (__)\\       )\\/\\\n                ||----w |\n                ||     ||`; });
+    add('fortune','随机格言','娱乐',()=>{ const q=['千里之行，始于足下。','Talk is cheap. Show me the code.','Stay hungry, stay foolish.','知之为知之，不知为不知。','The journey of a thousand miles begins with one step.','代码是写给人看的，只是顺便让机器执行。']; return q[Math.floor(Math.random()*q.length)]; });
+    add('matrix','矩阵雨','娱乐',()=>Array.from({length:8},()=>Array.from({length:16},()=>'01'[Math.floor(Math.random()*2)]).join(' ')).join('\n'));
+    add('open','打开应用','系统',(a)=>{ const id=a[0]; if(!id) return '用法: open <appId>'; launchApp(id); return `正在打开 ${id}...`; });
+    add('wallpaper','当前壁纸','系统',()=>{ const s=localStorage.getItem('webnt_wallpaper'); return s?'当前壁纸: '+s.substring(0,80)+(s.length>80?'...':''):'当前使用默认壁纸'; });
   }
   getCommand(n) { return this.cmds.get(n)||null; }
   getAllCommands() { return [...this.cmds.keys()]; }
@@ -749,6 +882,9 @@ const appRoot = document.getElementById('app-root');
 const desktopIcons = document.getElementById('desktop-icons');
 const taskbar = document.getElementById('taskbar');
 const startMenu = document.getElementById('start-menu');
+const powerMenu = document.getElementById('power-menu');
+const wallpaperDialog = document.getElementById('wallpaper-dialog');
+const desktopBg = document.getElementById('desktop-bg');
 const tw = document.getElementById('terminal-window');
 const twOutput = document.getElementById('tw-output');
 const twInput = document.getElementById('tw-input');
@@ -885,11 +1021,12 @@ function renderDesktopIcons() {
     });
     icon.addEventListener('contextmenu', (e) => {
       e.preventDefault(); e.stopPropagation();
+      const pinLabel = isPinned(app.appId) ? '从任务栏取消固定' : '固定到任务栏';
       showContextMenu(e.clientX, e.clientY, [
         {label:'打开', action:()=>launchApp(app.appId)},
         {label:'在终端中打开', action:()=>{launchApp('terminal'); writeTerminal(`正在打开 ${app.name}...\n`);}},
         {separator:true},
-        {label:'固定到开始', action:()=>{}},
+        {label:pinLabel, action:()=>{ isPinned(app.appId) ? unpinFromTaskbar(app.appId) : pinToTaskbar(app); }},
         {label:'属性', action:()=>{}},
       ]);
     });
@@ -912,8 +1049,99 @@ function renderDesktopIcons() {
 }
 renderDesktopIcons();
 
-// 桌面右键菜单
+// ===================================================================
+// 任务栏固定应用
+// ===================================================================
+let pinnedApps = [];
+function loadPinnedApps() {
+  try { pinnedApps = JSON.parse(localStorage.getItem('webnt_taskbar_pins') || '[]'); }
+  catch(e) { pinnedApps = []; }
+}
+function savePinnedApps() { localStorage.setItem('webnt_taskbar_pins', JSON.stringify(pinnedApps)); }
+
+function isPinned(appId) { return pinnedApps.some(p => p.appId === appId); }
+function pinToTaskbar(app) {
+  if(!app || isPinned(app.appId)) return;
+  pinnedApps.push({ id: app.id, name: app.name, icon: app.icon, color: app.color, appId: app.appId });
+  savePinnedApps(); renderPinnedTaskbar();
+}
+function unpinFromTaskbar(appId) {
+  pinnedApps = pinnedApps.filter(p => p.appId !== appId);
+  savePinnedApps(); renderPinnedTaskbar();
+}
+
+function renderPinnedTaskbar() {
+  const container = document.getElementById('tb-pinned');
+  if(!container) return;
+  container.innerHTML = '';
+  const runningIds = new Set(WindowManager.instance.getWindowList().map(w => w.appId).filter(Boolean));
+  pinnedApps.forEach(app => {
+    const btn = document.createElement('div');
+    btn.className = 'tb-pin-btn' + (runningIds.has(app.appId) ? ' running' : '');
+    btn.title = app.name;
+    btn.innerHTML = `<span style="color:${app.color}">${app.icon}</span>`;
+    btn.addEventListener('click', () => { launchApp(app.appId); });
+    btn.addEventListener('contextmenu', e => {
+      e.preventDefault(); e.stopPropagation();
+      showContextMenu(e.clientX, e.clientY, [
+        {label:'取消固定', action:()=>unpinFromTaskbar(app.appId)},
+      ]);
+    });
+    container.appendChild(btn);
+  });
+}
+loadPinnedApps(); renderPinnedTaskbar();
+
+// ===================================================================
+// 壁纸设置
+// ===================================================================
+function applyWallpaper(value) {
+  if(!value) return;
+  if(value.startsWith('linear-gradient')) {
+    desktopBg.style.background = value;
+  } else {
+    desktopBg.style.background = `url(${value}) center/cover no-repeat`;
+  }
+}
+function loadWallpaper() {
+  const saved = localStorage.getItem('webnt_wallpaper');
+  if(saved) applyWallpaper(saved);
+}
+function showWallpaperDialog() {
+  document.getElementById('wp-url-input').value = '';
+  document.getElementById('wp-file-input').value = '';
+  wallpaperDialog.style.display = 'flex';
+}
+function hideWallpaperDialog() { wallpaperDialog.style.display = 'none'; }
+
+document.getElementById('wp-cancel').addEventListener('click', hideWallpaperDialog);
+document.getElementById('wp-ok').addEventListener('click', () => {
+  const url = document.getElementById('wp-url-input').value.trim();
+  const fileInput = document.getElementById('wp-file-input');
+  if(fileInput.files && fileInput.files[0]) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      localStorage.setItem('webnt_wallpaper', ev.target.result);
+      applyWallpaper(ev.target.result);
+      hideWallpaperDialog();
+    };
+    reader.readAsDataURL(fileInput.files[0]);
+  } else if(url) {
+    localStorage.setItem('webnt_wallpaper', url);
+    applyWallpaper(url);
+    hideWallpaperDialog();
+  }
+});
+wallpaperDialog.addEventListener('click', e => { if(e.target === wallpaperDialog) hideWallpaperDialog(); });
+
+// ===================================================================
+// 桌面右键菜单 & 长按更换壁纸
+// ===================================================================
+let desktopLongPressTimer = null;
+let desktopLongPressTarget = null;
+
 desktopIcons.addEventListener('contextmenu', e => {
+  if(e.target !== desktopIcons) return;
   e.preventDefault();
   showContextMenu(e.clientX, e.clientY, [
     {label:'查看', action:()=>{}},
@@ -921,9 +1149,37 @@ desktopIcons.addEventListener('contextmenu', e => {
     {separator:true},
     {label:'刷新', action:()=>renderDesktopIcons()},
     {separator:true},
+    {label:'更换壁纸', action:()=>showWallpaperDialog()},
     {label:'显示设置', action:()=>launchApp('settings')},
-    {label:'个性化', action:()=>{}},
+    {label:'个性化', action:()=>showWallpaperDialog()},
   ]);
+});
+
+function startDesktopLongPress(x, y) {
+  desktopLongPressTimer = setTimeout(() => {
+    desktopLongPressTimer = null;
+    showWallpaperDialog();
+  }, 600);
+}
+function cancelDesktopLongPress() {
+  if(desktopLongPressTimer) { clearTimeout(desktopLongPressTimer); desktopLongPressTimer = null; }
+}
+
+desktopIcons.addEventListener('pointerdown', e => {
+  if(e.target !== desktopIcons) return;
+  desktopLongPressTarget = e.target;
+  startDesktopLongPress();
+});
+desktopIcons.addEventListener('pointerup', e => {
+  cancelDesktopLongPress();
+  desktopLongPressTarget = null;
+});
+desktopIcons.addEventListener('pointermove', e => {
+  if(desktopLongPressTimer && e.target !== desktopLongPressTarget) cancelDesktopLongPress();
+});
+desktopIcons.addEventListener('pointercancel', () => {
+  cancelDesktopLongPress();
+  desktopLongPressTarget = null;
 });
 
 // 点击空白取消选择
@@ -1004,11 +1260,31 @@ document.getElementById('sm-search-input').addEventListener('input', e => {
   });
 });
 
-// 点击其他地方关闭开始菜单
+// 点击其他地方关闭开始菜单 / 电源菜单
 document.addEventListener('click', e => {
   if(!startMenu.contains(e.target) && e.target.id!=='tb-start-btn' && !document.getElementById('tb-start-btn').contains(e.target)) {
     startMenu.style.display='none';
   }
+  if(!powerMenu.contains(e.target) && e.target.id!=='tb-power-btn' && !document.getElementById('tb-power-btn').contains(e.target)) {
+    powerMenu.style.display='none';
+  }
+});
+
+function togglePowerMenu() {
+  powerMenu.style.display = (powerMenu.style.display==='block')?'none':'block';
+}
+document.getElementById('tb-power-btn').addEventListener('click', e => { e.stopPropagation(); togglePowerMenu(); });
+document.getElementById('pm-sleep').addEventListener('click', () => {
+  powerMenu.style.display='none';
+  lockScreen.style.display='flex';
+  lockScreen.classList.remove('unlocked');
+  resetKnob();
+});
+document.getElementById('pm-reboot').addEventListener('click', () => {
+  if(confirm('确定要重启 WebNT 吗？')) location.reload();
+});
+document.getElementById('pm-shutdown').addEventListener('click', () => {
+  if(confirm('确定要关闭 WebNT 吗？')) location.reload();
 });
 
 // ===================================================================
@@ -1028,6 +1304,7 @@ function updateTaskbarWindowButtons() {
     });
     list.appendChild(btn);
   });
+  renderPinnedTaskbar();
 }
 
 // ===================================================================
@@ -2308,6 +2585,7 @@ async function boot() {
   // 隐藏 BIOS 启动画面，显示锁屏
   bootScreen.classList.add('hidden');
   appRoot.style.display='block';
+  loadWallpaper();
   updateAllClocks();
 
   setTimeout(() => { if(bootScreen.parentNode) bootScreen.remove(); }, 600);

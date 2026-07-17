@@ -83,67 +83,67 @@ html, body {
 
 /* ── Dark Theme ─────────────────────────────────────────── */
 [data-theme="dark"] {
-  --sys-bg:              #121212;
-  --sys-bg-secondary:    #1e1e1e;
-  --sys-bg-tertiary:     #2d2d2d;
+  --sys-bg:              #070b14;
+  --sys-bg-secondary:    #0b1221;
+  --sys-bg-tertiary:     #0f223d;
   --sys-text:            #e8eaed;
   --sys-text-secondary:  #9aa0a6;
   --sys-text-disabled:   #5f6368;
-  --sys-accent:          #8ab4f8;
-  --sys-accent-hover:    #aecbfa;
-  --sys-accent-text:     #1a1c1e;
-  --sys-border:          #3c4043;
-  --sys-border-light:    #2d2d2d;
+  --sys-accent:          #38bdf8;
+  --sys-accent-hover:    #7dd3fc;
+  --sys-accent-text:     #050b14;
+  --sys-border:          rgba(255,255,255,0.10);
+  --sys-border-light:    rgba(255,255,255,0.06);
   --sys-danger:          #f28b82;
   --sys-warning:         #fdd663;
   --sys-success:         #81c995;
-  --sys-info:            #8ab4f8;
+  --sys-info:            #38bdf8;
 
-  --sys-window-bg:       #1e1e1e;
-  --sys-window-border:   #3c4043;
-  --sys-titlebar-bg:     #2d2d2d;
+  --sys-window-bg:       rgba(11, 18, 33, 0.95);
+  --sys-window-border:   rgba(255,255,255,0.10);
+  --sys-titlebar-bg:     rgba(0, 0, 0, 0.25);
   --sys-titlebar-text:   #e8eaed;
-  --sys-window-shadow:   0 4px 24px rgba(0, 0, 0, 0.4);
+  --sys-window-shadow:   0 8px 40px rgba(0, 0, 0, 0.5);
 
-  --sys-taskbar-bg:      #1e1e1e;
+  --sys-taskbar-bg:      rgba(11, 16, 30, 0.78);
   --sys-taskbar-text:    #e8eaed;
 
   --sys-terminal-bg:     #0c0c0c;
   --sys-terminal-text:   #cccccc;
-  --sys-terminal-prompt: #4ec9b0;
+  --sys-terminal-prompt: #38bdf8;
   --sys-terminal-cursor: #aeafad;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --sys-bg:              #121212;
-    --sys-bg-secondary:    #1e1e1e;
-    --sys-bg-tertiary:     #2d2d2d;
+    --sys-bg:              #070b14;
+    --sys-bg-secondary:    #0b1221;
+    --sys-bg-tertiary:     #0f223d;
     --sys-text:            #e8eaed;
     --sys-text-secondary:  #9aa0a6;
     --sys-text-disabled:   #5f6368;
-    --sys-accent:          #8ab4f8;
-    --sys-accent-hover:    #aecbfa;
-    --sys-accent-text:     #1a1c1e;
-    --sys-border:          #3c4043;
-    --sys-border-light:    #2d2d2d;
+    --sys-accent:          #38bdf8;
+    --sys-accent-hover:    #7dd3fc;
+    --sys-accent-text:     #050b14;
+    --sys-border:          rgba(255,255,255,0.10);
+    --sys-border-light:    rgba(255,255,255,0.06);
     --sys-danger:          #f28b82;
     --sys-warning:         #fdd663;
     --sys-success:         #81c995;
-    --sys-info:            #8ab4f8;
+    --sys-info:            #38bdf8;
 
-    --sys-window-bg:       #1e1e1e;
-    --sys-window-border:   #3c4043;
-    --sys-titlebar-bg:     #2d2d2d;
+    --sys-window-bg:       rgba(11, 18, 33, 0.95);
+    --sys-window-border:   rgba(255,255,255,0.10);
+    --sys-titlebar-bg:     rgba(0, 0, 0, 0.25);
     --sys-titlebar-text:   #e8eaed;
-    --sys-window-shadow:   0 4px 24px rgba(0, 0, 0, 0.4);
+    --sys-window-shadow:   0 8px 40px rgba(0, 0, 0, 0.5);
 
-    --sys-taskbar-bg:      #1e1e1e;
+    --sys-taskbar-bg:      rgba(11, 16, 30, 0.78);
     --sys-taskbar-text:    #e8eaed;
 
     --sys-terminal-bg:     #0c0c0c;
     --sys-terminal-text:   #cccccc;
-    --sys-terminal-prompt: #4ec9b0;
+    --sys-terminal-prompt: #38bdf8;
     --sys-terminal-cursor: #aeafad;
   }
 }
