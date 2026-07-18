@@ -1137,16 +1137,20 @@ loadPinnedApps(); renderPinnedTaskbar();
 // 壁纸设置
 // ===================================================================
 function applyWallpaper(value) {
-  if(!value) return;
-  if(value.startsWith('linear-gradient')) {
-    desktopBg.style.background = value;
-  } else {
-    desktopBg.style.background = `url(${value}) center/cover no-repeat`;
-  }
+  if(!value || !desktopBg) return;
+  try {
+    if(value.startsWith('linear-gradient')) {
+      desktopBg.style.background = value;
+    } else {
+      desktopBg.style.background = `url(${value}) center/cover no-repeat`;
+    }
+  } catch(e) { /* ignore invalid wallpaper */ }
 }
 function loadWallpaper() {
-  const saved = localStorage.getItem('webnt_wallpaper');
-  if(saved) applyWallpaper(saved);
+  try {
+    const saved = localStorage.getItem('webnt_wallpaper');
+    if(saved) applyWallpaper(saved);
+  } catch(e) { /* localStorage not available */ }
 }
 function showWallpaperDialog() {
   document.getElementById('wp-url-input').value = '';
@@ -1694,8 +1698,8 @@ function launchApp(appId) {
           }
         }
         // 内存 - 使用 performance.memory (Chrome)
-        if(typeof performance !== 'undefined' && (performance as any).memory) {
-          const m=(performance as any).memory;
+        if(typeof performance !== 'undefined' && performance.memory) {
+          const m=performance.memory;
           mem=Math.round((m.usedJSHeapSize/m.totalJSHeapSize)*100);
           infoText+=`内存: ${(m.usedJSHeapSize/1024/1024).toFixed(1)} MB / ${(m.totalJSHeapSize/1024/1024).toFixed(1)} MB`;
         }
@@ -2621,6 +2625,7 @@ tw.addEventListener('pointerup', () => { twDragging=false; });
 // 启动流程
 // ===================================================================
 async function boot() {
+  try {
   bootLogLine('WebNT 内核 v1.0.0 正在启动...', 'info');
   bootLogLine('Copyright (c) 2026 WebNT 项目', '');
   bootLogLine('', '');
@@ -2630,7 +2635,9 @@ async function boot() {
   bootLogLine('阶段 0: 硬件检测', 'info');
   bootLogLine(`  CPU: ${navigator.hardwareConcurrency||'?'} 核`, '');
   bootLogLine(`  内存: ${navigator.deviceMemory||'?'} GB`, '');
-  bootLogLine(`  WebGPU: ${navigator.gpu?'可用':'不可用'}`, navigator.gpu?'ok':'warn');
+  let gpuOk = false;
+  try { gpuOk = !!navigator.gpu; } catch(e) { gpuOk = false; }
+  bootLogLine(`  WebGPU: ${gpuOk?'可用':'不可用'}`, gpuOk?'ok':'warn');
   bootLogLine('', '');
   await new Promise(r=>setTimeout(r,300));
 
@@ -2684,12 +2691,20 @@ async function boot() {
 
   console.log('%c WebNT 内核 v1.0.0 就绪 %c| %c滑动解锁',
     'color:#00ff88;font-size:16px;', '', 'color:#aaa;');
+  } catch(err) {
+    bootLogLine(`启动错误: ${err.message}`, 'err');
+    console.error('Boot error:', err);
+    bootScreen.classList.add('hidden');
+    appRoot.style.display = 'block';
+    if(lockScreen && lockScreen.style.display !== 'none') unlockDesktop();
+  }
 }
 
 boot().catch(err => {
   bootLogLine(`严重错误: ${err.message}`, 'err');
   console.error(err);
   bootScreen.classList.add('hidden');
+  appRoot.style.display = 'block';
   unlockDesktop();
 });
 </script>
