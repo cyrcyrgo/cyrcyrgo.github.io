@@ -326,13 +326,15 @@
     box-shadow: 0 8px 40px rgba(0,0,0,0.5);
     font-family: 'Segoe UI', system-ui, sans-serif;
     animation: menuSlideUp 0.2s ease;
+    flex-direction: column;
   }
+  #start-menu.show { display: flex; }
   @keyframes menuSlideUp {
     from { transform: translateY(10px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
   }
   #start-menu .sm-search {
-    padding: 16px;
+    padding: 16px; flex-shrink: 0;
   }
   #start-menu .sm-search input {
     width: 100%; padding: 10px 14px; border-radius: 20px;
@@ -342,7 +344,7 @@
   }
   #start-menu .sm-search input::placeholder { color: #777; }
   #start-menu .sm-apps {
-    padding: 0 8px 8px; max-height: 320px; overflow-y: auto;
+    padding: 0 8px 8px; flex: 1; min-height: 0; overflow-y: auto;
   }
   #start-menu .sm-app-item {
     display: flex; align-items: center; gap: 14px;
@@ -359,7 +361,7 @@
   }
   #start-menu .sm-footer {
     display: flex; align-items: center; padding: 12px 16px;
-    border-top: 1px solid rgba(255,255,255,0.06); gap: 8px;
+    border-top: 1px solid rgba(255,255,255,0.06); gap: 8px; flex-shrink: 0;
   }
   #start-menu .sm-user {
     flex: 1; display: flex; align-items: center; gap: 10px;
@@ -534,7 +536,7 @@
     background: rgba(20, 20, 35, 0.95);
     border: 1px solid rgba(255,255,255,0.1);
     box-shadow: 0 8px 40px rgba(0,0,0,0.5);
-    z-index: 50; display: none; flex-direction: column;
+    z-index: 50; flex-direction: column;
     font-family: 'Segoe UI', system-ui, sans-serif;
     resize: both; min-width: 300px; min-height: 200px;
   }
@@ -1353,7 +1355,19 @@ desktopIcons.addEventListener('contextmenu', e => {
 function startDesktopLongPress(x, y) {
   desktopLongPressTimer = setTimeout(() => {
     desktopLongPressTimer = null;
-    showWallpaperDialog();
+    showContextMenu(x, y, [
+      {label:'查看', action:()=>{}},
+      {label:'排序方式', action:()=>{}},
+      {separator:true},
+      {label:'新建文件夹', action:()=>{}},
+      {label:'新建文本文档', action:()=>{}},
+      {separator:true},
+      {label:'刷新', action:()=>renderDesktopIcons()},
+      {separator:true},
+      {label:'更换壁纸', action:()=>showWallpaperDialog()},
+      {label:'显示设置', action:()=>launchApp('settings')},
+      {label:'个性化', action:()=>showWallpaperDialog()},
+    ]);
   }, 600);
 }
 function cancelDesktopLongPress() {
@@ -1363,7 +1377,7 @@ function cancelDesktopLongPress() {
 desktopIcons.addEventListener('pointerdown', e => {
   if(e.target !== desktopIcons) return;
   desktopLongPressTarget = e.target;
-  startDesktopLongPress();
+  startDesktopLongPress(e.clientX, e.clientY);
 });
 desktopIcons.addEventListener('pointerup', e => {
   cancelDesktopLongPress();
@@ -1439,7 +1453,7 @@ function renderStartMenu() {
 renderStartMenu();
 
 function toggleStartMenu() {
-  startMenu.style.display=(startMenu.style.display==='block')?'none':'block';
+  startMenu.classList.toggle('show');
 }
 document.getElementById('tb-start-btn').addEventListener('click', e => { e.stopPropagation(); toggleStartMenu(); });
 document.getElementById('sm-shutdown').addEventListener('click', () => {
@@ -1457,8 +1471,8 @@ document.getElementById('sm-search-input').addEventListener('input', e => {
 // 点击其他地方关闭开始菜单 / 电源菜单 / 右键菜单
 document.addEventListener('click', e => {
   // 关闭开始菜单
-  if(startMenu && startMenu.style.display==='block' && !startMenu.contains(e.target) && e.target.id!=='tb-start-btn' && !document.getElementById('tb-start-btn').contains(e.target)) {
-    startMenu.style.display='none';
+  if(startMenu && startMenu.classList.contains('show') && !startMenu.contains(e.target) && e.target.id!=='tb-start-btn' && !document.getElementById('tb-start-btn').contains(e.target)) {
+    startMenu.classList.remove('show');
   }
   // 关闭电源菜单
   if(powerMenu && powerMenu.style.display==='block' && !powerMenu.contains(e.target) && e.target.id!=='tb-power-btn' && !document.getElementById('tb-power-btn').contains(e.target)) {
@@ -1471,7 +1485,7 @@ document.addEventListener('click', e => {
 });
 // 桌面右键菜单点击关闭
 desktopIcons.addEventListener('click', () => {
-  if(startMenu.style.display==='block') startMenu.style.display='none';
+  if(startMenu.classList.contains('show')) startMenu.classList.remove('show');
   if(powerMenu.style.display==='block') powerMenu.style.display='none';
   hideContextMenu();
 });
@@ -2823,7 +2837,7 @@ document.addEventListener('keydown', e => {
   }
   // Escape 关闭菜单
   if(e.key==='Escape') {
-    if(startMenu.style.display==='block') startMenu.style.display='none';
+    if(startMenu.classList.contains('show')) startMenu.classList.remove('show');
     if(powerMenu.style.display==='block') powerMenu.style.display='none';
     hideContextMenu();
     return;
