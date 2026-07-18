@@ -856,7 +856,7 @@ class WindowManager {
   static get instance() { if(!this._i) this._i=new WindowManager(); return this._i; }
   createWindow(o={}) {
     const id='win_'+this.nid++;
-    const w={id,title:o.title||'Window',w:o.width||600,h:o.height||400,x:o.x??100,y:o.y??100,state:'NORMAL',appId:o.appId||null,minimized:false};
+    const w={id,title:o.title||'Window',w:o.width||600,h:o.height||400,x:o.x??100,y:o.y??100,state:'NORMAL',appId:o.appId||null,minimized:false,icon:o.icon||'\ud83d\udcc4'};
     this.wins.set(id,w); this.order.push(id); this.focus=id;
     this._emit('window-created',w); return id;
   }
@@ -947,6 +947,9 @@ class TerminalExecutor {
 }
 
 window.__WebNT__ = { GlobalDisplayAPI, WindowManager, SysCallBridge, TerminalCommandRegistry, TerminalExecutor };
+window.WindowManager = WindowManager;
+window.updateTaskbarWindowButtons = updateTaskbarWindowButtons;
+window.showWallpaperDialog = showWallpaperDialog;
 
 // 计算器全局辅助函数
 window.__calcState = {};
@@ -1024,6 +1027,43 @@ function updateAllClocks() {
   if(tbcd) tbcd.textContent=`${now.getMonth()+1}/${now.getDate()}`;
 }
 updateAllClocks(); setInterval(updateAllClocks, 1000);
+
+// 点击任务栏时钟显示同步时间弹窗
+document.getElementById('tb-clock').addEventListener('click', () => {
+  let popup = document.getElementById('clock-sync-popup');
+  if(popup) { popup.remove(); return; }
+  const server = localStorage.getItem('webnt_time_server') || 'time.windows.com';
+  popup = document.createElement('div');
+  popup.id = 'clock-sync-popup';
+  popup.style.cssText = 'position:fixed;bottom:48px;right:8px;background:rgba(15,23,42,0.95);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px;z-index:2500;width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.5);';
+  popup.innerHTML = `
+    <div style="font-size:14px;color:#fff;margin-bottom:12px;font-weight:500;">时间同步</div>
+    <div style="font-size:12px;color:#888;margin-bottom:8px;">当前时间服务器</div>
+    <input type="text" id="clock-server-input" value="${server}" style="width:100%;padding:8px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e0e0e0;font-size:13px;outline:none;margin-bottom:12px;box-sizing:border-box;">
+    <button id="clock-sync-btn" style="width:100%;padding:10px;background:#667eea;border:none;border-radius:6px;color:#fff;font-size:13px;cursor:pointer;transition:background 0.2s;">立即同步时间</button>
+    <div id="clock-sync-status" style="margin-top:8px;font-size:12px;color:#888;text-align:center;"></div>
+  `;
+  document.body.appendChild(popup);
+  document.getElementById('clock-sync-btn').addEventListener('click', () => {
+    const newServer = document.getElementById('clock-server-input').value.trim();
+    if(newServer) localStorage.setItem('webnt_time_server', newServer);
+    const status = document.getElementById('clock-sync-status');
+    status.textContent = '正在同步...';
+    status.style.color = '#8ab4f8';
+    setTimeout(() => {
+      status.textContent = '✓ 时间已同步 (' + newServer + ')';
+      status.style.color = '#81c995';
+      updateAllClocks();
+    }, 800);
+  });
+  const closePopup = (e) => {
+    if(!popup.contains(e.target) && e.target.id !== 'tb-clock') {
+      popup.remove();
+      document.removeEventListener('click', closePopup);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closePopup), 0);
+});
 
 // ===================================================================
 // 锁屏滑动解锁
@@ -1642,11 +1682,16 @@ function launchApp(appId) {
           .fm-toolbar button { background:rgba(255,255,255,0.06);border:none;color:#ccc;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:13px; }
           .fm-toolbar button:hover { background:rgba(255,255,255,0.12); }
           .fm-path { flex:1;padding:4px 10px;background:rgba(255,255,255,0.04);border-radius:4px;font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-          .fm-files { flex:1;overflow-y:auto;padding:8px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:4px; }
-          .fm-file { display:flex;flex-direction:column;align-items:center;width:80px;padding:8px 4px;border-radius:8px;cursor:pointer;text-align:center; }
+          .fm-files { flex:1;overflow-y:auto;padding:8px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:4px;position:relative; }
+          .fm-file { display:flex;flex-direction:column;align-items:center;width:80px;padding:8px 4px;border-radius:8px;cursor:pointer;text-align:center;position:relative; }
           .fm-file:hover { background:rgba(255,255,255,0.05); }
+          .fm-file.selected { background:rgba(102,126,234,0.2); }
           .fm-file .fm-file-icon { font-size:32px; }
           .fm-file .fm-file-name { font-size:11px;color:#ccc;margin-top:4px;word-break:break-all; }
+          .fm-context-menu { position:fixed;background:rgba(30,30,40,0.98);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:4px 0;min-width:160px;z-index:3000;box-shadow:0 4px 20px rgba(0,0,0,0.5); }
+          .fm-context-menu-item { padding:8px 16px;font-size:13px;color:#ccc;cursor:pointer; }
+          .fm-context-menu-item:hover { background:rgba(102,126,234,0.3); }
+          .fm-context-menu-separator { height:1px;background:rgba(255,255,255,0.08);margin:4px 0; }
         </style>
         <div class="fm-wrap">
           <div class="fm-sidebar" id="fm-sidebar">
@@ -1662,6 +1707,8 @@ function launchApp(appId) {
               <button onclick="window.__fmBack()" title="返回">\u2190</button>
               <button onclick="window.__fmForward()" title="前进">\u2192</button>
               <button onclick="window.__fmUp()" title="上级">\u2191</button>
+              <button onclick="window.__fmNewFolder()" title="新建文件夹">\ud83d\udcc1+</button>
+              <button onclick="window.__fmNewFile()" title="新建文件">\ud83d\udcc4+</button>
               <div class="fm-path" id="fm-path">/</div>
             </div>
             <div class="fm-files" id="fm-files"></div>
@@ -1674,6 +1721,8 @@ function launchApp(appId) {
         window.__fmHistory = [];
         window.__fmHistoryIdx = -1;
         window.__fmCurrentPath = '/';
+        window.__fmSelectedFile = null;
+        window.__fmClipboard = null;
         const fmFS = {
           '/': {type:'dir',children:['下载','文档','桌面','系统','临时']},
           '/下载': {type:'dir',children:[]},
@@ -1681,19 +1730,20 @@ function launchApp(appId) {
           '/桌面': {type:'dir',children:['快捷方式.lnk']},
           '/系统': {type:'dir',children:['kernel.config','drivers.json','boot.log']},
           '/临时': {type:'dir',children:['cache.dat','日志.log']},
-          '/文档/readme.txt': {type:'file',size:'1.2 KB',content:'欢迎使用 WebNT 文件管理系统！'},
-          '/文档/笔记.txt': {type:'file',size:'3.5 KB',content:'今天的笔记...'},
-          '/文档/项目计划.txt': {type:'file',size:'8.1 KB',content:'Q3 项目计划\n1. 完成 UI 组件\n2. 集成测试\n3. 发布'},
-          '/桌面/快捷方式.lnk': {type:'file',size:'0.5 KB',content:'[快捷方式]'},
-          '/系统/kernel.config': {type:'file',size:'2.3 KB',content:'kernel_version=1.0.0\nscheduler=smp\nmax_threads=256'},
-          '/系统/drivers.json': {type:'file',size:'4.7 KB',content:'{"display":"webgpu","fs":"internal","net":"stream"}'},
-          '/系统/boot.log': {type:'file',size:'12.1 KB',content:'[正常] 内核初始化完成\n[正常] 驱动加载完成\n[正常] 用户会话已启动'},
-          '/临时/cache.dat': {type:'file',size:'0.8 KB',content:'[二进制数据]'},
-          '/临时/日志.log': {type:'file',size:'2.1 KB',content:'[日志数据]'},
+          '/文档/readme.txt': {type:'file',size:'1.2 KB',content:'欢迎使用 WebNT 文件管理系统！',modified:'2024-01-15 10:30'},
+          '/文档/笔记.txt': {type:'file',size:'3.5 KB',content:'今天的笔记...',modified:'2024-01-16 14:20'},
+          '/文档/项目计划.txt': {type:'file',size:'8.1 KB',content:'Q3 项目计划\n1. 完成 UI 组件\n2. 集成测试\n3. 发布',modified:'2024-01-14 09:15'},
+          '/桌面/快捷方式.lnk': {type:'file',size:'0.5 KB',content:'[快捷方式]',modified:'2024-01-10 16:45'},
+          '/系统/kernel.config': {type:'file',size:'2.3 KB',content:'kernel_version=1.0.0\nscheduler=smp\nmax_threads=256',modified:'2024-01-01 00:00'},
+          '/系统/drivers.json': {type:'file',size:'4.7 KB',content:'{"display":"webgpu","fs":"internal","net":"stream"}',modified:'2024-01-01 00:00'},
+          '/系统/boot.log': {type:'file',size:'12.1 KB',content:'[正常] 内核初始化完成\n[正常] 驱动加载完成\n[正常] 用户会话已启动',modified:'2024-01-01 00:00'},
+          '/临时/cache.dat': {type:'file',size:'0.8 KB',content:'[二进制数据]',modified:'2024-01-17 08:30'},
+          '/临时/日志.log': {type:'file',size:'2.1 KB',content:'[日志数据]',modified:'2024-01-17 09:00'},
         };
         window.__fmNavigate = function(path) {
           if(!fmFS[path] || fmFS[path].type !== 'dir') return;
           window.__fmCurrentPath = path;
+          window.__fmSelectedFile = null;
           window.__fmHistory = window.__fmHistory.slice(0, window.__fmHistoryIdx + 1);
           window.__fmHistory.push(path);
           window.__fmHistoryIdx = window.__fmHistory.length - 1;
@@ -1703,6 +1753,7 @@ function launchApp(appId) {
           if(window.__fmHistoryIdx > 0) {
             window.__fmHistoryIdx--;
             window.__fmCurrentPath = window.__fmHistory[window.__fmHistoryIdx];
+            window.__fmSelectedFile = null;
             window.__fmRender();
           }
         };
@@ -1710,6 +1761,7 @@ function launchApp(appId) {
           if(window.__fmHistoryIdx < window.__fmHistory.length - 1) {
             window.__fmHistoryIdx++;
             window.__fmCurrentPath = window.__fmHistory[window.__fmHistoryIdx];
+            window.__fmSelectedFile = null;
             window.__fmRender();
           }
         };
@@ -1718,6 +1770,85 @@ function launchApp(appId) {
           const idx = p.lastIndexOf('/');
           if(idx > 0) window.__fmNavigate(p.substring(0, idx));
           else if(window.__fmCurrentPath !== '/') window.__fmNavigate('/');
+        };
+        window.__fmNewFolder = function() {
+          const name = prompt('输入文件夹名称:', '新建文件夹');
+          if(!name) return;
+          const path = window.__fmCurrentPath === '/' ? '/' + name : window.__fmCurrentPath + '/' + name;
+          if(fmFS[path]) { alert('文件或文件夹已存在'); return; }
+          fmFS[path] = {type:'dir',children:[]};
+          const dir = fmFS[window.__fmCurrentPath];
+          if(!dir.children.includes(name)) dir.children.push(name);
+          window.__fmRender();
+        };
+        window.__fmNewFile = function() {
+          const name = prompt('输入文件名称:', '新建文件.txt');
+          if(!name) return;
+          const path = window.__fmCurrentPath === '/' ? '/' + name : window.__fmCurrentPath + '/' + name;
+          if(fmFS[path]) { alert('文件或文件夹已存在'); return; }
+          fmFS[path] = {type:'file',size:'0 KB',content:'',modified:new Date().toLocaleString('zh-CN')};
+          const dir = fmFS[window.__fmCurrentPath];
+          if(!dir.children.includes(name)) dir.children.push(name);
+          window.__fmRender();
+        };
+        window.__fmDelete = function(path) {
+          if(!confirm('确定要删除此项目吗？')) return;
+          const name = path.split('/').pop();
+          const parentPath = path.substring(0, path.lastIndexOf('/')) || '/';
+          const parent = fmFS[parentPath];
+          if(parent) parent.children = parent.children.filter(c => c !== name);
+          delete fmFS[path];
+          window.__fmSelectedFile = null;
+          window.__fmRender();
+        };
+        window.__fmRename = function(path) {
+          const oldName = path.split('/').pop();
+          const newName = prompt('输入新名称:', oldName);
+          if(!newName || newName === oldName) return;
+          const parentPath = path.substring(0, path.lastIndexOf('/')) || '/';
+          const newPath = parentPath === '/' ? '/' + newName : parentPath + '/' + newName;
+          if(fmFS[newPath]) { alert('文件或文件夹已存在'); return; }
+          fmFS[newPath] = fmFS[path];
+          delete fmFS[path];
+          const parent = fmFS[parentPath];
+          if(parent) {
+            parent.children = parent.children.map(c => c === oldName ? newName : c);
+          }
+          window.__fmSelectedFile = null;
+          window.__fmRender();
+        };
+        window.__fmCopy = function(path) {
+          window.__fmClipboard = {action:'copy',path:path};
+        };
+        window.__fmCut = function(path) {
+          window.__fmClipboard = {action:'cut',path:path};
+        };
+        window.__fmPaste = function() {
+          if(!window.__fmClipboard) return;
+          const srcPath = window.__fmClipboard.path;
+          const name = srcPath.split('/').pop();
+          const destPath = window.__fmCurrentPath === '/' ? '/' + name : window.__fmCurrentPath + '/' + name;
+          if(fmFS[destPath]) { alert('目标位置已存在同名文件'); return; }
+          fmFS[destPath] = {...fmFS[srcPath]};
+          const dir = fmFS[window.__fmCurrentPath];
+          if(!dir.children.includes(name)) dir.children.push(name);
+          if(window.__fmClipboard.action === 'cut') {
+            const srcParentPath = srcPath.substring(0, srcPath.lastIndexOf('/')) || '/';
+            const srcParent = fmFS[srcParentPath];
+            if(srcParent) srcParent.children = srcParent.children.filter(c => c !== name);
+            delete fmFS[srcPath];
+            window.__fmClipboard = null;
+          }
+          window.__fmRender();
+        };
+        window.__fmProperties = function(path) {
+          const entry = fmFS[path];
+          if(!entry) return;
+          const name = path.split('/').pop();
+          const type = entry.type === 'dir' ? '文件夹' : '文件';
+          const size = entry.size || '-';
+          const modified = entry.modified || '-';
+          alert(`名称: ${name}\n类型: ${type}\n大小: ${size}\n修改时间: ${modified}\n路径: ${path}`);
         };
         window.__fmRender = function() {
           const path = window.__fmCurrentPath;
@@ -1743,14 +1874,46 @@ function launchApp(appId) {
             const isDir = entry && entry.type === 'dir';
             const icon = isDir ? '\ud83d\udcc1' : (name.endsWith('.txt')||name.endsWith('.log')?'\ud83d\udcc4':name.endsWith('.json')||name.endsWith('.config')?'\u2699\ufe0f':name.endsWith('.lnk')?'\ud83d\udd17':'\ud83d\udce6');
             const size = entry && entry.size ? entry.size : '';
-            return '<div class="fm-file" ondblclick="'+(isDir ? "window.__fmNavigate('"+fullPath+"')" : "window.__fmOpenFile('"+fullPath+"')")+'"><div class="fm-file-icon">'+icon+'</div><div class="fm-file-name">'+name+'</div>'+ (size ? '<div style="font-size:10px;color:#666">'+size+'</div>' : '') +'</div>';
+            const selected = window.__fmSelectedFile === fullPath ? ' selected' : '';
+            return '<div class="fm-file'+selected+'" onclick="window.__fmSelect(\''+fullPath+'\')" ondblclick="'+(isDir ? "window.__fmNavigate('"+fullPath+"')" : "window.__fmOpenFile('"+fullPath+"')")+'" oncontextmenu="window.__fmContextMenu(event,\''+fullPath+'\')"><div class="fm-file-icon">'+icon+'</div><div class="fm-file-name">'+name+'</div>'+ (size ? '<div style="font-size:10px;color:#666">'+size+'</div>' : '') +'</div>';
           }).join('');
+        };
+        window.__fmSelect = function(path) {
+          window.__fmSelectedFile = path;
+          window.__fmRender();
+        };
+        window.__fmContextMenu = function(e, path) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.__fmSelect(path);
+          const menu = document.createElement('div');
+          menu.className = 'fm-context-menu';
+          menu.innerHTML = `
+            <div class="fm-context-menu-item" onclick="window.__fmOpenFile('${path}');this.parentElement.remove()">打开</div>
+            <div class="fm-context-menu-separator"></div>
+            <div class="fm-context-menu-item" onclick="window.__fmCopy('${path}');this.parentElement.remove()">复制</div>
+            <div class="fm-context-menu-item" onclick="window.__fmCut('${path}');this.parentElement.remove()">剪切</div>
+            <div class="fm-context-menu-item" onclick="window.__fmRename('${path}');this.parentElement.remove()">重命名</div>
+            <div class="fm-context-menu-item" onclick="window.__fmDelete('${path}');this.parentElement.remove()">删除</div>
+            <div class="fm-context-menu-separator"></div>
+            <div class="fm-context-menu-item" onclick="window.__fmProperties('${path}');this.parentElement.remove()">属性</div>
+          `;
+          menu.style.left = e.clientX + 'px';
+          menu.style.top = e.clientY + 'px';
+          document.body.appendChild(menu);
+          const closeMenu = () => { menu.remove(); document.removeEventListener('click', closeMenu); };
+          setTimeout(() => document.addEventListener('click', closeMenu), 0);
         };
         window.__fmOpenFile = function(path) {
           const entry = fmFS[path];
           if(!entry) return;
           showAppWindow(path.split('/').pop(), '\ud83d\udcc4', '<div style="padding:8px;white-space:pre-wrap;font-family:monospace;font-size:13px;color:#e0e0e0;height:100%;overflow:auto">'+ (entry.content || '[无法预览]') +'</div>');
         };
+        document.addEventListener('keydown', e => {
+          if(e.ctrlKey && e.key === 'v' && window.__fmClipboard) {
+            window.__fmPaste();
+          }
+        });
         window.__fmNavigate('/');
       } else {
         setTimeout(() => window.__fmRender(), 50);
@@ -1816,6 +1979,10 @@ function launchApp(appId) {
               <span class="ss-icon">\ud83d\udd0a</span>
               <span>声音</span>
             </div>
+            <div class="ss-item" data-panel="apps">
+              <span class="ss-icon">\ud83d\udce6</span>
+              <span>应用</span>
+            </div>
             <div class="ss-item" data-panel="about">
               <span class="ss-icon">\u2139\ufe0f</span>
               <span>关于</span>
@@ -1826,6 +1993,7 @@ function launchApp(appId) {
             <div id="panel-display" style="display:none"></div>
             <div id="panel-personalization" style="display:none"></div>
             <div id="panel-sound" style="display:none"></div>
+            <div id="panel-apps" style="display:none"></div>
             <div id="panel-about" style="display:none"></div>
           </div>
         </div>
@@ -1899,22 +2067,54 @@ function launchApp(appId) {
         function renderDisplay() {
           const fontSize = localStorage.getItem('webnt_font_size') || 'normal';
           const animations = localStorage.getItem('webnt_animations') !== 'false';
+          const resolution = localStorage.getItem('webnt_resolution') || 'auto';
+          const zoom = localStorage.getItem('webnt_zoom') || '100';
+          const resolutions = [
+            { label: '自动', value: 'auto' },
+            { label: '1920×1080', value: '1920x1080' },
+            { label: '1366×768', value: '1366x768' },
+            { label: '1280×720', value: '1280x720' },
+            { label: '1024×768', value: '1024x768' },
+            { label: '800×600', value: '800x600' }
+          ];
+          const zoomLevels = ['75', '80', '90', '100', '110', '125', '150', '175', '200'];
           return `
             <div class="sc-section">
               <h3>显示分辨率</h3>
               <div class="sc-item">
                 <div>
-                  <div class="sc-label">屏幕分辨率</div>
-                  <div class="sc-desc">当前显示分辨率</div>
+                  <div class="sc-label">当前分辨率</div>
+                  <div class="sc-desc">实际显示分辨率</div>
                 </div>
                 <div class="sc-value">${window.innerWidth} × ${window.innerHeight}</div>
               </div>
               <div class="sc-item">
                 <div>
-                  <div class="sc-label">缩放比例</div>
+                  <div class="sc-label">设置分辨率</div>
+                  <div class="sc-desc">选择显示分辨率（需要刷新）</div>
+                </div>
+                <select onchange="window.__setResolution(this.value)" style="padding:6px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#ccc;font-size:13px;cursor:pointer;">
+                  ${resolutions.map(r => `<option value="${r.value}" ${resolution === r.value ? 'selected' : ''}>${r.label}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="sc-section">
+              <h3>缩放比例</h3>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">当前缩放</div>
                   <div class="sc-desc">设备像素比</div>
                 </div>
                 <div class="sc-value">${window.devicePixelRatio}x</div>
+              </div>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">设置缩放</div>
+                  <div class="sc-desc">调整界面缩放比例（需要刷新）</div>
+                </div>
+                <select onchange="window.__setZoom(this.value)" style="padding:6px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#ccc;font-size:13px;cursor:pointer;">
+                  ${zoomLevels.map(z => `<option value="${z}" ${zoom === z ? 'selected' : ''}>${z}%</option>`).join('')}
+                </select>
               </div>
             </div>
             <div class="sc-section">
@@ -1999,6 +2199,46 @@ function launchApp(appId) {
           `;
         }
         
+        function renderApps() {
+          const installedApps = JSON.parse(localStorage.getItem('webnt_installed_apps') || '[]');
+          const defaultApps = [
+            { id: 'files', name: '文件管理器', icon: '\ud83d\udcc1', version: '1.0.0', builtIn: true },
+            { id: 'settings', name: '设置', icon: '\u2699\ufe0f', version: '2.0.0', builtIn: true },
+            { id: 'terminal', name: '终端', icon: '\u2328\ufe0f', version: '1.0.0', builtIn: true },
+            { id: 'notepad', name: '记事本', icon: '\ud83d\udcc4', version: '1.0.0', builtIn: true },
+            { id: 'calculator', name: '计算器', icon: '\ud83d\uddd2\ufe0f', version: '1.0.0', builtIn: true },
+            { id: 'paint', name: '画图', icon: '\ud83c\udfa8', version: '1.0.0', builtIn: true },
+            { id: 'player', name: '播放器', icon: '\ud83c\udfa5', version: '1.0.0', builtIn: true },
+            { id: 'browser', name: '浏览器', icon: '\ud83c\udf10', version: '1.0.0', builtIn: true },
+            { id: 'weather', name: '天气', icon: '\u2600\ufe0f', version: '1.0.0', builtIn: true },
+            { id: 'taskmgr', name: '任务管理', icon: '\ud83d\udcca', version: '1.0.0', builtIn: true },
+            { id: 'sysmon', name: '系统监控', icon: '\ud83d\udcbb', version: '1.0.0', builtIn: true },
+            { id: 'appstore', name: '应用商店', icon: '\ud83d\uded2', version: '1.0.0', builtIn: true },
+            { id: 'recycle', name: '回收站', icon: '\ud83d\uddd1\ufe0f', version: '1.0.0', builtIn: true },
+            { id: 'computer', name: '此电脑', icon: '\ud83d\udda5\ufe0f', version: '1.0.0', builtIn: true }
+          ];
+          const allApps = [...defaultApps, ...installedApps.map(a => ({ ...a, builtIn: false }))];
+          return `
+            <div class="sc-section">
+              <h3>已安装应用 (${allApps.length})</h3>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                ${allApps.map(app => `
+                  <div class="sc-item" style="padding:12px;background:rgba(255,255,255,0.02);border-radius:8px;">
+                    <div style="display:flex;align-items:center;gap:12px;flex:1;">
+                      <span style="font-size:24px;">${app.icon}</span>
+                      <div style="flex:1;">
+                        <div style="font-size:14px;color:#e0e0e0;">${app.name}</div>
+                        <div style="font-size:12px;color:#888;">v${app.version} ${app.builtIn ? '(系统应用)' : '(用户安装)'}</div>
+                      </div>
+                    </div>
+                    ${!app.builtIn ? `<button class="settings-btn secondary" onclick="window.__uninstallApp('${app.id}')" style="padding:6px 12px;font-size:12px;">卸载</button>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+        
         function renderAbout() {
           return `
             <div class="sc-section">
@@ -2052,6 +2292,7 @@ function launchApp(appId) {
         document.getElementById('panel-display').innerHTML = renderDisplay();
         document.getElementById('panel-personalization').innerHTML = renderPersonalization();
         document.getElementById('panel-sound').innerHTML = renderSound();
+        document.getElementById('panel-apps').innerHTML = renderApps();
         document.getElementById('panel-about').innerHTML = renderAbout();
         
         sidebar.querySelectorAll('.ss-item').forEach(item => {
@@ -2085,6 +2326,23 @@ function launchApp(appId) {
         window.__setVolume = function(val) {
           localStorage.setItem('webnt_volume', val);
         };
+        
+        window.__setResolution = function(res) {
+          localStorage.setItem('webnt_resolution', res);
+          document.getElementById('panel-display').innerHTML = renderDisplay();
+        };
+        
+        window.__setZoom = function(zoom) {
+          localStorage.setItem('webnt_zoom', zoom);
+          document.getElementById('panel-display').innerHTML = renderDisplay();
+        };
+        
+        window.__uninstallApp = function(appId) {
+          const installed = JSON.parse(localStorage.getItem('webnt_installed_apps') || '[]');
+          const filtered = installed.filter(a => a.id !== appId);
+          localStorage.setItem('webnt_installed_apps', JSON.stringify(filtered));
+          document.getElementById('panel-apps').innerHTML = renderApps();
+        };
       });
       break;
     case 'notepad':
@@ -2112,6 +2370,135 @@ function launchApp(appId) {
           用户代理: ${navigator.userAgent.substring(0,50)}...
         </div>
       `);
+      break;
+    case 'player':
+      showAppWindow('播放器', '\ud83c\udfa5', `
+        <style>
+          .player-tabs { display:flex;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:16px; }
+          .player-tab { flex:1;padding:10px;text-align:center;cursor:pointer;color:#888;border-bottom:2px solid transparent;transition:all 0.2s; }
+          .player-tab:hover { color:#ccc; }
+          .player-tab.active { color:#8ab4f8;border-bottom-color:#667eea; }
+          .player-panel { display:none; }
+          .player-panel.active { display:block; }
+          .player-input-group { display:flex;gap:8px;margin-bottom:12px; }
+          .player-input { flex:1;padding:8px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#e0e0e0;font-size:13px;outline:none; }
+          .player-input:focus { border-color:#667eea; }
+          .player-btn { padding:8px 16px;border-radius:6px;border:none;cursor:pointer;font-size:13px;transition:all 0.2s; }
+          .player-btn.primary { background:#667eea;color:#fff; }
+          .player-btn.primary:hover { background:#5a6fd6; }
+          .player-btn.secondary { background:rgba(255,255,255,0.08);color:#ccc; }
+          .player-btn.secondary:hover { background:rgba(255,255,255,0.12); }
+          .player-media-wrap { width:100%;max-height:400px;background:#000;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center; }
+          .player-media-wrap video,.player-media-wrap audio,.player-media-wrap img { max-width:100%;max-height:400px; }
+          .player-media-wrap img { object-fit:contain; }
+          .player-placeholder { display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:#666;gap:12px; }
+          .player-placeholder-icon { font-size:48px;opacity:0.3; }
+          .player-placeholder-text { font-size:13px; }
+          .player-file-input { display:none; }
+        </style>
+        <div class="player-tabs">
+          <div class="player-tab active" data-tab="video">\ud83c\udfac 视频</div>
+          <div class="player-tab" data-tab="audio">\ud83c\udfb5 音频</div>
+          <div class="player-tab" data-tab="image">\ud83d\uddbc\ufe0f 图片</div>
+        </div>
+        <div class="player-panel active" id="player-panel-video">
+          <div class="player-input-group">
+            <input type="text" class="player-input" id="player-video-url" placeholder="输入视频链接 (MP4/WebM/OGG)">
+            <button class="player-btn primary" onclick="window.__playerLoadVideo()">播放</button>
+            <button class="player-btn secondary" onclick="document.getElementById('player-video-file').click()">上传</button>
+            <input type="file" class="player-file-input" id="player-video-file" accept="video/*" onchange="window.__playerLoadVideoFile(this)">
+          </div>
+          <div class="player-media-wrap" id="player-video-wrap">
+            <div class="player-placeholder">
+              <div class="player-placeholder-icon">\ud83c\udfac</div>
+              <div class="player-placeholder-text">输入视频链接或上传视频文件</div>
+            </div>
+          </div>
+        </div>
+        <div class="player-panel" id="player-panel-audio">
+          <div class="player-input-group">
+            <input type="text" class="player-input" id="player-audio-url" placeholder="输入音频链接 (MP3/WAV/OGG)">
+            <button class="player-btn primary" onclick="window.__playerLoadAudio()">播放</button>
+            <button class="player-btn secondary" onclick="document.getElementById('player-audio-file').click()">上传</button>
+            <input type="file" class="player-file-input" id="player-audio-file" accept="audio/*" onchange="window.__playerLoadAudioFile(this)">
+          </div>
+          <div class="player-media-wrap" id="player-audio-wrap">
+            <div class="player-placeholder">
+              <div class="player-placeholder-icon">\ud83c\udfb5</div>
+              <div class="player-placeholder-text">输入音频链接或上传音频文件</div>
+            </div>
+          </div>
+        </div>
+        <div class="player-panel" id="player-panel-image">
+          <div class="player-input-group">
+            <input type="text" class="player-input" id="player-image-url" placeholder="输入图片链接 (JPG/PNG/GIF/WebP)">
+            <button class="player-btn primary" onclick="window.__playerLoadImage()">显示</button>
+            <button class="player-btn secondary" onclick="document.getElementById('player-image-file').click()">上传</button>
+            <input type="file" class="player-file-input" id="player-image-file" accept="image/*" onchange="window.__playerLoadImageFile(this)">
+          </div>
+          <div class="player-media-wrap" id="player-image-wrap">
+            <div class="player-placeholder">
+              <div class="player-placeholder-icon">\ud83d\uddbc\ufe0f</div>
+              <div class="player-placeholder-text">输入图片链接或上传图片文件</div>
+            </div>
+          </div>
+        </div>
+      `);
+      requestAnimationFrame(() => {
+        document.querySelectorAll('.player-tab').forEach(tab => {
+          tab.addEventListener('click', () => {
+            document.querySelectorAll('.player-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.player-panel').forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById('player-panel-' + tab.dataset.tab).classList.add('active');
+          });
+        });
+        
+        window.__playerLoadVideo = function() {
+          const url = document.getElementById('player-video-url').value.trim();
+          if(!url) return;
+          const wrap = document.getElementById('player-video-wrap');
+          wrap.innerHTML = '<video controls autoplay src="' + url + '"></video>';
+        };
+        
+        window.__playerLoadVideoFile = function(input) {
+          const file = input.files[0];
+          if(!file) return;
+          const url = URL.createObjectURL(file);
+          const wrap = document.getElementById('player-video-wrap');
+          wrap.innerHTML = '<video controls autoplay src="' + url + '"></video>';
+        };
+        
+        window.__playerLoadAudio = function() {
+          const url = document.getElementById('player-audio-url').value.trim();
+          if(!url) return;
+          const wrap = document.getElementById('player-audio-wrap');
+          wrap.innerHTML = '<audio controls autoplay src="' + url + '" style="width:100%;padding:20px"></audio>';
+        };
+        
+        window.__playerLoadAudioFile = function(input) {
+          const file = input.files[0];
+          if(!file) return;
+          const url = URL.createObjectURL(file);
+          const wrap = document.getElementById('player-audio-wrap');
+          wrap.innerHTML = '<audio controls autoplay src="' + url + '" style="width:100%;padding:20px"></audio>';
+        };
+        
+        window.__playerLoadImage = function() {
+          const url = document.getElementById('player-image-url').value.trim();
+          if(!url) return;
+          const wrap = document.getElementById('player-image-wrap');
+          wrap.innerHTML = '<img src="' + url + '" alt="Image">';
+        };
+        
+        window.__playerLoadImageFile = function(input) {
+          const file = input.files[0];
+          if(!file) return;
+          const url = URL.createObjectURL(file);
+          const wrap = document.getElementById('player-image-wrap');
+          wrap.innerHTML = '<img src="' + url + '" alt="Image">';
+        };
+      });
       break;
     case 'recycle':
       showAppWindow('回收站', '\ud83d\uddd1\ufe0f', `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#777">回收站为空</div>`);
@@ -2207,7 +2594,7 @@ function launchApp(appId) {
           <tr><td>1</td><td>系统</td><td style="color:#81c995">运行中</td><td>0.2%</td><td>4.2 MB</td><td></td></tr>
           <tr><td>2</td><td>内核</td><td style="color:#81c995">运行中</td><td>0.5%</td><td>8.1 MB</td><td></td></tr>
           <tr><td>3</td><td>桌面</td><td style="color:#81c995">运行中</td><td>1.2%</td><td>12.4 MB</td><td></td></tr>
-          ${WindowManager.instance.getWindowList().map((w,i)=>'<tr><td>'+(i+4)+'</td><td>'+w.title+'</td><td style="color:#81c995">运行中</td><td>'+(Math.random()*2).toFixed(1)+'%</td><td>'+(Math.random()*20+5).toFixed(1)+' MB</td><td><button class="tm-kill" onclick="document.getElementById(\'appwin_'+w.appId+'\')?.remove();updateTaskbarWindowButtons();this.closest(\'tr\').remove()">结束</button></td></tr>').join('')}
+          ${WindowManager.instance.getWindowList().map((w,i)=>'<tr><td>'+(i+4)+'</td><td>'+w.title+'</td><td style="color:#81c995">运行中</td><td>'+(Math.random()*2).toFixed(1)+'%</td><td>'+(Math.random()*20+5).toFixed(1)+' MB</td><td><button class="tm-kill" onclick="const el=document.getElementById(\''+w.appId+'\');if(el)el.remove();WindowManager.instance.destroyWindow(\''+w.id+'\');updateTaskbarWindowButtons();this.closest(\'tr\').remove()">结束</button></td></tr>').join('')}
         </table>
       `);
       break;
@@ -2358,15 +2745,26 @@ function launchApp(appId) {
         const ctx = canvas.getContext('2d');
         let drawing = false;
         function resize() {
-  renderDesktopIcons();
-  updateTaskbarWindowButtons();
-}
+          const rect = wrap.getBoundingClientRect();
+          canvas.width = rect.width;
+          canvas.height = rect.height;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
         resize();
         new ResizeObserver(resize).observe(wrap);
+        function getCanvasPos(e) {
+          const rect = canvas.getBoundingClientRect();
+          return {
+            x: (e.clientX - rect.left) * (canvas.width / rect.width),
+            y: (e.clientY - rect.top) * (canvas.height / rect.height)
+          };
+        }
         canvas.addEventListener('pointerdown', e => {
           drawing = true;
+          const pos = getCanvasPos(e);
           ctx.beginPath();
-          ctx.moveTo(e.offsetX, e.offsetY);
+          ctx.moveTo(pos.x, pos.y);
           ctx.strokeStyle = colorPicker.value;
           ctx.lineWidth = parseInt(sizeSlider.value);
           ctx.lineCap = 'round';
@@ -2374,7 +2772,8 @@ function launchApp(appId) {
         });
         canvas.addEventListener('pointermove', e => {
           if(!drawing) return;
-          ctx.lineTo(e.offsetX, e.offsetY);
+          const pos = getCanvasPos(e);
+          ctx.lineTo(pos.x, pos.y);
           ctx.stroke();
         });
         canvas.addEventListener('pointerup', () => { drawing = false; });
