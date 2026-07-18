@@ -20,18 +20,19 @@
   body {
     margin: 0; padding: 0; overflow: hidden;
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    background: #0a0a0a; color: #e0e0e0;
+    background: #0a0a0f; color: #e8eaf0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     user-select: none;
     -webkit-user-select: none;
+    letter-spacing: 0.01em;
   }
-  ::selection { background: rgba(0,255,136,0.3); color: #fff; }
+  ::selection { background: rgba(99,102,241,0.35); color: #fff; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
-  :focus-visible { outline: 2px solid rgba(0,255,136,0.6); outline-offset: 2px; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+  :focus-visible { outline: 2px solid rgba(99,102,241,0.6); outline-offset: 2px; border-radius: 4px; }
   button, input, select, textarea { touch-action: manipulation; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
@@ -42,23 +43,32 @@
      ============================================================ */
   #boot-screen {
     position: fixed; inset: 0; z-index: 99999;
-    background: #0a0a0a; display: flex; flex-direction: column;
+    background: radial-gradient(ellipse at center, #0f1419 0%, #0a0a0f 100%);
+    display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     font-family: 'Courier New', monospace; color: #00ff00;
-    transition: opacity 0.5s ease-out;
+    transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   }
   #boot-screen.hidden { opacity: 0; pointer-events: none; }
   #boot-screen .boot-logo {
-    font-size: 28px; font-weight: bold; color: #00ff88;
-    margin-bottom: 8px; letter-spacing: 4px;
-    text-shadow: 0 0 10px rgba(0,255,136,0.5);
+    font-size: 32px; font-weight: 700; color: #00ff88;
+    margin-bottom: 10px; letter-spacing: 6px;
+    text-shadow: 0 0 20px rgba(0,255,136,0.6), 0 0 40px rgba(0,255,136,0.3);
+    animation: logoGlow 2s ease-in-out infinite alternate;
+  }
+  @keyframes logoGlow {
+    from { text-shadow: 0 0 20px rgba(0,255,136,0.6), 0 0 40px rgba(0,255,136,0.3); }
+    to { text-shadow: 0 0 30px rgba(0,255,136,0.8), 0 0 60px rgba(0,255,136,0.5); }
   }
   #boot-screen .boot-subtitle {
-    font-size: 12px; color: #888; margin-bottom: 32px; letter-spacing: 2px;
+    font-size: 13px; color: #8892a0; margin-bottom: 36px; letter-spacing: 3px;
+    text-transform: uppercase;
   }
   #boot-screen .boot-log {
-    width: 560px; max-width: 90vw; font-size: 13px; line-height: 1.8;
+    width: 580px; max-width: 90vw; font-size: 13px; line-height: 1.9;
     color: #00cc00; max-height: 200px; overflow-y: auto;
+    padding: 16px; background: rgba(0,20,0,0.3);
+    border-radius: 8px; border: 1px solid rgba(0,255,0,0.1);
   }
   #boot-screen .boot-log .log-line { opacity: 0; animation: logFadeIn 0.15s forwards; }
   #boot-screen .boot-log .log-line.ok  { color: #00ff00; }
@@ -67,15 +77,23 @@
   #boot-screen .boot-log .log-line.info { color: #00aaff; }
   @keyframes logFadeIn { to { opacity: 1; } }
   #boot-screen .boot-progress {
-    width: 400px; max-width: 80vw; height: 4px; background: #1a1a1a;
-    border-radius: 2px; margin-top: 24px; overflow: hidden;
+    width: 420px; max-width: 80vw; height: 4px; background: rgba(255,255,255,0.05);
+    border-radius: 2px; margin-top: 28px; overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
   }
   #boot-screen .boot-progress-bar {
     height: 100%; width: 0%; border-radius: 2px;
-    background: linear-gradient(90deg, #00ff88, #00aaff);
+    background: linear-gradient(90deg, #00ff88, #00aaff, #00ff88);
+    background-size: 200% 100%;
+    animation: progressShimmer 2s linear infinite;
     transition: width 0.3s ease;
+    box-shadow: 0 0 10px rgba(0,255,136,0.5);
   }
-  #boot-screen .boot-status { margin-top: 12px; font-size: 11px; color: #666; }
+  @keyframes progressShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  #boot-screen .boot-status { margin-top: 14px; font-size: 11px; color: #6b7280; letter-spacing: 1px; }
 
   /* ============================================================
      Lock Screen - 滑动解锁界面
@@ -84,9 +102,9 @@
     position: fixed; inset: 0; z-index: 50000;
     display: flex; flex-direction: column; align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #070b14 0%, #0b1221 35%, #0f223d 65%, #0a1628 100%);
+    background: linear-gradient(135deg, #0a0a1a 0%, #0f1428 35%, #1a1f3a 65%, #0d1020 100%);
     background-size: cover;
-    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s ease;
     user-select: none;
     touch-action: none;
   }
@@ -96,23 +114,29 @@
   }
   #lock-screen .ls-bg-blur {
     position: absolute; inset: 0;
-    background: radial-gradient(ellipse at 50% 25%, rgba(56,189,248,0.14), transparent 55%),
-                radial-gradient(ellipse at 80% 80%, rgba(14,165,233,0.1), transparent 50%),
-                radial-gradient(ellipse at 20% 85%, rgba(99,102,241,0.08), transparent 45%);
+    background: radial-gradient(ellipse at 50% 25%, rgba(99,102,241,0.18), transparent 55%),
+                radial-gradient(ellipse at 80% 80%, rgba(168,85,247,0.12), transparent 50%),
+                radial-gradient(ellipse at 20% 85%, rgba(59,130,246,0.1), transparent 45%);
+    animation: bgPulse 8s ease-in-out infinite;
+  }
+  @keyframes bgPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
   }
   #lock-screen .ls-time {
     position: relative; z-index: 1;
     font-family: 'Segoe UI', system-ui, sans-serif;
-    font-size: 80px; font-weight: 200; color: #fff;
-    text-shadow: 0 2px 20px rgba(255,255,255,0.2);
-    letter-spacing: 2px;
-    margin-bottom: 4px;
+    font-size: 88px; font-weight: 200; color: #fff;
+    text-shadow: 0 2px 30px rgba(255,255,255,0.25), 0 0 60px rgba(99,102,241,0.15);
+    letter-spacing: 3px;
+    margin-bottom: 6px;
   }
   #lock-screen .ls-date {
     position: relative; z-index: 1;
     font-family: 'Segoe UI', system-ui, sans-serif;
-    font-size: 18px; color: #b0c4de;
-    margin-bottom: 60px;
+    font-size: 19px; color: #c5cee0;
+    margin-bottom: 65px;
+    letter-spacing: 0.5px;
   }
   #lock-screen .ls-user {
     position: relative; z-index: 1;
@@ -120,31 +144,40 @@
     margin-bottom: 50px;
   }
   #lock-screen .ls-avatar {
-    width: 72px; height: 72px; border-radius: 50%;
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    width: 76px; height: 76px; border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
     display: flex; align-items: center; justify-content: center;
     font-size: 28px; color: #fff; font-weight: 600;
-    box-shadow: 0 4px 24px rgba(102,126,234,0.4);
-    margin-bottom: 12px;
+    box-shadow: 0 4px 30px rgba(99,102,241,0.5), 0 0 60px rgba(139,92,246,0.2);
+    margin-bottom: 14px;
+    border: 2px solid rgba(255,255,255,0.15);
+    animation: avatarFloat 4s ease-in-out infinite;
+  }
+  @keyframes avatarFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
   }
   #lock-screen .ls-username {
     font-family: 'Segoe UI', sans-serif;
-    font-size: 16px; color: #e0e0e0;
+    font-size: 16px; color: #e8eaf0;
+    letter-spacing: 0.5px;
   }
   /* 滑动解锁条 */
   #lock-screen .ls-slider {
     position: relative; z-index: 1;
-    width: 300px; max-width: 80vw; height: 48px;
+    width: 300px; max-width: 80vw; height: 50px;
     background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 25px;
     overflow: hidden;
     cursor: pointer;
     touch-action: none;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.05);
   }
   #lock-screen .ls-slider-track {
     position: absolute; inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(102,126,234,0.3), transparent);
+    background: linear-gradient(90deg, transparent, rgba(99,102,241,0.4), transparent);
     animation: sliderShimmer 2.5s infinite;
   }
   @keyframes sliderShimmer {
@@ -155,32 +188,36 @@
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
     font-family: 'Segoe UI', sans-serif;
-    font-size: 14px; color: #a0b4d0;
-    letter-spacing: 1px;
+    font-size: 14px; color: #b8c1d6;
+    letter-spacing: 1.5px;
     pointer-events: none;
     transition: opacity 0.3s;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
   }
   #lock-screen .ls-slider-knob {
-    position: absolute; top: 4px; left: 4px;
+    position: absolute; top: 5px; left: 5px;
     width: 40px; height: 40px; border-radius: 50%;
-    background: linear-gradient(135deg, #8ea8f0, #a0b4f0);
-    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    background: linear-gradient(135deg, #8b9cf7, #a78bfa);
+    box-shadow: 0 2px 15px rgba(139,156,247,0.5), 0 0 30px rgba(167,139,250,0.3);
     transition: left 0.05s linear;
     display: flex; align-items: center; justify-content: center;
     z-index: 2;
+    border: 1px solid rgba(255,255,255,0.2);
   }
   #lock-screen .ls-slider-knob::after {
     content: '›';
-    font-size: 22px; color: #fff; font-weight: 300;
+    font-size: 24px; color: #fff; font-weight: 300;
     line-height: 1;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
   }
   #lock-screen .ls-slider.dragging .ls-slider-text { opacity: 0; }
   #lock-screen .ls-slider.dragging .ls-slider-track { animation: none; }
   #lock-screen .ls-hint {
     position: relative; z-index: 1;
-    margin-top: 16px;
-    font-size: 11px; color: #666;
+    margin-top: 18px;
+    font-size: 11px; color: #7b8499;
     font-family: 'Segoe UI', sans-serif;
+    letter-spacing: 0.5px;
   }
   /* 锁屏通知 */
   #lock-screen .ls-notifications {
@@ -218,31 +255,52 @@
   .desktop-icon {
     display: flex; flex-direction: column;
     align-items: center; width: 80px; padding: 8px 4px;
-    border-radius: 8px; cursor: pointer;
+    border-radius: 10px; cursor: pointer;
     font-family: 'Segoe UI', system-ui, sans-serif;
     font-size: 12px; color: #fff; text-align: center;
     text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-    transition: background 0.1s, transform 0.15s;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     user-select: none;
     touch-action: none;
   }
-  .desktop-icon:hover { background: rgba(255,255,255,0.1); }
-  .desktop-icon:active { background: rgba(255,255,255,0.05); }
-  .desktop-icon.selected { background: rgba(102,126,234,0.3); }
-  .desktop-icon.dragging { opacity: 0.5; transform: scale(0.95); }
-  .desktop-icon.drag-over { background: rgba(102,126,234,0.25); border: 2px dashed rgba(102,126,234,0.6); }
+  .desktop-icon:hover { 
+    background: rgba(255,255,255,0.12);
+    transform: translateY(-2px);
+  }
+  .desktop-icon:active { 
+    background: rgba(255,255,255,0.06);
+    transform: translateY(0) scale(0.96);
+  }
+  .desktop-icon.selected { 
+    background: rgba(99,102,241,0.3);
+    box-shadow: 0 0 0 2px rgba(99,102,241,0.4), 0 4px 12px rgba(99,102,241,0.2);
+  }
+  .desktop-icon.dragging { opacity: 0.5; transform: scale(0.92); }
+  .desktop-icon.drag-over { 
+    background: rgba(99,102,241,0.25);
+    border: 2px dashed rgba(99,102,241,0.6);
+    box-shadow: 0 0 20px rgba(99,102,241,0.3);
+  }
   .desktop-icon .dicon-svg {
-    width: 48px; height: 48px; margin-bottom: 4px;
+    width: 48px; height: 48px; margin-bottom: 6px;
     display: flex; align-items: center; justify-content: center;
     pointer-events: none;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+  }
+  .desktop-icon:hover .dicon-svg {
+    transform: scale(1.08);
   }
   .desktop-icon .dicon-label {
     word-break: break-word; line-height: 1.3;
     pointer-events: none;
     text-shadow: 0 0 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7), 0 1px 2px rgba(0,0,0,0.95);
-    padding: 2px 4px; border-radius: 4px;
-    background: rgba(0,0,0,0.35);
+    padding: 3px 6px; border-radius: 6px;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(4px);
     max-width: 100%;
+    font-weight: 500;
+    letter-spacing: 0.02em;
   }
   #desktop-icons {
     position: absolute; top: 0; left: 0; right: 0; bottom: 48px;
@@ -250,8 +308,8 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, 96px);
     grid-template-rows: repeat(auto-fill, 100px);
-    gap: 4px;
-    padding: 12px;
+    gap: 6px;
+    padding: 14px;
     align-content: start;
   }
 
@@ -261,13 +319,14 @@
   #taskbar {
     position: fixed; bottom: 0; left: 0; width: 100%;
     height: 48px; z-index: 1000;
-    background: rgba(11, 16, 30, 0.78);
-    backdrop-filter: blur(24px) saturate(200%);
-    -webkit-backdrop-filter: blur(24px) saturate(200%);
-    border-top: 1px solid rgba(255,255,255,0.07);
+    background: rgba(11, 16, 30, 0.85);
+    backdrop-filter: blur(30px) saturate(200%);
+    -webkit-backdrop-filter: blur(30px) saturate(200%);
+    border-top: 1px solid rgba(255,255,255,0.08);
     display: flex; align-items: center;
     font-family: 'Segoe UI', system-ui, sans-serif;
     color: #e8eaed;
+    box-shadow: 0 -2px 20px rgba(0,0,0,0.4);
   }
   #taskbar .tb-left {
     display: flex; align-items: center; height: 100%;
@@ -276,11 +335,18 @@
   #taskbar .tb-start-btn {
     width: 44px; height: 44px; display: flex; align-items: center;
     justify-content: center; border-radius: 10px; cursor: pointer;
-    transition: background 0.15s;
-    color: #38bdf8;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    color: #6366f1;
   }
-  #taskbar .tb-start-btn:hover { background: rgba(56,189,248,0.12); }
-  #taskbar .tb-start-btn:active { background: rgba(56,189,248,0.06); }
+  #taskbar .tb-start-btn:hover { 
+    background: rgba(99,102,241,0.15); 
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(99,102,241,0.3);
+  }
+  #taskbar .tb-start-btn:active { 
+    background: rgba(99,102,241,0.1); 
+    transform: scale(0.98);
+  }
   #taskbar .tb-pinned {
     display: flex; align-items: center; height: 100%;
     padding: 0 6px; gap: 4px; flex-shrink: 0;
@@ -289,16 +355,27 @@
   #taskbar .tb-pin-btn {
     width: 40px; height: 40px; display: flex; align-items: center;
     justify-content: center; border-radius: 8px; cursor: pointer;
-    font-size: 20px; transition: background 0.15s, transform 0.1s;
+    font-size: 20px; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
   }
-  #taskbar .tb-pin-btn:hover { background: rgba(255,255,255,0.08); transform: translateY(-1px); }
-  #taskbar .tb-pin-btn:active { transform: translateY(0); }
+  #taskbar .tb-pin-btn:hover { 
+    background: rgba(255,255,255,0.1); 
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  #taskbar .tb-pin-btn:active { 
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }
   #taskbar .tb-pin-btn::after {
     content: ''; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
-    width: 16px; height: 3px; border-radius: 2px; background: transparent; transition: background 0.15s;
+    width: 16px; height: 3px; border-radius: 2px; background: transparent; 
+    transition: all 0.2s ease;
   }
-  #taskbar .tb-pin-btn.running::after { background: rgba(56,189,248,0.8); }
+  #taskbar .tb-pin-btn.running::after { 
+    background: rgba(99,102,241,0.9);
+    box-shadow: 0 0 8px rgba(99,102,241,0.6);
+  }
   #taskbar .tb-center {
     flex: 1; display: flex; align-items: center; height: 100%;
     padding: 0 4px; gap: 2px; overflow-x: auto;
@@ -307,12 +384,18 @@
     height: 40px; min-width: 40px; max-width: 200px;
     display: flex; align-items: center; padding: 0 12px;
     border-radius: 6px; cursor: pointer; gap: 8px;
-    transition: background 0.15s; white-space: nowrap;
+    transition: all 0.2s ease; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis;
     font-size: 12px;
   }
-  #taskbar .tb-win-btn:hover { background: rgba(255,255,255,0.08); }
-  #taskbar .tb-win-btn.active { background: rgba(255,255,255,0.12); }
+  #taskbar .tb-win-btn:hover { 
+    background: rgba(255,255,255,0.1);
+    transform: translateY(-1px);
+  }
+  #taskbar .tb-win-btn.active { 
+    background: rgba(99,102,241,0.2);
+    box-shadow: inset 0 0 0 1px rgba(99,102,241,0.3);
+  }
   #taskbar .tb-win-btn .tb-win-icon {
     width: 20px; height: 20px; border-radius: 4px;
     flex-shrink: 0; display: flex; align-items: center;
@@ -325,22 +408,34 @@
   #taskbar .tb-tray-btn {
     width: 36px; height: 36px; display: flex; align-items: center;
     justify-content: center; border-radius: 6px; cursor: pointer;
-    font-size: 14px; transition: background 0.15s;
+    font-size: 14px; transition: all 0.2s ease;
   }
-  #taskbar .tb-tray-btn:hover { background: rgba(255,255,255,0.08); }
+  #taskbar .tb-tray-btn:hover { 
+    background: rgba(255,255,255,0.1);
+    transform: scale(1.05);
+  }
   #taskbar .tb-power-btn {
     width: 36px; height: 36px; display: flex; align-items: center;
     justify-content: center; border-radius: 6px; cursor: pointer;
-    font-size: 16px; color: #f28b82; transition: background 0.15s;
+    font-size: 16px; color: #f87171; transition: all 0.2s ease;
   }
-  #taskbar .tb-power-btn:hover { background: rgba(242,139,130,0.15); }
+  #taskbar .tb-power-btn:hover { 
+    background: rgba(248,113,113,0.15);
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(248,113,113,0.3);
+  }
   #taskbar .tb-clock {
     font-size: 12px; padding: 0 8px; cursor: pointer;
     display: flex; flex-direction: column; align-items: flex-end;
     line-height: 1.3;
+    transition: all 0.2s ease;
   }
-  #taskbar .tb-clock .tb-clock-time { font-weight: 500; }
-  #taskbar .tb-clock .tb-clock-date { font-size: 10px; color: #999; }
+  #taskbar .tb-clock:hover {
+    background: rgba(255,255,255,0.05);
+    border-radius: 6px;
+  }
+  #taskbar .tb-clock .tb-clock-time { font-weight: 500; color: #e8eaed; }
+  #taskbar .tb-clock .tb-clock-date { font-size: 10px; color: #9ca3af; }
 
   /* ============================================================
      开始菜单
@@ -373,6 +468,12 @@
     border: 1px solid rgba(255,255,255,0.1);
     background: rgba(255,255,255,0.06); color: #fff;
     font-size: 14px; outline: none;
+    transition: all 0.2s ease;
+  }
+  #start-menu .sm-search input:focus {
+    border-color: rgba(99,102,241,0.5);
+    background: rgba(255,255,255,0.08);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
   }
   #start-menu .sm-search input::placeholder { color: #777; }
   #start-menu .sm-apps {
@@ -382,15 +483,25 @@
   #start-menu .sm-app-item {
     display: flex; align-items: center; gap: 14px;
     padding: 12px 14px; border-radius: 10px; cursor: pointer;
-    font-size: 15px; color: #e0e0e0; transition: background 0.15s;
+    font-size: 15px; color: #e0e0e0; transition: all 0.2s ease;
     min-height: 48px;
   }
-  #start-menu .sm-app-item:hover { background: rgba(255,255,255,0.08); }
-  #start-menu .sm-app-item:active { background: rgba(255,255,255,0.04); }
+  #start-menu .sm-app-item:hover { 
+    background: rgba(99,102,241,0.12);
+    transform: translateX(4px);
+  }
+  #start-menu .sm-app-item:active { 
+    background: rgba(99,102,241,0.08);
+    transform: translateX(2px);
+  }
   #start-menu .sm-app-item .sm-app-icon {
     width: 36px; height: 36px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     font-size: 20px; flex-shrink: 0;
+    transition: transform 0.2s ease;
+  }
+  #start-menu .sm-app-item:hover .sm-app-icon {
+    transform: scale(1.1);
   }
   #start-menu .sm-footer {
     display: flex; align-items: center; padding: 12px 16px;
@@ -401,41 +512,58 @@
   }
   #start-menu .sm-avatar {
     width: 32px; height: 32px; border-radius: 50%;
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
     display: flex; align-items: center; justify-content: center;
     font-size: 14px; color: #fff; font-weight: 600;
+    box-shadow: 0 2px 8px rgba(99,102,241,0.3);
   }
   #start-menu .sm-username { font-size: 13px; color: #ccc; }
   #start-menu .sm-power-btn {
     width: 36px; height: 36px; border-radius: 6px; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    font-size: 18px; color: #f28b82; transition: background 0.15s;
+    font-size: 18px; color: #f87171; transition: all 0.2s ease;
   }
-  #start-menu .sm-power-btn:hover { background: rgba(242,139,130,0.15); }
+  #start-menu .sm-power-btn:hover { 
+    background: rgba(248,113,113,0.15);
+    transform: scale(1.1);
+  }
 
   /* ============================================================
      右键菜单
      ============================================================ */
   #context-menu {
     position: fixed; z-index: 5000; display: none;
-    min-width: 180px; max-width: 280px; padding: 4px;
-    background: rgba(30, 30, 50, 0.95);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    min-width: 180px; max-width: 280px; padding: 6px;
+    background: rgba(20, 25, 40, 0.98);
+    backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px; 
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
     font-family: 'Segoe UI', system-ui, sans-serif;
     font-size: 13px;
+    animation: contextMenuFadeIn 0.15s ease-out;
+  }
+  @keyframes contextMenuFadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
   }
   #context-menu .cm-item {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 12px; border-radius: 6px; cursor: pointer;
-    color: #e0e0e0; transition: background 0.1s;
+    padding: 9px 14px; border-radius: 7px; cursor: pointer;
+    color: #e8eaf0; transition: all 0.15s ease;
+    position: relative;
   }
-  #context-menu .cm-item:hover { background: rgba(102,126,234,0.3); }
-  #context-menu .cm-item:active { background: rgba(102,126,234,0.2); }
-  #context-menu .cm-item .cm-shortcut { color: #777; font-size: 11px; margin-left: 24px; }
+  #context-menu .cm-item:hover { 
+    background: rgba(99,102,241,0.2);
+    transform: translateX(2px);
+  }
+  #context-menu .cm-item:active { 
+    background: rgba(99,102,241,0.15);
+    transform: translateX(1px);
+  }
+  #context-menu .cm-item .cm-shortcut { color: #6b7280; font-size: 11px; margin-left: 24px; }
   #context-menu .cm-separator {
-    height: 1px; background: rgba(255,255,255,0.06); margin: 6px 8px;
+    height: 1px; background: rgba(255,255,255,0.08); margin: 6px 10px;
   }
 
   /* ============================================================
@@ -443,28 +571,45 @@
      ============================================================ */
   #power-menu {
     position: absolute; bottom: 52px; right: 8px;
-    z-index: 2001; display: none; min-width: 200px;
-    background: rgba(15, 23, 42, 0.95);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 12px; overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    z-index: 2001; display: none; min-width: 220px;
+    background: rgba(15, 23, 42, 0.98);
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px; overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
     font-family: 'Segoe UI', system-ui, sans-serif;
     font-size: 14px;
+    animation: powerMenuSlideUp 0.2s ease-out;
+  }
+  @keyframes powerMenuSlideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   #power-menu .pm-item {
     display: flex; align-items: center; gap: 14px;
-    padding: 12px 16px; cursor: pointer; color: #e0e0e0;
-    transition: background 0.15s;
-    min-height: 48px;
+    padding: 14px 18px; cursor: pointer; color: #e8eaf0;
+    transition: all 0.2s ease;
+    min-height: 52px;
   }
-  #power-menu .pm-item:hover { background: rgba(255,255,255,0.08); }
-  #power-menu .pm-item:active { background: rgba(255,255,255,0.04); }
-  #power-menu .pm-icon { font-size: 18px; width: 24px; text-align: center; }
-  #power-menu .pm-shutdown { color: #f28b82; }
-  #power-menu .pm-reboot { color: #fdd663; }
-  #power-menu .pm-sleep { color: #8ab4f8; }
+  #power-menu .pm-item:hover { 
+    background: rgba(255,255,255,0.1);
+    transform: translateX(3px);
+  }
+  #power-menu .pm-item:active { 
+    background: rgba(255,255,255,0.06);
+    transform: translateX(2px);
+  }
+  #power-menu .pm-icon { 
+    font-size: 20px; width: 26px; text-align: center;
+    transition: transform 0.2s ease;
+  }
+  #power-menu .pm-item:hover .pm-icon {
+    transform: scale(1.15);
+  }
+  #power-menu .pm-shutdown { color: #f87171; }
+  #power-menu .pm-reboot { color: #fbbf24; }
+  #power-menu .pm-sleep { color: #60a5fa; }
 
   /* ============================================================
      壁纸设置弹窗
@@ -472,39 +617,74 @@
   #wallpaper-dialog {
     position: fixed; inset: 0; z-index: 6000;
     display: none; align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
     font-family: 'Segoe UI', system-ui, sans-serif;
+    animation: dialogFadeIn 0.2s ease-out;
+  }
+  @keyframes dialogFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   #wallpaper-dialog .wp-box {
-    width: 360px; max-width: 90vw;
+    width: 380px; max-width: 90vw;
     background: rgba(15, 23, 42, 0.98);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 16px; padding: 20px;
-    box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 18px; padding: 24px;
+    box-shadow: 0 16px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.05);
+    animation: dialogSlideUp 0.25s ease-out;
+  }
+  @keyframes dialogSlideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
   }
   #wallpaper-dialog .wp-title {
-    font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 14px;
+    font-size: 17px; font-weight: 600; color: #fff; margin-bottom: 16px;
+    letter-spacing: 0.3px;
   }
   #wallpaper-dialog .wp-label {
-    display: block; font-size: 12px; color: #888; margin-bottom: 6px; margin-top: 12px;
+    display: block; font-size: 12px; color: #9ca3af; margin-bottom: 7px; margin-top: 14px;
+    letter-spacing: 0.2px;
   }
   #wallpaper-dialog .wp-input {
-    width: 100%; padding: 10px 12px; border-radius: 8px;
+    width: 100%; padding: 11px 13px; border-radius: 9px;
     border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.05); color: #fff; font-size: 13px; outline: none;
+    background: rgba(255,255,255,0.06); color: #fff; font-size: 13px; outline: none;
+    transition: all 0.2s ease;
   }
-  #wallpaper-dialog .wp-input:focus { border-color: rgba(56,189,248,0.5); }
+  #wallpaper-dialog .wp-input:focus { 
+    border-color: rgba(99,102,241,0.6);
+    background: rgba(255,255,255,0.08);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  }
   #wallpaper-dialog .wp-file {
-    display: block; width: 100%; padding: 8px 0; color: #aaa; font-size: 13px;
+    display: block; width: 100%; padding: 9px 0; color: #b8c1d6; font-size: 13px;
   }
   #wallpaper-dialog .wp-btns {
-    display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;
+    display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;
   }
   #wallpaper-dialog .wp-btns button {
-    padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px;
+    padding: 9px 18px; border-radius: 9px; border: none; cursor: pointer; font-size: 13px;
+    transition: all 0.2s ease;
+    font-weight: 500;
   }
-  #wallpaper-dialog .wp-cancel { background: rgba(255,255,255,0.08); color: #ccc; }
-  #wallpaper-dialog .wp-ok { background: rgba(56,189,248,0.85); color: #fff; }
+  #wallpaper-dialog .wp-btns button:hover {
+    transform: translateY(-1px);
+  }
+  #wallpaper-dialog .wp-cancel { 
+    background: rgba(255,255,255,0.08); 
+    color: #d1d5db;
+  }
+  #wallpaper-dialog .wp-cancel:hover {
+    background: rgba(255,255,255,0.12);
+  }
+  #wallpaper-dialog .wp-ok { 
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(99,102,241,0.3);
+  }
+  #wallpaper-dialog .wp-ok:hover {
+    box-shadow: 0 4px 15px rgba(99,102,241,0.4);
+  }
 
   /* ============================================================
      终端窗口
@@ -512,40 +692,43 @@
   #terminal-window {
     position: absolute; display: none;
     width: 700px; height: 420px;
-    background: #0c0c0c; border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 12px; z-index: 100;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    background: #0c0c0c; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px; z-index: 100;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.05);
     font-family: 'Courier New', monospace;
     overflow: hidden;
     flex-direction: column;
   }
   #terminal-window .tw-titlebar {
-    display: flex; align-items: center; height: 36px;
-    background: #161616; padding: 0 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; height: 38px;
+    background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%);
+    padding: 0 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
     cursor: move;
   }
   #terminal-window .tw-title {
-    flex: 1; font-size: 13px; color: #aaa; font-family: 'Segoe UI', sans-serif;
+    flex: 1; font-size: 13px; color: #b8c1d6; font-family: 'Segoe UI', sans-serif;
+    letter-spacing: 0.3px;
   }
   #terminal-window .tw-ctrl {
-    display: flex; gap: 6px;
+    display: flex; gap: 7px;
   }
   #terminal-window .tw-ctrl-btn {
-    width: 28px; height: 28px; border-radius: 6px; border: none;
+    width: 28px; height: 28px; border-radius: 7px; border: none;
     cursor: pointer; font-size: 14px; display: flex; align-items: center;
-    justify-content: center; background: transparent; color: #999;
+    justify-content: center; background: transparent; color: #9ca3af;
+    transition: all 0.15s ease;
   }
-  #terminal-window .tw-ctrl-btn:hover { background: rgba(255,255,255,0.1); }
+  #terminal-window .tw-ctrl-btn:hover { background: rgba(255,255,255,0.1); color: #e8eaf0; }
   #terminal-window .tw-ctrl-btn.close:hover { background: #e81123; color: #fff; }
   #terminal-window .tw-output {
-    flex: 1; overflow-y: auto; padding: 12px;
-    font-size: 14px; line-height: 1.5; color: #00cc00;
+    flex: 1; overflow-y: auto; padding: 14px;
+    font-size: 14px; line-height: 1.6; color: #00cc00;
     white-space: pre-wrap; word-break: break-all;
   }
   #terminal-window .tw-output .tw-line { margin: 0; }
-  #terminal-window .tw-output .tw-line.error { color: #f28b82; }
-  #terminal-window .tw-output .tw-line.info { color: #8ab4f8; }
+  #terminal-window .tw-output .tw-line.error { color: #f87171; }
+  #terminal-window .tw-output .tw-line.info { color: #60a5fa; }
   #terminal-window .tw-input-line {
     display: flex; align-items: center; padding: 8px 12px;
     border-top: 1px solid rgba(255,255,255,0.06);
