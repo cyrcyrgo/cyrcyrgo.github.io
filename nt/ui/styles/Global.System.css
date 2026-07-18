@@ -19,6 +19,10 @@ html, body {
   background: var(--sys-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* ── CSS Custom Properties — Light Theme (default) ──────── */

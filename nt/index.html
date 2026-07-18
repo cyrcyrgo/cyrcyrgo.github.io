@@ -206,6 +206,10 @@
     word-break: break-word; line-height: 1.3;
     pointer-events: none;
   }
+  #desktop-icons {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 48px;
+    z-index: 1; overflow: hidden;
+  }
 
   /* ============================================================
      任务栏
@@ -537,6 +541,24 @@
   /* ============================================================
      响应式
      ============================================================ */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    #lock-screen .ls-time { font-size: clamp(56px, 8vw, 72px); }
+    #lock-screen .ls-date { font-size: 16px; }
+    #lock-screen .ls-avatar { width: 64px; height: 64px; font-size: 24px; }
+    #lock-screen .ls-slider { width: 320px; max-width: 80vw; }
+    #desktop-icons { bottom: 52px; }
+    .desktop-icon { width: 80px; font-size: 13px; }
+    .desktop-icon .dicon-svg { width: 48px; height: 48px; font-size: 36px !important; }
+    #taskbar { height: 52px; }
+    #taskbar .tb-start-btn { width: 48px; height: 48px; }
+    #taskbar .tb-pin-btn { width: 44px; height: 44px; font-size: 22px; }
+    #taskbar .tb-win-btn { font-size: 13px; height: 44px; min-width: 44px; }
+    #taskbar .tb-tray-btn { width: 40px; height: 40px; font-size: 15px; }
+    #taskbar .tb-power-btn { width: 40px; height: 40px; font-size: 18px; }
+    #taskbar .tb-clock { font-size: 13px; }
+    #start-menu { width: min(320px, calc(100vw - 16px)); max-height: 500px; }
+    .app-window { width: 600px !important; height: 450px !important; }
+  }
   @media (max-width: 768px) {
     /* 锁屏 */
     #lock-screen .ls-time { font-size: clamp(40px, 12vw, 60px); }
@@ -551,21 +573,28 @@
       max-width: none; font-size: 12px;
     }
     /* 桌面图标缩小 */
-    #desktop-icons { bottom: 44px; }
-    .desktop-icon { width: 68px; font-size: 11px; padding: 6px 2px; }
-    .desktop-icon .dicon-svg { width: 40px; height: 40px; font-size: 28px !important; }
-    /* 任务栏 */
-    #taskbar { height: 44px; }
-    #taskbar .tb-win-btn { font-size: 11px; padding: 0 8px; min-width: 32px; }
-    #taskbar .tb-clock { font-size: 11px; }
-    #taskbar .tb-clock .tb-clock-date { font-size: 9px; }
+    #desktop-icons { bottom: 52px; }
+    .desktop-icon { width: 72px; font-size: 11px; padding: 8px 4px; }
+    .desktop-icon .dicon-svg { width: 44px; height: 44px; font-size: 30px !important; }
+    /* 任务栏 - 触控优化 */
+    #taskbar { height: 52px; }
+    #taskbar .tb-start-btn { width: 44px; height: 44px; }
+    #taskbar .tb-start-btn svg { width: 22px; height: 22px; }
+    #taskbar .tb-pinned { padding: 0 6px; }
+    #taskbar .tb-pin-btn { width: 44px; height: 44px; font-size: 22px; }
+    #taskbar .tb-win-btn { font-size: 12px; padding: 0 10px; min-width: 44px; height: 44px; }
+    #taskbar .tb-tray-btn { width: 40px; height: 40px; font-size: 15px; }
+    #taskbar .tb-power-btn { width: 40px; height: 40px; font-size: 18px; }
+    #taskbar .tb-clock { font-size: 12px; padding: 0 6px; }
+    #taskbar .tb-clock .tb-clock-date { font-size: 10px; }
     /* 开始菜单 */
     #start-menu { width: min(280px, calc(100vw - 8px)); max-height: 420px; left: 4px; }
-    #start-menu .sm-app-item { font-size: 13px; padding: 8px 10px; }
+    #start-menu .sm-app-item { font-size: 13px; padding: 10px 12px; gap: 10px; }
     /* 终端 */
-    #terminal-window { width: 100vw; height: 100vh; border-radius: 0; left: 0 !important; top: 0 !important; }
+    #terminal-window { width: 100vw; height: calc(100vh - 52px); border-radius: 0; left: 0 !important; top: 0 !important; }
     /* 应用窗口 */
-    .app-window { width: 100vw !important; height: calc(100vh - 44px) !important; left: 0 !important; top: 0 !important; border-radius: 0; min-width: auto; min-height: auto; }
+    .app-window { width: 100vw !important; height: calc(100vh - 52px) !important; left: 0 !important; top: 0 !important; border-radius: 0; min-width: auto; min-height: auto; }
+    .app-window .aw-ctrl-btn { width: 36px; height: 36px; font-size: 14px; }
     /* 右键菜单 */
     #context-menu { min-width: 180px; font-size: 12px; }
   }
@@ -583,20 +612,27 @@
     #lock-screen .ls-notifications { bottom: 80px; right: 8px; left: 8px; }
     #lock-screen .ls-notif { padding: 10px 12px; font-size: 11px; }
     /* 桌面 */
-    #desktop-icons { bottom: 40px; }
-    .desktop-icon { width: 60px; font-size: 10px; padding: 4px 2px; }
-    .desktop-icon .dicon-svg { width: 34px; height: 34px; font-size: 24px !important; }
-    /* 任务栏 */
-    #taskbar { height: 40px; }
-    #taskbar .tb-start-btn { width: 36px; height: 36px; }
-    #taskbar .tb-win-btn { font-size: 10px; padding: 0 6px; min-width: 28px; max-width: 100px; }
-    #taskbar .tb-tray-btn { width: 28px; height: 28px; font-size: 12px; }
-    #taskbar .tb-clock { font-size: 10px; padding: 0 4px; }
-    #taskbar .tb-clock .tb-clock-date { font-size: 8px; }
+    #desktop-icons { bottom: 56px; }
+    .desktop-icon { width: 72px; font-size: 11px; padding: 8px 4px; }
+    .desktop-icon .dicon-svg { width: 40px; height: 40px; font-size: 28px !important; }
+    /* 任务栏 - 触控优化 */
+    #taskbar { height: 56px; }
+    #taskbar .tb-start-btn { width: 48px; height: 48px; }
+    #taskbar .tb-start-btn svg { width: 24px; height: 24px; }
+    #taskbar .tb-pinned { padding: 0 8px; }
+    #taskbar .tb-pin-btn { width: 48px; height: 48px; font-size: 24px; }
+    #taskbar .tb-win-btn { font-size: 12px; padding: 0 10px; min-width: 48px; height: 48px; }
+    #taskbar .tb-tray-btn { width: 44px; height: 44px; font-size: 16px; }
+    #taskbar .tb-power-btn { width: 44px; height: 44px; font-size: 20px; }
+    #taskbar .tb-clock { font-size: 12px; padding: 0 6px; }
+    #taskbar .tb-clock .tb-clock-date { font-size: 10px; }
     /* 开始菜单 */
-    #start-menu { width: min(240px, calc(100vw - 4px)); max-height: 360px; left: 2px; }
-    #start-menu .sm-search input { font-size: 13px; padding: 8px 12px; }
-    #start-menu .sm-app-item { font-size: 12px; padding: 6px 8px; gap: 8px; }
+    #start-menu { width: min(280px, calc(100vw - 8px)); max-height: 400px; left: 4px; }
+    #start-menu .sm-search input { font-size: 14px; padding: 10px 14px; }
+    #start-menu .sm-app-item { font-size: 13px; padding: 10px 12px; gap: 10px; }
+    /* 应用窗口 */
+    .app-window { width: 100vw !important; height: calc(100vh - 56px) !important; }
+    .app-window .aw-ctrl-btn { width: 40px; height: 40px; font-size: 16px; }
   }
 </style>
 </head>
@@ -645,7 +681,7 @@
   <!-- 桌面背景 -->
   <div id="desktop-bg" style="position:absolute;inset:0;background:linear-gradient(135deg,#070b14 0%,#0b1221 35%,#0f223d 65%,#0a1628 100%);background-size:cover;z-index:0;"></div>
   <!-- 桌面图标容器 -->
-  <div id="desktop-icons" style="position:absolute;top:0;left:0;right:0;bottom:48px;z-index:1;"></div>
+  <div id="desktop-icons"></div>
   <!-- 任务栏 -->
   <div id="taskbar">
     <div class="tb-left">
