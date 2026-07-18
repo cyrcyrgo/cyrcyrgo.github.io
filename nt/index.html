@@ -770,7 +770,7 @@
       <div class="tb-tray-btn" id="tb-terminal-btn" title="终端">&#x1f4bb;</div>
       <div class="tb-tray-btn" title="网络">&#x1f310;</div>
       <div class="tb-tray-btn" title="音量">&#x1f50a;</div>
-      <div class="tb-power-btn" id="tb-power-btn" title="电源">&#x23fb;</div>
+      <div class="tb-power-btn" id="tb-power-btn" title="电源"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L1 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-11-3zm-1 16.92c-3.95-.49-7-3.85-7-7.92 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.92zm6.9-2.52c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.4z"/></svg></div>
       <div class="tb-clock" id="tb-clock">
         <span class="tb-clock-time">12:00</span>
         <span class="tb-clock-date">1/1</span>
@@ -786,7 +786,7 @@
         <div class="sm-avatar">管</div>
         <div class="sm-username">管理员</div>
       </div>
-      <div class="sm-power-btn" id="sm-shutdown" title="关机">&#x23fb;</div>
+      <div class="sm-power-btn" id="sm-shutdown" title="关机"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L1 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-11-3zm-1 16.92c-3.95-.49-7-3.85-7-7.92 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.92zm6.9-2.52c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.4z"/></svg></div>
     </div>
   </div>
   <!-- 终端窗口 -->
@@ -807,9 +807,9 @@
   </div>
   <!-- 电源菜单 -->
   <div id="power-menu">
-    <div class="pm-item pm-sleep" id="pm-sleep"><span class="pm-icon">&#x263e;</span> 睡眠</div>
-    <div class="pm-item pm-reboot" id="pm-reboot"><span class="pm-icon">&#x21bb;</span> 重启</div>
-    <div class="pm-item pm-shutdown" id="pm-shutdown"><span class="pm-icon">&#x23fb;</span> 关机</div>
+    <div class="pm-item pm-sleep" id="pm-sleep"><span class="pm-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 109 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 01-4.4 2.26 5.403 5.403 0 01-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg></span> 睡眠</div>
+    <div class="pm-item pm-reboot" id="pm-reboot"><span class="pm-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></span> 重启</div>
+    <div class="pm-item pm-shutdown" id="pm-shutdown"><span class="pm-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L1 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-11-3zm-1 16.92c-3.95-.49-7-3.85-7-7.92 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.92zm6.9-2.52c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.4z"/></svg></span> 关机</div>
   </div>
 
   <!-- 壁纸设置弹窗 -->
@@ -1758,22 +1758,334 @@ function launchApp(appId) {
       break;
     case 'settings':
       showAppWindow('设置', '\u2699\ufe0f', `
-        <div style="display:flex;flex-direction:column;gap:12px;">
-          <h3 style="margin:0;color:#8ab4f8">系统</h3>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
-            <div>内核:</div><div>WebNT v1.0.0</div>
-            <div>CPU:</div><div>${navigator.hardwareConcurrency||'?'} 核</div>
-            <div>内存:</div><div>${navigator.deviceMemory||'?'} GB</div>
-            <div>平台:</div><div>${navigator.platform}</div>
-            <div>GPU:</div><div>${navigator.gpu?'WebGPU':'Canvas2D'}</div>
-            <div>运行时间:</div><div>${Math.floor(performance.now()/1000)}秒</div>
+        <style>
+          .settings-wrap { display:flex;height:100%; }
+          .settings-sidebar { width:180px;border-right:1px solid rgba(255,255,255,0.08);padding:12px 0;overflow-y:auto;flex-shrink:0; }
+          .settings-sidebar .ss-item { display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;cursor:pointer;font-size:14px;color:#ccc;transition:background 0.15s; }
+          .settings-sidebar .ss-item:hover { background:rgba(255,255,255,0.06); }
+          .settings-sidebar .ss-item.active { background:rgba(102,126,234,0.25);color:#8ab4f8; }
+          .settings-sidebar .ss-icon { width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:16px; }
+          .settings-content { flex:1;overflow-y:auto;padding:20px; }
+          .settings-content .sc-section { margin-bottom:24px; }
+          .settings-content .sc-section h3 { font-size:16px;color:#8ab4f8;margin-bottom:16px; }
+          .settings-content .sc-item { display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04); }
+          .settings-content .sc-item:last-child { border-bottom:none; }
+          .settings-content .sc-item .sc-label { font-size:14px;color:#e0e0e0; }
+          .settings-content .sc-item .sc-desc { font-size:12px;color:#777;margin-top:2px; }
+          .settings-content .sc-item .sc-value { font-size:13px;color:#888; }
+          .toggle-switch { width:44px;height:24px;border-radius:12px;background:rgba(255,255,255,0.15);position:relative;cursor:pointer;transition:background 0.2s; }
+          .toggle-switch.active { background:#667eea; }
+          .toggle-switch::after { content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left 0.2s;box-shadow:0 2px 4px rgba(0,0,0,0.2); }
+          .toggle-switch.active::after { left:22px; }
+          .theme-card { display:flex;gap:12px;margin-top:8px; }
+          .theme-option { flex:1;padding:16px;border-radius:10px;border:2px solid rgba(255,255,255,0.1);cursor:pointer;transition:0.15s;text-align:center; }
+          .theme-option:hover { border-color:rgba(102,126,234,0.4); }
+          .theme-option.active { border-color:#667eea; }
+          .theme-option .theme-preview { width:100%;height:40px;border-radius:6px;margin-bottom:8px; }
+          .theme-option .theme-name { font-size:13px;color:#e0e0e0; }
+          .font-size-row { display:flex;align-items:center;gap:12px;margin-top:8px; }
+          .font-size-btn { padding:8px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#ccc;font-size:13px;cursor:pointer;transition:0.15s; }
+          .font-size-btn:hover { background:rgba(255,255,255,0.1); }
+          .font-size-btn.active { background:rgba(102,126,234,0.3);border-color:#667eea;color:#8ab4f8; }
+          .slider-wrap { display:flex;align-items:center;gap:12px;margin-top:8px;width:100%; }
+          .slider-wrap input[type=range] { flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,0.1);outline:none;-webkit-appearance:none; }
+          .slider-wrap input[type=range]::-webkit-slider-thumb { -webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#667eea;cursor:pointer; }
+          .slider-wrap .slider-value { width:40px;text-align:right;font-size:13px;color:#888; }
+          .settings-btn { padding:10px 20px;border-radius:8px;border:none;cursor:pointer;font-size:13px;transition:0.15s; }
+          .settings-btn.primary { background:#667eea;color:#fff; }
+          .settings-btn.primary:hover { background:#5a6fd6; }
+          .settings-btn.secondary { background:rgba(255,255,255,0.08);color:#ccc; }
+          .settings-btn.secondary:hover { background:rgba(255,255,255,0.12); }
+          .info-box { padding:12px;background:rgba(56,189,248,0.08);border-radius:8px;border:1px solid rgba(56,189,248,0.2);font-size:12px;color:#8ab4f8;margin-top:8px; }
+        </style>
+        <div class="settings-wrap">
+          <div class="settings-sidebar" id="settings-sidebar">
+            <div class="ss-item active" data-panel="system">
+              <span class="ss-icon">\u2699\ufe0f</span>
+              <span>系统</span>
+            </div>
+            <div class="ss-item" data-panel="display">
+              <span class="ss-icon">\ud83d\udcbb</span>
+              <span>显示</span>
+            </div>
+            <div class="ss-item" data-panel="personalization">
+              <span class="ss-icon">\ud83c\udfa8</span>
+              <span>个性化</span>
+            </div>
+            <div class="ss-item" data-panel="sound">
+              <span class="ss-icon">\ud83d\udd0a</span>
+              <span>声音</span>
+            </div>
+            <div class="ss-item" data-panel="about">
+              <span class="ss-icon">\u2139\ufe0f</span>
+              <span>关于</span>
+            </div>
           </div>
-          <hr style="border-color:rgba(255,255,255,0.06)">
-          <h3 style="margin:0;color:#8ab4f8">显示</h3>
-          <div style="font-size:13px">${window.innerWidth} × ${window.innerHeight} @ ${window.devicePixelRatio}x</div>
-          <div style="font-size:13px">主题: <strong>深色</strong></div>
+          <div class="settings-content" id="settings-content">
+            <div id="panel-system"></div>
+            <div id="panel-display" style="display:none"></div>
+            <div id="panel-personalization" style="display:none"></div>
+            <div id="panel-sound" style="display:none"></div>
+            <div id="panel-about" style="display:none"></div>
+          </div>
         </div>
       `);
+      
+      requestAnimationFrame(() => {
+        const sidebar = document.getElementById('settings-sidebar');
+        const content = document.getElementById('settings-content');
+        
+        function renderSystem() {
+          const uptime = Math.floor(performance.now() / 1000);
+          const hours = Math.floor(uptime / 3600);
+          const mins = Math.floor((uptime % 3600) / 60);
+          const secs = uptime % 60;
+          return `
+            <div class="sc-section">
+              <h3>系统信息</h3>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">内核版本</div>
+                  <div class="sc-desc">WebNT 内核版本号</div>
+                </div>
+                <div class="sc-value">v1.0.0</div>
+              </div>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">CPU</div>
+                  <div class="sc-desc">处理器核心数</div>
+                </div>
+                <div class="sc-value">${navigator.hardwareConcurrency || '未知'} 核</div>
+              </div>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">内存</div>
+                  <div class="sc-desc">系统内存容量</div>
+                </div>
+                <div class="sc-value">${navigator.deviceMemory || '未知'} GB</div>
+              </div>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">平台</div>
+                  <div class="sc-desc">操作系统平台</div>
+                </div>
+                <div class="sc-value">${navigator.platform}</div>
+              </div>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">GPU</div>
+                  <div class="sc-desc">图形处理单元</div>
+                </div>
+                <div class="sc-value">${navigator.gpu ? 'WebGPU' : 'Canvas2D'}</div>
+              </div>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">运行时间</div>
+                  <div class="sc-desc">系统已运行时长</div>
+                </div>
+                <div class="sc-value">${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}</div>
+              </div>
+            </div>
+            <div class="sc-section">
+              <h3>快速操作</h3>
+              <div style="display:flex;gap:8px;">
+                <button class="settings-btn secondary" onclick="showWallpaperDialog()">更换壁纸</button>
+                <button class="settings-btn secondary" onclick="location.reload()">重启系统</button>
+              </div>
+            </div>
+          `;
+        }
+        
+        function renderDisplay() {
+          const fontSize = localStorage.getItem('webnt_font_size') || 'normal';
+          const animations = localStorage.getItem('webnt_animations') !== 'false';
+          return `
+            <div class="sc-section">
+              <h3>显示分辨率</h3>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">屏幕分辨率</div>
+                  <div class="sc-desc">当前显示分辨率</div>
+                </div>
+                <div class="sc-value">${window.innerWidth} × ${window.innerHeight}</div>
+              </div>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">缩放比例</div>
+                  <div class="sc-desc">设备像素比</div>
+                </div>
+                <div class="sc-value">${window.devicePixelRatio}x</div>
+              </div>
+            </div>
+            <div class="sc-section">
+              <h3>字体大小</h3>
+              <div class="font-size-row">
+                <button class="font-size-btn ${fontSize === 'small' ? 'active' : ''}" onclick="window.__setFontSize('small')">小</button>
+                <button class="font-size-btn ${fontSize === 'normal' ? 'active' : ''}" onclick="window.__setFontSize('normal')">标准</button>
+                <button class="font-size-btn ${fontSize === 'large' ? 'active' : ''}" onclick="window.__setFontSize('large')">大</button>
+                <button class="font-size-btn ${fontSize === 'xlarge' ? 'active' : ''}" onclick="window.__setFontSize('xlarge')">特大</button>
+              </div>
+              <div class="info-box">修改字体大小后需要刷新页面生效</div>
+            </div>
+            <div class="sc-section">
+              <h3>动画效果</h3>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">启用动画</div>
+                  <div class="sc-desc">窗口、菜单和其他元素的动画效果</div>
+                </div>
+                <div class="toggle-switch ${animations ? 'active' : ''}" onclick="window.__toggleAnimations()"></div>
+              </div>
+            </div>
+          `;
+        }
+        
+        function renderPersonalization() {
+          const theme = localStorage.getItem('webnt_theme') || 'dark';
+          return `
+            <div class="sc-section">
+              <h3>主题</h3>
+              <div class="theme-card">
+                <div class="theme-option ${theme === 'dark' ? 'active' : ''}" onclick="window.__setTheme('dark')">
+                  <div class="theme-preview" style="background:linear-gradient(135deg,#0a0a0a,#1a1a2e)"></div>
+                  <div class="theme-name">深色</div>
+                </div>
+                <div class="theme-option ${theme === 'light' ? 'active' : ''}" onclick="window.__setTheme('light')">
+                  <div class="theme-preview" style="background:linear-gradient(135deg,#f5f5f5,#e8e8e8)"></div>
+                  <div class="theme-name">浅色</div>
+                </div>
+                <div class="theme-option ${theme === 'system' ? 'active' : ''}" onclick="window.__setTheme('system')">
+                  <div class="theme-preview" style="background:linear-gradient(135deg,#1a1a2e,#f5f5f5)"></div>
+                  <div class="theme-name">跟随系统</div>
+                </div>
+              </div>
+              <div class="info-box">主题修改后需要刷新页面生效</div>
+            </div>
+            <div class="sc-section">
+              <h3>壁纸</h3>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">当前壁纸</div>
+                  <div class="sc-desc">桌面背景图片</div>
+                </div>
+                <button class="settings-btn primary" onclick="showWallpaperDialog()">更换壁纸</button>
+              </div>
+            </div>
+          `;
+        }
+        
+        function renderSound() {
+          const volume = localStorage.getItem('webnt_volume') ? parseInt(localStorage.getItem('webnt_volume')) : 80;
+          const soundEnabled = localStorage.getItem('webnt_sound_enabled') !== 'false';
+          return `
+            <div class="sc-section">
+              <h3>音量控制</h3>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">系统音量</div>
+                  <div class="sc-desc">调节系统音量大小</div>
+                </div>
+                <div class="toggle-switch ${soundEnabled ? 'active' : ''}" onclick="window.__toggleSoundEnabled()"></div>
+              </div>
+              <div class="slider-wrap">
+                <input type="range" min="0" max="100" value="${volume}" oninput="window.__setVolume(this.value)">
+                <div class="slider-value">${volume}%</div>
+              </div>
+            </div>
+            <div class="sc-section">
+              <h3>音效</h3>
+              <div class="info-box">WebNT 目前支持基本音量控制。更多音效功能将在后续版本中添加。</div>
+            </div>
+          `;
+        }
+        
+        function renderAbout() {
+          return `
+            <div class="sc-section">
+              <h3>关于 WebNT</h3>
+              <div style="padding:16px;background:rgba(255,255,255,0.04);border-radius:10px;">
+                <div style="font-size:20px;font-weight:600;color:#fff;margin-bottom:8px">WebNT 内核</div>
+                <div style="font-size:13px;color:#ccc;margin-bottom:16px">HTML5 混合微内核操作系统</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+                  <div style="color:#888">版本:</div><div style="color:#e0e0e0">v1.0.0</div>
+                  <div style="color:#888">构建:</div><div style="color:#e0e0e0">2026.01.01</div>
+                  <div style="color:#888">架构:</div><div style="color:#e0e0e0">HTML5 / JavaScript</div>
+                  <div style="color:#888">许可证:</div><div style="color:#e0e0e0">MIT</div>
+                </div>
+              </div>
+            </div>
+            <div class="sc-section">
+              <h3>系统信息</h3>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">浏览器</div>
+                  <div class="sc-desc">运行 WebNT 的浏览器</div>
+                </div>
+                <div class="sc-value" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${navigator.userAgent.substring(0,50)}...</div>
+              </div>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">语言</div>
+                  <div class="sc-desc">系统语言设置</div>
+                </div>
+                <div class="sc-value">${navigator.language}</div>
+              </div>
+              <div class="sc-item">
+                <div>
+                  <div class="sc-label">在线状态</div>
+                  <div class="sc-desc">网络连接状态</div>
+                </div>
+                <div class="sc-value" style="${navigator.onLine ? 'color:#81c995' : 'color:#f28b82'}">${navigator.onLine ? '在线' : '离线'}</div>
+              </div>
+            </div>
+          `;
+        }
+        
+        function switchPanel(panelId) {
+          document.querySelectorAll('.ss-item').forEach(item => item.classList.remove('active'));
+          document.querySelectorAll('[data-panel="' + panelId + '"]').forEach(item => item.classList.add('active'));
+          document.querySelectorAll('[id^="panel-"]').forEach(panel => panel.style.display = 'none');
+          document.getElementById('panel-' + panelId).style.display = 'block';
+        }
+        
+        document.getElementById('panel-system').innerHTML = renderSystem();
+        document.getElementById('panel-display').innerHTML = renderDisplay();
+        document.getElementById('panel-personalization').innerHTML = renderPersonalization();
+        document.getElementById('panel-sound').innerHTML = renderSound();
+        document.getElementById('panel-about').innerHTML = renderAbout();
+        
+        sidebar.querySelectorAll('.ss-item').forEach(item => {
+          item.addEventListener('click', () => {
+            switchPanel(item.dataset.panel);
+          });
+        });
+        
+        window.__setTheme = function(theme) {
+          localStorage.setItem('webnt_theme', theme);
+          document.getElementById('panel-personalization').innerHTML = renderPersonalization();
+        };
+        
+        window.__setFontSize = function(size) {
+          localStorage.setItem('webnt_font_size', size);
+          document.getElementById('panel-display').innerHTML = renderDisplay();
+        };
+        
+        window.__toggleAnimations = function() {
+          const current = localStorage.getItem('webnt_animations') !== 'false';
+          localStorage.setItem('webnt_animations', !current);
+          document.getElementById('panel-display').innerHTML = renderDisplay();
+        };
+        
+        window.__toggleSoundEnabled = function() {
+          const current = localStorage.getItem('webnt_sound_enabled') !== 'false';
+          localStorage.setItem('webnt_sound_enabled', !current);
+          document.getElementById('panel-sound').innerHTML = renderSound();
+        };
+        
+        window.__setVolume = function(val) {
+          localStorage.setItem('webnt_volume', val);
+        };
+      });
       break;
     case 'notepad':
       showAppWindow('记事本', '\ud83d\udcc4', `
