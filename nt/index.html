@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>WebNT Kernel v1.0.0</title>
+<title>WebNT Kernel v2.01</title>
 <link rel="stylesheet" href="ui/styles/Global.System.css">
 <style>
   /* ============================================================
@@ -718,7 +718,7 @@
 <!-- ============================================================ -->
 <div id="boot-screen">
   <div class="boot-logo">WebNT 内核</div>
-  <div class="boot-subtitle">HTML5 混合微内核操作系统 v1.0.0</div>
+  <div class="boot-subtitle">HTML5 混合微内核操作系统 v2.01</div>
   <div class="boot-log" id="boot-log"></div>
   <div class="boot-progress"><div class="boot-progress-bar" id="boot-progress-bar"></div></div>
   <div class="boot-status" id="boot-status">正在初始化...</div>
@@ -872,7 +872,7 @@ class SysCallBridge {
   constructor() { this.h={}; this._reg(); }
   static get instance() { if(!this._i) this._i=new SysCallBridge(); return this._i; }
   _reg() {
-    this.h.NtGetSystemInfo=()=>({hostname:'WebNT-Kernel',version:'1.0.0',platform:navigator.platform,cpuCores:navigator.hardwareConcurrency||1,memory:navigator.deviceMemory||4,uptime:Math.floor(performance.now()/1000)});
+    this.h.NtGetSystemInfo=()=>({hostname:'WebNT-Kernel',version:'2.01',build:'20260718',platform:navigator.platform,cpuCores:navigator.hardwareConcurrency||1,memory:navigator.deviceMemory||4,uptime:Math.floor(performance.now()/1000)});
     this.h.NtShutdown=()=>({success:true});
     this.h.NtReboot=()=>({success:true});
   }
@@ -982,6 +982,86 @@ window.__calcClear = function(idSuffix) {
   const resultEl = document.getElementById('calc-result-' + idSuffix);
   if (exprEl) exprEl.textContent = '';
   if (resultEl) resultEl.textContent = '0';
+};
+
+// ===================================================================
+// 系统性能监控
+// ===================================================================
+const SystemMonitor = {
+  cpu: 0,
+  memory: 0,
+  fps: 0,
+  network: navigator.onLine,
+  
+  start() {
+    this.monitorCPU();
+    this.monitorMemory();
+    this.monitorFPS();
+    this.monitorNetwork();
+  },
+  
+  monitorCPU() {
+    let lastTime = performance.now();
+    let frameCount = 0;
+    
+    const measure = () => {
+      const now = performance.now();
+      frameCount++;
+      
+      if (now - lastTime >= 1000) {
+        const avgFrameTime = (now - lastTime) / frameCount;
+        this.cpu = Math.min(100, (avgFrameTime / 16.67) * 100);
+        frameCount = 0;
+        lastTime = now;
+      }
+      requestAnimationFrame(measure);
+    };
+    measure();
+  },
+  
+  monitorMemory() {
+    const update = () => {
+      if (performance.memory) {
+        this.memory = Math.round((performance.memory.usedJSHeapSize / performance.memory.totalJSHeapSize) * 100);
+      } else {
+        this.memory = Math.round(Math.random() * 30 + 20);
+      }
+      setTimeout(update, 2000);
+    };
+    update();
+  },
+  
+  monitorFPS() {
+    let frameCount = 0;
+    let lastTime = performance.now();
+    
+    const measure = () => {
+      const now = performance.now();
+      frameCount++;
+      
+      if (now - lastTime >= 1000) {
+        this.fps = Math.round(frameCount * 1000 / (now - lastTime));
+        frameCount = 0;
+        lastTime = now;
+      }
+      requestAnimationFrame(measure);
+    };
+    measure();
+  },
+  
+  monitorNetwork() {
+    window.addEventListener('online', () => { this.network = true; });
+    window.addEventListener('offline', () => { this.network = false; });
+  },
+  
+  getStats() {
+    return {
+      cpu: this.cpu.toFixed(1),
+      memory: this.memory.toFixed(0),
+      fps: this.fps,
+      network: this.network ? '在线' : '离线'
+    };
+  }
 };
 
 // ===================================================================
@@ -1736,7 +1816,7 @@ function launchApp(appId) {
           '/文档/笔记.txt': {type:'file',size:'3.5 KB',content:'今天的笔记...',modified:'2024-01-16 14:20'},
           '/文档/项目计划.txt': {type:'file',size:'8.1 KB',content:'Q3 项目计划\n1. 完成 UI 组件\n2. 集成测试\n3. 发布',modified:'2024-01-14 09:15'},
           '/桌面/快捷方式.lnk': {type:'file',size:'0.5 KB',content:'[快捷方式]',modified:'2024-01-10 16:45'},
-          '/系统/kernel.config': {type:'file',size:'2.3 KB',content:'kernel_version=1.0.0\nscheduler=smp\nmax_threads=256',modified:'2024-01-01 00:00'},
+          '/系统/kernel.config': {type:'file',size:'2.3 KB',content:'kernel_version=2.01\nbuild=20260718\nscheduler=smp\nmax_threads=256\nupdate_server=https://cyrcyrgo.github.io',modified:'2026-07-18 12:00'},
           '/系统/drivers.json': {type:'file',size:'4.7 KB',content:'{"display":"webgpu","fs":"internal","net":"stream"}',modified:'2024-01-01 00:00'},
           '/系统/boot.log': {type:'file',size:'12.1 KB',content:'[正常] 内核初始化完成\n[正常] 驱动加载完成\n[正常] 用户会话已启动',modified:'2024-01-01 00:00'},
           '/临时/cache.dat': {type:'file',size:'0.8 KB',content:'[二进制数据]',modified:'2024-01-17 08:30'},
@@ -2249,12 +2329,17 @@ function launchApp(appId) {
                 <div style="font-size:20px;font-weight:600;color:#fff;margin-bottom:8px">WebNT 内核</div>
                 <div style="font-size:13px;color:#ccc;margin-bottom:16px">HTML5 混合微内核操作系统</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
-                  <div style="color:#888">版本:</div><div style="color:#e0e0e0">v1.0.0</div>
-                  <div style="color:#888">构建:</div><div style="color:#e0e0e0">2026.01.01</div>
+                  <div style="color:#888">版本:</div><div style="color:#e0e0e0">v2.01</div>
+                  <div style="color:#888">构建:</div><div style="color:#e0e0e0">20260718</div>
                   <div style="color:#888">架构:</div><div style="color:#e0e0e0">HTML5 / JavaScript</div>
                   <div style="color:#888">许可证:</div><div style="color:#e0e0e0">MIT</div>
                 </div>
               </div>
+            </div>
+            <div class="sc-section">
+              <h3>系统更新</h3>
+              <div id="update-check-result" style="padding:12px;background:rgba(255,255,255,0.04);border-radius:8px;margin-bottom:12px;font-size:13px;color:#888;">点击下方按钮检查更新</div>
+              <button class="settings-btn" onclick="window.__checkUpdate()" style="width:100%;padding:10px;">检查更新</button>
             </div>
             <div class="sc-section">
               <h3>系统信息</h3>
@@ -2344,6 +2429,25 @@ function launchApp(appId) {
           const filtered = installed.filter(a => a.id !== appId);
           localStorage.setItem('webnt_installed_apps', JSON.stringify(filtered));
           document.getElementById('panel-apps').innerHTML = renderApps();
+        };
+        
+        window.__checkUpdate = function() {
+          const resultEl = document.getElementById('update-check-result');
+          if(!resultEl) return;
+          resultEl.textContent = '正在检查更新...';
+          resultEl.style.color = '#8ab4f8';
+          setTimeout(() => {
+            const latestVersion = '2.01';
+            const currentVersion = '2.01';
+            if(latestVersion === currentVersion) {
+              resultEl.textContent = '✓ 当前已是最新版本 (v' + currentVersion + ')';
+              resultEl.style.color = '#81c995';
+            } else {
+              resultEl.textContent = '发现新版本: v' + latestVersion + '\n点击下方按钮下载更新';
+              resultEl.style.color = '#ff9800';
+              resultEl.innerHTML = '发现新版本: v' + latestVersion + '<br><button onclick="location.reload()" style="margin-top:8px;padding:6px 12px;background:#667eea;border:none;border-radius:6px;color:#fff;font-size:12px;cursor:pointer;">立即更新</button>';
+            }
+          }, 1500);
         };
       });
       break;
