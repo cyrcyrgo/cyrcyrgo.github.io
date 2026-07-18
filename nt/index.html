@@ -348,7 +348,7 @@
   #start-menu {
     position: absolute; bottom: 52px; left: 8px;
     z-index: 2000; display: none;
-    width: clamp(260px, 30vw, 360px); max-height: clamp(320px, 55vh, 560px);
+    width: clamp(260px, 30vw, 360px); max-height: min(420px, calc(100vh - 120px));
     background: rgba(15, 23, 42, 0.95);
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);
@@ -376,6 +376,7 @@
   #start-menu .sm-search input::placeholder { color: #777; }
   #start-menu .sm-apps {
     padding: 0 8px 8px; flex: 1; min-height: 0; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   #start-menu .sm-app-item {
     display: flex; align-items: center; gap: 14px;
@@ -607,7 +608,7 @@
     #taskbar .tb-tray-btn { width: 36px; height: 36px; font-size: 14px; }
     #taskbar .tb-power-btn { width: 36px; height: 36px; font-size: 16px; }
     #taskbar .tb-clock { font-size: 12px; }
-    #start-menu { width: clamp(240px, 35vw, 320px); max-height: clamp(300px, 50vh, 500px); bottom: 48px; }
+    #start-menu { bottom: 46px; width: clamp(240px, 35vw, 320px); max-height: min(380px, calc(100vh - 130px)); }
     #power-menu { bottom: 48px; }
     .app-window { width: 600px !important; height: 450px !important; }
   }
@@ -641,7 +642,7 @@
     #taskbar .tb-clock { font-size: 11px; padding: 0 4px; }
     #taskbar .tb-clock .tb-clock-date { font-size: 9px; }
     /* 开始菜单 */
-    #start-menu { bottom: 44px; left: 4px; width: clamp(220px, 85vw, 280px); max-height: clamp(280px, 50vh, 420px); }
+    #start-menu { bottom: 42px; left: 4px; width: clamp(220px, 85vw, 280px); max-height: min(340px, calc(100vh - 120px)); }
     #start-menu .sm-app-item { font-size: 13px; padding: 10px 12px; gap: 10px; }
     /* 终端 */
     #terminal-window { width: 100vw; height: calc(100vh - 48px); border-radius: 0; left: 0 !important; top: 0 !important; }
@@ -682,7 +683,7 @@
     #taskbar .tb-clock { font-size: 11px; padding: 0 4px; }
     #taskbar .tb-clock .tb-clock-date { font-size: 9px; }
     /* 开始菜单 */
-    #start-menu { bottom: 44px; left: 4px; width: calc(100vw - 8px); max-height: clamp(240px, 45vh, 380px); }
+    #start-menu { bottom: 42px; left: 4px; width: calc(100vw - 8px); max-height: min(300px, calc(100vh - 120px)); }
     #start-menu .sm-search input { font-size: 14px; padding: 10px 14px; }
     #start-menu .sm-app-item { font-size: 13px; padding: 10px 12px; gap: 10px; }
     /* 应用窗口 */
@@ -2044,11 +2045,14 @@ function launchApp(appId) {
         const ctx = canvas.getContext('2d');
         let drawing = false;
         function resize() {
-          canvas.width = wrap.clientWidth;
-          canvas.height = wrap.clientHeight;
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
+  const vh = window.innerHeight;
+  const startMenu = document.getElementById('start-menu');
+  if(startMenu) {
+    startMenu.style.maxHeight = Math.min(420, vh - 120) + 'px';
+  }
+  renderDesktopIcons();
+  updateTaskbarWindowButtons();
+}
         resize();
         new ResizeObserver(resize).observe(wrap);
         canvas.addEventListener('pointerdown', e => {
