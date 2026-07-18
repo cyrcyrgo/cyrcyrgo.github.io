@@ -348,7 +348,7 @@
   #start-menu {
     position: absolute; bottom: 52px; left: 8px;
     z-index: 2000; display: none;
-    width: min(360px, calc(100vw - 16px)); max-height: min(560px, calc(100vh - 80px));
+    width: clamp(260px, 30vw, 360px); max-height: clamp(320px, 55vh, 560px);
     background: rgba(15, 23, 42, 0.95);
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);
@@ -416,7 +416,7 @@
      ============================================================ */
   #context-menu {
     position: fixed; z-index: 5000; display: none;
-    min-width: 200px; padding: 4px;
+    min-width: 180px; max-width: 280px; padding: 4px;
     background: rgba(30, 30, 50, 0.95);
     backdrop-filter: blur(20px);
     border: 1px solid rgba(255,255,255,0.1);
@@ -597,17 +597,18 @@
     #lock-screen .ls-date { font-size: 16px; }
     #lock-screen .ls-avatar { width: 64px; height: 64px; font-size: 24px; }
     #lock-screen .ls-slider { width: 320px; max-width: 80vw; }
-    #desktop-icons { bottom: 52px; grid-template-columns: repeat(auto-fill, 96px); grid-template-rows: repeat(auto-fill, 100px); }
+    #desktop-icons { bottom: 48px; grid-template-columns: repeat(auto-fill, 96px); grid-template-rows: repeat(auto-fill, 100px); }
     .desktop-icon { width: 80px; font-size: 13px; }
     .desktop-icon .dicon-svg { width: 48px; height: 48px; font-size: 36px !important; }
-    #taskbar { height: 52px; }
-    #taskbar .tb-start-btn { width: 48px; height: 48px; }
-    #taskbar .tb-pin-btn { width: 44px; height: 44px; font-size: 22px; }
-    #taskbar .tb-win-btn { font-size: 13px; height: 44px; min-width: 44px; }
-    #taskbar .tb-tray-btn { width: 40px; height: 40px; font-size: 15px; }
-    #taskbar .tb-power-btn { width: 40px; height: 40px; font-size: 18px; }
-    #taskbar .tb-clock { font-size: 13px; }
-    #start-menu { width: min(320px, calc(100vw - 16px)); max-height: 500px; }
+    #taskbar { height: 44px; }
+    #taskbar .tb-start-btn { width: 40px; height: 40px; }
+    #taskbar .tb-pin-btn { width: 40px; height: 40px; font-size: 20px; }
+    #taskbar .tb-win-btn { font-size: 12px; height: 36px; min-width: 36px; }
+    #taskbar .tb-tray-btn { width: 36px; height: 36px; font-size: 14px; }
+    #taskbar .tb-power-btn { width: 36px; height: 36px; font-size: 16px; }
+    #taskbar .tb-clock { font-size: 12px; }
+    #start-menu { width: clamp(240px, 35vw, 320px); max-height: clamp(300px, 50vh, 500px); bottom: 48px; }
+    #power-menu { bottom: 48px; }
     .app-window { width: 600px !important; height: 450px !important; }
   }
   @media (max-width: 768px) {
@@ -618,36 +619,39 @@
     #lock-screen .ls-username { font-size: 14px; }
     #lock-screen .ls-user { margin-bottom: 32px; }
     #lock-screen .ls-slider { width: 260px; max-width: 80vw; }
+    #lock-screen .ls-slider-text { font-size: 13px; }
     #lock-screen .ls-hint { font-size: 10px; }
     #lock-screen .ls-notifications {
       bottom: 100px; right: 12px; left: 12px;
       max-width: none; font-size: 12px;
     }
     /* 桌面图标缩小 */
-    #desktop-icons { bottom: 52px; grid-template-columns: repeat(auto-fill, 88px); grid-template-rows: repeat(auto-fill, 96px); padding: 8px; }
+    #desktop-icons { bottom: 44px; grid-template-columns: repeat(auto-fill, 80px); grid-template-rows: repeat(auto-fill, 88px); padding: 8px; }
     .desktop-icon { width: 72px; font-size: 11px; padding: 8px 4px; }
     .desktop-icon .dicon-svg { width: 44px; height: 44px; font-size: 30px !important; }
     /* 任务栏 - 触控优化 */
-    #taskbar { height: 52px; }
-    #taskbar .tb-start-btn { width: 44px; height: 44px; }
-    #taskbar .tb-start-btn svg { width: 22px; height: 22px; }
-    #taskbar .tb-pinned { padding: 0 6px; }
-    #taskbar .tb-pin-btn { width: 44px; height: 44px; font-size: 22px; }
-    #taskbar .tb-win-btn { font-size: 12px; padding: 0 10px; min-width: 44px; height: 44px; }
-    #taskbar .tb-tray-btn { width: 40px; height: 40px; font-size: 15px; }
-    #taskbar .tb-power-btn { width: 40px; height: 40px; font-size: 18px; }
-    #taskbar .tb-clock { font-size: 12px; padding: 0 6px; }
-    #taskbar .tb-clock .tb-clock-date { font-size: 10px; }
+    #taskbar { height: 40px; }
+    #taskbar .tb-start-btn { width: 36px; height: 36px; }
+    #taskbar .tb-start-btn svg { width: 20px; height: 20px; }
+    #taskbar .tb-pinned { padding: 0 4px; }
+    #taskbar .tb-pin-btn { width: 36px; height: 36px; font-size: 18px; }
+    #taskbar .tb-win-btn { font-size: 11px; padding: 0 8px; min-width: 32px; height: 32px; }
+    #taskbar .tb-tray-btn { width: 32px; height: 32px; font-size: 13px; }
+    #taskbar .tb-power-btn { width: 32px; height: 32px; font-size: 14px; }
+    #taskbar .tb-clock { font-size: 11px; padding: 0 4px; }
+    #taskbar .tb-clock .tb-clock-date { font-size: 9px; }
     /* 开始菜单 */
-    #start-menu { width: min(280px, calc(100vw - 8px)); max-height: 420px; left: 4px; }
+    #start-menu { bottom: 44px; left: 4px; width: clamp(220px, 85vw, 280px); max-height: clamp(280px, 50vh, 420px); }
     #start-menu .sm-app-item { font-size: 13px; padding: 10px 12px; gap: 10px; }
     /* 终端 */
-    #terminal-window { width: 100vw; height: calc(100vh - 52px); border-radius: 0; left: 0 !important; top: 0 !important; }
+    #terminal-window { width: 100vw; height: calc(100vh - 48px); border-radius: 0; left: 0 !important; top: 0 !important; }
     /* 应用窗口 */
-    .app-window { width: 100vw !important; height: calc(100vh - 52px) !important; left: 0 !important; top: 0 !important; border-radius: 0; min-width: auto; min-height: auto; }
+    .app-window { width: 100vw !important; height: calc(100vh - 48px) !important; left: 0 !important; top: 0 !important; border-radius: 0; min-width: auto; min-height: auto; }
     .app-window .aw-ctrl-btn { width: 36px; height: 36px; font-size: 14px; }
     /* 右键菜单 */
-    #context-menu { min-width: 180px; font-size: 12px; }
+    #context-menu { min-width: 160px; max-width: 260px; font-size: 12px; }
+    /* 电源菜单 */
+    #power-menu { bottom: 44px; right: 4px; left: 4px; min-width: auto; max-width: 280px; }
   }
 
   @media (max-width: 400px) {
@@ -663,27 +667,45 @@
     #lock-screen .ls-notifications { bottom: 80px; right: 8px; left: 8px; }
     #lock-screen .ls-notif { padding: 10px 12px; font-size: 11px; }
     /* 桌面 */
-    #desktop-icons { bottom: 56px; grid-template-columns: repeat(auto-fill, 80px); grid-template-rows: repeat(auto-fill, 88px); padding: 8px; }
-    .desktop-icon { width: 72px; font-size: 11px; padding: 8px 4px; }
-    .desktop-icon .dicon-svg { width: 40px; height: 40px; font-size: 28px !important; }
-    /* 任务栏 - 触控优化 */
-    #taskbar { height: 56px; }
-    #taskbar .tb-start-btn { width: 48px; height: 48px; }
-    #taskbar .tb-start-btn svg { width: 24px; height: 24px; }
-    #taskbar .tb-pinned { padding: 0 8px; }
-    #taskbar .tb-pin-btn { width: 48px; height: 48px; font-size: 24px; }
-    #taskbar .tb-win-btn { font-size: 12px; padding: 0 10px; min-width: 48px; height: 48px; }
-    #taskbar .tb-tray-btn { width: 44px; height: 44px; font-size: 16px; }
-    #taskbar .tb-power-btn { width: 44px; height: 44px; font-size: 20px; }
-    #taskbar .tb-clock { font-size: 12px; padding: 0 6px; }
-    #taskbar .tb-clock .tb-clock-date { font-size: 10px; }
+    #desktop-icons { bottom: 44px; grid-template-columns: repeat(auto-fill, 72px); grid-template-rows: repeat(auto-fill, 80px); padding: 6px; }
+    .desktop-icon { width: 64px; font-size: 10px; padding: 6px 2px; }
+    .desktop-icon .dicon-svg { width: 36px; height: 36px; font-size: 24px !important; }
+    /* 任务栏 */
+    #taskbar { height: 40px; }
+    #taskbar .tb-start-btn { width: 36px; height: 36px; }
+    #taskbar .tb-start-btn svg { width: 20px; height: 20px; }
+    #taskbar .tb-pinned { padding: 0 4px; }
+    #taskbar .tb-pin-btn { width: 36px; height: 36px; font-size: 18px; }
+    #taskbar .tb-win-btn { font-size: 11px; padding: 0 8px; min-width: 32px; height: 32px; }
+    #taskbar .tb-tray-btn { width: 32px; height: 32px; font-size: 13px; }
+    #taskbar .tb-power-btn { width: 32px; height: 32px; font-size: 14px; }
+    #taskbar .tb-clock { font-size: 11px; padding: 0 4px; }
+    #taskbar .tb-clock .tb-clock-date { font-size: 9px; }
     /* 开始菜单 */
-    #start-menu { width: min(280px, calc(100vw - 8px)); max-height: 400px; left: 4px; }
+    #start-menu { bottom: 44px; left: 4px; width: calc(100vw - 8px); max-height: clamp(240px, 45vh, 380px); }
     #start-menu .sm-search input { font-size: 14px; padding: 10px 14px; }
     #start-menu .sm-app-item { font-size: 13px; padding: 10px 12px; gap: 10px; }
     /* 应用窗口 */
-    .app-window { width: 100vw !important; height: calc(100vh - 56px) !important; }
+    .app-window { width: 100vw !important; height: calc(100vh - 48px) !important; }
     .app-window .aw-ctrl-btn { width: 40px; height: 40px; font-size: 16px; }
+    /* 右键菜单 */
+    #context-menu { min-width: 150px; max-width: 240px; font-size: 11px; }
+    /* 电源菜单 */
+    #power-menu { bottom: 44px; right: 2px; left: 2px; min-width: auto; max-width: 260px; }
+  }
+
+  /* 系统监控响应式 */
+  @media (max-width: 768px) {
+    .sm-bar-wrap { gap: 8px !important; margin-bottom: 8px !important; }
+    .sm-label { width: 56px !important; font-size: 11px !important; }
+    .sm-val { width: 40px !important; font-size: 11px !important; }
+    .sm-chart { height: 60px !important; gap: 2px !important; margin-top: 12px !important; }
+  }
+  @media (max-width: 400px) {
+    .sm-bar-wrap { gap: 6px !important; margin-bottom: 6px !important; }
+    .sm-label { width: 48px !important; font-size: 10px !important; }
+    .sm-val { width: 36px !important; font-size: 10px !important; }
+    .sm-chart { height: 48px !important; gap: 1px !important; margin-top: 10px !important; }
   }
 </style>
 </head>
@@ -967,7 +989,6 @@ const bootStatus = document.getElementById('boot-status');
 const lockScreen = document.getElementById('lock-screen');
 const appRoot = document.getElementById('app-root');
 const desktopIcons = document.getElementById('desktop-icons');
-const taskbar = document.getElementById('taskbar');
 const startMenu = document.getElementById('start-menu');
 const powerMenu = document.getElementById('power-menu');
 const wallpaperDialog = document.getElementById('wallpaper-dialog');
@@ -978,11 +999,12 @@ const twInput = document.getElementById('tw-input');
 const contextMenu = document.getElementById('context-menu');
 
 function bootLogLine(msg, type='') {
+  if(!bootLog) return;
   const l=document.createElement('div'); l.className=`log-line ${type}`;
   l.textContent=`[${new Date().toISOString().slice(11,23)}] ${msg}`;
   bootLog.appendChild(l); bootLog.scrollTop=bootLog.scrollHeight;
 }
-function bootProgress(p, s) { bootProgressBar.style.width=p+'%'; bootStatus.textContent=s; }
+function bootProgress(p, s) { if(bootProgressBar) bootProgressBar.style.width=p+'%'; if(bootStatus) bootStatus.textContent=s; }
 
 // ===================================================================
 // 时间更新
@@ -1013,29 +1035,32 @@ function getMaxSlide() { if(!lsSlider) return 256; const kw=lsKnob?lsKnob.offset
 function resetKnob() { if(lsKnob) lsKnob.style.left='4px'; }
 
 function unlockDesktop() {
+  if(!lockScreen) return;
   lockScreen.classList.add('unlocked');
   setTimeout(() => { lockScreen.style.display='none'; }, 500);
 }
 
+if(lsSlider) {
 lsSlider.addEventListener('pointerdown', e => {
   lsDragging=true; lsStartX=e.clientX; lsStartTime=Date.now(); lsKnobX=4;
   lsSlider.classList.add('dragging');
   e.preventDefault();
 });
+}
 // 绑定到 document 确保手指移出滑块后仍能追踪
 document.addEventListener('pointermove', e => {
   if(!lsDragging) return;
   const dx=e.clientX-lsStartX;
   const maxSlide=getMaxSlide();
   lsKnobX=Math.max(4, Math.min(maxSlide, 4+dx));
-  lsKnob.style.left=lsKnobX+'px';
+  if(lsKnob) lsKnob.style.left=lsKnobX+'px';
   // 降低阈值到85%，支持快速滑动解锁
   const threshold = Math.max(maxSlide * 0.85, maxSlide * 0.5);
-  if(lsKnobX>=threshold) { lsDragging=false; lsSlider.classList.remove('dragging'); unlockDesktop(); }
+  if(lsKnobX>=threshold) { lsDragging=false; if(lsSlider) lsSlider.classList.remove('dragging'); unlockDesktop(); }
 });
 document.addEventListener('pointerup', () => {
   if(!lsDragging) return;
-  lsDragging=false; lsSlider.classList.remove('dragging');
+  lsDragging=false; if(lsSlider) lsSlider.classList.remove('dragging');
   const maxSlide=getMaxSlide();
   const threshold = Math.max(maxSlide * 0.85, maxSlide * 0.5);
   // 快速滑动放宽阈值
@@ -1049,18 +1074,20 @@ document.addEventListener('pointerup', () => {
 });
 // 触摸取消时也重置
 document.addEventListener('pointercancel', () => {
-  if(lsDragging) { lsDragging=false; lsSlider.classList.remove('dragging'); resetKnob(); }
+  if(lsDragging) { lsDragging=false; if(lsSlider) lsSlider.classList.remove('dragging'); resetKnob(); }
 });
 
 // 按任意键解锁
 document.addEventListener('keydown', function unlockByKey(e) {
-  if(lockScreen.style.display!=='none') { unlockDesktop(); }
+  if(lockScreen && lockScreen.style.display!=='none') { unlockDesktop(); }
 }, {once:false});
 
 // 点击滑块区域也能解锁（触控备选）
+if(lsSlider) {
 lsSlider.addEventListener('click', e => {
   if(!lsDragging) unlockDesktop();
 });
+}
 
 // ===================================================================
 // 桌面图标
@@ -1100,6 +1127,7 @@ function saveDesktopOrder(order) {
 }
 
 function renderDesktopIcons() {
+  if(!desktopIcons) return;
   desktopIcons.innerHTML='';
   let installedApps = [];
   try { installedApps = JSON.parse(localStorage.getItem('webnt_installed_apps') || '[]'); }
@@ -1336,11 +1364,14 @@ function loadWallpaper() {
   } catch(e) { /* localStorage not available */ }
 }
 function showWallpaperDialog() {
-  document.getElementById('wp-url-input').value = '';
-  document.getElementById('wp-file-input').value = '';
+  if(!wallpaperDialog) return;
+  const urlInput = document.getElementById('wp-url-input');
+  const fileInput = document.getElementById('wp-file-input');
+  if(urlInput) urlInput.value = '';
+  if(fileInput) fileInput.value = '';
   wallpaperDialog.style.display = 'flex';
 }
-function hideWallpaperDialog() { wallpaperDialog.style.display = 'none'; }
+function hideWallpaperDialog() { if(wallpaperDialog) wallpaperDialog.style.display = 'none'; }
 
 document.getElementById('wp-cancel').addEventListener('click', hideWallpaperDialog);
 document.getElementById('wp-ok').addEventListener('click', () => {
@@ -1360,7 +1391,7 @@ document.getElementById('wp-ok').addEventListener('click', () => {
     hideWallpaperDialog();
   }
 });
-wallpaperDialog.addEventListener('click', e => { if(e.target === wallpaperDialog) hideWallpaperDialog(); });
+if(wallpaperDialog) wallpaperDialog.addEventListener('click', e => { if(e.target === wallpaperDialog) hideWallpaperDialog(); });
 
 // ===================================================================
 // 桌面右键菜单 & 长按更换壁纸
@@ -1368,6 +1399,7 @@ wallpaperDialog.addEventListener('click', e => { if(e.target === wallpaperDialog
 let desktopLongPressTimer = null;
 let desktopLongPressTarget = null;
 
+if(desktopIcons) {
 desktopIcons.addEventListener('contextmenu', e => {
   if(e.target !== desktopIcons) return;
   e.preventDefault();
@@ -1429,11 +1461,13 @@ desktopIcons.addEventListener('click', e => {
     selectedIcon=null;
   }
 });
+} // end if(desktopIcons)
 
 // ===================================================================
 // 右键菜单
 // ===================================================================
 function showContextMenu(x, y, items) {
+  if(!contextMenu) return;
   contextMenu.innerHTML='';
   items.forEach(item => {
     if(item.separator) { const s=document.createElement('div'); s.className='cm-separator'; contextMenu.appendChild(s); return; }
@@ -1444,16 +1478,21 @@ function showContextMenu(x, y, items) {
     contextMenu.appendChild(el);
   });
   contextMenu.style.display='block';
-  contextMenu.style.left=Math.min(x, window.innerWidth-220)+'px';
-  contextMenu.style.top=Math.min(y, window.innerHeight-contextMenu.offsetHeight-10)+'px';
+  // 使用 requestAnimationFrame 确保 DOM 已渲染后再计算高度
+  requestAnimationFrame(() => {
+    const menuHeight = contextMenu.offsetHeight || 200;
+    contextMenu.style.left = Math.max(0, Math.min(x, window.innerWidth - 220)) + 'px';
+    contextMenu.style.top = Math.max(0, Math.min(y, window.innerHeight - menuHeight - 10)) + 'px';
+  });
 }
-function hideContextMenu() { contextMenu.style.display='none'; }
+function hideContextMenu() { if(contextMenu) contextMenu.style.display='none'; }
 
 // ===================================================================
 // 开始菜单
 // ===================================================================
 const smAppList = document.getElementById('sm-app-list');
 function renderStartMenu() {
+  if(!smAppList) return;
   smAppList.innerHTML='';
   const apps=[
     {name:'终端', icon:'\u2328\ufe0f', color:'#00ff88', appId:'terminal'},
@@ -1484,7 +1523,7 @@ function renderStartMenu() {
 renderStartMenu();
 
 function toggleStartMenu() {
-  startMenu.classList.toggle('show');
+  if(startMenu) startMenu.classList.toggle('show');
 }
 document.getElementById('tb-start-btn').addEventListener('click', e => { e.stopPropagation(); toggleStartMenu(); });
 document.getElementById('sm-shutdown').addEventListener('click', () => {
@@ -1515,20 +1554,25 @@ document.addEventListener('click', e => {
   }
 });
 // 桌面右键菜单点击关闭
+if(desktopIcons) {
 desktopIcons.addEventListener('click', () => {
-  if(startMenu.classList.contains('show')) startMenu.classList.remove('show');
-  if(powerMenu.style.display==='block') powerMenu.style.display='none';
+  if(startMenu && startMenu.classList.contains('show')) startMenu.classList.remove('show');
+  if(powerMenu && powerMenu.style.display==='block') powerMenu.style.display='none';
   hideContextMenu();
 });
+}
 
 function togglePowerMenu() {
+  if(!powerMenu) return;
   powerMenu.style.display = (powerMenu.style.display==='block')?'none':'block';
 }
 document.getElementById('tb-power-btn').addEventListener('click', e => { e.stopPropagation(); togglePowerMenu(); });
 document.getElementById('pm-sleep').addEventListener('click', () => {
-  powerMenu.style.display='none';
-  lockScreen.style.display='flex';
-  lockScreen.classList.remove('unlocked');
+  if(powerMenu) powerMenu.style.display='none';
+  if(lockScreen) {
+    lockScreen.style.display='flex';
+    lockScreen.classList.remove('unlocked');
+  }
   resetKnob();
 });
 document.getElementById('pm-reboot').addEventListener('click', () => {
@@ -1543,6 +1587,7 @@ document.getElementById('pm-shutdown').addEventListener('click', () => {
 // ===================================================================
 function updateTaskbarWindowButtons() {
   const list=document.getElementById('tb-window-list');
+  if(!list) return;
   const wins=WindowManager.instance.getWindowList();
   list.innerHTML='';
   wins.forEach(w => {
@@ -1552,7 +1597,7 @@ function updateTaskbarWindowButtons() {
     btn.addEventListener('click', () => {
       WindowManager.instance.bringToFront(w.id);
       if(w.appId==='terminal') {
-        tw.style.display='flex'; tw.style.zIndex=100;
+        if(tw) { tw.style.display='flex'; tw.style.zIndex=100; }
       } else {
         const el = document.getElementById(w.appId);
         if(el) {
@@ -1574,8 +1619,9 @@ function updateTaskbarWindowButtons() {
 function launchApp(appId) {
   switch(appId) {
     case 'terminal':
+      if(!tw || !twInput) return;
       tw.style.display='flex';
-      tw.style.left='150px'; tw.style='80px';
+      tw.style.left='150px'; tw.style.top='80px';
       tw.style.zIndex=100;
       twInput.focus();
       tw.dataset.winId = WindowManager.instance.createWindow({title:'终端',appId:'terminal',icon:'\u2328\ufe0f'});
@@ -2752,14 +2798,14 @@ function showAppWindow(title, icon, bodyHTML) {
     win.style.left=(ox+e.clientX-sx)+'px';
     win.style.top=(oy+e.clientY-sy)+'px';
   });
-  win.addEventListener('pointerup', (e) => { dragging=false; if(win.hasPointerCapture&&win.hasPointerCapture(e.pointerId)) win.releasePointerCapture(e.pointerId); });
-  win.addEventListener('pointercancel', (e) => { dragging=false; if(win.hasPointerCapture&&win.hasPointerCapture(e.pointerId)) win.releasePointerCapture(e.pointerId); });
+  win.addEventListener('pointerup', (e) => { dragging=false; if(win.hasPointerCapture(e.pointerId)) win.releasePointerCapture(e.pointerId); });
+  win.addEventListener('pointercancel', (e) => { dragging=false; if(win.hasPointerCapture(e.pointerId)) win.releasePointerCapture(e.pointerId); });
   // 聚焦
   win.addEventListener('pointerdown', () => {
     document.querySelectorAll('.app-window').forEach(w=>w.style.zIndex=Math.min(50,w.style.zIndex||50));
     win.style.zIndex=100;
   });
-  appRoot.appendChild(win);
+  if(appRoot) appRoot.appendChild(win);
   updateTaskbarWindowButtons();
 }
 
@@ -2770,6 +2816,7 @@ const twHistory=[];
 let twHistoryIdx=-1;
 
 function writeTerminal(text, cls='') {
+  if(!twOutput) return;
   const lines=text.split('\n');
   lines.forEach(line => {
     const l=document.createElement('div');
@@ -2781,6 +2828,7 @@ function writeTerminal(text, cls='') {
 }
 
 function writeWelcome() {
+  if(!twOutput) return;
   twOutput.innerHTML='';
   writeTerminal('WebNT 内核 v1.0.0 [HTML5 混合微内核]', 'info');
   writeTerminal('输入 "help" 查看可用命令。');
@@ -2789,6 +2837,7 @@ function writeWelcome() {
 
 writeWelcome();
 
+if(twInput) {
 twInput.addEventListener('keydown', async e => {
   if(e.key==='Enter') {
     const cmd=twInput.value.trim();
@@ -2816,20 +2865,24 @@ twInput.addEventListener('keydown', async e => {
     else if(matches.length>1) writeTerminal(matches.join('  '),'');
   }
 });
+} // end if(twInput)
 
 // 终端按钮
 document.getElementById('tb-terminal-btn').addEventListener('click', () => launchApp('terminal'));
 document.getElementById('tw-close').addEventListener('click', () => {
+  if(!tw) return;
   tw.style.display='none';
   const wid = tw.dataset.winId;
   if(wid) WindowManager.instance.destroyWindow(wid);
   updateTaskbarWindowButtons();
 });
 document.getElementById('tw-minimize').addEventListener('click', () => {
+  if(!tw) return;
   tw.style.display='none';
   updateTaskbarWindowButtons();
 });
 document.getElementById('tw-maximize').addEventListener('click', () => {
+  if(!tw) return;
   if(tw.style.width==='100vw') {
     tw.style.cssText = tw.dataset.normalStyle || 'width:700px;height:420px;left:150px;top:80px';
     tw.style.display='flex';
@@ -2844,17 +2897,20 @@ document.getElementById('tw-maximize').addEventListener('click', () => {
 // 终端拖拽
 let twDragging=false, twSx=0, twSy=0, twOx=0, twOy=0;
 document.getElementById('tw-titlebar').addEventListener('pointerdown', e => {
+  if(!tw) return;
   twDragging=true; twSx=e.clientX; twSy=e.clientY;
   twOx=tw.offsetLeft; twOy=tw.offsetTop;
   tw.setPointerCapture(e.pointerId);
 });
+if(tw) {
 tw.addEventListener('pointermove', e => {
   if(!twDragging) return;
   tw.style.left=(twOx+e.clientX-twSx)+'px';
   tw.style.top=(twOy+e.clientY-twSy)+'px';
 });
-tw.addEventListener('pointerup', (e) => { twDragging=false; if(tw.hasPointerCapture&&tw.hasPointerCapture(e.pointerId)) tw.releasePointerCapture(e.pointerId); });
-tw.addEventListener('pointercancel', (e) => { twDragging=false; if(tw.hasPointerCapture&&tw.hasPointerCapture(e.pointerId)) tw.releasePointerCapture(e.pointerId); });
+tw.addEventListener('pointerup', (e) => { twDragging=false; if(tw.hasPointerCapture(e.pointerId)) tw.releasePointerCapture(e.pointerId); });
+tw.addEventListener('pointercancel', (e) => { twDragging=false; if(tw.hasPointerCapture(e.pointerId)) tw.releasePointerCapture(e.pointerId); });
+}
 
 // ===================================================================
 // 键盘快捷键
@@ -2868,8 +2924,8 @@ document.addEventListener('keydown', e => {
   }
   // Escape 关闭菜单
   if(e.key==='Escape') {
-    if(startMenu.classList.contains('show')) startMenu.classList.remove('show');
-    if(powerMenu.style.display==='block') powerMenu.style.display='none';
+    if(startMenu && startMenu.classList.contains('show')) startMenu.classList.remove('show');
+    if(powerMenu && powerMenu.style.display==='block') powerMenu.style.display='none';
     hideContextMenu();
     return;
   }
@@ -2879,6 +2935,10 @@ document.addEventListener('keydown', e => {
 // 启动流程
 // ===================================================================
 async function boot() {
+  if(!bootScreen || !appRoot) {
+    console.error('Boot: 缺少必要的 DOM 元素');
+    return;
+  }
   try {
   bootLogLine('WebNT 内核 v1.0.0 正在启动...', 'info');
   bootLogLine('Copyright (c) 2026 WebNT 项目', '');
@@ -2941,15 +3001,15 @@ async function boot() {
   loadWallpaper();
   updateAllClocks();
 
-  setTimeout(() => { if(bootScreen.parentNode) bootScreen.remove(); }, 600);
+  setTimeout(() => { if(bootScreen && bootScreen.parentNode) bootScreen.remove(); }, 600);
 
   console.log('%c WebNT 内核 v1.0.0 就绪 %c| %c滑动解锁',
     'color:#00ff88;font-size:16px;', '', 'color:#aaa;');
   } catch(err) {
     bootLogLine(`启动错误: ${err.message}`, 'err');
     console.error('Boot error:', err);
-    bootScreen.classList.add('hidden');
-    appRoot.style.display = 'block';
+    if(bootScreen) bootScreen.classList.add('hidden');
+    if(appRoot) appRoot.style.display = 'block';
     if(lockScreen && lockScreen.style.display !== 'none') unlockDesktop();
   }
 }
@@ -2957,8 +3017,8 @@ async function boot() {
 boot().catch(err => {
   bootLogLine(`严重错误: ${err.message}`, 'err');
   console.error(err);
-  bootScreen.classList.add('hidden');
-  appRoot.style.display = 'block';
+  if(bootScreen) bootScreen.classList.add('hidden');
+  if(appRoot) appRoot.style.display = 'block';
   unlockDesktop();
 });
 </script>
