@@ -185,18 +185,21 @@
      桌面图标 (内联渲染，不依赖外部 .ts)
      ============================================================ */
   .desktop-icon {
-    position: absolute; display: flex; flex-direction: column;
+    display: flex; flex-direction: column;
     align-items: center; width: 80px; padding: 8px 4px;
     border-radius: 8px; cursor: pointer;
     font-family: 'Segoe UI', system-ui, sans-serif;
     font-size: 12px; color: #fff; text-align: center;
     text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-    transition: background 0.1s;
+    transition: background 0.1s, transform 0.15s;
     user-select: none;
+    touch-action: none;
   }
   .desktop-icon:hover { background: rgba(255,255,255,0.1); }
   .desktop-icon:active { background: rgba(255,255,255,0.05); }
   .desktop-icon.selected { background: rgba(102,126,234,0.3); }
+  .desktop-icon.dragging { opacity: 0.5; transform: scale(0.95); }
+  .desktop-icon.drag-over { background: rgba(102,126,234,0.25); border: 2px dashed rgba(102,126,234,0.6); }
   .desktop-icon .dicon-svg {
     width: 48px; height: 48px; margin-bottom: 4px;
     display: flex; align-items: center; justify-content: center;
@@ -208,7 +211,13 @@
   }
   #desktop-icons {
     position: absolute; top: 0; left: 0; right: 0; bottom: 48px;
-    z-index: 1; overflow: hidden;
+    z-index: 1; overflow: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 96px);
+    grid-template-rows: repeat(auto-fill, 100px);
+    gap: 4px;
+    padding: 12px;
+    align-content: start;
   }
 
   /* ============================================================
@@ -551,7 +560,7 @@
     #lock-screen .ls-date { font-size: 16px; }
     #lock-screen .ls-avatar { width: 64px; height: 64px; font-size: 24px; }
     #lock-screen .ls-slider { width: 320px; max-width: 80vw; }
-    #desktop-icons { bottom: 52px; }
+    #desktop-icons { bottom: 52px; grid-template-columns: repeat(auto-fill, 96px); grid-template-rows: repeat(auto-fill, 100px); }
     .desktop-icon { width: 80px; font-size: 13px; }
     .desktop-icon .dicon-svg { width: 48px; height: 48px; font-size: 36px !important; }
     #taskbar { height: 52px; }
@@ -578,7 +587,7 @@
       max-width: none; font-size: 12px;
     }
     /* 桌面图标缩小 */
-    #desktop-icons { bottom: 52px; }
+    #desktop-icons { bottom: 52px; grid-template-columns: repeat(auto-fill, 88px); grid-template-rows: repeat(auto-fill, 96px); padding: 8px; }
     .desktop-icon { width: 72px; font-size: 11px; padding: 8px 4px; }
     .desktop-icon .dicon-svg { width: 44px; height: 44px; font-size: 30px !important; }
     /* 任务栏 - 触控优化 */
@@ -617,7 +626,7 @@
     #lock-screen .ls-notifications { bottom: 80px; right: 8px; left: 8px; }
     #lock-screen .ls-notif { padding: 10px 12px; font-size: 11px; }
     /* 桌面 */
-    #desktop-icons { bottom: 56px; }
+    #desktop-icons { bottom: 56px; grid-template-columns: repeat(auto-fill, 80px); grid-template-rows: repeat(auto-fill, 88px); padding: 8px; }
     .desktop-icon { width: 72px; font-size: 11px; padding: 8px 4px; }
     .desktop-icon .dicon-svg { width: 40px; height: 40px; font-size: 28px !important; }
     /* 任务栏 - 触控优化 */
@@ -1031,9 +1040,15 @@ function addDesktopIcon(id, name, icon, color, appId) {
   }
 }
 
+function getDesktopOrder() {
+  try { return JSON.parse(localStorage.getItem('webnt_desktop_order') || '[]'); } catch(e) { return []; }
+}
+function saveDesktopOrder(order) {
+  try { localStorage.setItem('webnt_desktop_order', JSON.stringify(order)); } catch(e) {}
+}
+
 function renderDesktopIcons() {
   desktopIcons.innerHTML='';
-  // Load installed apps from localStorage
   let installedApps = [];
   try { installedApps = JSON.parse(localStorage.getItem('webnt_installed_apps') || '[]'); }
   catch(e) {}
@@ -1043,12 +1058,22 @@ function renderDesktopIcons() {
       allApps.push({ id:a.id, name:a.name, icon:a.icon, color:a.color, appId:a.id });
     }
   });
-  allApps.forEach((app, i) => {
+
+  // 应用自定义排序
+  const savedOrder = getDesktopOrder();
+  if(savedOrder.length > 0) {
+    const ordered = [];
+    savedOrder.forEach(id => { const a = allApps.find(d => d.id === id); if(a) ordered.push(a); });
+    allApps.forEach(a => { if(!ordered.find(d => d.id === a.id)) ordered.push(a); });
+    allApps.length = 0;
+    allApps.push(...ordered);
+  }
+
+  allApps.forEach((app) => {
     const icon=document.createElement('div');
     icon.className='desktop-icon';
-    icon.style.left=(20+(i%4)*100)+'px';
-    icon.style.top=(20+Math.floor(i/4)*100)+'px';
     icon.dataset.appId=app.id;
+    icon.draggable=true;
     icon.innerHTML=`<div class="dicon-svg" style="font-size:36px;color:${app.color}">${app.icon}</div><div class="dicon-label">${app.name}</div>`;
     icon.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1071,20 +1096,38 @@ function renderDesktopIcons() {
         {label:'属性', action:()=>{}},
       ]);
     });
-    // 拖拽
-    let dragging=false, sx=0, sy=0, ox=0, oy=0;
-    icon.addEventListener('pointerdown', ed => {
-      if(ed.button!==0) return;
-      dragging=true; sx=ed.clientX; sy=ed.clientY;
-      ox=icon.offsetLeft; oy=icon.offsetTop;
-      icon.setPointerCapture(ed.pointerId);
+
+    // HTML5 拖拽排序
+    icon.addEventListener('dragstart', (e) => {
+      icon.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', app.id);
     });
-    icon.addEventListener('pointermove', ed => {
-      if(!dragging) return;
-      icon.style.left=(ox+ed.clientX-sx)+'px';
-      icon.style.top=(oy+ed.clientY-sy)+'px';
+    icon.addEventListener('dragend', () => {
+      icon.classList.remove('dragging');
+      document.querySelectorAll('.desktop-icon.drag-over').forEach(el => el.classList.remove('drag-over'));
+      // 保存新顺序
+      const newOrder = [...document.querySelectorAll('.desktop-icon')].map(el => el.dataset.appId);
+      saveDesktopOrder(newOrder);
     });
-    icon.addEventListener('pointerup', () => { dragging=false; });
+    icon.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const dragging = document.querySelector('.desktop-icon.dragging');
+      if(!dragging || dragging === icon) return;
+      const rect = icon.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      if(e.clientY < midY) {
+        desktopIcons.insertBefore(dragging, icon);
+      } else {
+        desktopIcons.insertBefore(dragging, icon.nextSibling);
+      }
+      icon.classList.add('drag-over');
+    });
+    icon.addEventListener('dragleave', () => {
+      icon.classList.remove('drag-over');
+    });
+
     desktopIcons.appendChild(icon);
   });
 }
