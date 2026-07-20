@@ -74,12 +74,18 @@ export function updateTaskbarWindowButtons() {
       WindowManager.instance.bringToFront(w.id);
       if (w.appId === 'terminal') {
         const tw = document.getElementById('terminal-window');
-        if (tw) { tw.style.display = 'flex'; tw.style.zIndex = 100; }
+        if (tw) {
+          document.querySelectorAll('.app-window').forEach(ew => ew.style.zIndex = Math.min(50, parseInt(ew.style.zIndex) || 50));
+          tw.style.display = 'flex';
+          tw.style.zIndex = 100;
+        }
       } else {
         const el = document.getElementById(w.appId);
         if (el) {
           el.style.display = 'flex';
-          document.querySelectorAll('.app-window').forEach(ew => ew.style.zIndex = Math.min(50, ew.style.zIndex || 50));
+          document.querySelectorAll('.app-window').forEach(ew => ew.style.zIndex = Math.min(50, parseInt(ew.style.zIndex) || 50));
+          const tw = document.getElementById('terminal-window');
+          if (tw) tw.style.zIndex = 50;
           el.style.zIndex = 100;
         }
       }

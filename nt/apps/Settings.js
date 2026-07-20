@@ -70,6 +70,10 @@ function launch() {
           <span class="ss-icon">\ud83d\udce6</span>
           <span>应用</span>
         </div>
+        <div class="ss-item" data-panel="account">
+          <span class="ss-icon">👤</span>
+          <span>账户</span>
+        </div>
         <div class="ss-item" data-panel="about">
           <span class="ss-icon">\u2139\ufe0f</span>
           <span>关于</span>
@@ -81,6 +85,7 @@ function launch() {
         <div id="panel-personalization" style="display:none"></div>
         <div id="panel-sound" style="display:none"></div>
         <div id="panel-apps" style="display:none"></div>
+        <div id="panel-account" style="display:none"></div>
         <div id="panel-about" style="display:none"></div>
       </div>
     </div>
@@ -91,6 +96,7 @@ function launch() {
     const content = document.getElementById('settings-content');
     
     function renderSystem() {
+      const version = window.__WebNT_VERSION || '2.01';
       const uptime = Math.floor(performance.now() / 1000);
       const hours = Math.floor(uptime / 3600);
       const mins = Math.floor((uptime % 3600) / 60);
@@ -103,7 +109,7 @@ function launch() {
               <div class="sc-label">内核版本</div>
               <div class="sc-desc">WebNT 内核版本号</div>
             </div>
-            <div class="sc-value">v1.0.0</div>
+            <div class="sc-value">v${version}</div>
           </div>
           <div class="sc-item">
             <div>
@@ -326,7 +332,68 @@ function launch() {
       `;
     }
     
+    function renderAccount() {
+      const role = window.__WebNT_userRole || localStorage.getItem('webnt_user_role') || 'admin';
+      const isAdmin = role === 'admin';
+      return `
+        <div class="sc-section">
+          <h3>用户账户</h3>
+          <div class="sc-item">
+            <div>
+              <div class="sc-label">当前用户</div>
+              <div class="sc-desc">${isAdmin ? '管理员' : '访客'}</div>
+            </div>
+            <div class="sc-value">${isAdmin ? '👑 全部权限' : '🔒 受限权限'}</div>
+          </div>
+          <div class="sc-item">
+            <div>
+              <div class="sc-label">切换角色</div>
+              <div class="sc-desc">更改当前账户类型（需重新锁定）</div>
+            </div>
+            <select onchange="localStorage.setItem('webnt_user_role', this.value); document.getElementById('panel-account').innerHTML = window.__renderAccount()" style="padding:6px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#ccc;font-size:13px;cursor:pointer;">
+              <option value="admin" ${isAdmin ? 'selected' : ''}>管理员</option>
+              <option value="guest" ${!isAdmin ? 'selected' : ''}>访客</option>
+            </select>
+          </div>
+        </div>
+        <div class="sc-section">
+          <h3>锁屏设置</h3>
+          <div class="sc-item">
+            <div>
+              <div class="sc-label">自动锁屏</div>
+              <div class="sc-desc">闲置一段时间后自动锁定</div>
+            </div>
+            <select onchange="localStorage.setItem('webnt_auto_lock', this.value)" style="padding:6px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#ccc;font-size:13px;cursor:pointer;">
+              <option value="never">从不</option>
+              <option value="5">5 分钟</option>
+              <option value="15">15 分钟</option>
+              <option value="30">30 分钟</option>
+            </select>
+          </div>
+        </div>
+        <div class="sc-section">
+          <h3>操作偏好</h3>
+          <div class="sc-item">
+            <div>
+              <div class="sc-label">双击打开</div>
+              <div class="sc-desc">桌面图标双击打开应用</div>
+            </div>
+            <div class="toggle-switch active" onclick="this.classList.toggle('active');localStorage.setItem('webnt_dblclick', this.classList.contains('active'))"></div>
+          </div>
+          <div class="sc-item">
+            <div>
+              <div class="sc-label">任务栏自动隐藏</div>
+              <div class="sc-desc">鼠标移开时自动隐藏任务栏</div>
+            </div>
+            <div class="toggle-switch" onclick="this.classList.toggle('active');localStorage.setItem('webnt_autohide', this.classList.contains('active'))"></div>
+          </div>
+        </div>
+      `;
+    }
+
     function renderAbout() {
+      const version = window.__WebNT_VERSION || '2.01';
+      const build = window.__WebNT_BUILD || '20260718';
       return `
         <div class="sc-section">
           <h3>关于 WebNT</h3>
@@ -334,8 +401,8 @@ function launch() {
             <div style="font-size:20px;font-weight:600;color:#fff;margin-bottom:8px">WebNT 内核</div>
             <div style="font-size:13px;color:#ccc;margin-bottom:16px">HTML5 混合微内核操作系统</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
-              <div style="color:#888">版本:</div><div style="color:#e0e0e0">v2.01</div>
-              <div style="color:#888">构建:</div><div style="color:#e0e0e0">20260718</div>
+              <div style="color:#888">版本:</div><div style="color:#e0e0e0">v${version}</div>
+              <div style="color:#888">构建:</div><div style="color:#e0e0e0">${build}</div>
               <div style="color:#888">架构:</div><div style="color:#e0e0e0">HTML5 / JavaScript</div>
               <div style="color:#888">许可证:</div><div style="color:#e0e0e0">MIT</div>
             </div>
@@ -385,6 +452,7 @@ function launch() {
     document.getElementById('panel-personalization').innerHTML = renderPersonalization();
     document.getElementById('panel-sound').innerHTML = renderSound();
     document.getElementById('panel-apps').innerHTML = renderApps();
+    document.getElementById('panel-account').innerHTML = renderAccount();
     document.getElementById('panel-about').innerHTML = renderAbout();
     
     sidebar.querySelectorAll('.ss-item').forEach(item => {
@@ -436,14 +504,17 @@ function launch() {
       document.getElementById('panel-apps').innerHTML = renderApps();
     };
     
+    window.__renderAccount = renderAccount;
+
     window.__checkUpdate = function() {
+      const version = window.__WebNT_VERSION || '2.01';
       const resultEl = document.getElementById('update-check-result');
       if(!resultEl) return;
       resultEl.textContent = '正在检查更新...';
       resultEl.style.color = '#8ab4f8';
       setTimeout(() => {
-        const latestVersion = '2.01';
-        const currentVersion = '2.01';
+        const latestVersion = version;
+        const currentVersion = version;
         if(latestVersion === currentVersion) {
           resultEl.textContent = '✓ 当前已是最新版本 (v' + currentVersion + ')';
           resultEl.style.color = '#81c995';

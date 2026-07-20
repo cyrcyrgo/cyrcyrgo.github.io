@@ -30,9 +30,9 @@ export function showAppWindow(title, icon, bodyHTML) {
       <span style="margin-right:8px">${icon}</span>
       <span class="aw-title">${title}</span>
       <div class="aw-ctrl">
-        <button class="aw-ctrl-btn" onclick="const w=this.closest('.app-window');w.style.display='none';window.updateTaskbarWindowButtons()">&#x2014;</button>
+        <button class="aw-ctrl-btn" onclick="(function(){const w=this.closest('.app-window');w.style.display='none';if(window.updateTaskbarWindowButtons)window.updateTaskbarWindowButtons();}).call(this)">&#x2014;</button>
         <button class="aw-ctrl-btn" onclick="const w=this.closest('.app-window');const ns=w.dataset.normalStyle;if(w.style.width==='100vw'){w.style.cssText=ns;this.textContent='\\u25a1'}else{w.dataset.normalStyle='width:'+w.style.width+';height:'+w.style.height+';left:'+w.style.left+';top:'+w.style.top;w.style.width='100vw';w.style.height='calc(100vh - 48px)';w.style.left='0';w.style.top='0';this.textContent='\\u25a2'}">&#x25a1;</button>
-        <button class="aw-ctrl-btn close" onclick="const w=this.closest('.app-window');const wid=w.dataset.winId;if(wid)WindowManager.instance.destroyWindow(wid);w.remove();window.updateTaskbarWindowButtons()">&#x2715;</button>
+        <button class="aw-ctrl-btn close" onclick="(function(){const w=this.closest('.app-window');const wid=w.dataset.winId;if(wid&&window.WindowManager&&window.WindowManager.instance)window.WindowManager.instance.destroyWindow(wid);w.remove();if(window.updateTaskbarWindowButtons)window.updateTaskbarWindowButtons();}).call(this)">&#x2715;</button>
       </div>
     </div>
     <div class="aw-body">${bodyHTML}</div>
@@ -43,6 +43,12 @@ export function showAppWindow(title, icon, bodyHTML) {
   const titlebar = win.querySelector('.aw-titlebar');
   if (titlebar) {
     titlebar.addEventListener('pointerdown', e => {
+      // 置顶窗口
+      document.querySelectorAll('.app-window').forEach(w => w.style.zIndex = Math.min(50, w.style.zIndex || 50));
+      const tw = document.getElementById('terminal-window');
+      if (tw) tw.style.zIndex = 50;
+      win.style.zIndex = 100;
+
       dragging = true;
       sx = e.clientX;
       sy = e.clientY;
@@ -68,10 +74,22 @@ export function showAppWindow(title, icon, bodyHTML) {
     if (win.hasPointerCapture(e.pointerId)) win.releasePointerCapture(e.pointerId);
   });
 
-  // 聚焦
-  win.addEventListener('pointerdown', () => {
-    document.querySelectorAll('.app-window').forEach(w => w.style.zIndex = Math.min(50, w.style.zIndex || 50));
+  // 聚焦 - 点击窗口任意位置提升层级
+  win.addEventListener('pointerdown', (e) => {
+    // 将所有窗口 z-index 降低
+    document.querySelectorAll('.app-window').forEach(w => {
+      w.style.zIndex = Math.min(50, parseInt(w.style.zIndex) || 50);
+    });
+    // 终端窗口也降低
+    const tw = document.getElementById('terminal-window');
+    if (tw) tw.style.zIndex = 50;
+    // 当前窗口置顶
     win.style.zIndex = 100;
+
+    // 聚焦窗口管理器
+    if (win.dataset.winId && window.WindowManager && window.WindowManager.instance) {
+      window.WindowManager.instance.bringToFront(win.dataset.winId);
+    }
   });
 
   appRoot.appendChild(win);

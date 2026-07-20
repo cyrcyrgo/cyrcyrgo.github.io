@@ -20,6 +20,10 @@ export function resetKnob() {
 export function unlockDesktop() {
   const lockScreen = document.getElementById('lock-screen');
   if (!lockScreen) return;
+  // 读取当前角色
+  const role = localStorage.getItem('webnt_user_role') || 'admin';
+  window.__WebNT_userRole = role;
+  window.__WebNT_isGuest = role === 'guest';
   lockScreen.classList.add('unlocked');
   setTimeout(() => { lockScreen.style.display = 'none'; }, 500);
 }
@@ -31,6 +35,27 @@ export function initLockScreen() {
   // 暴露到全局
   window.resetKnob = resetKnob;
   window.unlockDesktop = unlockDesktop;
+
+  // 用户角色切换
+  window.__switchRole = function(role) {
+    localStorage.setItem('webnt_user_role', role);
+    document.querySelectorAll('.ls-role-btn').forEach(btn => {
+      const isActive = btn.dataset.role === role;
+      btn.classList.toggle('active', isActive);
+      btn.style.background = isActive ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.05)';
+      btn.style.color = isActive ? '#fff' : '#999';
+    });
+    // 更新头像和用户名
+    const avatar = document.querySelector('.ls-avatar');
+    const username = document.querySelector('.ls-username');
+    if (role === 'guest') {
+      if (avatar) { avatar.textContent = '访'; avatar.style.background = 'linear-gradient(135deg, #555, #777)'; }
+      if (username) username.textContent = '访客';
+    } else {
+      if (avatar) { avatar.textContent = '管'; avatar.style.background = 'linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7)'; }
+      if (username) username.textContent = '管理员';
+    }
+  };
 
   if (lsSlider) {
     lsSlider.addEventListener('pointerdown', e => {

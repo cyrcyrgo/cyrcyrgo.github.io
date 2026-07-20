@@ -52,9 +52,10 @@ function launchTerminal() {
 
 // 计算机（特殊处理，直接显示系统信息）
 function launchComputer() {
+  const version = window.__WebNT_VERSION || '2.01';
   window.showAppWindow('此电脑', '\ud83d\udda5\ufe0f', `
     <div style="font-size:13px;line-height:1.8">
-      <strong>WebNT 内核 v1.0.0</strong><br>
+      <strong>WebNT 内核 v${version}</strong><br>
       CPU: ${navigator.hardwareConcurrency||'?'} 核<br>
       内存: ${navigator.deviceMemory||'?'} GB<br>
       平台: ${navigator.platform}<br>
@@ -77,11 +78,23 @@ const specialApps = {
 };
 
 function launchApp(appId) {
+  // 访客模式限制
+  if (window.__WebNT_isGuest) {
+    const restrictedApps = ['terminal', 'settings', 'taskmgr'];
+    if (restrictedApps.includes(appId)) {
+      if (window.showAppWindow) {
+        window.showAppWindow('访问受限', '\ud83d\uded1', `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#f28b82;font-size:14px;text-align:center;padding:20px;">访客模式下无法使用此功能。<br>请切换到管理员账户。</div>`);
+      }
+      return;
+    }
+  }
+
   // 先检查已注册的模块化应用
   const app = appRegistry[appId];
   if (app && app.launch) {
     app.launch();
     window.updateTaskbarWindowButtons();
+    if (window.showToast) window.showToast('已启动: ' + (app.name || appId), 'success');
     return;
   }
 
@@ -90,14 +103,17 @@ function launchApp(appId) {
   if (special) {
     special();
     window.updateTaskbarWindowButtons();
+    if (window.showToast) window.showToast('已启动: ' + appId, 'success');
     return;
   }
 
   // 检查是否是已安装的第三方应用
   if (appId.startsWith('ext_')) {
     if (window.__launchInstalledApp) window.__launchInstalledApp(appId);
+    if (window.showToast) window.showToast('已启动: ' + appId, 'success');
   } else {
     window.showAppWindow(appId, '\ud83d\udce6', `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#777">${appId} 正在运行</div>`);
+    if (window.showToast) window.showToast('已启动: ' + appId, 'success');
   }
 
   window.updateTaskbarWindowButtons();

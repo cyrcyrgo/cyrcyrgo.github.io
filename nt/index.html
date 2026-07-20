@@ -43,6 +43,10 @@
     <div class="ls-avatar">管</div>
     <div class="ls-username">管理员</div>
   </div>
+  <div class="ls-user-switch" style="position:relative;z-index:1;display:flex;gap:12px;margin-bottom:10px;">
+    <div class="ls-role-btn active" data-role="admin" style="padding:8px 20px;border-radius:20px;border:1px solid rgba(255,255,255,0.2);cursor:pointer;font-size:13px;color:#fff;background:rgba(99,102,241,0.3);transition:all 0.2s;" onclick="window.__switchRole('admin')">管理员</div>
+    <div class="ls-role-btn" data-role="guest" style="padding:8px 20px;border-radius:20px;border:1px solid rgba(255,255,255,0.2);cursor:pointer;font-size:13px;color:#999;background:rgba(255,255,255,0.05);transition:all 0.2s;" onclick="window.__switchRole('guest')">访客</div>
+  </div>
   <div class="ls-slider" id="ls-slider">
     <div class="ls-slider-track"></div>
     <div class="ls-slider-text">滑动解锁</div>
@@ -52,7 +56,7 @@
   <div class="ls-notifications" id="ls-notifications">
     <div class="ls-notif">
       <div class="ls-notif-title">WebNT 内核</div>
-      系统 v1.0.0 — 所有服务运行正常
+      系统 <span id="ls-version-text">v2.01</span> — 所有服务运行正常
     </div>
   </div>
 </div>
@@ -188,6 +192,10 @@ import { initUI } from './ui/UIMain.js';
 import { initAppLauncher } from './apps/AppLauncher.js';
 import WebNT from './sdk/WebNT.API.js';
 
+// 全局版本常量
+window.__WebNT_VERSION = '2.01';
+window.__WebNT_BUILD = '20260718';
+
 // 暴露到全局
 window.__WebNT__ = { GlobalDisplayAPI, WindowManager, SysCallBridge, TerminalCommandRegistry, TerminalExecutor };
 window.WindowManager = WindowManager;
@@ -277,7 +285,8 @@ function writeTerminal(text, cls) {
 function writeWelcome() {
   if (!twOutput) return;
   twOutput.innerHTML = '';
-  writeTerminal('WebNT 内核 v1.0.0 [HTML5 混合微内核]', 'info');
+  const version = window.__WebNT_VERSION || '2.01';
+  writeTerminal('WebNT 内核 v' + version + ' [HTML5 混合微内核]', 'info');
   writeTerminal('输入 "help" 查看可用命令。');
   writeTerminal('');
 }
@@ -292,7 +301,21 @@ if (twInput) {
     if (e.key === 'Enter') {
       const cmd = twInput.value.trim();
       if (!cmd) return;
-      writeTerminal(`webnt@kernel:~$ ${cmd}`, '');
+      // 访客权限检查
+      const restrictedCmds = ['shutdown', 'reboot', 'rm', 'sudo', 'format', 'kill'];
+      const cmdBase = cmd.split(/\s+/)[0];
+      if (window.__WebNT_isGuest && restrictedCmds.includes(cmdBase)) {
+        if (window.showToast) window.showToast('访客模式下此操作受限', 'warning');
+        const cwd2 = TerminalCommandRegistry.instance.getCwd ? TerminalCommandRegistry.instance.getCwd() : '/home/webnt';
+        const promptPath2 = cwd2 === '/' ? '/' : (cwd2.startsWith('/home/webnt') ? '~' + cwd2.replace('/home/webnt', '') : cwd2);
+        writeTerminal(`webnt@kernel:${promptPath2}$ ${cmd}`, '');
+        writeTerminal('权限不足: 访客模式下无法执行此命令', 'error');
+        twInput.value = '';
+        return;
+      }
+      const cwd = TerminalCommandRegistry.instance.getCwd ? TerminalCommandRegistry.instance.getCwd() : '/home/webnt';
+      const promptPath = cwd === '/' ? '/' : (cwd.startsWith('/home/webnt') ? '~' + cwd.replace('/home/webnt', '') : cwd);
+      writeTerminal(`webnt@kernel:${promptPath}$ ${cmd}`, '');
       twInput.value = '';
       if (cmd !== 'clear') twHistory.push(cmd);
       twHistoryIdx = twHistory.length;
@@ -391,8 +414,9 @@ async function boot() {
     console.error('Boot: 缺少必要的 DOM 元素');
     return;
   }
+  const version = window.__WebNT_VERSION || '2.01';
   try {
-    bootLogLine('WebNT 内核 v1.0.0 正在启动...', 'info');
+    bootLogLine('WebNT 内核 v' + version + ' 正在启动...', 'info');
     bootLogLine('Copyright (c) 2026 WebNT 项目', '');
     bootLogLine('', '');
 
@@ -441,7 +465,7 @@ async function boot() {
     bootProgress(100, '系统就绪');
     bootLogLine('', '');
     bootLogLine('========================================', '');
-    bootLogLine('  WebNT 内核 v1.0.0 就绪', 'ok');
+    bootLogLine('  WebNT 内核 v' + version + ' 就绪', 'ok');
     bootLogLine('  所有系统运行正常', 'ok');
     bootLogLine('========================================', '');
 
@@ -450,6 +474,10 @@ async function boot() {
     // 隐藏 BIOS 启动画面，显示锁屏
     if (bootScreen) bootScreen.classList.add('hidden');
     if (appRoot) appRoot.style.display = 'block';
+
+    // 更新锁屏版本号
+    const lsVersionEl = document.getElementById('ls-version-text');
+    if (lsVersionEl) lsVersionEl.textContent = 'v' + version;
 
     // 初始化 UI 组件
     initUI();
@@ -461,7 +489,7 @@ async function boot() {
 
     setTimeout(() => { if (bootScreen && bootScreen.parentNode) bootScreen.remove(); }, 600);
 
-    console.log('%c WebNT 内核 v1.0.0 就绪 %c| %c滑动解锁',
+    console.log('%c WebNT 内核 v' + version + ' 就绪 %c| %c滑动解锁',
       'color:#00ff88;font-size:16px;', '', 'color:#aaa;');
   } catch(err) {
     if (bootLogLine) bootLogLine(`启动错误: ${err.message}`, 'err');
@@ -473,6 +501,35 @@ async function boot() {
     }
   }
 }
+
+// ===================================================================
+// Toast 通知系统
+// ===================================================================
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  const colors = { info: '#667eea', success: '#81c995', error: '#f28b82', warning: '#fdd663' };
+  toast.style.cssText = `
+    position: fixed; bottom: 60px; right: 20px; z-index: 10000;
+    padding: 12px 20px; border-radius: 10px; font-size: 13px;
+    background: rgba(15,23,42,0.95); color: ${colors[type] || '#ccc'};
+    border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(20px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4); max-width: 320px;
+    animation: toastSlideIn 0.3s ease; pointer-events: none;
+  `;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s';
+    setTimeout(() => toast.remove(), 300);
+  }, 2500);
+}
+window.showToast = showToast;
+
+// 添加 toast 动画样式
+const toastStyle = document.createElement('style');
+toastStyle.textContent = '@keyframes toastSlideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }';
+document.head.appendChild(toastStyle);
 
 boot().catch(err => {
   if (bootLogLine) bootLogLine(`严重错误: ${err.message}`, 'err');
