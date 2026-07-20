@@ -1,0 +1,147 @@
+/* ============================================================
+   LockScreen.css — WebNT-HTML5 Web OS
+   ============================================================ */
+/* ============================================================
+   Lock Screen - 滑动解锁界面
+   ============================================================ */
+#lock-screen {
+  position: fixed; inset: 0; z-index: 50000;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0a0a1a 0%, #0f1428 35%, #1a1f3a 65%, #0d1020 100%);
+  background-size: cover;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s ease;
+  user-select: none;
+  touch-action: none;
+}
+#lock-screen.unlocked {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+#lock-screen .ls-bg-blur {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 25%, rgba(99,102,241,0.18), transparent 55%),
+              radial-gradient(ellipse at 80% 80%, rgba(168,85,247,0.12), transparent 50%),
+              radial-gradient(ellipse at 20% 85%, rgba(59,130,246,0.1), transparent 45%);
+  animation: bgPulse 8s ease-in-out infinite;
+}
+@keyframes bgPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+#lock-screen .ls-time {
+  position: relative; z-index: 1;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 88px; font-weight: 200; color: #fff;
+  text-shadow: 0 2px 30px rgba(255,255,255,0.25), 0 0 60px rgba(99,102,241,0.15);
+  letter-spacing: 3px;
+  margin-bottom: 6px;
+}
+#lock-screen .ls-date {
+  position: relative; z-index: 1;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 19px; color: #c5cee0;
+  margin-bottom: 65px;
+  letter-spacing: 0.5px;
+}
+#lock-screen .ls-user {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; align-items: center;
+  margin-bottom: 50px;
+}
+#lock-screen .ls-avatar {
+  width: 76px; height: 76px; border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; color: #fff; font-weight: 600;
+  box-shadow: 0 4px 30px rgba(99,102,241,0.5), 0 0 60px rgba(139,92,246,0.2);
+  margin-bottom: 14px;
+  border: 2px solid rgba(255,255,255,0.15);
+  animation: avatarFloat 4s ease-in-out infinite;
+}
+@keyframes avatarFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+#lock-screen .ls-username {
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 16px; color: #e8eaf0;
+  letter-spacing: 0.5px;
+}
+/* 滑动解锁条 */
+#lock-screen .ls-slider {
+  position: relative; z-index: 1;
+  width: 300px; max-width: 80vw; height: 50px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 25px;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: none;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.05);
+}
+#lock-screen .ls-slider-track {
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(99,102,241,0.4), transparent);
+  animation: sliderShimmer 2.5s infinite;
+}
+@keyframes sliderShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+#lock-screen .ls-slider-text {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 14px; color: #b8c1d6;
+  letter-spacing: 1.5px;
+  pointer-events: none;
+  transition: opacity 0.3s;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+#lock-screen .ls-slider-knob {
+  position: absolute; top: 5px; left: 5px;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: linear-gradient(135deg, #8b9cf7, #a78bfa);
+  box-shadow: 0 2px 15px rgba(139,156,247,0.5), 0 0 30px rgba(167,139,250,0.3);
+  transition: left 0.05s linear;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+#lock-screen .ls-slider-knob::after {
+  content: '›';
+  font-size: 24px; color: #fff; font-weight: 300;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+#lock-screen .ls-slider.dragging .ls-slider-text { opacity: 0; }
+#lock-screen .ls-slider.dragging .ls-slider-track { animation: none; }
+#lock-screen .ls-hint {
+  position: relative; z-index: 1;
+  margin-top: 18px;
+  font-size: 11px; color: #7b8499;
+  font-family: 'Segoe UI', sans-serif;
+  letter-spacing: 0.5px;
+}
+/* 锁屏通知 */
+#lock-screen .ls-notifications {
+  position: absolute; bottom: 120px; right: 40px;
+  z-index: 1; display: flex; flex-direction: column; gap: 8px;
+  max-width: 320px;
+}
+#lock-screen .ls-notif {
+  background: rgba(255,255,255,0.06); backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+  padding: 12px 16px; font-family: 'Segoe UI', sans-serif;
+  color: #ccc; font-size: 13px;
+  animation: notifSlideIn 0.3s ease;
+}
+@keyframes notifSlideIn {
+  from { transform: translateX(100px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+#lock-screen .ls-notif .ls-notif-title {
+  font-weight: 600; color: #fff; margin-bottom: 4px;
+}
