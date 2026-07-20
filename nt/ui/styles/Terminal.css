@@ -1,0 +1,57 @@
+/* ============================================================
+   终端窗口
+   ============================================================ */
+#terminal-window {
+  position: absolute; display: none;
+  width: 700px; height: 420px;
+  background: #0c0c0c; border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px; z-index: 100;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.05);
+  font-family: 'Courier New', monospace;
+  overflow: hidden;
+  flex-direction: column;
+}
+#terminal-window .tw-titlebar {
+  display: flex; align-items: center; height: 38px;
+  background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%);
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  cursor: move;
+}
+#terminal-window .tw-title {
+  flex: 1; font-size: 13px; color: #b8c1d6; font-family: 'Segoe UI', sans-serif;
+  letter-spacing: 0.3px;
+}
+#terminal-window .tw-ctrl {
+  display: flex; gap: 7px;
+}
+#terminal-window .tw-ctrl-btn {
+  width: 28px; height: 28px; border-radius: 7px; border: none;
+  cursor: pointer; font-size: 14px; display: flex; align-items: center;
+  justify-content: center; background: transparent; color: #9ca3af;
+  transition: all 0.15s ease;
+}
+#terminal-window .tw-ctrl-btn:hover { background: rgba(255,255,255,0.1); color: #e8eaf0; }
+#terminal-window .tw-ctrl-btn.close:hover { background: #e81123; color: #fff; }
+#terminal-window .tw-output {
+  flex: 1; overflow-y: auto; padding: 14px;
+  font-size: 14px; line-height: 1.6; color: #00cc00;
+  white-space: pre-wrap; word-break: break-all;
+}
+#terminal-window .tw-output .tw-line { margin: 0; }
+#terminal-window .tw-output .tw-line.error { color: #f87171; }
+#terminal-window .tw-output .tw-line.info { color: #60a5fa; }
+#terminal-window .tw-input-line {
+  display: flex; align-items: center; padding: 8px 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+#terminal-window .tw-prompt {
+  color: #00ff88; font-weight: bold; font-size: 14px;
+  white-space: nowrap; margin-right: 8px;
+}
+#terminal-window .tw-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: #e0e0e0; font-size: 14px; font-family: 'Courier New', monospace;
+  caret-color: #00ff88;
+}
+#terminal-window .tw-input::placeholder { color: #444; }

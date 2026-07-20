@@ -1,0 +1,29 @@
+/* ============================================================
+   应用窗口 (通用)
+   ============================================================ */
+.app-window {
+  position: absolute; border-radius: 12px; overflow: hidden;
+  background: rgba(20, 20, 35, 0.95);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  z-index: 50; flex-direction: column;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  resize: both; min-width: 300px; min-height: 200px;
+}
+.app-window .aw-titlebar {
+  display: flex; align-items: center; height: 36px;
+  background: rgba(0,0,0,0.3); padding: 0 12px;
+  cursor: move;
+}
+.app-window .aw-title { flex: 1; font-size: 13px; color: #ccc; }
+.app-window .aw-ctrl { display: flex; gap: 4px; }
+.app-window .aw-ctrl-btn {
+  width: 28px; height: 28px; border-radius: 6px; border: none;
+  cursor: pointer; font-size: 14px; background: transparent; color: #999;
+  display: flex; align-items: center; justify-content: center;
+}
+.app-window .aw-ctrl-btn:hover { background: rgba(255,255,255,0.1); }
+.app-window .aw-ctrl-btn.close:hover { background: #e81123; color: #fff; }
+.app-window .aw-body {
+  flex: 1; overflow: auto; padding: 16px; color: #e0e0e0;
+}

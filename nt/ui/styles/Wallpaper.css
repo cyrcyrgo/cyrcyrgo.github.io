@@ -1,0 +1,74 @@
+/* ============================================================
+   壁纸设置弹窗
+   ============================================================ */
+#wallpaper-dialog {
+  position: fixed; inset: 0; z-index: 6000;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  animation: dialogFadeIn 0.2s ease-out;
+}
+@keyframes dialogFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+#wallpaper-dialog .wp-box {
+  width: 380px; max-width: 90vw;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px; padding: 24px;
+  box-shadow: 0 16px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.05);
+  animation: dialogSlideUp 0.25s ease-out;
+}
+@keyframes dialogSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+#wallpaper-dialog .wp-title {
+  font-size: 17px; font-weight: 600; color: #fff; margin-bottom: 16px;
+  letter-spacing: 0.3px;
+}
+#wallpaper-dialog .wp-label {
+  display: block; font-size: 12px; color: #9ca3af; margin-bottom: 7px; margin-top: 14px;
+  letter-spacing: 0.2px;
+}
+#wallpaper-dialog .wp-input {
+  width: 100%; padding: 11px 13px; border-radius: 9px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.06); color: #fff; font-size: 13px; outline: none;
+  transition: all 0.2s ease;
+}
+#wallpaper-dialog .wp-input:focus { 
+  border-color: rgba(99,102,241,0.6);
+  background: rgba(255,255,255,0.08);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+}
+#wallpaper-dialog .wp-file {
+  display: block; width: 100%; padding: 9px 0; color: #b8c1d6; font-size: 13px;
+}
+#wallpaper-dialog .wp-btns {
+  display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;
+}
+#wallpaper-dialog .wp-btns button {
+  padding: 9px 18px; border-radius: 9px; border: none; cursor: pointer; font-size: 13px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+#wallpaper-dialog .wp-btns button:hover {
+  transform: translateY(-1px);
+}
+#wallpaper-dialog .wp-cancel { 
+  background: rgba(255,255,255,0.08); 
+  color: #d1d5db;
+}
+#wallpaper-dialog .wp-cancel:hover {
+  background: rgba(255,255,255,0.12);
+}
+#wallpaper-dialog .wp-ok { 
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(99,102,241,0.3);
+}
+#wallpaper-dialog .wp-ok:hover {
+  box-shadow: 0 4px 15px rgba(99,102,241,0.4);
+}
