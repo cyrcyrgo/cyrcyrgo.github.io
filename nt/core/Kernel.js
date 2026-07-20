@@ -2,6 +2,9 @@
 // WebNT 内核 - EventBus, GlobalDisplayAPI, WindowManager, SysCallBridge
 // ===================================================================
 
+export const WEB_VERSION = '2.01';
+export const WEB_BUILD = '20260718';
+
 // EventBus - 全局事件总线
 class EventBus {
   constructor() { this._handlers = {}; }
@@ -38,6 +41,24 @@ class WindowManager {
   setFocus(id) { if(this.wins.has(id)) { this.focus=id; this._emit('window-focused',{windowId:id}); } }
   bringToFront(id) { if(!this.wins.has(id)) return; this.order=this.order.filter(w=>w!==id); this.order.push(id); this.setFocus(id); }
   getWindowList() { return [...this.wins.values()]; }
+  getProcessList() {
+    const coreProcesses = [
+      { pid: 1, name: '系统', type: 'core', cpu: '0.2%', mem: '4.2 MB', protected: true },
+      { pid: 2, name: '内核', type: 'core', cpu: '0.5%', mem: '8.1 MB', protected: true },
+      { pid: 3, name: '桌面', type: 'core', cpu: '1.2%', mem: '12.4 MB', protected: true },
+    ];
+    const userProcesses = [...this.wins.values()].map((w, i) => ({
+      pid: i + 4,
+      name: w.title,
+      type: 'app',
+      windowId: w.id,
+      appId: w.appId,
+      cpu: (Math.random() * 2).toFixed(1) + '%',
+      mem: (Math.random() * 20 + 5).toFixed(1) + ' MB',
+      protected: false,
+    }));
+    return [...coreProcesses, ...userProcesses];
+  }
   on(e,cb) { if(!this.ls[e]) this.ls[e]=[]; this.ls[e].push(cb); }
   _emit(e,d) { (this.ls[e]||[]).forEach(cb=>{try{cb(d)}catch(e){}}); }
 }

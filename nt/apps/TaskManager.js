@@ -7,6 +7,9 @@ const name = '任务管理';
 const icon = '\ud83d\udcca';
 
 function launch() {
+  const procs = window.WindowManager.instance.getProcessList();
+  const coreCount = procs.filter(p => p.protected).length;
+  const userCount = procs.filter(p => !p.protected).length;
   window.showAppWindow('任务管理', '\ud83d\udcca', `
     <style>
       .tm-table { width:100%;border-collapse:collapse;font-size:13px; }
@@ -16,15 +19,18 @@ function launch() {
       .tm-kill:hover { background:#e8112344; }
     </style>
     <div style="margin-bottom:12px;font-size:13px;color:#888;">
-      进程: <strong style="color:#fff">${window.WindowManager.instance.getWindowList().length+1}</strong> | 
-      内核: <strong style="color:#81c995">运行中</strong>
+      进程: <strong style="color:#fff">${procs.length}</strong> | 
+      核心进程: <strong style="color:#81c995">${coreCount}</strong> | 
+      用户进程: <strong style="color:#8ab4f8">${userCount}</strong>
     </div>
     <table class="tm-table">
       <tr><th>PID</th><th>名称</th><th>状态</th><th>CPU</th><th>内存</th><th></th></tr>
-      <tr><td>1</td><td>系统</td><td style="color:#81c995">运行中</td><td>0.2%</td><td>4.2 MB</td><td></td></tr>
-      <tr><td>2</td><td>内核</td><td style="color:#81c995">运行中</td><td>0.5%</td><td>8.1 MB</td><td></td></tr>
-      <tr><td>3</td><td>桌面</td><td style="color:#81c995">运行中</td><td>1.2%</td><td>12.4 MB</td><td></td></tr>
-      ${window.WindowManager.instance.getWindowList().map((w,i)=>'<tr><td>'+(i+4)+'</td><td>'+w.title+'</td><td style="color:#81c995">运行中</td><td>'+(Math.random()*2).toFixed(1)+'%</td><td>'+(Math.random()*20+5).toFixed(1)+' MB</td><td><button class="tm-kill" onclick="const el=document.getElementById(\''+w.appId+'\');if(el)el.remove();window.WindowManager.instance.destroyWindow(\''+w.id+'\');window.updateTaskbarWindowButtons();this.closest(\'tr\').remove()">结束</button></td></tr>').join('')}
+      ${procs.map(p => {
+        if (p.protected) {
+          return `<tr><td>${p.pid}</td><td>${p.name}</td><td style="color:#81c995">运行中</td><td>${p.cpu}</td><td>${p.mem}</td><td style="color:#666;font-size:11px">受保护</td></tr>`;
+        }
+        return `<tr><td>${p.pid}</td><td>${p.name}</td><td style="color:#81c995">运行中</td><td>${p.cpu}</td><td>${p.mem}</td><td><button class="tm-kill" onclick="const el=document.getElementById('${p.appId||''}');if(el)el.remove();window.WindowManager.instance.destroyWindow('${p.windowId||''}');window.updateTaskbarWindowButtons();this.closest('tr').remove()">结束</button></td></tr>`;
+      }).join('')}
     </table>
   `);
 }

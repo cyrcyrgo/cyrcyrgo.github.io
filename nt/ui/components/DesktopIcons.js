@@ -79,8 +79,21 @@ export function renderDesktopIcons() {
 
     icon.addEventListener('dblclick', (e) => {
       e.stopPropagation();
+      // 点击反馈动画
+      icon.style.transition = 'transform 0.1s ease';
+      icon.style.transform = 'scale(0.9)';
+      setTimeout(() => {
+        icon.style.transform = 'scale(1)';
+        setTimeout(() => { icon.style.transition = ''; icon.style.transform = ''; }, 150);
+      }, 100);
       const launchApp = window.launchApp;
-      if (launchApp) launchApp(app.appId);
+      if (launchApp) {
+        launchApp(app.appId);
+      } else {
+        // 回退：尝试直接显示窗口
+        const showAppWindow = window.showAppWindow;
+        if (showAppWindow) showAppWindow(app.name, app.icon, '<div style="padding:20px;color:#ccc">应用加载中...</div>');
+      }
     });
 
     icon.addEventListener('contextmenu', (e) => {

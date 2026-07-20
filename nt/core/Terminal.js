@@ -2,18 +2,48 @@
 // WebNT 终端 - TerminalCommandRegistry, TerminalExecutor
 // ===================================================================
 
+import { WEB_VERSION } from './Kernel.js';
+
 class TerminalCommandRegistry {
-  constructor() { this.cmds=new Map(); this._init(); }
+  constructor() { this.cmds=new Map(); this._cwd='/home/webnt'; this._init(); }
   static get instance() { if(!this._i) this._i=new TerminalCommandRegistry(); return this._i; }
+  getCwd() { return this._cwd; }
   _init() {
     const add=(name,desc,cat,fn)=>this.cmds.set(name,{name,desc,cat,fn});
     add('help','显示可用命令','系统',(a,o)=>{let t='可用命令:\n\n';this.cmds.forEach((c,n)=>{t+=`  ${n.padEnd(12)}${c.desc}\n`;});return t;});
-    add('ver','内核版本','系统',()=>'WebNT 内核 v1.0.0');
-    add('sysinfo','系统信息','系统',()=>`WebNT 内核 v1.0.0\nCPU: ${navigator.hardwareConcurrency||'?'} 核\n内存: ${navigator.deviceMemory||'?'} GB\n平台: ${navigator.platform}\nGPU: ${navigator.gpu?'WebGPU':'Canvas2D'}\n运行时间: ${Math.floor(performance.now()/1000)}秒`);
-    add('ps','进程列表','进程',()=>'  PID:1  系统  [运行中]');
-    add('ls','目录列表','文件',(a)=>(a.length?`目录: ${a[0]}`:'/')+'\n  下载/  文档/  桌面/');
-    add('pwd','当前目录','文件',()=>'/home/webnt');
-    add('cd','切换目录','文件',(a)=>`已切换到: ${a[0]||'/'}`);
+    add('ver','内核版本','系统',()=>`WebNT 内核 v${WEB_VERSION}`);
+    add('sysinfo','系统信息','系统',()=>`WebNT 内核 v${WEB_VERSION}\nCPU: ${navigator.hardwareConcurrency||'?'} 核\n内存: ${navigator.deviceMemory||'?'} GB\n平台: ${navigator.platform}\nGPU: ${navigator.gpu?'WebGPU':'Canvas2D'}\n运行时间: ${Math.floor(performance.now()/1000)}秒`);
+    add('ps','进程列表','进程',()=>{
+      const windowManager = window.WindowManager.instance;
+      if (!windowManager || !windowManager.getProcessList) return '  PID:1  系统  [运行中]';
+      const procs = windowManager.getProcessList();
+      return procs.map(p => `  PID:${p.pid}  ${p.name}  [${p.protected ? '核心' : '运行中'}]`).join('\n');
+    });
+    add('ls','目录列表','文件',(a)=>{
+      const cwd = this._cwd;
+      if (cwd === '/') return '/\n  下载/  文档/  桌面/  系统/  临时/';
+      if (cwd === '/下载') return '/下载/\n  (空目录)';
+      if (cwd === '/文档') return '/文档/\n  (空目录)';
+      if (cwd === '/桌面') return '/桌面/\n  (空目录)';
+      if (cwd === '/系统') return '/系统/\n  (空目录)';
+      if (cwd === '/临时') return '/临时/\n  (空目录)';
+      return (a.length ? `目录: ${a[0]}` : cwd) + '\n  下载/  文档/  桌面/  系统/  临时/';
+    });
+    add('pwd','当前目录','文件',()=>this._cwd);
+    add('cd','切换目录','文件',(a)=>{
+      const target = a[0] || '/home/webnt';
+      if (target === '/') this._cwd = '/';
+      else if (target === '..') {
+        const parts = this._cwd.split('/').filter(Boolean);
+        parts.pop();
+        this._cwd = '/' + parts.join('/') || '/';
+      } else if (target.startsWith('/')) {
+        this._cwd = target;
+      } else {
+        this._cwd = this._cwd === '/' ? '/' + target : this._cwd + '/' + target;
+      }
+      return `已切换到: ${this._cwd}`;
+    });
     add('clear','清屏','工具',()=>'__CLEAR__');
     add('echo','输出文本','工具',(a)=>a.join(' '));
     add('date','显示日期','工具',()=>new Date().toLocaleString('zh-CN'));
@@ -39,7 +69,7 @@ class TerminalCommandRegistry {
     add('time','当前时间','工具',()=>new Date().toLocaleString('zh-CN',{hour12:false}));
     add('neofetch','系统信息','工具',()=>{
       const logo='    ___       ___       ___\n   /\\__\\     /\\__\\     /\\__\\\n  /:/  /__   /:/ _/_   /:/ _/_\n /:/_/\\__\\ /:/_/\\__\\ /:/_/\\__\\\n \\:\\\\/__/ \\:\\/__/ \\:\\\\/__/\n  \\:\\\\__\\  \\:\\\\__\\  \\:\\\\__\\\n   \\/__/    \\/__/    \\/__/';
-      return `${logo}\n  系统: WebNT 内核 v1.0.0\n  平台: ${navigator.platform}\n  内核: ${navigator.hardwareConcurrency||'?'} 核\n  内存: ${navigator.deviceMemory||'?'} GB\n  分辨率: ${window.innerWidth}x${window.innerHeight}\n  运行时间: ${Math.floor(performance.now()/1000)} 秒`;
+      return `${logo}\n  系统: WebNT 内核 v${WEB_VERSION}\n  平台: ${navigator.platform}\n  内核: ${navigator.hardwareConcurrency||'?'} 核\n  内存: ${navigator.deviceMemory||'?'} GB\n  分辨率: ${window.innerWidth}x${window.innerHeight}\n  运行时间: ${Math.floor(performance.now()/1000)} 秒`;
     });
     add('cowsay','奶牛说话','娱乐',(a)=>{ const text=a.join(' ')||'哞~'; const pad=Math.max(2,text.length+2); const line='-'.repeat(pad); return `${line}\n< ${text} >\n${line}\n        \\   ^__^\n         \\  (oo)\\_______\n            (__)\\       )\\/\\\n                ||----w |\n                ||     ||`; });
     add('fortune','随机格言','娱乐',()=>{ const q=['千里之行，始于足下。','Talk is cheap. Show me the code.','Stay hungry, stay foolish.','知之为知之，不知为不知。','The journey of a thousand miles begins with one step.','代码是写给人看的，只是顺便让机器执行。']; return q[Math.floor(Math.random()*q.length)]; });
@@ -55,16 +85,32 @@ class TerminalExecutor {
   constructor() { this.history=[]; }
   static get instance() { if(!this._i) this._i=new TerminalExecutor(); return this._i; }
   async execute(line) {
-    const t=line.trim(); if(!t) return {output:'',exitCode:0};
+    const t = line.trim(); if (!t) return { output: '', exitCode: 0 };
     this.history.push(t);
-    const parts=t.split(/\s+/), name=parts[0].toLowerCase(), args=parts.slice(1);
-    const cmd=TerminalCommandRegistry.instance.getCommand(name);
-    if(!cmd) return {output:`命令未找到: ${name}\n输入 'help' 查看可用命令。`,exitCode:127};
+
+    // 支持 && 命令拼接
+    if (t.includes('&&')) {
+      const commands = t.split('&&').map(s => s.trim());
+      const results = [];
+      for (const cmdStr of commands) {
+        const result = await this._executeSingle(cmdStr);
+        if (result.output) results.push(result.output);
+        if (result.exitCode !== 0) break;
+      }
+      return { output: results.join('\n'), exitCode: 0 };
+    }
+
+    return this._executeSingle(t);
+  }
+  async _executeSingle(line) {
+    const parts = line.split(/\s+/), name = parts[0].toLowerCase(), args = parts.slice(1);
+    const cmd = TerminalCommandRegistry.instance.getCommand(name);
+    if (!cmd) return { output: `命令未找到: ${name}\n输入 'help' 查看可用命令。`, exitCode: 127 };
     try {
-      const r=cmd.fn(args,{});
-      if(r==='__CLEAR__') return {output:'',exitCode:0,clear:true};
-      return {output:String(r||''),exitCode:0};
-    } catch(e) { return {output:`Error: ${e.message}`,exitCode:1}; }
+      const r = cmd.fn(args, {});
+      if (r === '__CLEAR__') return { output: '', exitCode: 0, clear: true };
+      return { output: String(r || ''), exitCode: 0 };
+    } catch (e) { return { output: `Error: ${e.message}`, exitCode: 1 }; }
   }
   getHistory() { return [...this.history]; }
 }
