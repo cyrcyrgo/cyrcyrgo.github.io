@@ -144,7 +144,57 @@ const KOBGUI = (() => {
      */
     function getTrainingDuration() {
         const slider = $('#duration-slider');
-        return slider ? parseInt(slider.value) * 60 : 300; // 默认5分钟
+        return slider ? parseInt(slider.value) * 60 : 300;
+    }
+
+    /**
+     * 获取训练模式 ('time' | 'rounds')
+     */
+    function getTrainingMode() {
+        const selected = $('input[name="training-mode"]:checked');
+        return selected ? selected.value : 'time';
+    }
+
+    /**
+     * 获取自定义训练轮数
+     */
+    function getCustomRounds() {
+        const input = $('#custom-rounds');
+        if (!input) return 10;
+        const val = parseInt(input.value);
+        return (val >= 1 && val <= 100) ? val : 10;
+    }
+
+    /**
+     * 切换训练模式显示
+     */
+    function switchTrainingMode(mode) {
+        const timeMode = $('#time-mode');
+        const roundsMode = $('#rounds-mode');
+        const roundsByTime = $('#rounds-by-time');
+
+        if (mode === 'rounds') {
+            if (timeMode) timeMode.style.display = 'none';
+            if (roundsMode) roundsMode.style.display = 'block';
+            if (roundsByTime) roundsByTime.style.display = 'none';
+        } else {
+            if (timeMode) timeMode.style.display = 'block';
+            if (roundsMode) roundsMode.style.display = 'none';
+            if (roundsByTime) roundsByTime.style.display = 'block';
+        }
+    }
+
+    /**
+     * 更新预计训练轮数显示
+     */
+    function updateEstimatedRounds() {
+        const slider = $('#duration-slider');
+        const roundsEl = $('#estimated-rounds');
+        if (slider && roundsEl) {
+            const minutes = parseInt(slider.value);
+            const rounds = Math.max(1, Math.ceil((minutes * 60) / 30));
+            roundsEl.textContent = rounds;
+        }
     }
 
     /**
@@ -450,6 +500,10 @@ const KOBGUI = (() => {
         updateTimer,
         updateDurationSlider,
         getTrainingDuration,
+        getTrainingMode,
+        getCustomRounds,
+        switchTrainingMode,
+        updateEstimatedRounds,
         displayCode,
         displayOutput,
         appendOutput,

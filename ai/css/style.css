@@ -393,6 +393,62 @@ body {
     color: var(--text-muted);
 }
 
+.training-mode-switch {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.training-mode-switch .mode-option {
+    flex: 1;
+    cursor: pointer;
+}
+
+.training-mode-switch input[type="radio"] {
+    display: none;
+}
+
+.training-mode-switch .mode-option span {
+    display: block;
+    text-align: center;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+    transition: all var(--transition);
+}
+
+.training-mode-switch input[type="radio"]:checked + span {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
+
+.training-mode-switch .mode-option:hover span {
+    border-color: var(--accent);
+}
+
+.rounds-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.rounds-input-wrapper .form-input {
+    flex: 1;
+    padding-right: 40px;
+}
+
+.rounds-unit {
+    position: absolute;
+    right: 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+    pointer-events: none;
+}
+
 /* ========== Progress ========== */
 .progress-bar {
     height: 4px;
