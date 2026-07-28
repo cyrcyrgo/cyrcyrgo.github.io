@@ -225,6 +225,10 @@ const KOBGTraining = (() => {
         return trainingState.generatedCode;
     }
 
+    function setGeneratedCode(code) {
+        trainingState.generatedCode = code;
+    }
+
     /**
      * 获取编译结果
      */
@@ -273,6 +277,7 @@ const KOBGTraining = (() => {
         resumeTraining,
         stopTraining,
         getGeneratedCode,
+        setGeneratedCode,
         getCompileResults,
         getTrainingLog
     };
