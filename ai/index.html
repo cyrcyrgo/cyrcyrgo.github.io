@@ -107,6 +107,16 @@
                             </div>
                             <div class="training-time-label" id="rounds-info">每轮间隔 30 秒</div>
                         </div>
+
+                        <div class="form-group">
+                            <label class="form-label">每轮问答数量</label>
+                            <div class="rounds-input-wrapper">
+                                <input type="number" class="form-input" id="qa-per-round" 
+                                       min="1" max="100" value="5" step="1">
+                                <span class="rounds-unit">对</span>
+                            </div>
+                            <div class="training-time-label">每轮生成 1-100 个问答对</div>
+                        </div>
                         
                         <div class="form-group">
                             <label class="form-label">💬 捎句话（自定义训练指令）</label>
@@ -364,5 +374,48 @@
             }
         });
     </script>
+    <!-- 保存训练数据模态框 -->
+    <div class="modal-overlay" id="modal-save-data" style="display:none;">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>💾 保存训练数据</span>
+                <button class="modal-close" data-modal="modal-save-data">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">训练名称</label>
+                    <input type="text" class="form-input" id="save-data-name" placeholder="例如：AI基础训练-第一轮" autocomplete="off">
+                </div>
+                <div class="save-info" id="save-data-info"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline btn-sm" data-modal-close="modal-save-data">取消</button>
+                <button class="btn btn-primary btn-sm" id="btn-confirm-save-data">确认保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 打开训练数据模态框 -->
+    <div class="modal-overlay" id="modal-load-data" style="display:none;">
+        <div class="modal-box modal-box-lg">
+            <div class="modal-header">
+                <span>📂 打开训练数据</span>
+                <button class="modal-close" data-modal="modal-load-data">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="data-list-header">
+                    <span id="data-list-count">共 0 条记录</span>
+                    <button class="btn btn-danger btn-sm" id="btn-clear-all-data">清空全部</button>
+                </div>
+                <div class="data-list" id="data-list">
+                    <div class="data-empty">暂无已保存的训练数据</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline btn-sm" data-modal-close="modal-load-data">关闭</button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

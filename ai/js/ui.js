@@ -166,6 +166,32 @@ const KOBGUI = (() => {
     }
 
     /**
+     * 获取每轮问答数量
+     */
+    function getQaPerRound() {
+        const input = $('#qa-per-round');
+        if (!input) return 5;
+        const val = parseInt(input.value);
+        return (val >= 1 && val <= 100) ? val : 5;
+    }
+
+    /**
+     * 打开模态框
+     */
+    function openModal(id) {
+        const el = $('#' + id);
+        if (el) el.style.display = 'flex';
+    }
+
+    /**
+     * 关闭模态框
+     */
+    function closeModal(id) {
+        const el = $('#' + id);
+        if (el) el.style.display = 'none';
+    }
+
+    /**
      * 切换训练模式显示
      */
     function switchTrainingMode(mode) {
@@ -502,6 +528,9 @@ const KOBGUI = (() => {
         getTrainingDuration,
         getTrainingMode,
         getCustomRounds,
+        getQaPerRound,
+        openModal,
+        closeModal,
         switchTrainingMode,
         updateEstimatedRounds,
         displayCode,
