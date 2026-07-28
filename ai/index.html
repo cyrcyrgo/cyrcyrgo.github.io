@@ -77,12 +77,36 @@
                 <div class="panel-body">
                     <div class="training-controls">
                         <div class="form-group">
+                            <label class="form-label">训练模式</label>
+                            <div class="training-mode-switch">
+                                <label class="mode-option">
+                                    <input type="radio" name="training-mode" value="time" checked>
+                                    <span>按时间训练</span>
+                                </label>
+                                <label class="mode-option">
+                                    <input type="radio" name="training-mode" value="rounds">
+                                    <span>按轮数训练</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group" id="time-mode">
                             <label class="form-label">训练时长</label>
                             <input type="range" class="training-slider" id="duration-slider" 
                                    min="1" max="60" value="5" step="1">
                         </div>
                         <div class="training-time-display" id="duration-display">5 分钟</div>
-                        <div class="training-time-label">预计训练轮次: <span id="estimated-rounds">10</span></div>
+                        <div class="training-time-label" id="rounds-by-time">预计训练轮次: <span id="estimated-rounds">10</span></div>
+
+                        <div class="form-group" id="rounds-mode" style="display:none;">
+                            <label class="form-label">自定义训练轮数</label>
+                            <div class="rounds-input-wrapper">
+                                <input type="number" class="form-input" id="custom-rounds" 
+                                       min="1" max="100" value="10" step="1">
+                                <span class="rounds-unit">轮</span>
+                            </div>
+                            <div class="training-time-label" id="rounds-info">每轮间隔 30 秒</div>
+                        </div>
                         
                         <div class="form-group">
                             <label class="form-label">💬 捎句话（自定义训练指令）</label>

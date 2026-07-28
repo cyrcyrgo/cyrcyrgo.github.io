@@ -97,8 +97,10 @@ const KOBGTraining = (() => {
      * @param {function} onError - 错误回调
      * @param {function} onTick - 计时回调
      * @param {function} onStreamChunk - 流式输出回调
+     * @param {string} customInstruction - 自定义训练指令
+     * @param {number} customRounds - 自定义训练轮数（可选，覆盖基于时长的计算）
      */
-    async function startTraining(durationSeconds, onProgress, onComplete, onError, onTick, onStreamChunk, customInstruction) {
+    async function startTraining(durationSeconds, onProgress, onComplete, onError, onTick, onStreamChunk, customInstruction, customRounds) {
         if (trainingState.isRunning) {
             throw new Error('训练已在运行中');
         }
@@ -106,14 +108,14 @@ const KOBGTraining = (() => {
         trainingState.isRunning = true;
         trainingState.isPaused = false;
         trainingState.totalDuration = durationSeconds;
-        trainingState.totalRounds = Math.max(1, Math.ceil(durationSeconds / 30));
+        trainingState.totalRounds = customRounds && customRounds >= 1 ? customRounds : Math.max(1, Math.ceil(durationSeconds / 30));
         trainingState.currentRound = 0;
         trainingState.elapsedTime = 0;
 
         startTimer(onTick);
 
         try {
-            const roundInterval = (durationSeconds * 1000) / trainingState.totalRounds;
+            const roundInterval = customRounds && customRounds >= 1 ? 30000 : Math.min((durationSeconds * 1000) / trainingState.totalRounds, 30000);
 
             for (let i = 0; i < trainingState.totalRounds; i++) {
                 if (!trainingState.isRunning) break;
@@ -132,7 +134,7 @@ const KOBGTraining = (() => {
                 }
 
                 if (i < trainingState.totalRounds - 1 && trainingState.isRunning) {
-                    await sleep(Math.min(roundInterval, 30000));
+                    await sleep(roundInterval);
                 }
             }
 

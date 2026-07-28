@@ -129,15 +129,35 @@
             });
         }
 
+        // 训练模式切换
+        const modeRadios = document.querySelectorAll('input[name="training-mode"]');
+        modeRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                UI.switchTrainingMode(e.target.value);
+            });
+        });
+
         // 训练时长滑块
         const durationSlider = UI.$('#duration-slider');
         if (durationSlider) {
             durationSlider.addEventListener('input', () => {
                 UI.updateDurationSlider();
-                const minutes = parseInt(durationSlider.value);
-                const rounds = Math.max(1, Math.ceil((minutes * 60) / 30));
-                const roundsEl = UI.$('#estimated-rounds');
-                if (roundsEl) roundsEl.textContent = rounds;
+                UI.updateEstimatedRounds();
+            });
+        }
+
+        // 自定义轮数输入
+        const customRoundsInput = UI.$('#custom-rounds');
+        if (customRoundsInput) {
+            customRoundsInput.addEventListener('input', () => {
+                let val = parseInt(customRoundsInput.value);
+                if (isNaN(val) || val < 1) val = 1;
+                if (val > 100) val = 100;
+                customRoundsInput.value = val;
+                const roundsInfo = UI.$('#rounds-info');
+                if (roundsInfo) {
+                    roundsInfo.textContent = `共 ${val} 轮，每轮间隔 30 秒，预计用时 ${Math.ceil(val * 30 / 60)} 分钟`;
+                }
             });
         }
 
@@ -225,8 +245,13 @@
             return;
         }
 
+        const trainingMode = UI.getTrainingMode();
         const durationSeconds = UI.getTrainingDuration();
         const customInstruction = UI.$('#custom-instruction')?.value?.trim() || '';
+        const customRounds = trainingMode === 'rounds' ? UI.getCustomRounds() : null;
+        
+        const totalRounds = trainingMode === 'rounds' ? customRounds : Math.max(1, Math.ceil(durationSeconds / 30));
+        const totalMinutes = trainingMode === 'rounds' ? Math.ceil(totalRounds * 30 / 60) : Math.ceil(durationSeconds / 60);
         
         UI.updateStatus('training');
         UI.clearOutput();
@@ -234,7 +259,7 @@
         UI.updateProgress(0);
         UI.streamReset();
         updateDetailStatus('训练中');
-        updateDetailRound(0, Math.ceil(durationSeconds / 30));
+        updateDetailRound(0, totalRounds);
         updateDetailCompile('-');
         
         const startBtn = UI.$('#btn-start-training');
@@ -245,7 +270,11 @@
         if (pauseBtn) pauseBtn.disabled = false;
         if (stopBtn) stopBtn.disabled = false;
 
-        UI.addLogEntry('info', `训练开始，总时长: ${Math.ceil(durationSeconds / 60)} 分钟`);
+        if (trainingMode === 'rounds') {
+            UI.addLogEntry('info', `训练开始，共 ${totalRounds} 轮`);
+        } else {
+            UI.addLogEntry('info', `训练开始，总时长: ${totalMinutes} 分钟`);
+        }
         if (customInstruction) {
             UI.addLogEntry('info', `自定义指令: ${customInstruction.substring(0, 50)}${customInstruction.length > 50 ? '...' : ''}`);
         }
@@ -300,7 +329,8 @@
                 (chunk) => {
                     UI.streamAppend(chunk);
                 },
-                customInstruction
+                customInstruction,
+                customRounds
             );
         } catch (error) {
             UI.showToast('启动训练失败: ' + error.message, 'error');
