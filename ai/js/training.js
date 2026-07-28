@@ -130,7 +130,7 @@ const KOBGTraining = (() => {
                 if (onStreamChunk) {
                     await executeTrainingRoundStream(onStreamChunk, customInstruction);
                 } else {
-                    await executeTrainingRound();
+                    await executeTrainingRound(customInstruction);
                 }
 
                 if (i < trainingState.totalRounds - 1 && trainingState.isRunning) {
@@ -165,6 +165,45 @@ const KOBGTraining = (() => {
                 );
             } else {
                 code = await KOBGAPI.generateCppCodeStream(onStreamChunk, customInstruction);
+            }
+
+            if (code) {
+                trainingState.generatedCode = code;
+                
+                const compileResult = await KOBGCompiler.compile(code);
+                trainingState.compileResults.push({
+                    round: trainingState.currentRound,
+                    timestamp: Date.now(),
+                    success: compileResult.success,
+                    output: compileResult.output,
+                    errors: compileResult.errors
+                });
+
+                trainingState.contextMessages.push({
+                    role: 'assistant',
+                    content: code
+                });
+            }
+        } catch (error) {
+            console.error('[Training] Round failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 执行单轮训练（非流式）
+     * @param {string} customInstruction - 自定义训练指令
+     */
+    async function executeTrainingRound(customInstruction = '') {
+        try {
+            let code;
+            if (trainingState.generatedCode) {
+                code = await KOBGAPI.continueTraining(
+                    trainingState.generatedCode,
+                    customInstruction || 'Add more diverse Q&A pairs and improve the knowledge base. Output the complete updated C++ code.'
+                );
+            } else {
+                code = await KOBGAPI.generateCppCode(customInstruction);
             }
 
             if (code) {
