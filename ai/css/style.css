@@ -602,6 +602,80 @@ body {
     margin-top: 2px;
 }
 
+/* ========== Streaming Panel ========== */
+.stream-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.stream-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.stream-dot.streaming {
+    background: var(--success);
+    animation: pulse 0.8s infinite;
+}
+
+.stream-dot.waiting {
+    background: var(--warning);
+}
+
+.stream-dot.error {
+    background: var(--error);
+}
+
+.stream-label {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.stream-content {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    max-height: 280px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    min-height: 60px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.stream-content .stream-placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.stream-content .stream-chunk {
+    animation: fadeIn 0.15s ease;
+}
+
+.stream-info {
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--text-muted);
+    display: flex;
+    gap: 8px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0.6; }
+    to { opacity: 1; }
+}
+
 /* ========== Training Log ========== */
 .training-log {
     flex: 1;

@@ -142,6 +142,26 @@
                 </div>
             </div>
 
+            <!-- AI 实时输出 -->
+            <div class="panel" id="panel-stream">
+                <div class="panel-header">
+                    <span class="icon">🤖</span> AI 实时输出
+                    <span class="arrow">▼</span>
+                </div>
+                <div class="panel-body" style="padding:8px;">
+                    <div class="stream-status" id="stream-status">
+                        <span class="stream-dot" id="stream-dot"></span>
+                        <span class="stream-label" id="stream-label">等待训练</span>
+                    </div>
+                    <div class="stream-content" id="stream-content">
+                        <span class="stream-placeholder">AI 生成内容将在此逐字显示...</span>
+                    </div>
+                    <div class="stream-info" id="stream-info">
+                        <span id="stream-chars">0</span> 字符 | <span id="stream-lines">0</span> 行
+                    </div>
+                </div>
+            </div>
+
             <!-- Training Log -->
             <div class="panel" id="panel-log">
                 <div class="panel-header">

@@ -240,6 +240,85 @@ const KOBGUI = (() => {
     }
 
     /**
+     * 流式输出面板 - 开始流式显示
+     */
+    function streamStart() {
+        const content = $('#stream-content');
+        const dot = $('#stream-dot');
+        const label = $('#stream-label');
+        const chars = $('#stream-chars');
+        const lines = $('#stream-lines');
+
+        if (content) content.innerHTML = '';
+        if (dot) { dot.className = 'stream-dot streaming'; }
+        if (label) label.textContent = 'AI 正在生成...';
+        if (chars) chars.textContent = '0';
+        if (lines) lines.textContent = '0';
+    }
+
+    /**
+     * 流式输出面板 - 追加文本块
+     */
+    function streamAppend(text) {
+        const content = $('#stream-content');
+        const chars = $('#stream-chars');
+        const lines = $('#stream-lines');
+
+        if (content) {
+            content.append(text);
+            content.scrollTop = content.scrollHeight;
+        }
+        if (chars) {
+            const current = parseInt(chars.textContent) || 0;
+            chars.textContent = current + text.length;
+        }
+        if (lines) {
+            const lineCount = (text.match(/\n/g) || []).length;
+            const current = parseInt(lines.textContent) || 0;
+            lines.textContent = current + lineCount;
+        }
+    }
+
+    /**
+     * 流式输出面板 - 结束
+     */
+    function streamEnd() {
+        const dot = $('#stream-dot');
+        const label = $('#stream-label');
+
+        if (dot) { dot.className = 'stream-dot'; }
+        if (label) label.textContent = '生成完成';
+    }
+
+    /**
+     * 流式输出面板 - 错误
+     */
+    function streamError(message) {
+        const dot = $('#stream-dot');
+        const label = $('#stream-label');
+
+        if (dot) { dot.className = 'stream-dot error'; }
+        if (label) label.textContent = '错误: ' + message;
+    }
+
+    /**
+     * 流式输出面板 - 重置
+     */
+    function streamReset() {
+        const content = $('#stream-content');
+        const dot = $('#stream-dot');
+        const label = $('#stream-label');
+        const chars = $('#stream-chars');
+        const lines = $('#stream-lines');
+
+        if (content) content.innerHTML = '<span class="stream-placeholder">AI 生成内容将在此逐字显示...</span>';
+        if (dot) { dot.className = 'stream-dot'; }
+        if (label) label.textContent = '等待训练';
+        if (chars) chars.textContent = '0';
+        if (lines) lines.textContent = '0';
+    }
+
+    /**
      * 切换标签页
      */
     function switchTab(tabName) {
@@ -377,6 +456,11 @@ const KOBGUI = (() => {
         clearOutput,
         addLogEntry,
         clearLog,
+        streamStart,
+        streamAppend,
+        streamEnd,
+        streamError,
+        streamReset,
         switchTab,
         setButtonLoading,
         togglePanel,

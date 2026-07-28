@@ -96,8 +96,9 @@ const KOBGTraining = (() => {
      * @param {function} onComplete - 完成回调
      * @param {function} onError - 错误回调
      * @param {function} onTick - 计时回调
+     * @param {function} onStreamChunk - 流式输出回调
      */
-    async function startTraining(durationSeconds, onProgress, onComplete, onError, onTick) {
+    async function startTraining(durationSeconds, onProgress, onComplete, onError, onTick, onStreamChunk) {
         if (trainingState.isRunning) {
             throw new Error('训练已在运行中');
         }
@@ -125,8 +126,12 @@ const KOBGTraining = (() => {
                 const progress = trainingState.currentRound / trainingState.totalRounds;
                 onProgress(progress, trainingState.currentRound, trainingState.totalRounds);
 
-                // 执行一轮训练
-                await executeTrainingRound();
+                // 执行一轮训练（流式）
+                if (onStreamChunk) {
+                    await executeTrainingRoundStream(onStreamChunk);
+                } else {
+                    await executeTrainingRound();
+                }
 
                 // 等待下一轮（除非是最后一轮）
                 if (i < trainingState.totalRounds - 1 && trainingState.isRunning) {
@@ -146,20 +151,22 @@ const KOBGTraining = (() => {
     }
 
     /**
-     * 执行单轮训练
+     * 执行单轮训练（流式）
+     * @param {function} onStreamChunk - 流式回调 (chunkText)
      */
-    async function executeTrainingRound() {
+    async function executeTrainingRoundStream(onStreamChunk) {
         try {
             let code;
             if (trainingState.generatedCode) {
-                // 继续训练：在已有代码基础上改进
-                code = await KOBGAPI.continueTraining(
+                // 继续训练：流式
+                code = await KOBGAPI.continueTrainingStream(
                     trainingState.generatedCode,
+                    onStreamChunk,
                     'Add more diverse Q&A pairs and improve the knowledge base. Output the complete updated C++ code.'
                 );
             } else {
-                // 首次生成
-                code = await KOBGAPI.generateCppCode();
+                // 首次生成：流式
+                code = await KOBGAPI.generateCppCodeStream(onStreamChunk);
             }
 
             if (code) {
@@ -266,6 +273,8 @@ const KOBGTraining = (() => {
         clearContext,
         reset,
         startTraining,
+        executeTrainingRound,
+        executeTrainingRoundStream,
         pauseTraining,
         resumeTraining,
         stopTraining,

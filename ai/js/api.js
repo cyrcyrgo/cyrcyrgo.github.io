@@ -146,6 +146,122 @@ REMEMBER: Output ONLY the C++ code. No markdown. No explanations. No backticks. 
     }
 
     /**
+     * 流式生成 C++ 代码（逐字返回）
+     * @param {string} userPrompt - 用户提示词
+     * @param {function} onChunk - 每收到一个文本块时回调 (chunkText)
+     * @returns {Promise<string>} 完整代码
+     */
+    async function generateCppCodeStream(onChunk, userPrompt = '') {
+        const defaultPrompt = 'Generate a complete C++ AI dialogue system following the KOBG framework. Include diverse Q&A pairs about AI and machine learning topics.';
+        const messages = [
+            { role: 'user', content: userPrompt || defaultPrompt }
+        ];
+        return await sendStreamRequest(messages, { temperature: 0.7 }, onChunk);
+    }
+
+    /**
+     * 流式继续训练
+     * @param {string} previousCode - 上一次生成的代码
+     * @param {function} onChunk - 每收到一个文本块时回调
+     * @param {string} instruction - 训练指令
+     * @returns {Promise<string>} 完整代码
+     */
+    async function continueTrainingStream(previousCode, onChunk, instruction = '') {
+        const prompt = instruction || 'Add more diverse Q&A pairs and improve the knowledge base. Output the complete updated C++ code.';
+        const messages = [
+            { role: 'user', content: `Previous C++ code:\n${previousCode}\n\n${prompt}` }
+        ];
+        return await sendStreamRequest(messages, { temperature: 0.8 }, onChunk);
+    }
+
+    /**
+     * 发送流式请求（SSE）
+     * @param {Array} messages - 消息列表
+     * @param {Object} options - 额外选项
+     * @param {function} onChunk - 流式回调
+     * @returns {Promise<string>} 完整文本
+     */
+    async function sendStreamRequest(messages, options = {}, onChunk) {
+        const config = getConfig();
+        if (!isConfigured()) {
+            throw new Error('API 未配置，请先填写 API 接口信息');
+        }
+
+        const allMessages = [
+            { role: 'system', content: SYSTEM_PROMPT },
+            ...messages
+        ];
+
+        const body = {
+            model: config.model,
+            messages: allMessages,
+            temperature: options.temperature || 0.7,
+            max_tokens: options.maxTokens || 4096,
+            top_p: options.topP || 1.0,
+            stream: true
+        };
+
+        const url = config.url.replace(/\/+$/, '') + '/chat/completions';
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            let errorMsg;
+            try {
+                const errJson = JSON.parse(errorText);
+                errorMsg = errJson.error?.message || errorText;
+            } catch {
+                errorMsg = errorText;
+            }
+            throw new Error(`API 请求失败 (${response.status}): ${errorMsg}`);
+        }
+
+        let fullContent = '';
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith('data: ')) continue;
+                const data = trimmed.slice(6);
+                if (data === '[DONE]') continue;
+
+                try {
+                    const parsed = JSON.parse(data);
+                    const delta = parsed.choices?.[0]?.delta?.content;
+                    if (delta) {
+                        fullContent += delta;
+                        if (onChunk) onChunk(delta);
+                    }
+                } catch (e) {
+                    // 忽略解析错误的行
+                }
+            }
+        }
+
+        // 估算 token 用量（流式 API 通常不返回 usage）
+        KOBGStorage.updateTokenUsage(
+            estimateTokens(messages.map(m => m.content).join('')),
+            estimateTokens(fullContent)
+        );
+
+        return cleanCodeOutput(fullContent);
+    }
+
+    /**
      * 继续训练：在上一次代码基础上改进
      */
     async function continueTraining(previousCode, instruction = '') {
@@ -207,7 +323,10 @@ REMEMBER: Output ONLY the C++ code. No markdown. No explanations. No backticks. 
         getConfig,
         isConfigured,
         generateCppCode,
+        generateCppCodeStream,
         continueTraining,
+        continueTrainingStream,
+        sendStreamRequest,
         testConnection,
         estimateTokens,
         cleanCodeOutput,
