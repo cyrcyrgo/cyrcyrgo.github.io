@@ -34,12 +34,15 @@
 }
 
 body {
-    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
     min-height: 100vh;
     line-height: 1.6;
     overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 /* ========== Header ========== */
@@ -78,10 +81,18 @@ body {
 .header-title {
     font-size: 18px;
     font-weight: 700;
+    color: var(--accent);
     background: var(--gradient-1);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+}
+/* 移动端渐变文字 fallback：部分浏览器 text-fill-color 异常时回退纯色 */
+@supports not (-webkit-background-clip: text) {
+    .header-title {
+        color: var(--accent);
+        -webkit-text-fill-color: var(--accent);
+    }
 }
 
 .header-subtitle {
@@ -107,6 +118,11 @@ body {
 .status-dot.connected { background: var(--success); box-shadow: 0 0 8px var(--success); }
 .status-dot.training { background: var(--warning); box-shadow: 0 0 8px var(--warning); animation: pulse 1s infinite; }
 .status-dot.error { background: var(--error); box-shadow: 0 0 8px var(--error); }
+
+.status-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
 
 @keyframes pulse {
     0%, 100% { opacity: 1; }
@@ -143,6 +159,7 @@ body {
     background: var(--bg-secondary);
     border-right: 1px solid var(--border);
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding: 16px;
     display: flex;
     flex-direction: column;
@@ -227,7 +244,7 @@ body {
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: 16px;
     font-family: inherit;
     transition: var(--transition);
     outline: none;
@@ -262,6 +279,7 @@ body {
     justify-content: center;
     gap: 6px;
     white-space: nowrap;
+    touch-action: manipulation;
 }
 
 .btn:disabled {
@@ -463,6 +481,7 @@ body {
 .code-body {
     flex: 1;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding: 0;
     position: relative;
 }
@@ -476,6 +495,7 @@ body {
     color: var(--text-primary);
     white-space: pre-wrap;
     word-break: break-word;
+    overflow-wrap: anywhere;
     min-height: 100%;
 }
 
@@ -522,6 +542,8 @@ body {
     color: #a0d0a0;
     white-space: pre-wrap;
     word-break: break-word;
+    overflow-wrap: anywhere;
+    -webkit-overflow-scrolling: touch;
 }
 
 .output-body::-webkit-scrollbar {
@@ -682,18 +704,398 @@ body {
     to { transform: translateX(0); opacity: 1; }
 }
 
-/* ========== Responsive ========== */
-@media (max-width: 900px) {
+/* ============================================================
+   响应式设计 - 移动端适配
+   ============================================================ */
+
+/* ---------- 平板 (≤768px) ---------- */
+@media (max-width: 768px) {
+    .header {
+        padding: 10px 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .header-brand {
+        gap: 8px;
+    }
+
+    .header-logo {
+        width: 30px;
+        height: 30px;
+        font-size: 16px;
+        border-radius: 8px;
+    }
+
+    .header-title {
+        font-size: 15px;
+    }
+
+    .header-subtitle {
+        font-size: 10px;
+    }
+
+    .header-status {
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .token-badge {
+        padding: 3px 8px;
+        font-size: 10px;
+        gap: 4px;
+    }
+
     .main-container {
         flex-direction: column;
+        height: auto;
+        min-height: calc(100vh - 52px);
     }
+
     .sidebar {
         width: 100%;
         min-width: unset;
-        max-height: 50vh;
+        max-height: none;
         border-right: none;
         border-bottom: 1px solid var(--border);
+        padding: 10px;
+        gap: 10px;
+        flex-shrink: 0;
     }
+
+    .sidebar.collapsed-mobile {
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        overflow: hidden;
+        border-bottom: none;
+    }
+
+    .content {
+        flex: 1;
+        min-height: 50vh;
+    }
+
+    .content-tabs {
+        padding: 0 8px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .content-tab {
+        padding: 10px 14px;
+        font-size: 12px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .content-tab-panel {
+        padding: 10px;
+    }
+
+    .panel-body {
+        padding: 12px;
+    }
+
+    .panel-header {
+        padding: 10px 12px;
+        font-size: 12px;
+    }
+
+    .btn {
+        padding: 10px 14px;
+        font-size: 13px;
+    }
+
+    .btn-sm {
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+
+    .form-input {
+        font-size: 16px;
+        padding: 10px;
+    }
+
+    .form-label {
+        font-size: 11px;
+    }
+
+    .code-body pre {
+        font-size: 11px;
+        padding: 10px;
+        line-height: 1.5;
+    }
+
+    .output-body {
+        font-size: 11px;
+        padding: 10px;
+    }
+
+    .training-time-display {
+        font-size: 20px;
+    }
+
+    .token-stats {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+
+    .token-stat .value {
+        font-size: 15px;
+    }
+
+    .toast-container {
+        top: 60px;
+        right: 8px;
+        left: 8px;
+        max-width: none;
+    }
+
+    .toast {
+        max-width: 100%;
+        font-size: 12px;
+        padding: 10px 12px;
+    }
+
+    /* 训练详情网格改为单列 */
+    .training-detail-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px;
+    }
+
+    .training-detail-body {
+        padding: 12px;
+    }
+
+    .training-stat-value {
+        font-size: 18px;
+    }
+
+    .training-stat-card {
+        padding: 10px;
+    }
+
+    .system-prompt-preview {
+        font-size: 10px;
+        padding: 8px;
+        max-height: 150px;
+    }
+
+    .training-desc {
+        font-size: 11px;
+    }
+
+    /* 移动端侧边栏切换按钮 */
+    .mobile-sidebar-toggle {
+        display: inline-flex;
+    }
+}
+
+/* ---------- 手机 (≤480px) ---------- */
+@media (max-width: 480px) {
+    .header {
+        padding: 8px 10px;
+    }
+
+    .header-logo {
+        width: 26px;
+        height: 26px;
+        font-size: 14px;
+        border-radius: 6px;
+    }
+
+    .header-title {
+        font-size: 14px;
+    }
+
+    .header-subtitle {
+        display: none;
+    }
+
+    .status-label {
+        display: none;
+    }
+
+    /* 手机端隐藏 token badge 文字，只显示数字 */
+    .token-badge {
+        padding: 2px 6px;
+        font-size: 9px;
+        gap: 2px;
+    }
+
+    .token-badge span:first-child {
+        display: none;
+    }
+
+    .header-status {
+        gap: 4px;
+    }
+
+    .sidebar {
+        padding: 6px;
+        gap: 6px;
+    }
+
+    .panel-body {
+        padding: 8px;
+    }
+
+    .panel-header {
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+
+    .content-tab {
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+
+    .content-tab-panel {
+        padding: 6px;
+    }
+
+    .btn {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+
+    .btn-sm {
+        padding: 5px 8px;
+        font-size: 10px;
+    }
+
+    .btn-group {
+        gap: 4px;
+    }
+
+    .form-input {
+        padding: 8px 10px;
+        font-size: 16px;
+    }
+
+    .form-group {
+        margin-bottom: 10px;
+    }
+
+    .code-body pre {
+        font-size: 10px;
+        padding: 8px;
+        line-height: 1.4;
+    }
+
+    .code-header {
+        padding: 6px 10px;
+        font-size: 10px;
+    }
+
+    .output-body {
+        font-size: 10px;
+        padding: 8px;
+    }
+
+    .output-header {
+        padding: 6px 10px;
+        font-size: 10px;
+    }
+
+    .training-time-display {
+        font-size: 18px;
+    }
+
+    .token-stats {
+        gap: 4px;
+    }
+
+    .token-stat {
+        padding: 6px;
+    }
+
+    .token-stat .value {
+        font-size: 13px;
+    }
+
+    .token-stat .label {
+        font-size: 8px;
+    }
+
+    .training-log {
+        gap: 4px;
+    }
+
+    .log-entry {
+        padding: 6px 8px;
+        font-size: 10px;
+        gap: 6px;
+    }
+
+    .log-entry .log-icon {
+        font-size: 14px;
+    }
+
+    .log-entry .log-time {
+        font-size: 9px;
+    }
+
+    .toast-container {
+        top: 50px;
+        right: 4px;
+        left: 4px;
+    }
+
+    .toast {
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+
+    /* 训练详情面板 */
+    .training-detail-body {
+        padding: 8px;
+    }
+
+    .training-detail-grid {
+        gap: 6px;
+    }
+
+    .training-stat-value {
+        font-size: 14px;
+    }
+
+    .training-stat-card {
+        padding: 8px;
+    }
+
+    .system-prompt-preview {
+        font-size: 9px;
+        padding: 6px;
+        max-height: 120px;
+    }
+
+    .training-desc {
+        font-size: 10px;
+    }
+}
+
+/* ---------- 桌面端：隐藏移动端切换按钮 ---------- */
+.mobile-sidebar-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 16px;
+    transition: var(--transition);
+    flex-shrink: 0;
+}
+
+.mobile-sidebar-toggle:hover {
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 /* ========== Highlight.js override ========== */
@@ -709,4 +1111,55 @@ body {
 
 @keyframes blink {
     50% { opacity: 0; }
+}
+
+/* ========== Training Detail Panel ========== */
+.training-detail-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.training-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.training-stat-card {
+    padding: 16px;
+}
+
+.training-stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.training-detail-section {
+    margin-top: 16px;
+}
+
+.panel-header-static {
+    cursor: default;
+}
+
+.system-prompt-preview {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--bg-tertiary);
+    padding: 12px;
+    border-radius: 6px;
+    margin: 0;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.training-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.8;
 }
