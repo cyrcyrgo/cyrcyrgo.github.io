@@ -565,30 +565,6 @@ CRITICAL RULES:
         return cleanCodeOutput(fullContent);
     }
 
-    /**
-     * 继续训练（非流式）
-     */
-    async function continueTraining(previousCode, instruction = '') {
-        const { knowledge, testQuestions } = extractAIContents(previousCode);
-
-        let contextPrompt = `Current knowledge base (${knowledge.length} entries):\n`;
-        for (const entry of knowledge.slice(0, 10)) {
-            contextPrompt += `  Q: "${entry.q}"\n  A: "${entry.a.substring(0, 80)}"\n`;
-        }
-        contextPrompt += `\nCurrent test questions (${testQuestions.length} questions):\n`;
-        for (const q of testQuestions.slice(0, 10)) {
-            contextPrompt += `  - "${q}"\n`;
-        }
-
-        const defaultInstruction = 'Add more diverse Q&A pairs and improve the knowledge base. Output ALL entries (old + new) in the required format.';
-        const prompt = `${contextPrompt}\n\nTask: ${instruction || defaultInstruction}`;
-
-        const messages = [{ role: 'user', content: prompt }];
-        const rawOutput = await sendRequest(messages, { temperature: 0.8 });
-
-        return await assembleCppCode(rawOutput);
-    }
-
     async function testConnection() {
         const config = getConfig();
         if (!isConfigured()) {
