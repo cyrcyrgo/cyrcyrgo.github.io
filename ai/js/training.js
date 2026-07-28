@@ -290,6 +290,33 @@ const KOBGTraining = (() => {
         }));
     }
 
+    /**
+     * 导出训练状态（用于保存）
+     */
+    function exportState() {
+        const kbSize = KOBGKnowledgeTest ? KOBGKnowledgeTest.getKnowledgeBase().length : 0;
+        return {
+            generatedCode: trainingState.generatedCode,
+            totalRounds: trainingState.totalRounds,
+            currentRound: trainingState.currentRound,
+            compileResults: trainingState.compileResults ? [...trainingState.compileResults] : [],
+            knowledgeSize: kbSize
+        };
+    }
+
+    /**
+     * 导入训练状态（用于加载）
+     */
+    function importState(data) {
+        if (!data) return false;
+        trainingState.generatedCode = data.code || data.generatedCode || null;
+        trainingState.totalRounds = data.totalRounds || 0;
+        trainingState.currentRound = data.currentRound || 0;
+        trainingState.compileResults = data.compileResults || [];
+        trainingState.elapsedTime = 0;
+        return true;
+    }
+
     // 辅助函数
     function sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
@@ -320,6 +347,8 @@ const KOBGTraining = (() => {
         getGeneratedCode,
         setGeneratedCode,
         getCompileResults,
-        getTrainingLog
+        getTrainingLog,
+        exportState,
+        importState
     };
 })();
