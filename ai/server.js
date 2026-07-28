@@ -308,6 +308,86 @@ app.post('/api/export', async (req, res) => {
     }
 });
 
+// ============================================================
+//  LLM API 代理（绕过浏览器 CORS 限制）
+// ============================================================
+app.post('/api/chat', async (req, res) => {
+    const { url, apiKey, model, messages, temperature, max_tokens, top_p, stream } = req.body;
+
+    if (!url || !apiKey || !model || !messages) {
+        return res.status(400).json({ error: '缺少必要参数: url, apiKey, model, messages' });
+    }
+
+    const apiUrl = url.replace(/\/+$/, '') + '/chat/completions';
+
+    const body = {
+        model,
+        messages,
+        temperature: temperature || 0.7,
+        max_tokens: max_tokens || 4096,
+        top_p: top_p || 1.0,
+        stream: stream || false
+    };
+
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            return res.status(response.status).json({
+                error: true,
+                status: response.status,
+                message: errorText
+            });
+        }
+
+        if (stream) {
+            // 流式响应：管道转发 SSE
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            const pump = async () => {
+                try {
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) {
+                            res.end();
+                            break;
+                        }
+                        res.write(value);
+                    }
+                } catch (err) {
+                    console.error('[Proxy] Stream error:', err.message);
+                    res.end();
+                }
+            };
+            pump();
+        } else {
+            // 非流式响应：直接返回 JSON
+            const data = await response.json();
+            res.json(data);
+        }
+    } catch (err) {
+        console.error('[Proxy] Request failed:', err.message);
+        res.status(502).json({
+            error: true,
+            message: '代理请求失败: ' + err.message
+        });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`╔══════════════════════════════════════════╗`);
     console.log(`║   KOBG AI Compiler Server v1.01          ║`);

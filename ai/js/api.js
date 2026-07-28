@@ -237,27 +237,21 @@ CRITICAL RULES:
     }
 
     function getHeaders() {
-        const config = getConfig();
-        return {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.apiKey}`
-        };
+        // 不再需要，所有请求通过服务端代理转发
+        return { 'Content-Type': 'application/json' };
     }
 
     function buildRequestBody(messages, options = {}) {
-        const config = getConfig();
         const allMessages = [
             { role: 'system', content: SYSTEM_PROMPT },
             ...messages
         ];
 
         return {
-            model: config.model,
             messages: allMessages,
             temperature: options.temperature || 0.7,
             max_tokens: options.maxTokens || 4096,
-            top_p: options.topP || 1.0,
-            stream: false
+            top_p: options.topP || 1.0
         };
     }
 
@@ -267,25 +261,25 @@ CRITICAL RULES:
             throw new Error('API 未配置，请先填写 API 接口信息');
         }
 
-        const body = buildRequestBody(messages, options);
-        const url = config.url.replace(/\/+$/, '') + '/chat/completions';
+        const payload = buildRequestBody(messages, options);
+        const body = {
+            url: config.url,
+            apiKey: config.apiKey,
+            model: config.model,
+            ...payload,
+            stream: false
+        };
 
-        const response = await fetch(url, {
+        const response = await fetch('/api/chat', {
             method: 'POST',
-            headers: getHeaders(),
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            let errorMsg;
-            try {
-                const errJson = JSON.parse(errorText);
-                errorMsg = errJson.error?.message || errorText;
-            } catch {
-                errorMsg = errorText;
-            }
-            throw new Error(`API 请求失败 (${response.status}): ${errorMsg}`);
+            const errorData = await response.json().catch(() => ({}));
+            const msg = errorData.error?.message || errorData.message || `HTTP ${response.status}`;
+            throw new Error(`API 请求失败 (${response.status}): ${msg}`);
         }
 
         const data = await response.json();
@@ -498,6 +492,8 @@ CRITICAL RULES:
         ];
 
         const body = {
+            url: config.url,
+            apiKey: config.apiKey,
             model: config.model,
             messages: allMessages,
             temperature: options.temperature || 0.7,
@@ -506,23 +502,16 @@ CRITICAL RULES:
             stream: true
         };
 
-        const url = config.url.replace(/\/+$/, '') + '/chat/completions';
-        const response = await fetch(url, {
+        const response = await fetch('/api/chat', {
             method: 'POST',
-            headers: getHeaders(),
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            let errorMsg;
-            try {
-                const errJson = JSON.parse(errorText);
-                errorMsg = errJson.error?.message || errorText;
-            } catch {
-                errorMsg = errorText;
-            }
-            throw new Error(`API 请求失败 (${response.status}): ${errorMsg}`);
+            const errorData = await response.json().catch(() => ({}));
+            const msg = errorData.error?.message || errorData.message || `HTTP ${response.status}`;
+            throw new Error(`API 请求失败 (${response.status}): ${msg}`);
         }
 
         let fullContent = '';
@@ -572,22 +561,23 @@ CRITICAL RULES:
         }
 
         const body = {
+            url: config.url,
+            apiKey: config.apiKey,
             model: config.model,
             messages: [{ role: 'user', content: 'Say "KOBG AI connected" and nothing else.' }],
-            max_tokens: 50
+            max_tokens: 50,
+            stream: false
         };
 
-        const url = config.url.replace(/\/+$/, '') + '/chat/completions';
-
-        const response = await fetch(url, {
+        const response = await fetch('/api/chat', {
             method: 'POST',
-            headers: getHeaders(),
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`连接失败 (${response.status}): ${errorText}`);
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(`连接失败 (${response.status}): ${errorData.message || ''}`);
         }
 
         const data = await response.json();
