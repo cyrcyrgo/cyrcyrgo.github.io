@@ -98,9 +98,10 @@ const KOBGTraining = (() => {
      * @param {function} onTick - 计时回调
      * @param {function} onStreamChunk - 流式输出回调
      * @param {string} customInstruction - 自定义训练指令
-     * @param {number} customRounds - 自定义训练轮数（可选，覆盖基于时长的计算）
+     * @param {number} customRounds - 自定义训练轮数（可选）
+     * @param {number} qaPerRound - 每轮问答数量（默认5）
      */
-    async function startTraining(durationSeconds, onProgress, onComplete, onError, onTick, onStreamChunk, customInstruction, customRounds) {
+    async function startTraining(durationSeconds, onProgress, onComplete, onError, onTick, onStreamChunk, customInstruction, customRounds, qaPerRound) {
         if (trainingState.isRunning) {
             throw new Error('训练已在运行中');
         }
@@ -111,11 +112,16 @@ const KOBGTraining = (() => {
         trainingState.totalRounds = customRounds && customRounds >= 1 ? customRounds : Math.max(1, Math.ceil(durationSeconds / 30));
         trainingState.currentRound = 0;
         trainingState.elapsedTime = 0;
+        trainingState.qaPerRound = qaPerRound || 5;
 
         startTimer(onTick);
 
         try {
-            const roundInterval = customRounds && customRounds >= 1 ? 30000 : Math.min((durationSeconds * 1000) / trainingState.totalRounds, 30000);
+            // 按时间模式：使用固定间隔；按轮数模式：等待每轮输出完成后立即开始下一轮
+            const useFixedInterval = !(customRounds && customRounds >= 1);
+            const roundInterval = useFixedInterval
+                ? Math.min((durationSeconds * 1000) / trainingState.totalRounds, 30000)
+                : 0;
 
             for (let i = 0; i < trainingState.totalRounds; i++) {
                 if (!trainingState.isRunning) break;
@@ -127,14 +133,21 @@ const KOBGTraining = (() => {
                 const progress = trainingState.currentRound / trainingState.totalRounds;
                 onProgress(progress, trainingState.currentRound, trainingState.totalRounds);
 
+                // 执行训练轮次 - 等待完成
                 if (onStreamChunk) {
-                    await executeTrainingRoundStream(onStreamChunk, customInstruction);
+                    await executeTrainingRoundStream(onStreamChunk, customInstruction, trainingState.qaPerRound);
                 } else {
-                    await executeTrainingRound(customInstruction);
+                    await executeTrainingRound(customInstruction, trainingState.qaPerRound);
                 }
 
+                // 按时间模式：固定间隔；按轮数模式：仅短暂延迟后继续
                 if (i < trainingState.totalRounds - 1 && trainingState.isRunning) {
-                    await sleep(roundInterval);
+                    if (useFixedInterval) {
+                        await sleep(roundInterval);
+                    } else {
+                        // 轮数模式：等待1秒缓冲后立即进入下一轮
+                        await sleep(1000);
+                    }
                 }
             }
 
@@ -153,18 +166,20 @@ const KOBGTraining = (() => {
      * 执行单轮训练（流式）
      * @param {function} onStreamChunk - 流式回调 (chunkText)
      * @param {string} customInstruction - 自定义训练指令
+     * @param {number} qaPerRound - 每轮问答数量
      */
-    async function executeTrainingRoundStream(onStreamChunk, customInstruction = '') {
+    async function executeTrainingRoundStream(onStreamChunk, customInstruction = '', qaPerRound = 5) {
         try {
             let code;
             if (trainingState.generatedCode) {
                 code = await KOBGAPI.continueTrainingStream(
                     trainingState.generatedCode,
                     onStreamChunk,
-                    customInstruction || 'Add more diverse Q&A pairs and improve the knowledge base. Output the complete updated C++ code.'
+                    customInstruction,
+                    qaPerRound
                 );
             } else {
-                code = await KOBGAPI.generateCppCodeStream(onStreamChunk, customInstruction);
+                code = await KOBGAPI.generateCppCodeStream(onStreamChunk, customInstruction, qaPerRound);
             }
 
             if (code) {
@@ -193,17 +208,19 @@ const KOBGTraining = (() => {
     /**
      * 执行单轮训练（非流式）
      * @param {string} customInstruction - 自定义训练指令
+     * @param {number} qaPerRound - 每轮问答数量
      */
-    async function executeTrainingRound(customInstruction = '') {
+    async function executeTrainingRound(customInstruction = '', qaPerRound = 5) {
         try {
             let code;
             if (trainingState.generatedCode) {
                 code = await KOBGAPI.continueTraining(
                     trainingState.generatedCode,
-                    customInstruction || 'Add more diverse Q&A pairs and improve the knowledge base. Output the complete updated C++ code.'
+                    customInstruction,
+                    qaPerRound
                 );
             } else {
-                code = await KOBGAPI.generateCppCode(customInstruction);
+                code = await KOBGAPI.generateCppCode(customInstruction, qaPerRound);
             }
 
             if (code) {

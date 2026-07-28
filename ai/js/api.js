@@ -14,29 +14,28 @@ The C++ code framework is BUILT-IN - you ONLY output the knowledge data.
 OUTPUT FORMAT (STRICTLY FOLLOW):
 1. First, output knowledge base entries using this exact C++ syntax:
    knowledge_base["question text"] = "answer text";
-   Each entry on its own line. Generate AT LEAST 5 entries.
+   Each entry on its own line. Generate the EXACT number of entries requested.
 
 2. Then output a separator line:  ---TEST---
 
 3. Then output test questions as C++ string initializers:
    "test question 1",
    "test question 2",
-   Each question on its own line. Generate AT LEAST 5 questions.
+   Each question on its own line. Generate the same number of test questions.
 
-EXAMPLE:
-knowledge_base["What is AI?"] = "Artificial Intelligence is the simulation of human intelligence by machines.";
-knowledge_base["What is ML?"] = "Machine Learning enables computers to learn from data without explicit programming.";
----TEST---
-"What is AI?",
-"Explain machine learning",
+QUALITY REQUIREMENTS:
+- Each question must be UNIQUE and DIFFERENT from all others.
+- Questions must cover DIVERSE topics within the requested subject area.
+- Answers must be DETAILED (at least 20 words), ACCURATE, and EDUCATIONAL.
+- Do NOT repeat questions or give near-duplicate questions.
+- Vary question phrasing: "What is...", "Explain...", "How does...", "Describe...", "Why is..."
+- Each answer should be self-contained and informative.
 
 CRITICAL RULES:
 - ONLY output knowledge_base entries, the ---TEST--- separator, and test questions.
 - Do NOT include any other C++ code, class definitions, includes, or explanations.
 - Do NOT use markdown, code blocks, or backticks.
-- Questions should be diverse: about AI, ML, neural networks, NLP, computer vision, etc.
-- Answers should be detailed, accurate, and educational.
-- You may include Chinese language Q&A pairs.`;
+- You may include Chinese language Q&A pairs if the user asks in Chinese.`;
 
     let cachedTemplate = null;
 
@@ -307,11 +306,35 @@ CRITICAL RULES:
     }
 
     /**
+     * 构建训练提示词（包含问答数量）
+     */
+    function buildTrainingPrompt(qaCount, customInstruction, isContinue, existingCount) {
+        const count = Math.max(1, Math.min(100, qaCount || 5));
+        let prompt = '';
+
+        if (isContinue && existingCount !== undefined) {
+            prompt += `The current knowledge base has ${existingCount} entries. `;
+            prompt += `Generate EXACTLY ${count} NEW and UNIQUE Q&A pairs that do NOT duplicate any existing entries. `;
+        } else {
+            prompt += `Generate EXACTLY ${count} diverse Q&A pairs about artificial intelligence and machine learning topics. `;
+            prompt += `Topics should cover: AI fundamentals, machine learning, neural networks, deep learning, NLP, computer vision, reinforcement learning, etc.\n`;
+        }
+
+        prompt += `You MUST output exactly ${count} knowledge_base entries and ${count} test questions.\n`;
+        prompt += `Each question must be completely unique - no duplicates or near-duplicates.\n`;
+
+        if (customInstruction) {
+            prompt += `\nAdditional instruction from user: ${customInstruction}\n`;
+        }
+
+        return prompt;
+    }
+
+    /**
      * 生成 C++ 代码（单次训练，非流式）
      */
-    async function generateCppCode(userPrompt = '') {
-        const defaultPrompt = 'Generate diverse Q&A pairs about artificial intelligence and machine learning topics. Include at least 5 knowledge entries and 5 test questions.';
-        const prompt = userPrompt || defaultPrompt;
+    async function generateCppCode(userPrompt = '', qaCount = 5) {
+        const prompt = userPrompt || buildTrainingPrompt(qaCount, '', false);
 
         const messages = [{ role: 'user', content: prompt }];
         const rawOutput = await sendRequest(messages);
@@ -322,40 +345,142 @@ CRITICAL RULES:
     /**
      * 流式生成 C++ 代码（逐字输出 AI 原始内容）
      */
-    async function generateCppCodeStream(onChunk, userPrompt = '') {
-        const defaultPrompt = 'Generate diverse Q&A pairs about artificial intelligence and machine learning topics. Include at least 5 knowledge entries and 5 test questions.';
-        const prompt = userPrompt || defaultPrompt;
+    async function generateCppCodeStream(onChunk, userPrompt = '', qaCount = 5) {
+        const prompt = userPrompt || buildTrainingPrompt(qaCount, '', false);
         const messages = [{ role: 'user', content: prompt }];
-        const rawOutput = await sendStreamRequest(messages, { temperature: 0.7 }, onChunk);
+        const rawOutput = await sendStreamRequest(messages, { temperature: 0.7, maxTokens: getMaxTokens(qaCount) }, onChunk);
 
         return await assembleCppCode(rawOutput);
     }
 
     /**
      * 流式继续训练
-     * @param {string} previousCode - 上一次完整 C++ 代码
-     * @param {function} onChunk - 流式回调
-     * @param {string} instruction - 训练指令
      */
-    async function continueTrainingStream(previousCode, onChunk, instruction = '') {
+    async function continueTrainingStream(previousCode, onChunk, instruction = '', qaCount = 5) {
         const { knowledge, testQuestions } = extractAIContents(previousCode);
 
-        let contextPrompt = `Current knowledge base (${knowledge.length} entries):\n`;
-        for (const entry of knowledge.slice(0, 10)) {
-            contextPrompt += `  Q: "${entry.q}"\n  A: "${entry.a.substring(0, 80)}"\n`;
-        }
-        contextPrompt += `\nCurrent test questions (${testQuestions.length} questions):\n`;
-        for (const q of testQuestions.slice(0, 10)) {
-            contextPrompt += `  - "${q}"\n`;
+        let contextPrompt = `Current knowledge base has ${knowledge.length} entries:\n`;
+        for (const entry of knowledge.slice(0, 20)) {
+            contextPrompt += `  Q: "${entry.q}"\n`;
         }
 
-        const defaultInstruction = 'Add more diverse Q&A pairs, improve existing answers, and provide better test coverage. Output ALL knowledge entries (old + new) and test questions in the required format.';
-        const prompt = `${contextPrompt}\n\nTask: ${instruction || defaultInstruction}`;
+        const trainingPrompt = buildTrainingPrompt(qaCount, instruction, true, knowledge.length);
+        const prompt = `${contextPrompt}\n\n${trainingPrompt}`;
 
         const messages = [{ role: 'user', content: prompt }];
-        const rawOutput = await sendStreamRequest(messages, { temperature: 0.8 }, onChunk);
+        const rawOutput = await sendStreamRequest(messages, { temperature: 0.8, maxTokens: getMaxTokens(qaCount) }, onChunk);
 
-        return await assembleCppCode(rawOutput);
+        // 合并旧知识和新知识
+        const parsed = parseAIOutput(rawOutput);
+        const mergedCode = await assembleMergedCppCode(knowledge, parsed.knowledge, testQuestions, parsed.testQuestions);
+        return mergedCode;
+    }
+
+    /**
+     * 继续训练（非流式）
+     */
+    async function continueTraining(previousCode, instruction = '', qaCount = 5) {
+        const { knowledge, testQuestions } = extractAIContents(previousCode);
+
+        let contextPrompt = `Current knowledge base has ${knowledge.length} entries:\n`;
+        for (const entry of knowledge.slice(0, 20)) {
+            contextPrompt += `  Q: "${entry.q}"\n`;
+        }
+
+        const trainingPrompt = buildTrainingPrompt(qaCount, instruction, true, knowledge.length);
+        const prompt = `${contextPrompt}\n\n${trainingPrompt}`;
+
+        const messages = [{ role: 'user', content: prompt }];
+        const rawOutput = await sendRequest(messages, { temperature: 0.8, maxTokens: getMaxTokens(qaCount) });
+
+        // 合并旧知识和新知识
+        const parsed = parseAIOutput(rawOutput);
+        const mergedCode = await assembleMergedCppCode(knowledge, parsed.knowledge, testQuestions, parsed.testQuestions);
+        return mergedCode;
+    }
+
+    /**
+     * 根据 QA 数量估算 max_tokens
+     * 每个 QA 约 100-150 tokens，加上格式开销
+     */
+    function getMaxTokens(qaCount) {
+        const base = 500;
+        const perQa = 200;
+        return Math.min(16000, base + perQa * Math.max(1, qaCount || 5));
+    }
+
+    /**
+     * 合并旧知识和新知识，生成完整 C++ 代码
+     */
+    async function assembleMergedCppCode(oldKb, newKb, oldTests, newTests) {
+        const template = await loadTemplate();
+        if (!template) {
+            console.error('[API] Template not found');
+            return '';
+        }
+
+        // 合并知识库，去重
+        const seen = new Set();
+        const allKnowledge = [];
+        for (const entry of [...oldKb, ...newKb]) {
+            const key = entry.q.toLowerCase();
+            if (!seen.has(key)) {
+                seen.add(key);
+                allKnowledge.push(entry);
+            }
+        }
+
+        // 合并测试问题，去重
+        const allTests = [];
+        const testSeen = new Set();
+        for (const q of [...oldTests, ...newTests]) {
+            const key = q.toLowerCase();
+            if (!testSeen.has(key)) {
+                testSeen.add(key);
+                allTests.push(q);
+            }
+        }
+
+        // 组装知识库代码
+        let kbCode = '';
+        for (const entry of allKnowledge) {
+            const escapedQ = entry.q.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            const escapedA = entry.a.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+            kbCode += `        knowledge_base["${escapedQ}"] = "${escapedA}";\n`;
+        }
+
+        if (kbCode.trim() === '') {
+            kbCode = '        // AI 未生成有效知识库条目\n';
+        }
+
+        // 组装测试问题代码
+        let testCode = '';
+        if (allTests.length > 0) {
+            testCode = '        std::vector<std::string> test_questions = {\n';
+            for (let i = 0; i < allTests.length; i++) {
+                const escaped = allTests[i].replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                testCode += `            "${escaped}"`;
+                if (i < allTests.length - 1) testCode += ',';
+                testCode += '\n';
+            }
+            testCode += '        };';
+        } else {
+            testCode = '        std::vector<std::string> test_questions = {\n            "What is artificial intelligence?"\n        };';
+        }
+
+        let result = template;
+
+        result = result.replace(
+            /\/\/ @@AI_CONTENT_BEGIN@@[\s\S]*?\/\/ @@AI_CONTENT_END@@/,
+            `// @@AI_CONTENT_BEGIN@@\n${kbCode}        // @@AI_CONTENT_END@@`
+        );
+
+        result = result.replace(
+            /\/\/ @@AI_DIALOGUE_BEGIN@@[\s\S]*?\/\/ @@AI_DIALOGUE_END@@/,
+            `// @@AI_DIALOGUE_BEGIN@@\n${testCode}\n        // @@AI_DIALOGUE_END@@`
+        );
+
+        return result;
     }
 
     /**

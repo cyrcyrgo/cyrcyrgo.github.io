@@ -117,6 +117,45 @@
             exportBtn.addEventListener('click', handleExport);
         }
 
+        // 保存训练数据
+        const saveDataBtn = UI.$('#btn-save-data');
+        if (saveDataBtn) {
+            saveDataBtn.addEventListener('click', handleOpenSaveModal);
+        }
+
+        // 打开训练数据
+        const loadDataBtn = UI.$('#btn-load-data');
+        if (loadDataBtn) {
+            loadDataBtn.addEventListener('click', handleOpenLoadModal);
+        }
+
+        // 确认保存
+        const confirmSaveBtn = UI.$('#btn-confirm-save-data');
+        if (confirmSaveBtn) {
+            confirmSaveBtn.addEventListener('click', handleConfirmSaveData);
+        }
+
+        // 清空全部训练数据
+        const clearAllDataBtn = UI.$('#btn-clear-all-data');
+        if (clearAllDataBtn) {
+            clearAllDataBtn.addEventListener('click', handleClearAllData);
+        }
+
+        // 模态框关闭按钮
+        document.querySelectorAll('[data-modal-close]').forEach(btn => {
+            btn.addEventListener('click', () => UI.closeModal(btn.dataset.modalClose));
+        });
+        document.querySelectorAll('[data-modal] .modal-close').forEach(btn => {
+            btn.addEventListener('click', () => UI.closeModal(btn.dataset.modal));
+        });
+
+        // 点击遮罩关闭模态框
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) overlay.style.display = 'none';
+            });
+        });
+
         // 移动端侧边栏切换
         const mobileToggle = UI.$('#mobile-sidebar-toggle');
         if (mobileToggle) {
@@ -257,6 +296,7 @@
         const durationSeconds = UI.getTrainingDuration();
         const customInstruction = UI.$('#custom-instruction')?.value?.trim() || '';
         const customRounds = trainingMode === 'rounds' ? UI.getCustomRounds() : null;
+        const qaPerRound = UI.getQaPerRound();
         
         const totalRounds = trainingMode === 'rounds' ? customRounds : Math.max(1, Math.ceil(durationSeconds / 30));
         const totalMinutes = trainingMode === 'rounds' ? Math.ceil(totalRounds * 30 / 60) : Math.ceil(durationSeconds / 60);
@@ -279,9 +319,9 @@
         if (stopBtn) stopBtn.disabled = false;
 
         if (trainingMode === 'rounds') {
-            UI.addLogEntry('info', `训练开始，共 ${totalRounds} 轮`);
+            UI.addLogEntry('info', `训练开始，共 ${totalRounds} 轮，每轮 ${qaPerRound} 个问答对`);
         } else {
-            UI.addLogEntry('info', `训练开始，总时长: ${totalMinutes} 分钟`);
+            UI.addLogEntry('info', `训练开始，总时长: ${totalMinutes} 分钟，每轮 ${qaPerRound} 个问答对`);
         }
         if (customInstruction) {
             UI.addLogEntry('info', `自定义指令: ${customInstruction.substring(0, 50)}${customInstruction.length > 50 ? '...' : ''}`);
@@ -338,7 +378,8 @@
                     UI.streamAppend(chunk);
                 },
                 customInstruction,
-                customRounds
+                customRounds,
+                qaPerRound
             );
         } catch (error) {
             UI.showToast('启动训练失败: ' + error.message, 'error');
@@ -539,6 +580,147 @@
             UI.showToast('测试失败: ' + err.message, 'error');
         }
         input.value = '';
+    }
+
+    // ========== 训练数据保存/加载 ==========
+
+    function handleOpenSaveModal() {
+        const code = Training.getGeneratedCode();
+        if (!code) {
+            UI.showToast('暂无训练数据可保存，请先训练', 'warning');
+            return;
+        }
+
+        const state = Training.getState();
+        const info = UI.$('#save-data-info');
+        if (info) {
+            const now = new Date().toLocaleString();
+            info.innerHTML = `已训练轮次: ${state.currentRound}/${state.totalRounds}<br>` +
+                             `编译次数: ${state.compileResults.length}<br>` +
+                             `代码长度: ${code.length} 字符<br>` +
+                             `保存时间: ${now}`;
+        }
+
+        const nameInput = UI.$('#save-data-name');
+        if (nameInput) {
+            nameInput.value = `训练_${new Date().toLocaleDateString()} ${state.currentRound}轮`;
+        }
+
+        UI.openModal('modal-save-data');
+    }
+
+    function handleConfirmSaveData() {
+        const nameInput = UI.$('#save-data-name');
+        const name = nameInput ? nameInput.value.trim() : '';
+        if (!name) {
+            UI.showToast('请输入训练名称', 'warning');
+            return;
+        }
+
+        const state = Training.exportState();
+        const record = Storage.saveTrainingData(name, state);
+        UI.showToast(`训练数据 "${name}" 已保存`, 'success');
+        UI.closeModal('modal-save-data');
+    }
+
+    function handleOpenLoadModal() {
+        renderDataList();
+        UI.openModal('modal-load-data');
+    }
+
+    function renderDataList() {
+        const list = Storage.getTrainingDataList();
+        const listEl = UI.$('#data-list');
+        const countEl = UI.$('#data-list-count');
+        if (countEl) countEl.textContent = `共 ${list.length} 条记录`;
+
+        if (!listEl) return;
+
+        if (list.length === 0) {
+            listEl.innerHTML = '<div class="data-empty">暂无已保存的训练数据</div>';
+            return;
+        }
+
+        listEl.innerHTML = list.slice().reverse().map(item => {
+            const date = new Date(item.createdAt).toLocaleString();
+            const codeLen = item.code ? item.code.length : 0;
+            return `
+                <div class="data-item" data-id="${item.id}">
+                    <div class="data-item-info">
+                        <div class="data-item-name">${escapeHtml(item.name)}</div>
+                        <div class="data-item-meta">${date} | ${item.currentRound}/${item.totalRounds} 轮 | ${codeLen} 字符</div>
+                    </div>
+                    <div class="data-item-actions">
+                        <button class="btn btn-primary btn-sm" data-action="load" data-id="${item.id}">加载</button>
+                        <button class="btn btn-danger btn-sm" data-action="delete" data-id="${item.id}">删除</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // 绑定按钮事件
+        listEl.querySelectorAll('[data-action="load"]').forEach(btn => {
+            btn.addEventListener('click', () => handleLoadData(btn.dataset.id));
+        });
+        listEl.querySelectorAll('[data-action="delete"]').forEach(btn => {
+            btn.addEventListener('click', () => handleDeleteData(btn.dataset.id));
+        });
+    }
+
+    function handleLoadData(id) {
+        const data = Storage.getTrainingData(id);
+        if (!data) {
+            UI.showToast('未找到该训练数据', 'error');
+            return;
+        }
+
+        if (Training.isRunning()) {
+            UI.showToast('请先停止当前训练', 'warning');
+            return;
+        }
+
+        const success = Training.importState(data);
+        if (success) {
+            const code = Training.getGeneratedCode();
+            if (code) {
+                UI.displayCode(code);
+                KnowledgeTest.loadKnowledgeBase(code);
+            }
+            UI.addLogEntry('success', `已加载训练数据: ${data.name}`);
+            UI.showToast(`已加载: ${data.name}`, 'success');
+
+            const exportBtn = UI.$('#btn-export');
+            if (exportBtn) exportBtn.disabled = !code;
+
+            UI.closeModal('modal-load-data');
+        } else {
+            UI.showToast('加载失败', 'error');
+        }
+    }
+
+    function handleDeleteData(id) {
+        const data = Storage.getTrainingData(id);
+        if (!data) return;
+        Storage.deleteTrainingData(id);
+        UI.showToast(`已删除: ${data.name}`, 'success');
+        renderDataList();
+    }
+
+    function handleClearAllData() {
+        const list = Storage.getTrainingDataList();
+        if (list.length === 0) {
+            UI.showToast('暂无数据可清空', 'info');
+            return;
+        }
+        list.forEach(item => Storage.deleteTrainingData(item.id));
+        UI.showToast('已清空全部训练数据', 'success');
+        renderDataList();
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     // ========== 辅助函数 ==========
