@@ -98,7 +98,7 @@ const KOBGTraining = (() => {
      * @param {function} onTick - 计时回调
      * @param {function} onStreamChunk - 流式输出回调
      */
-    async function startTraining(durationSeconds, onProgress, onComplete, onError, onTick, onStreamChunk) {
+    async function startTraining(durationSeconds, onProgress, onComplete, onError, onTick, onStreamChunk, customInstruction) {
         if (trainingState.isRunning) {
             throw new Error('训练已在运行中');
         }
@@ -106,14 +106,13 @@ const KOBGTraining = (() => {
         trainingState.isRunning = true;
         trainingState.isPaused = false;
         trainingState.totalDuration = durationSeconds;
-        trainingState.totalRounds = Math.max(1, Math.ceil(durationSeconds / 30)); // 每30秒一轮
+        trainingState.totalRounds = Math.max(1, Math.ceil(durationSeconds / 30));
         trainingState.currentRound = 0;
         trainingState.elapsedTime = 0;
 
         startTimer(onTick);
 
         try {
-            // 计算每轮间隔
             const roundInterval = (durationSeconds * 1000) / trainingState.totalRounds;
 
             for (let i = 0; i < trainingState.totalRounds; i++) {
@@ -126,14 +125,12 @@ const KOBGTraining = (() => {
                 const progress = trainingState.currentRound / trainingState.totalRounds;
                 onProgress(progress, trainingState.currentRound, trainingState.totalRounds);
 
-                // 执行一轮训练（流式）
                 if (onStreamChunk) {
-                    await executeTrainingRoundStream(onStreamChunk);
+                    await executeTrainingRoundStream(onStreamChunk, customInstruction);
                 } else {
                     await executeTrainingRound();
                 }
 
-                // 等待下一轮（除非是最后一轮）
                 if (i < trainingState.totalRounds - 1 && trainingState.isRunning) {
                     await sleep(Math.min(roundInterval, 30000));
                 }
@@ -153,26 +150,24 @@ const KOBGTraining = (() => {
     /**
      * 执行单轮训练（流式）
      * @param {function} onStreamChunk - 流式回调 (chunkText)
+     * @param {string} customInstruction - 自定义训练指令
      */
-    async function executeTrainingRoundStream(onStreamChunk) {
+    async function executeTrainingRoundStream(onStreamChunk, customInstruction = '') {
         try {
             let code;
             if (trainingState.generatedCode) {
-                // 继续训练：流式
                 code = await KOBGAPI.continueTrainingStream(
                     trainingState.generatedCode,
                     onStreamChunk,
-                    'Add more diverse Q&A pairs and improve the knowledge base. Output the complete updated C++ code.'
+                    customInstruction || 'Add more diverse Q&A pairs and improve the knowledge base. Output the complete updated C++ code.'
                 );
             } else {
-                // 首次生成：流式
-                code = await KOBGAPI.generateCppCodeStream(onStreamChunk);
+                code = await KOBGAPI.generateCppCodeStream(onStreamChunk, customInstruction);
             }
 
             if (code) {
                 trainingState.generatedCode = code;
                 
-                // 编译代码
                 const compileResult = await KOBGCompiler.compile(code);
                 trainingState.compileResults.push({
                     round: trainingState.currentRound,
@@ -182,7 +177,6 @@ const KOBGTraining = (() => {
                     errors: compileResult.errors
                 });
 
-                // 保存到上下文
                 trainingState.contextMessages.push({
                     role: 'assistant',
                     content: code

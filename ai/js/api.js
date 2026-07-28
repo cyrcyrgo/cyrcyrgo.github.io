@@ -153,8 +153,9 @@ REMEMBER: Output ONLY the C++ code. No markdown. No explanations. No backticks. 
      */
     async function generateCppCodeStream(onChunk, userPrompt = '') {
         const defaultPrompt = 'Generate a complete C++ AI dialogue system following the KOBG framework. Include diverse Q&A pairs about AI and machine learning topics.';
+        const prompt = userPrompt || defaultPrompt;
         const messages = [
-            { role: 'user', content: userPrompt || defaultPrompt }
+            { role: 'user', content: prompt }
         ];
         return await sendStreamRequest(messages, { temperature: 0.7 }, onChunk);
     }
