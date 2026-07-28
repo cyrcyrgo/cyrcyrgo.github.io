@@ -197,7 +197,7 @@ public:
 int main() {
     std::cout << std::endl;
     std::cout << "  ╔══════════════════════════════════════╗" << std::endl;
-    std::cout << "  ║     KOBG AI 强化式训练系统 v1.0      ║" << std::endl;
+    std::cout << "  ║     KOBG AI 强化式训练系统 v1.01     ║" << std::endl;
     std::cout << "  ║   C++ Native AI Training Framework   ║" << std::endl;
     std::cout << "  ╚══════════════════════════════════════╝" << std::endl;
     std::cout << std::endl;
