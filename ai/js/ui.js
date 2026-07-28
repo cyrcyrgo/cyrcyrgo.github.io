@@ -448,9 +448,10 @@ const KOBGUI = (() => {
         const keyEl = $('#api-key');
         const modelEl = $('#api-model');
 
-        if (urlEl) urlEl.value = config.url || '';
-        if (keyEl) keyEl.value = config.apiKey || '';
-        if (modelEl) modelEl.value = config.model || '';
+        // 只在 localStorage 有值时覆盖，否则保留 HTML 预填的默认值
+        if (urlEl && config.url) urlEl.value = config.url;
+        if (keyEl && config.apiKey) keyEl.value = config.apiKey;
+        if (modelEl && config.model) modelEl.value = config.model;
     }
 
     /**
