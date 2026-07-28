@@ -340,6 +340,26 @@ const KOBGKnowledgeTest = (() => {
         return { text: '兜底匹配', cls: 'low' };
     }
 
+    /**
+     * 从 C++ 代码中解析知识库条目
+     * 格式: knowledge_base["问题"] = "答案";
+     */
+    function parseKnowledgeBase(code) {
+        const entries = [];
+        if (!code) return entries;
+
+        const pattern = /knowledge_base\s*\[\s*"((?:[^"\\]|\\.)*)"\s*\]\s*=\s*"((?:[^"\\]|\\.)*)"\s*;/g;
+        let match;
+        while ((match = pattern.exec(code)) !== null) {
+            const question = match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
+            const answer = match[2].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
+            if (question && answer) {
+                entries.push({ question, answer });
+            }
+        }
+        return entries;
+    }
+
     function loadKnowledgeBase(code) {
         knowledgeBase = parseKnowledgeBase(code);
         updateKBInfo();

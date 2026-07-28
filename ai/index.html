@@ -79,11 +79,11 @@
                         <div class="form-group">
                             <label class="form-label">训练模式</label>
                             <div class="training-mode-switch">
-                                <label class="mode-option">
+                                <label class="mode-option" onclick="var r=this.querySelector('input');r.checked=true;KOBGUI.switchTrainingMode(r.value)">
                                     <input type="radio" name="training-mode" value="time" checked>
                                     <span>按时间训练</span>
                                 </label>
-                                <label class="mode-option">
+                                <label class="mode-option" onclick="var r=this.querySelector('input');r.checked=true;KOBGUI.switchTrainingMode(r.value)">
                                     <input type="radio" name="training-mode" value="rounds">
                                     <span>按轮数训练</span>
                                 </label>
@@ -162,7 +162,7 @@
 
             <!-- Token Statistics -->
             <div class="panel" id="panel-tokens">
-                <div class="panel-header">
+                <div class="panel-header" onclick="this.closest('.panel').classList.toggle('collapsed')">
                     <span class="icon">📊</span> Token 用量
                     <span class="arrow">▼</span>
                 </div>
@@ -190,7 +190,7 @@
 
             <!-- AI 实时输出 -->
             <div class="panel" id="panel-stream">
-                <div class="panel-header">
+                <div class="panel-header" onclick="this.closest('.panel').classList.toggle('collapsed')">
                     <span class="icon">🤖</span> AI 实时输出
                     <span class="arrow">▼</span>
                 </div>
@@ -210,7 +210,7 @@
 
             <!-- Training Log -->
             <div class="panel" id="panel-log">
-                <div class="panel-header">
+                <div class="panel-header" onclick="this.closest('.panel').classList.toggle('collapsed')">
                     <span class="icon">📋</span> 训练日志
                     <span class="arrow">▼</span>
                 </div>
