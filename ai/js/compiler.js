@@ -192,11 +192,67 @@ const KOBGCompiler = (() => {
     }
 
     /**
-     * 编译 C++ 代码
+     * 编译 C++ 代码（优先使用后端真实编译，失败时回退到浏览器解释器）
      * @param {string} code - C++ 源代码
      * @returns {Promise<{success: boolean, output: string, errors: string[]}>}
      */
-    function compile(code) {
+    async function compile(code) {
+        try {
+            const result = await compileViaBackend(code);
+            return result;
+        } catch (backendError) {
+            console.warn('[Compiler] 后端编译失败，回退到浏览器解释器:', backendError.message);
+            return compileViaWorker(code);
+        }
+    }
+
+    /**
+     * 通过后端 API 进行真实 C++ 编译
+     */
+    async function compileViaBackend(code) {
+        const response = await fetch('/api/compile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+        });
+
+        if (!response.ok) {
+            throw new Error(`后端编译服务错误 (${response.status})`);
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            return {
+                success: true,
+                output: data.output,
+                errors: []
+            };
+        } else {
+            return {
+                success: false,
+                output: data.output || '',
+                errors: data.errors || ['编译失败']
+            };
+        }
+    }
+
+    /**
+     * 检测后端编译服务是否可用
+     */
+    async function isBackendAvailable() {
+        try {
+            const response = await fetch('/api/health');
+            return response.ok;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * 通过 Web Worker 浏览器解释器编译（回退方案）
+     */
+    function compileViaWorker(code) {
         return new Promise((resolve) => {
             initWorker();
             const id = ++callbackId;
@@ -267,6 +323,9 @@ const KOBGCompiler = (() => {
 
     return {
         compile,
+        compileViaBackend,
+        compileViaWorker,
+        isBackendAvailable,
         compileSync,
         analyzeCode,
         destroy
