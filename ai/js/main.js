@@ -266,16 +266,19 @@
     // ========== 事件处理 ==========
 
     async function handleSaveConfig() {
+        const btn = UI.$('#btn-save-config');
         const validation = UI.validateApiForm();
         if (!validation.valid) {
             UI.showToast(validation.errors[0], 'error');
             return;
         }
 
+        UI.setButtonLoading(btn, true);
         const config = UI.getApiFormData();
         Storage.saveApiConfig(config);
         UI.showToast('API 配置已保存', 'success');
         checkApiStatus();
+        UI.setButtonLoading(btn, false);
     }
 
     async function handleTestConnection() {
@@ -283,6 +286,15 @@
         UI.setButtonLoading(btn, true);
 
         try {
+            // 先保存当前表单配置，确保测试使用最新填入的值
+            const validation = UI.validateApiForm();
+            if (!validation.valid) {
+                UI.showToast(validation.errors[0], 'error');
+                return;
+            }
+            const config = UI.getApiFormData();
+            Storage.saveApiConfig(config);
+
             const result = await API.testConnection();
             UI.showToast('连接成功: ' + result, 'success');
             UI.updateStatus('connected');
