@@ -170,11 +170,13 @@
 
         // 训练模式切换（改用 label 点击事件，避免 hidden radio 的 change 事件不可靠）
         const modeOptions = document.querySelectorAll('.training-mode-switch .mode-option');
+        console.log('[Main] Training mode options found:', modeOptions.length);
         modeOptions.forEach(option => {
             option.addEventListener('click', function(e) {
                 const radio = this.querySelector('input[type="radio"]');
                 if (radio) {
                     radio.checked = true;
+                    console.log('[Main] Training mode clicked:', radio.value);
                     UI.switchTrainingMode(radio.value);
                 }
             });
@@ -204,12 +206,16 @@
             });
         }
 
-        // 面板折叠
-        UI.$$('.panel-header').forEach(header => {
-            header.addEventListener('click', () => {
+        // 面板折叠（使用事件委托，更可靠）
+        document.querySelector('.sidebar')?.addEventListener('click', (e) => {
+            const header = e.target.closest('.panel-header');
+            if (header) {
                 const panel = header.closest('.panel');
-                if (panel) panel.classList.toggle('collapsed');
-            });
+                if (panel) {
+                    panel.classList.toggle('collapsed');
+                    console.log('[Main] Panel toggled:', panel.id, panel.classList.contains('collapsed'));
+                }
+            }
         });
 
         // 标签切换

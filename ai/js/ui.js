@@ -195,9 +195,12 @@ const KOBGUI = (() => {
      * 切换训练模式显示
      */
     function switchTrainingMode(mode) {
-        const timeMode = $('#time-mode');
-        const roundsMode = $('#rounds-mode');
-        const roundsByTime = $('#rounds-by-time');
+        console.log('[UI] switchTrainingMode called, mode:', mode);
+        const timeMode = document.getElementById('time-mode');
+        const roundsMode = document.getElementById('rounds-mode');
+        const roundsByTime = document.getElementById('rounds-by-time');
+
+        console.log('[UI] timeMode el:', timeMode, 'roundsMode el:', roundsMode);
 
         if (mode === 'rounds') {
             if (timeMode) timeMode.style.display = 'none';
