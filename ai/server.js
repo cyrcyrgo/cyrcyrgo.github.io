@@ -113,6 +113,77 @@ app.post('/api/analyze', async (req, res) => {
     res.json(analysis);
 });
 
+// ============================================================
+//  导出模型：编译为二进制可执行文件
+// ============================================================
+app.post('/api/export', async (req, res) => {
+    const { code } = req.body;
+
+    if (!code || typeof code !== 'string') {
+        return res.status(400).json({ error: '缺少 code 参数' });
+    }
+
+    const id = genId();
+    const srcFile = path.join(TMP_DIR, `${id}.cpp`);
+    const outFile = path.join(TMP_DIR, `${id}.exe`);
+
+    try {
+        fs.writeFileSync(srcFile, code, 'utf-8');
+
+        await new Promise((resolve, reject) => {
+            execFile('g++', [
+                '-std=c++17', '-O2', '-Wall', '-static-libgcc', '-static-libstdc++',
+                '-o', outFile, srcFile
+            ], {
+                timeout: 30000,
+                maxBuffer: 10 * 1024 * 1024
+            }, (error, stdout, stderr) => {
+                if (error) {
+                    reject({ error, stderr });
+                } else {
+                    resolve({ stdout, stderr });
+                }
+            });
+        });
+
+        if (!fs.existsSync(outFile)) {
+            return res.status(500).json({ error: '编译产物不存在' });
+        }
+
+        const stats = fs.statSync(outFile);
+        const filename = `kobg-ai-model-${id}.exe`;
+
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Length', stats.size);
+        res.setHeader('X-Compile-Id', id);
+        res.setHeader('X-File-Size', stats.size);
+
+        const readStream = fs.createReadStream(outFile);
+        readStream.pipe(res);
+
+        readStream.on('end', () => {
+            try { fs.unlinkSync(srcFile); } catch (_) {}
+            try { fs.unlinkSync(outFile); } catch (_) {}
+        });
+
+        readStream.on('error', () => {
+            try { fs.unlinkSync(srcFile); } catch (_) {}
+            try { fs.unlinkSync(outFile); } catch (_) {}
+        });
+
+    } catch (result) {
+        try { fs.unlinkSync(srcFile); } catch (_) {}
+        try { fs.unlinkSync(outFile); } catch (_) {}
+
+        const stderr = result.stderr || result.error?.message || '';
+        res.status(400).json({
+            success: false,
+            errors: stderr.split('\n').filter(l => l.trim())
+        });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`╔══════════════════════════════════════════╗`);
     console.log(`║   KOBG AI Compiler Server v1.0           ║`);

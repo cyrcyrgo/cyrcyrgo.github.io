@@ -161,6 +161,9 @@ const KOBGUI = (() => {
             } else {
                 codeEl.textContent = code;
             }
+            // 启用导出按钮
+            const exportBtn = $('#btn-export');
+            if (exportBtn) exportBtn.disabled = false;
         } else {
             // 显示默认框架模板
             showDefaultTemplate();
