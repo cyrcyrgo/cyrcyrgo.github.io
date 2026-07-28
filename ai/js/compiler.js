@@ -79,29 +79,56 @@ const KOBGCompiler = (() => {
                 output += '  ╚══════════════════════════════════════╝\\n';
                 output += '\\n';
 
-                // 提取知识库内容
-                const kbPattern = /knowledge_base\\[\\s*"([^"]+)"\\s*\\]\\s*=\\s*"([^"]+)"/g;
-                let match;
+                // 提取知识库内容 - 多种格式匹配
                 let kbEntries = [];
-                while ((match = kbPattern.exec(code)) !== null) {
-                    kbEntries.push({ q: match[1], a: match[2] });
+
+                // 格式1: knowledge_base["key"] = "value"; (单行)
+                const kbPattern1 = /knowledge_base\\s*\\[\\s*"((?:[^"\\\\]|\\\\.)*)"\\s*\\]\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"\\s*;/g;
+                let match;
+                while ((match = kbPattern1.exec(code)) !== null) {
+                    const q = match[1].replace(/\\\\"/g, '"').replace(/\\\\n/g, '\\n').replace(/\\\\\\\\/g, '\\\\');
+                    const a = match[2].replace(/\\\\"/g, '"').replace(/\\\\n/g, '\\n').replace(/\\\\\\\\/g, '\\\\');
+                    kbEntries.push({ q, a });
                 }
 
-                // 也支持多行字符串
-                const kbMultiPattern = /knowledge_base\\[\\s*"([^"]+)"\\s*\\]\\s*=\\s*\\n?\\s*"([\\s\\S]*?)";/g;
-                while ((match = kbMultiPattern.exec(code)) !== null) {
-                    kbEntries.push({ q: match[1], a: match[2].replace(/\\n/g, ' ').replace(/\\s+/g, ' ').trim() });
+                // 格式2: knowledge_base["key"] = (多行长文本)
+                const kbPattern2 = /knowledge_base\\s*\\[\\s*"((?:[^"\\\\]|\\\\.)*)"\\s*\\]\\s*=\\s*"([^"]*?)";/gs;
+                while ((match = kbPattern2.exec(code)) !== null) {
+                    const q = match[1].replace(/\\\\"/g, '"').replace(/\\\\n/g, '\\n');
+                    const a = match[2].replace(/\\\\"/g, '"').replace(/\\\\n/g, '\\n');
+                    if (q && a && !kbEntries.some(e => e.q === q)) {
+                        kbEntries.push({ q, a });
+                    }
                 }
 
-                // 提取测试问题
-                const testPattern = /test_questions[^}]*\\{([^}]*)\\}/g;
-                let testMatch;
+                // 提取测试问题 - 支持多行 vector
                 let testQuestions = [];
-                while ((testMatch = testPattern.exec(code)) !== null) {
-                    const qPattern = /"([^"]+)"/g;
+
+                // 格式1: std::vector<std::string> test_questions = { ... };
+                const vecPattern = /test_questions\\s*=\\s*\\{([\\s\\S]*?)\\}\\s*;/g;
+                let vecMatch;
+                while ((vecMatch = vecPattern.exec(code)) !== null) {
+                    const block = vecMatch[1];
+                    const qPattern = /"((?:[^"\\\\]|\\\\.)*)"/g;
                     let qMatch;
-                    while ((qMatch = qPattern.exec(testMatch[1])) !== null) {
-                        testQuestions.push(qMatch[1]);
+                    while ((qMatch = qPattern.exec(block)) !== null) {
+                        const q = qMatch[1].replace(/\\\\"/g, '"').replace(/\\\\n/g, '\\n');
+                        if (q) testQuestions.push(q);
+                    }
+                }
+
+                // 格式2: 直接搜索代码中所有字符串字面量作为测试问题候选
+                if (testQuestions.length === 0) {
+                    const fallbackPattern = /"([^"]{3,})"/g;
+                    let fbMatch;
+                    while ((fbMatch = fallbackPattern.exec(code)) !== null) {
+                        const q = fbMatch[1].trim();
+                        if (q.length > 5 && !q.startsWith('#') && !q.startsWith('include')) {
+                            // 排除明显不是问题的字符串
+                            if (!/^(std::|iostream|string|vector|map|cmath|algorithm|sstream)/.test(q)) {
+                                testQuestions.push(q);
+                            }
+                        }
                     }
                 }
 

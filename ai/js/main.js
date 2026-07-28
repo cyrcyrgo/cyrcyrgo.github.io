@@ -200,6 +200,14 @@
                 UI.showToast('对话已清空', 'success');
             });
         }
+
+        // 测试模式切换
+        const testModeRadios = document.querySelectorAll('input[name="test-mode"]');
+        testModeRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                KnowledgeTest.setMode(e.target.value);
+            });
+        });
     }
 
     // ========== 事件处理 ==========
@@ -519,13 +527,17 @@
         }
     }
 
-    function handleTestSend() {
+    async function handleTestSend() {
         const input = UI.$('#test-input');
         if (!input) return;
         const question = input.value.trim();
         if (!question) return;
 
-        KnowledgeTest.askQuestion(question);
+        try {
+            await KnowledgeTest.askQuestion(question);
+        } catch (err) {
+            UI.showToast('测试失败: ' + err.message, 'error');
+        }
         input.value = '';
     }
 

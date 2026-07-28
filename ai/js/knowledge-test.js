@@ -1,18 +1,15 @@
 /* ============================================================
    KOBG AI - knowledge-test.js - 知识在线测试模块
-   解析 C++ 代码中的知识库，提供模糊匹配问答测试
+   支持两种模式：本地模糊匹配 和 真实模型编译执行
    ============================================================ */
 
 const KOBGKnowledgeTest = (() => {
     let knowledgeBase = [];
     let chatHistory = [];
+    let testMode = 'local';
 
     /**
      * 从 C++ 代码中提取知识库条目
-     * 支持多种格式：
-     *   knowledge_base["q"] = "a";
-     *   knowledge_base["q"] = R"(a)";
-     *   kb["q"] = "a";
      */
     function parseKnowledgeBase(code) {
         if (!code) return [];
@@ -20,71 +17,46 @@ const KOBGKnowledgeTest = (() => {
         const entries = [];
 
         // 模式1: knowledge_base["key"] = "value";
-        const pattern1 = /knowledge_base\s*\[\s*"([^"]+)"\s*\]\s*=\s*"((?:[^"\\]|\\.)*)"/g;
+        const pattern1 = /knowledge_base\s*\[\s*"((?:[^"\\]|\\.)*)"\s*\]\s*=\s*"((?:[^"\\]|\\.)*)"/g;
         let match;
+        const seen = new Set();
         while ((match = pattern1.exec(code)) !== null) {
-            entries.push({
-                question: match[1],
-                answer: match[2].replace(/\\"/g, '"').replace(/\\n/g, '\n')
-            });
+            const q = match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').trim();
+            const a = match[2].replace(/\\"/g, '"').replace(/\\n/g, '\n').trim();
+            const key = q.toLowerCase();
+            if (q && a && !seen.has(key)) {
+                seen.add(key);
+                entries.push({ question: q, answer: a });
+            }
         }
 
-        // 模式2: kb["key"] = "value";
-        const pattern2 = /\bkb\s*\[\s*"([^"]+)"\s*\]\s*=\s*"((?:[^"\\]|\\.)*)"/g;
-        while ((match = pattern2.exec(code)) !== null) {
-            entries.push({
-                question: match[1],
-                answer: match[2].replace(/\\"/g, '"').replace(/\\n/g, '\n')
-            });
-        }
-
-        // 模式3: 原始字符串字面量 knowledge_base["key"] = R"(value)";
-        const pattern3 = /knowledge_base\s*\[\s*"([^"]+)"\s*\]\s*=\s*R"\(([\s\S]*?)\)"/g;
-        while ((match = pattern3.exec(code)) !== null) {
-            entries.push({
-                question: match[1],
-                answer: match[2].trim()
-            });
-        }
-
-        // 模式4: knowledge_base.insert({"key", "value"})
-        const pattern4 = /knowledge_base\s*\.\s*(?:insert|emplace)\s*\(\s*\{\s*"([^"]+)"\s*,\s*"((?:[^"\\]|\\.)*)"\s*\}\s*\)/g;
-        while ((match = pattern4.exec(code)) !== null) {
-            entries.push({
-                question: match[1],
-                answer: match[2].replace(/\\"/g, '"').replace(/\\n/g, '\n')
-            });
-        }
-
-        // 模式5: make_pair("key", "value")
-        const pattern5 = /make_pair\s*\(\s*"([^"]+)"\s*,\s*"((?:[^"\\]|\\.)*)"\s*\)/g;
-        while ((match = pattern5.exec(code)) !== null) {
-            entries.push({
-                question: match[1],
-                answer: match[2].replace(/\\"/g, '"').replace(/\\n/g, '\n')
-            });
+        // 模式2: 宽松匹配
+        if (entries.length === 0) {
+            const pattern2 = /knowledge_base\s*\[\s*"([^"]+)"\s*\]\s*=\s*"([^"]+)"/g;
+            while ((match = pattern2.exec(code)) !== null) {
+                const q = match[1].trim();
+                const a = match[2].trim();
+                const key = q.toLowerCase();
+                if (q && a && !seen.has(key)) {
+                    seen.add(key);
+                    entries.push({ question: q, answer: a });
+                }
+            }
         }
 
         return entries;
     }
 
     /**
-     * 计算两个字符串的相似度 (0-1)
-     * 使用词袋模型 + 子串匹配
+     * 计算两个字符串的相似度
      */
     function calculateSimilarity(query, target) {
         const q = query.toLowerCase();
         const t = target.toLowerCase();
 
-        // 精确匹配
         if (q === t) return 1.0;
+        if (t.includes(q) || q.includes(t)) return 0.85;
 
-        // 包含关系
-        if (t.includes(q) || q.includes(t)) {
-            return 0.85;
-        }
-
-        // 词袋匹配
         const qWords = q.split(/[\s,，。？！、]+/).filter(w => w.length > 0);
         const tWords = t.split(/[\s,，。？！、]+/).filter(w => w.length > 0);
 
@@ -107,7 +79,6 @@ const KOBGKnowledgeTest = (() => {
 
     /**
      * 在知识库中搜索最佳匹配
-     * @returns {{ answer: string, score: number, matchedKey: string }}
      */
     function search(query) {
         if (!knowledgeBase.length) {
@@ -134,39 +105,26 @@ const KOBGKnowledgeTest = (() => {
         return best;
     }
 
-    /**
-     * 获取匹配置信度标签
-     */
     function getScoreLabel(score) {
         if (score >= 0.7) return { text: '高匹配', cls: 'high' };
         if (score >= 0.35) return { text: '中匹配', cls: 'medium' };
         return { text: '低匹配', cls: 'low' };
     }
 
-    /**
-     * 加载知识库
-     */
     function loadKnowledgeBase(code) {
         knowledgeBase = parseKnowledgeBase(code);
         updateKBInfo();
     }
 
-    /**
-     * 更新知识库信息显示
-     */
     function updateKBInfo() {
         const el = document.getElementById('test-kb-info');
         if (el) el.textContent = '知识库: ' + knowledgeBase.length + ' 条';
     }
 
-    /**
-     * 添加聊天消息
-     */
     function addChatMessage(type, text, meta = '') {
         const chatEl = document.getElementById('test-chat');
         if (!chatEl) return;
 
-        // 清除空状态
         const emptyState = chatEl.querySelector('.test-empty-state');
         if (emptyState) emptyState.remove();
 
@@ -192,20 +150,16 @@ const KOBGKnowledgeTest = (() => {
     }
 
     /**
-     * 发送问题并获取答案
+     * 本地模式回答
      */
-    function askQuestion(question) {
-        if (!question.trim()) return;
-
+    function askLocal(question) {
         // 重新从代码中加载知识库
         const code = window.KOBGTraining?.getGeneratedCode?.();
         if (code) knowledgeBase = parseKnowledgeBase(code);
         updateKBInfo();
 
-        // 用户消息
         addChatMessage('user', question, new Date().toLocaleTimeString());
 
-        // 搜索答案
         const result = search(question);
         const label = getScoreLabel(result.score);
 
@@ -220,8 +174,83 @@ const KOBGKnowledgeTest = (() => {
     }
 
     /**
-     * 清空聊天记录
+     * 真实模型模式回答
      */
+    async function askReal(question) {
+        const code = window.KOBGTraining?.getGeneratedCode?.();
+        if (!code) {
+            addChatMessage('user', question, new Date().toLocaleTimeString());
+            addChatMessage('ai', '没有训练好的模型代码，请先完成训练。', new Date().toLocaleTimeString());
+            return;
+        }
+
+        addChatMessage('user', question, new Date().toLocaleTimeString() + ' | 真实编译模式');
+        
+        // 显示加载状态
+        const loadingId = 'loading_' + Date.now();
+        const chatEl = document.getElementById('test-chat');
+        if (chatEl) {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'test-msg ai';
+            loadingDiv.id = loadingId;
+            loadingDiv.innerHTML = '<div class="test-msg-bubble" style="color:var(--text-muted);">⏳ 编译模型并运行中...</div>';
+            chatEl.appendChild(loadingDiv);
+            chatEl.scrollTop = chatEl.scrollHeight;
+        }
+
+        try {
+            const response = await fetch('/api/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, question })
+            });
+
+            // 移除加载状态
+            const loadingEl = document.getElementById(loadingId);
+            if (loadingEl) loadingEl.remove();
+
+            const data = await response.json();
+            
+            if (data.success) {
+                let meta = new Date().toLocaleTimeString() + ' | <span class="test-match high">真实模型</span>';
+                addChatMessage('ai', data.answer || '（无回答）', meta);
+            } else {
+                const errorMsg = (data.errors && data.errors.length > 0) 
+                    ? data.errors.join('; ') 
+                    : '未知错误';
+                addChatMessage('ai', '❌ 模型编译/执行失败: ' + errorMsg, new Date().toLocaleTimeString());
+            }
+        } catch (err) {
+            const loadingEl = document.getElementById(loadingId);
+            if (loadingEl) loadingEl.remove();
+            addChatMessage('ai', '❌ 无法连接到编译服务: ' + err.message, new Date().toLocaleTimeString());
+        }
+    }
+
+    /**
+     * 发送问题 - 根据模式选择
+     */
+    async function askQuestion(question) {
+        if (!question.trim()) return;
+
+        if (testMode === 'real') {
+            await askReal(question);
+        } else {
+            askLocal(question);
+        }
+    }
+
+    /**
+     * 切换测试模式
+     */
+    function setMode(mode) {
+        testMode = mode;
+    }
+
+    function getMode() {
+        return testMode;
+    }
+
     function clearChat() {
         const chatEl = document.getElementById('test-chat');
         if (!chatEl) return;
@@ -235,9 +264,6 @@ const KOBGKnowledgeTest = (() => {
         chatHistory = [];
     }
 
-    /**
-     * 获取知识库条目列表（用于调试）
-     */
     function getKnowledgeBase() {
         return [...knowledgeBase];
     }
@@ -247,6 +273,10 @@ const KOBGKnowledgeTest = (() => {
         search,
         loadKnowledgeBase,
         askQuestion,
+        askLocal,
+        askReal,
+        setMode,
+        getMode,
         clearChat,
         getKnowledgeBase,
         getScoreLabel,

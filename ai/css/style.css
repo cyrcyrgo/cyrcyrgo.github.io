@@ -869,6 +869,41 @@ body {
     color: var(--error);
 }
 
+.test-mode-switch {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.test-mode-switch .mode-option {
+    cursor: pointer;
+}
+
+.test-mode-switch input[type="radio"] {
+    display: none;
+}
+
+.test-mode-switch .mode-option span {
+    display: block;
+    padding: 4px 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    color: var(--text-secondary);
+    transition: all var(--transition);
+}
+
+.test-mode-switch input[type="radio"]:checked + span {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
+
+.test-mode-switch .mode-option:hover span {
+    border-color: var(--accent);
+}
+
 .test-input-area {
     display: flex;
     gap: 8px;
