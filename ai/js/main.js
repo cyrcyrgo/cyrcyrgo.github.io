@@ -11,6 +11,7 @@
     const Compiler = KOBGCompiler;
     const Training = KOBGTraining;
     const Storage = KOBGStorage;
+    const KnowledgeTest = KOBGKnowledgeTest;
 
     // ========== 初始化 ==========
     function init() {
