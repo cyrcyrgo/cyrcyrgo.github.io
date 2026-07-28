@@ -7,6 +7,7 @@ const KOBGStorage = (() => {
     const KEYS = {
         API_CONFIG: 'kobg_api_config',
         TRAINING_HISTORY: 'kobg_training_history',
+        TRAINING_DATA: 'kobg_training_data',
         TOKEN_USAGE: 'kobg_token_usage',
         SETTINGS: 'kobg_settings'
     };
@@ -119,6 +120,72 @@ const KOBGStorage = (() => {
         Object.values(KEYS).forEach(key => remove(key));
     }
 
+    // ============================================================
+    //  训练数据管理：保存 / 加载 / 列表 / 删除
+    // ============================================================
+
+    /**
+     * 保存训练数据
+     * @param {string} name - 训练数据名称
+     * @param {Object} data - 训练数据 { generatedCode, compileResults, totalRounds, currentRound, ... }
+     * @returns {Object} 保存的记录
+     */
+    function saveTrainingData(name, data) {
+        const list = getTrainingDataList();
+        const record = {
+            id: Date.now().toString(36) + Math.random().toString(36).substring(2, 6),
+            name: name || '未命名训练',
+            code: data.generatedCode || '',
+            totalRounds: data.totalRounds || 0,
+            currentRound: data.currentRound || 0,
+            compileResults: data.compileResults || [],
+            knowledgeSize: data.knowledgeSize || 0,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
+        list.push(record);
+        set(KEYS.TRAINING_DATA, list);
+        return record;
+    }
+
+    /**
+     * 获取所有已保存的训练数据列表
+     */
+    function getTrainingDataList() {
+        return get(KEYS.TRAINING_DATA, []);
+    }
+
+    /**
+     * 根据 ID 获取单条训练数据
+     */
+    function getTrainingData(id) {
+        const list = getTrainingDataList();
+        return list.find(item => item.id === id) || null;
+    }
+
+    /**
+     * 更新训练数据
+     */
+    function updateTrainingData(id, updates) {
+        const list = getTrainingDataList();
+        const idx = list.findIndex(item => item.id === id);
+        if (idx >= 0) {
+            list[idx] = { ...list[idx], ...updates, updatedAt: Date.now() };
+            set(KEYS.TRAINING_DATA, list);
+            return list[idx];
+        }
+        return null;
+    }
+
+    /**
+     * 删除训练数据
+     */
+    function deleteTrainingData(id) {
+        const list = getTrainingDataList();
+        const filtered = list.filter(item => item.id !== id);
+        set(KEYS.TRAINING_DATA, filtered);
+    }
+
     return {
         getApiConfig,
         saveApiConfig,
@@ -130,6 +197,11 @@ const KOBGStorage = (() => {
         resetTokenUsage,
         getSettings,
         saveSettings,
-        clearAll
+        clearAll,
+        saveTrainingData,
+        getTrainingDataList,
+        getTrainingData,
+        updateTrainingData,
+        deleteTrainingData
     };
 })();
