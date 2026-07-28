@@ -196,6 +196,7 @@
                 <button class="content-tab active" data-tab="code">C++ 代码</button>
                 <button class="content-tab" data-tab="output">编译输出</button>
                 <button class="content-tab" data-tab="training">训练详情</button>
+                <button class="content-tab" data-tab="test">知识测试</button>
             </div>
 
             <!-- Code Tab -->
@@ -275,6 +276,28 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Knowledge Test Tab -->
+            <div class="content-tab-panel" id="tab-test">
+                <div class="test-container">
+                    <div class="test-header">
+                        <span>📚 知识在线测试</span>
+                        <span class="test-kb-info" id="test-kb-info">知识库: 0 条</span>
+                    </div>
+                    <div class="test-chat" id="test-chat">
+                        <div class="test-empty-state">
+                            <div class="test-empty-icon">🧠</div>
+                            <div class="test-empty-text">在下方输入问题，测试当前训练模型的回答能力</div>
+                        </div>
+                    </div>
+                    <div class="test-input-area">
+                        <input type="text" class="test-input" id="test-input" 
+                               placeholder="输入你的问题..." autocomplete="off">
+                        <button class="btn btn-primary btn-sm" id="btn-test-send">发送</button>
+                        <button class="btn btn-outline btn-sm" id="btn-test-clear">清空对话</button>
                     </div>
                 </div>
             </div>
