@@ -41,7 +41,7 @@
         <aside class="sidebar">
             <!-- API Configuration -->
             <div class="panel" id="panel-api">
-                <div class="panel-header">
+                <div class="panel-header" onclick="this.closest('.panel').classList.toggle('collapsed')">
                     <span class="icon">⚙</span> API 接口配置
                     <span class="arrow">▼</span>
                 </div>
@@ -70,7 +70,7 @@
 
             <!-- Training Controls -->
             <div class="panel" id="panel-training">
-                <div class="panel-header">
+                <div class="panel-header" onclick="this.closest('.panel').classList.toggle('collapsed')">
                     <span class="icon">🎯</span> 训练控制
                     <span class="arrow">▼</span>
                 </div>
