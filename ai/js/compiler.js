@@ -74,7 +74,7 @@ const KOBGCompiler = (() => {
                 // 模拟执行输出
                 output += '\\n';
                 output += '  ╔══════════════════════════════════════╗\\n';
-                output += '  ║     KOBG AI 强化式训练系统 v1.0      ║\\n';
+                output += '  ║     KOBG AI 强化式训练系统 v1.01     ║\\n';
                 output += '  ║   C++ Native AI Training Framework   ║\\n';
                 output += '  ╚══════════════════════════════════════╝\\n';
                 output += '\\n';

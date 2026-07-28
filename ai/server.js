@@ -310,7 +310,7 @@ app.post('/api/export', async (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`╔══════════════════════════════════════════╗`);
-    console.log(`║   KOBG AI Compiler Server v1.0           ║`);
+    console.log(`║   KOBG AI Compiler Server v1.01          ║`);
     console.log(`║   http://localhost:${PORT}                       ║`);
     console.log(`╚══════════════════════════════════════════╝`);
     console.log(`  编译器: g++`);
