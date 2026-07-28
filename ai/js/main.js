@@ -195,7 +195,7 @@
                 customRoundsInput.value = val;
                 const roundsInfo = UI.$('#rounds-info');
                 if (roundsInfo) {
-                    roundsInfo.textContent = `共 ${val} 轮，每轮间隔 30 秒，预计用时 ${Math.ceil(val * 30 / 60)} 分钟`;
+                    roundsInfo.textContent = `共 ${val} 轮，LLM输出完成后自动进入下一轮`;
                 }
             });
         }
