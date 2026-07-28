@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOBG AI - 强化式训练系统</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Highlight.js for C++ syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-brand">
+            <div class="header-logo">K</div>
+            <div>
+                <div class="header-title">KOBG AI</div>
+                <div class="header-subtitle">强化式训练系统</div>
+            </div>
+        </div>
+        <div class="header-status">
+            <div class="token-badge">
+                <span>Token</span>
+                <span class="count" id="token-total">0</span>
+            </div>
+            <div class="token-badge">
+                <span>调用</span>
+                <span class="count" id="token-calls">0</span>
+            </div>
+            <span class="status-dot" id="status-dot" title="状态"></span>
+            <span style="font-size:12px;color:var(--text-muted)" id="status-text">未连接</span>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <!-- API Configuration -->
+            <div class="panel" id="panel-api">
+                <div class="panel-header">
+                    <span class="icon">⚙</span> API 接口配置
+                    <span class="arrow">▼</span>
+                </div>
+                <div class="panel-body">
+                    <div class="form-group">
+                        <label class="form-label" for="api-url">API URL</label>
+                        <input type="text" class="form-input" id="api-url" 
+                               placeholder="https://api.openai.com/v1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="api-key">API Key</label>
+                        <input type="password" class="form-input" id="api-key" 
+                               placeholder="sk-...">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="api-model">模型名称</label>
+                        <input type="text" class="form-input" id="api-model" 
+                               placeholder="gpt-4o / deepseek-chat / ...">
+                    </div>
+                    <div class="btn-group" style="margin-top: 12px;">
+                        <button class="btn btn-primary" id="btn-save-config" style="flex:1;">保存配置</button>
+                        <button class="btn btn-outline btn-sm" id="btn-test-connection">测试连接</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Training Controls -->
+            <div class="panel" id="panel-training">
+                <div class="panel-header">
+                    <span class="icon">🎯</span> 训练控制
+                    <span class="arrow">▼</span>
+                </div>
+                <div class="panel-body">
+                    <div class="training-controls">
+                        <div class="form-group">
+                            <label class="form-label">训练时长</label>
+                            <input type="range" class="training-slider" id="duration-slider" 
+                                   min="1" max="60" value="5" step="1">
+                        </div>
+                        <div class="training-time-display" id="duration-display">5 分钟</div>
+                        <div class="training-time-label">预计训练轮次: <span id="estimated-rounds">10</span></div>
+                        
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" id="progress-bar"></div>
+                        </div>
+                        <div style="text-align:center;font-size:11px;color:var(--text-muted);">
+                            进度: <span id="progress-text">0%</span>
+                        </div>
+                        
+                        <div class="btn-group">
+                            <button class="btn btn-success" id="btn-start-training" style="flex:1;">▶ 开始训练</button>
+                            <button class="btn btn-outline" id="btn-pause-training" disabled>⏸ 暂停</button>
+                            <button class="btn btn-danger btn-sm" id="btn-stop-training" disabled>⏹ 停止</button>
+                        </div>
+                        
+                        <div class="btn-group">
+                            <button class="btn btn-outline btn-sm" id="btn-single-generate" style="flex:1;">单次生成</button>
+                            <button class="btn btn-outline btn-sm" id="btn-compile" style="flex:1;">手动编译</button>
+                        </div>
+                        
+                        <div class="btn-group">
+                            <button class="btn btn-outline btn-sm" id="btn-clear-context" style="flex:1;">🗑 清除上下文</button>
+                            <button class="btn btn-outline btn-sm" id="btn-reset-token" style="flex:1;">重置Token</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Token Statistics -->
+            <div class="panel" id="panel-tokens">
+                <div class="panel-header">
+                    <span class="icon">📊</span> Token 用量
+                    <span class="arrow">▼</span>
+                </div>
+                <div class="panel-body">
+                    <div class="token-stats">
+                        <div class="token-stat">
+                            <div class="value" id="token-total-2">0</div>
+                            <div class="label">总 Token</div>
+                        </div>
+                        <div class="token-stat">
+                            <div class="value" id="token-calls-2">0</div>
+                            <div class="label">API 调用</div>
+                        </div>
+                        <div class="token-stat">
+                            <div class="value" id="token-input">0</div>
+                            <div class="label">输入 Token</div>
+                        </div>
+                        <div class="token-stat">
+                            <div class="value" id="token-output">0</div>
+                            <div class="label">输出 Token</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Training Log -->
+            <div class="panel" id="panel-log">
+                <div class="panel-header">
+                    <span class="icon">📋</span> 训练日志
+                    <span class="arrow">▼</span>
+                </div>
+                <div class="panel-body" style="padding:8px;">
+                    <div class="training-log" id="training-log">
+                        <div class="log-entry info">
+                            <span class="log-icon">ℹ</span>
+                            <div class="log-content">
+                                <div class="log-time">--:--:--</div>
+                                <div class="log-msg">系统就绪，请配置 API 并开始训练</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="content">
+            <!-- Tabs -->
+            <div class="content-tabs">
+                <button class="content-tab active" data-tab="code">C++ 代码</button>
+                <button class="content-tab" data-tab="output">编译输出</button>
+                <button class="content-tab" data-tab="training">训练详情</button>
+            </div>
+
+            <!-- Code Tab -->
+            <div class="content-tab-panel active" id="tab-code">
+                <div class="code-container">
+                    <div class="code-header">
+                        <span>C++ 源代码</span>
+                        <span class="lang-tag">C++</span>
+                    </div>
+                    <div class="code-body">
+                        <pre><code id="code-content" class="language-cpp">// 请在左侧配置 API 并开始训练，AI 将生成 C++ 代码...</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Output Tab -->
+            <div class="content-tab-panel" id="tab-output">
+                <div class="output-container">
+                    <div class="output-header">
+                        <span>编译与执行输出</span>
+                        <span style="color:var(--success);">stdout</span>
+                    </div>
+                    <div class="output-body" id="output-body">暂无输出</div>
+                </div>
+            </div>
+
+            <!-- Training Details Tab -->
+            <div class="content-tab-panel" id="tab-training">
+                <div class="code-container">
+                    <div class="code-header">
+                        <span>训练详情与统计</span>
+                        <span style="color:var(--warning);">实时</span>
+                    </div>
+                    <div style="padding:24px;overflow-y:auto;flex:1;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                            <div class="panel" style="padding:16px;">
+                                <div class="form-label">训练状态</div>
+                                <div style="font-size:24px;font-weight:700;color:var(--accent);" id="detail-status">就绪</div>
+                            </div>
+                            <div class="panel" style="padding:16px;">
+                                <div class="form-label">已用时间</div>
+                                <div style="font-size:24px;font-weight:700;color:var(--accent);" id="training-time">00:00</div>
+                            </div>
+                            <div class="panel" style="padding:16px;">
+                                <div class="form-label">当前轮次</div>
+                                <div style="font-size:24px;font-weight:700;color:var(--accent);" id="detail-round">0 / 0</div>
+                            </div>
+                            <div class="panel" style="padding:16px;">
+                                <div class="form-label">编译结果</div>
+                                <div style="font-size:24px;font-weight:700;color:var(--success);" id="detail-compile">-</div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top:16px;" class="panel">
+                            <div class="panel-header" style="cursor:default;">
+                                <span class="icon">📝</span> 系统提示词 (System Prompt)
+                            </div>
+                            <div class="panel-body">
+                                <pre id="system-prompt-display" style="font-size:11px;color:var(--text-muted);white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;background:var(--bg-tertiary);padding:12px;border-radius:6px;"></pre>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:16px;" class="panel">
+                            <div class="panel-header" style="cursor:default;">
+                                <span class="icon">📖</span> 说明
+                            </div>
+                            <div class="panel-body">
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.8;">
+                                    <strong>KOBG AI 强化式训练系统</strong> 使用您配置的大模型 API 来生成 C++ 代码，
+                                    该代码模拟了一个 AI 对话系统。内置框架提供了标准结构，AI 负责填充知识库和对话内容。<br><br>
+                                    <strong>工作流程：</strong><br>
+                                    1. 配置 API 接口信息（URL、Key、模型名称）<br>
+                                    2. 设置训练时长，点击"开始训练"<br>
+                                    3. AI 自动生成 C++ 代码并编译执行<br>
+                                    4. 查看编译输出和训练统计<br>
+                                    5. 可随时清除上下文重新开始
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- JavaScript Modules -->
+    <script src="js/storage.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/compiler.js"></script>
+    <script src="js/training.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+
+    <script>
+        // 初始化后显示系统提示词
+        document.addEventListener('DOMContentLoaded', function() {
+            const promptEl = document.getElementById('system-prompt-display');
+            if (promptEl && typeof KOBGAPI !== 'undefined') {
+                promptEl.textContent = KOBGAPI.SYSTEM_PROMPT;
+            }
+        });
+    </script>
+</body>
+</html>
