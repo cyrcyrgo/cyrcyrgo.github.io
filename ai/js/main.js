@@ -168,11 +168,15 @@
             });
         }
 
-        // 训练模式切换
-        const modeRadios = document.querySelectorAll('input[name="training-mode"]');
-        modeRadios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                UI.switchTrainingMode(e.target.value);
+        // 训练模式切换（改用 label 点击事件，避免 hidden radio 的 change 事件不可靠）
+        const modeOptions = document.querySelectorAll('.training-mode-switch .mode-option');
+        modeOptions.forEach(option => {
+            option.addEventListener('click', function(e) {
+                const radio = this.querySelector('input[type="radio"]');
+                if (radio) {
+                    radio.checked = true;
+                    UI.switchTrainingMode(radio.value);
+                }
             });
         });
 
@@ -240,11 +244,15 @@
             });
         }
 
-        // 测试模式切换
-        const testModeRadios = document.querySelectorAll('input[name="test-mode"]');
-        testModeRadios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                KnowledgeTest.setMode(e.target.value);
+        // 测试模式切换（改用 label 点击事件）
+        const testModeOptions = document.querySelectorAll('.test-mode-switch .mode-option');
+        testModeOptions.forEach(option => {
+            option.addEventListener('click', function(e) {
+                const radio = this.querySelector('input[type="radio"]');
+                if (radio) {
+                    radio.checked = true;
+                    KnowledgeTest.setMode(radio.value);
+                }
             });
         });
     }
