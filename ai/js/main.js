@@ -161,6 +161,25 @@
         if (singleGenBtn) {
             singleGenBtn.addEventListener('click', handleSingleGenerate);
         }
+
+        // 知识测试 - 发送按钮
+        const testSendBtn = UI.$('#btn-test-send');
+        if (testSendBtn) {
+            testSendBtn.addEventListener('click', handleTestSend);
+        }
+        const testInput = UI.$('#test-input');
+        if (testInput) {
+            testInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleTestSend();
+            });
+        }
+        const testClearBtn = UI.$('#btn-test-clear');
+        if (testClearBtn) {
+            testClearBtn.addEventListener('click', () => {
+                KnowledgeTest.clearChat();
+                UI.showToast('对话已清空', 'success');
+            });
+        }
     }
 
     // ========== 事件处理 ==========
@@ -195,7 +214,6 @@
     }
 
     async function handleStartTraining() {
-        // 验证 API 配置
         if (!API.isConfigured()) {
             UI.showToast('请先配置 API 接口信息', 'error');
             UI.switchTab('code');
@@ -208,12 +226,13 @@
         }
 
         const durationSeconds = UI.getTrainingDuration();
+        const customInstruction = UI.$('#custom-instruction')?.value?.trim() || '';
         
-        // 更新 UI 状态
         UI.updateStatus('training');
         UI.clearOutput();
         UI.clearLog();
         UI.updateProgress(0);
+        UI.streamReset();
         updateDetailStatus('训练中');
         updateDetailRound(0, Math.ceil(durationSeconds / 30));
         updateDetailCompile('-');
@@ -227,17 +246,20 @@
         if (stopBtn) stopBtn.disabled = false;
 
         UI.addLogEntry('info', `训练开始，总时长: ${Math.ceil(durationSeconds / 60)} 分钟`);
+        if (customInstruction) {
+            UI.addLogEntry('info', `自定义指令: ${customInstruction.substring(0, 50)}${customInstruction.length > 50 ? '...' : ''}`);
+        }
 
         try {
             await Training.startTraining(
                 durationSeconds,
-                // onProgress
                 (progress, round, total) => {
                     UI.updateProgress(progress);
                     UI.addLogEntry('info', `第 ${round}/${total} 轮训练中...`);
                     updateDetailRound(round, total);
+                    UI.streamReset();
+                    UI.streamStart();
                 },
-                // onComplete
                 () => {
                     UI.updateProgress(1);
                     UI.updateStatus('connected');
@@ -245,14 +267,14 @@
                     UI.addLogEntry('success', '训练已完成');
                     updateDetailStatus('完成');
                     updateDetailCompile('成功');
+                    UI.streamEnd();
                     
-                    // 显示生成的代码
                     const code = Training.getGeneratedCode();
                     if (code) {
                         UI.displayCode(code);
+                        KnowledgeTest.loadKnowledgeBase(code);
                     }
                     
-                    // 显示最新的编译结果
                     const results = Training.getCompileResults();
                     if (results.length > 0) {
                         const last = results[results.length - 1];
@@ -260,24 +282,25 @@
                         UI.switchTab('output');
                     }
                     
-                    // 更新 Token 显示
                     UI.updateTokenDisplay();
-                    
                     resetButtons();
                 },
-                // onError
                 (error) => {
                     UI.updateStatus('error');
                     UI.showToast('训练出错: ' + error.message, 'error');
                     UI.addLogEntry('error', '训练出错: ' + error.message);
                     updateDetailStatus('错误');
                     updateDetailCompile('失败');
+                    UI.streamError(error.message);
                     resetButtons();
                 },
-                // onTick
                 (elapsed) => {
                     UI.updateTimer(elapsed);
-                }
+                },
+                (chunk) => {
+                    UI.streamAppend(chunk);
+                },
+                customInstruction
             );
         } catch (error) {
             UI.showToast('启动训练失败: ' + error.message, 'error');
@@ -318,6 +341,9 @@
                 UI.updateTokenDisplay();
                 UI.clearOutput();
                 UI.clearLog();
+                UI.streamReset();
+                KnowledgeTest.clearChat();
+                KnowledgeTest.loadKnowledgeBase('');
                 loadDefaultTemplate();
                 UI.showToast('上下文已清除', 'success');
                 UI.addLogEntry('info', '上下文已清除');
@@ -429,15 +455,23 @@
         UI.setButtonLoading(btn, true);
         UI.addLogEntry('info', '单次生成中...');
 
+        const customInstruction = UI.$('#custom-instruction')?.value?.trim() || '';
+        UI.streamReset();
+        UI.streamStart();
+
         try {
-            const code = await API.generateCppCode();
+            const code = await API.generateCppCodeStream((chunk) => {
+                UI.streamAppend(chunk);
+            }, customInstruction);
+
+            UI.streamEnd();
+
             if (code) {
                 UI.displayCode(code);
                 UI.switchTab('code');
+                Training.setGeneratedCode(code);
+                KnowledgeTest.loadKnowledgeBase(code);
                 
-                // 也保存到训练状态
-                const state = Training.getState();
-                // 直接编译
                 const result = await Compiler.compile(code);
                 UI.clearOutput();
                 UI.displayOutput(result.output);
@@ -447,11 +481,22 @@
                 UI.updateTokenDisplay();
             }
         } catch (error) {
+            UI.streamError(error.message);
             UI.showToast('生成失败: ' + error.message, 'error');
             UI.addLogEntry('error', '生成失败: ' + error.message);
         } finally {
             UI.setButtonLoading(btn, false);
         }
+    }
+
+    function handleTestSend() {
+        const input = UI.$('#test-input');
+        if (!input) return;
+        const question = input.value.trim();
+        if (!question) return;
+
+        KnowledgeTest.askQuestion(question);
+        input.value = '';
     }
 
     // ========== 辅助函数 ==========
