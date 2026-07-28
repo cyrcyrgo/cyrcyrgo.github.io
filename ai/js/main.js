@@ -110,6 +110,18 @@
             compileBtn.addEventListener('click', handleManualCompile);
         }
 
+        // 移动端侧边栏切换
+        const mobileToggle = UI.$('#mobile-sidebar-toggle');
+        if (mobileToggle) {
+            mobileToggle.addEventListener('click', () => {
+                const sidebar = UI.$('.sidebar');
+                if (sidebar) {
+                    sidebar.classList.toggle('collapsed-mobile');
+                    mobileToggle.textContent = sidebar.classList.contains('collapsed-mobile') ? '☰' : '✕';
+                }
+            });
+        }
+
         // 训练时长滑块
         const durationSlider = UI.$('#duration-slider');
         if (durationSlider) {

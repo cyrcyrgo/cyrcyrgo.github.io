@@ -20,6 +20,7 @@
                 <div class="header-subtitle">强化式训练系统</div>
             </div>
         </div>
+        <button class="mobile-sidebar-toggle" id="mobile-sidebar-toggle" title="切换侧边栏">☰</button>
         <div class="header-status">
             <div class="token-badge">
                 <span>Token</span>
@@ -30,7 +31,7 @@
                 <span class="count" id="token-calls">0</span>
             </div>
             <span class="status-dot" id="status-dot" title="状态"></span>
-            <span style="font-size:12px;color:var(--text-muted)" id="status-text">未连接</span>
+            <span class="status-label" id="status-text">未连接</span>
         </div>
     </header>
 
@@ -197,41 +198,41 @@
                         <span>训练详情与统计</span>
                         <span style="color:var(--warning);">实时</span>
                     </div>
-                    <div style="padding:24px;overflow-y:auto;flex:1;">
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-                            <div class="panel" style="padding:16px;">
+                    <div class="training-detail-body">
+                        <div class="training-detail-grid">
+                            <div class="panel training-stat-card">
                                 <div class="form-label">训练状态</div>
-                                <div style="font-size:24px;font-weight:700;color:var(--accent);" id="detail-status">就绪</div>
+                                <div class="training-stat-value" id="detail-status">就绪</div>
                             </div>
-                            <div class="panel" style="padding:16px;">
+                            <div class="panel training-stat-card">
                                 <div class="form-label">已用时间</div>
-                                <div style="font-size:24px;font-weight:700;color:var(--accent);" id="training-time">00:00</div>
+                                <div class="training-stat-value" id="training-time">00:00</div>
                             </div>
-                            <div class="panel" style="padding:16px;">
+                            <div class="panel training-stat-card">
                                 <div class="form-label">当前轮次</div>
-                                <div style="font-size:24px;font-weight:700;color:var(--accent);" id="detail-round">0 / 0</div>
+                                <div class="training-stat-value" id="detail-round">0 / 0</div>
                             </div>
-                            <div class="panel" style="padding:16px;">
+                            <div class="panel training-stat-card">
                                 <div class="form-label">编译结果</div>
-                                <div style="font-size:24px;font-weight:700;color:var(--success);" id="detail-compile">-</div>
+                                <div class="training-stat-value" style="color:var(--success);" id="detail-compile">-</div>
                             </div>
                         </div>
                         
-                        <div style="margin-top:16px;" class="panel">
-                            <div class="panel-header" style="cursor:default;">
+                        <div class="panel training-detail-section">
+                            <div class="panel-header panel-header-static">
                                 <span class="icon">📝</span> 系统提示词 (System Prompt)
                             </div>
                             <div class="panel-body">
-                                <pre id="system-prompt-display" style="font-size:11px;color:var(--text-muted);white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;background:var(--bg-tertiary);padding:12px;border-radius:6px;"></pre>
+                                <pre class="system-prompt-preview" id="system-prompt-display"></pre>
                             </div>
                         </div>
 
-                        <div style="margin-top:16px;" class="panel">
-                            <div class="panel-header" style="cursor:default;">
+                        <div class="panel training-detail-section">
+                            <div class="panel-header panel-header-static">
                                 <span class="icon">📖</span> 说明
                             </div>
                             <div class="panel-body">
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.8;">
+                                <div class="training-desc">
                                     <strong>KOBG AI 强化式训练系统</strong> 使用您配置的大模型 API 来生成 C++ 代码，
                                     该代码模拟了一个 AI 对话系统。内置框架提供了标准结构，AI 负责填充知识库和对话内容。<br><br>
                                     <strong>工作流程：</strong><br>
