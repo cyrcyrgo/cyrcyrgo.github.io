@@ -114,6 +114,130 @@ app.post('/api/analyze', async (req, res) => {
 });
 
 // ============================================================
+//  模型测试：编译模型并回答指定问题
+// ============================================================
+app.post('/api/test', async (req, res) => {
+    const { code, question } = req.body;
+
+    if (!code || !question) {
+        return res.status(400).json({ error: '缺少 code 或 question 参数' });
+    }
+
+    const id = genId();
+    const srcFile = path.join(TMP_DIR, `${id}_test.cpp`);
+    const outFile = path.join(TMP_DIR, `${id}_test`);
+
+    try {
+        // 从模型代码中提取核心类（去掉 main 函数）
+        const modelCode = extractModelCore(code);
+
+        // 生成测试程序
+        const testProgram = `#include <iostream>
+#include <string>
+#include <sstream>
+${modelCode}
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cout << "Error: No question provided" << std::endl;
+        return 1;
+    }
+    std::string question = argv[1];
+    // 转义命令行参数中的特殊字符
+    for (char& c : question) {
+        if (c == '_') c = ' ';
+    }
+    
+    KOBGModel model("Test-Model");
+    std::string answer = model.predict(question);
+    std::cout << "ANSWER_START" << std::endl;
+    std::cout << answer << std::endl;
+    std::cout << "ANSWER_END" << std::endl;
+    return 0;
+}`;
+
+        fs.writeFileSync(srcFile, testProgram, 'utf-8');
+
+        await new Promise((resolve, reject) => {
+            execFile('g++', ['-std=c++17', '-O2', '-Wall', '-o', outFile, srcFile], {
+                timeout: 15000,
+                maxBuffer: 10 * 1024 * 1024
+            }, (error, stdout, stderr) => {
+                if (error) {
+                    reject({ error, stdout, stderr });
+                } else {
+                    resolve({ stdout, stderr });
+                }
+            });
+        });
+
+        // 将问题中的空格替换为下划线作为命令行参数
+        const safeQuestion = question.replace(/ /g, '_').replace(/"/g, '\\"');
+        
+        let output = '';
+        if (fs.existsSync(outFile)) {
+            output = await new Promise((resolve) => {
+                execFile(outFile, [safeQuestion], {
+                    timeout: 10000,
+                    maxBuffer: 10 * 1024 * 1024
+                }, (error, stdout, stderr) => {
+                    resolve((error ? `[运行错误] ${error.message}\n` : '') + stdout + (stderr ? `\n[stderr]\n${stderr}` : ''));
+                });
+            });
+        }
+
+        // 解析 ANSWER_START ... ANSWER_END 之间的内容
+        let answer = '';
+        const match = output.match(/ANSWER_START\s*\n([\s\S]*?)\nANSWER_END/);
+        if (match) {
+            answer = match[1].trim();
+        } else {
+            answer = output.trim();
+        }
+
+        res.json({
+            success: true,
+            answer: answer,
+            rawOutput: output
+        });
+    } catch (result) {
+        const stderr = result.stderr || result.error?.message || '';
+        res.json({
+            success: false,
+            answer: null,
+            errors: stderr.split('\n').filter(l => l.trim())
+        });
+    } finally {
+        try { fs.unlinkSync(srcFile); } catch (_) {}
+        try { fs.unlinkSync(outFile); } catch (_) {}
+    }
+});
+
+/**
+ * 从完整 C++ 代码中提取模型核心（去除 main 函数，保留类定义）
+ */
+function extractModelCore(code) {
+    // 移除 main 函数
+    let result = code.replace(/int\s+main\s*\([^)]*\)\s*\{[\s\S]*?\n\}/g, '');
+    
+    // 移除 AIDialogueSystem 类（只保留 KOBGModel）
+    // 先尝试提取 KOBGModel 类
+    const classMatch = result.match(/class\s+KOBGModel\s*\{[\s\S]*?\n\s*\};/);
+    const includesMatch = result.match(/(?:#include\s*<[^>]+>\s*)+/);
+    
+    let extracted = '';
+    if (includesMatch) extracted += includesMatch[0] + '\n';
+    if (classMatch) extracted += '\n' + classMatch[0] + '\n';
+    
+    if (!extracted.trim()) {
+        // 如果提取失败，返回原始代码（去掉main）
+        return code.replace(/int\s+main\s*\([^)]*\)\s*\{[\s\S]*?\n\}/g, '');
+    }
+    
+    return extracted;
+}
+
+// ============================================================
 //  导出模型：编译为二进制可执行文件
 // ============================================================
 app.post('/api/export', async (req, res) => {
