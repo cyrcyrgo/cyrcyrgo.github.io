@@ -80,14 +80,19 @@ const KOBGUI = (() => {
     function updateTokenDisplay() {
         const usage = KOBGStorage.getTokenUsage();
         const totalEl = $('#token-total');
+        const totalEl2 = $('#token-total-2');
         const inputEl = $('#token-input');
         const outputEl = $('#token-output');
         const callsEl = $('#token-calls');
+        const callsEl2 = $('#token-calls-2');
 
-        if (totalEl) totalEl.textContent = formatNumber(usage.totalTokens);
+        const formatted = formatNumber(usage.totalTokens);
+        if (totalEl) totalEl.textContent = formatted;
+        if (totalEl2) totalEl2.textContent = formatted;
         if (inputEl) inputEl.textContent = formatNumber(usage.totalInputTokens);
         if (outputEl) outputEl.textContent = formatNumber(usage.totalOutputTokens);
         if (callsEl) callsEl.textContent = usage.callCount;
+        if (callsEl2) callsEl2.textContent = usage.callCount;
     }
 
     function formatNumber(num) {

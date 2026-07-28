@@ -6,12 +6,26 @@
 (function () {
     'use strict';
 
-    const UI = KOBGUI;
-    const API = KOBGAPI;
-    const Compiler = KOBGCompiler;
-    const Training = KOBGTraining;
-    const Storage = KOBGStorage;
-    const KnowledgeTest = KOBGKnowledgeTest;
+    try {
+        // 标记 JS 已加载
+        window.__KOBG_LOADED__ = true;
+        console.log('[KOBG AI] main.js loaded, checking modules...');
+
+        const UI = KOBGUI;
+        const API = KOBGAPI;
+        const Compiler = KOBGCompiler;
+        const Training = KOBGTraining;
+        const Storage = KOBGStorage;
+        const KnowledgeTest = KOBGKnowledgeTest;
+
+        if (!UI) throw new Error('KOBGUI not defined');
+        if (!API) throw new Error('KOBGAPI not defined');
+        if (!Compiler) throw new Error('KOBGCompiler not defined');
+        if (!Training) throw new Error('KOBGTraining not defined');
+        if (!Storage) throw new Error('KOBGStorage not defined');
+        if (!KnowledgeTest) throw new Error('KOBGKnowledgeTest not defined');
+
+        console.log('[KOBG AI] All modules OK');
 
     // ========== 初始化 ==========
     function init() {
@@ -775,5 +789,13 @@
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
+    }
+
+    } catch (e) {
+        console.error('[KOBG AI] Fatal error:', e.message, e.stack);
+        document.body.insertAdjacentHTML('beforeend',
+            '<div style="position:fixed;top:0;left:0;right:0;background:#e74c3c;color:#fff;padding:12px;z-index:99999;font-size:14px;text-align:center;">' +
+            '<strong>KOBG AI 初始化失败:</strong> ' + e.message +
+            '</div>');
     }
 })();

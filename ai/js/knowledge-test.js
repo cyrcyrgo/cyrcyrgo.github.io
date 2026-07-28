@@ -402,7 +402,7 @@ const KOBGKnowledgeTest = (() => {
      * 本地模式回答
      */
     function askLocal(question) {
-        const code = window.KOBGTraining?.getGeneratedCode?.();
+        const code = typeof KOBGTraining !== 'undefined' ? KOBGTraining.getGeneratedCode() : null;
         if (code) knowledgeBase = parseKnowledgeBase(code);
         updateKBInfo();
 
@@ -425,7 +425,7 @@ const KOBGKnowledgeTest = (() => {
      * 真实模型模式回答
      */
     async function askReal(question) {
-        const code = window.KOBGTraining?.getGeneratedCode?.();
+        const code = typeof KOBGTraining !== 'undefined' ? KOBGTraining.getGeneratedCode() : null;
         if (!code) {
             addChatMessage('user', question, new Date().toLocaleTimeString());
             addChatMessage('ai', '没有训练好的模型代码，请先完成训练。', new Date().toLocaleTimeString());
