@@ -110,6 +110,12 @@
             compileBtn.addEventListener('click', handleManualCompile);
         }
 
+        // 导出模型
+        const exportBtn = UI.$('#btn-export');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', handleExport);
+        }
+
         // 移动端侧边栏切换
         const mobileToggle = UI.$('#mobile-sidebar-toggle');
         if (mobileToggle) {
@@ -355,6 +361,60 @@
         } catch (error) {
             UI.appendOutput('编译异常: ' + error.message + '\n', 'error-line');
             UI.showToast('编译异常', 'error');
+        }
+    }
+
+    async function handleExport() {
+        const code = Training.getGeneratedCode();
+        if (!code) {
+            UI.showToast('暂无代码可导出，请先进行训练生成代码', 'warning');
+            return;
+        }
+
+        const exportBtn = UI.$('#btn-export');
+        if (exportBtn) {
+            exportBtn.disabled = true;
+            exportBtn.textContent = '⏳ 编译中...';
+        }
+
+        UI.showToast('正在编译并导出模型...', 'info');
+
+        try {
+            const response = await fetch('/api/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => null);
+                const errMsg = errData?.errors?.join('; ') || `编译失败 (${response.status})`;
+                throw new Error(errMsg);
+            }
+
+            const blob = await response.blob();
+            const disposition = response.headers.get('Content-Disposition') || '';
+            const filenameMatch = disposition.match(/filename="?([^"\s;]+)"?/);
+            const filename = filenameMatch ? filenameMatch[1] : 'kobg-ai-model.exe';
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+            UI.showToast(`模型导出成功: ${filename} (${sizeMB} MB)`, 'success');
+        } catch (error) {
+            UI.showToast('导出失败: ' + error.message, 'error');
+        } finally {
+            if (exportBtn) {
+                exportBtn.disabled = false;
+                exportBtn.textContent = '📦 导出模型 (.exe)';
+            }
         }
     }
 
