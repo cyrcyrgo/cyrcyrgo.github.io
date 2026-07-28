@@ -159,11 +159,14 @@ body {
     background: var(--bg-secondary);
     border-right: 1px solid var(--border);
     overflow-y: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-height: 0;
+    scrollbar-gutter: stable;
 }
 
 .sidebar::-webkit-scrollbar {
@@ -180,6 +183,7 @@ body {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .panel-header {
@@ -216,6 +220,9 @@ body {
 
 .panel-body {
     padding: 16px;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    min-width: 0;
 }
 
 /* ========== Form Elements ========== */
@@ -401,6 +408,7 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
 }
 
 .content-tabs {
@@ -601,6 +609,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-height: 0;
 }
 
 .log-entry {
@@ -612,6 +621,8 @@ body {
     display: flex;
     align-items: flex-start;
     gap: 10px;
+    flex-shrink: 0;
+    overflow-wrap: break-word;
 }
 
 .log-entry .log-icon {
@@ -622,6 +633,9 @@ body {
 
 .log-entry .log-content {
     flex: 1;
+    min-width: 0;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 .log-entry .log-time {
@@ -755,7 +769,8 @@ body {
     .sidebar {
         width: 100%;
         min-width: unset;
-        max-height: none;
+        max-height: 45vh;
+        overflow-y: auto;
         border-right: none;
         border-bottom: 1px solid var(--border);
         padding: 10px;
