@@ -311,11 +311,28 @@ app.post('/api/export', async (req, res) => {
 // ============================================================
 //  LLM API 代理（绕过浏览器 CORS 限制）
 // ============================================================
+
+// 处理 OPTIONS 预检请求，避免 405
+app.options('/api/chat', (req, res) => {
+    res.setHeader('Allow', 'POST, OPTIONS');
+    res.status(204).end();
+});
+
+// GET 请求返回友好提示
+app.get('/api/chat', (req, res) => {
+    res.status(405).json({
+        error: { message: '请使用 POST 方法请求此端点' },
+        hint: '此端点仅接受 POST 请求，用于转发 LLM API 调用'
+    });
+});
+
 app.post('/api/chat', async (req, res) => {
     const { url, apiKey, model, messages, temperature, max_tokens, top_p, stream } = req.body;
 
     if (!url || !apiKey || !model || !messages) {
-        return res.status(400).json({ error: '缺少必要参数: url, apiKey, model, messages' });
+        return res.status(400).json({
+            error: { message: '缺少必要参数: url, apiKey, model, messages' }
+        });
     }
 
     const apiUrl = url.replace(/\/+$/, '') + '/chat/completions';
@@ -341,10 +358,24 @@ app.post('/api/chat', async (req, res) => {
 
         if (!response.ok) {
             const errorText = await response.text();
+            let userMessage = `上游 API 返回错误 (${response.status})`;
+
+            // 尝试解析上游 JSON 错误，提取可读信息
+            try {
+                const errJson = JSON.parse(errorText);
+                if (errJson.error?.message) {
+                    userMessage = errJson.error.message;
+                }
+            } catch (_) {
+                // 非 JSON 响应，截取前 200 字符
+                if (errorText.length > 0) {
+                    userMessage = errorText.substring(0, 200);
+                }
+            }
+
+            console.error(`[Proxy] Upstream ${response.status}: ${userMessage}`);
             return res.status(response.status).json({
-                error: true,
-                status: response.status,
-                message: errorText
+                error: { message: userMessage, code: response.status }
             });
         }
 
@@ -382,8 +413,7 @@ app.post('/api/chat', async (req, res) => {
     } catch (err) {
         console.error('[Proxy] Request failed:', err.message);
         res.status(502).json({
-            error: true,
-            message: '代理请求失败: ' + err.message
+            error: { message: '代理请求失败: ' + err.message, code: 502 }
         });
     }
 });
