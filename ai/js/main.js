@@ -27,6 +27,12 @@
 
         console.log('[KOBG AI] All modules OK');
 
+        // ========== 高压力训练稳定性：全局状态 ==========
+        let currentAbortController = null;    // 当前训练/生成的中止控制器
+        let logThrottleTimer = null;          // 日志节流定时器
+        let pendingLogEntries = [];           // 待写入的日志条目
+        const LOG_THROTTLE_MS = 200;          // 日志批量写入间隔
+
     // ========== 初始化 ==========
     function init() {
         console.log('[KOBG AI] 初始化...');
@@ -432,6 +438,7 @@
 
     function handleStopTraining() {
         if (Training.isRunning()) {
+            abortCurrentRequest(); // 中止当前进行中的 API 请求
             Training.stopTraining();
             UI.updateStatus('connected');
             UI.showToast('训练已停止', 'warning');
@@ -443,6 +450,7 @@
     function handleClearContext() {
         UI.confirm('确定要清除所有上下文数据吗？这将重置训练进度但保留 API 配置。').then(confirmed => {
             if (confirmed) {
+                abortCurrentRequest(); // 中止当前请求
                 Training.clearContext();
                 Storage.resetTokenUsage();
                 UI.updateTokenDisplay();
@@ -566,10 +574,12 @@
         UI.streamReset();
         UI.streamStart();
 
+        const signal = createAbortSignal();
+
         try {
             const code = await API.generateCppCodeStream((chunk) => {
                 UI.streamAppend(chunk);
-            }, customInstruction);
+            }, customInstruction, 5, signal);
 
             UI.streamEnd();
 
@@ -664,12 +674,16 @@
 
         if (!listEl) return;
 
+        // 清理旧的事件监听器（通过替换克隆节点）
+        const newListEl = listEl.cloneNode(false);
+        listEl.parentNode.replaceChild(newListEl, listEl);
+
         if (list.length === 0) {
-            listEl.innerHTML = '<div class="data-empty">暂无已保存的训练数据</div>';
+            newListEl.innerHTML = '<div class="data-empty">暂无已保存的训练数据</div>';
             return;
         }
 
-        listEl.innerHTML = list.slice().reverse().map(item => {
+        newListEl.innerHTML = list.slice().reverse().map(item => {
             const date = new Date(item.createdAt).toLocaleString();
             const codeLen = item.code ? item.code.length : 0;
             return `
@@ -686,12 +700,14 @@
             `;
         }).join('');
 
-        // 绑定按钮事件
-        listEl.querySelectorAll('[data-action="load"]').forEach(btn => {
-            btn.addEventListener('click', () => handleLoadData(btn.dataset.id));
-        });
-        listEl.querySelectorAll('[data-action="delete"]').forEach(btn => {
-            btn.addEventListener('click', () => handleDeleteData(btn.dataset.id));
+        // 绑定按钮事件（使用事件委托，避免每个按钮单独绑定）
+        newListEl.addEventListener('click', function(e) {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            const action = btn.dataset.action;
+            const id = btn.dataset.id;
+            if (action === 'load') handleLoadData(id);
+            if (action === 'delete') handleDeleteData(id);
         });
     }
 
@@ -782,6 +798,45 @@
             pauseBtn.textContent = '⏸ 暂停训练';
         }
         if (stopBtn) stopBtn.disabled = true;
+    }
+
+    /**
+     * 中止当前请求（流式/非流式）
+     */
+    function abortCurrentRequest() {
+        if (currentAbortController) {
+            try {
+                currentAbortController.abort();
+                console.log('[Main] 已中止当前请求');
+            } catch (_) {}
+            currentAbortController = null;
+        }
+    }
+
+    /**
+     * 创建新的 AbortController 并返回其 signal
+     */
+    function createAbortSignal() {
+        abortCurrentRequest();
+        currentAbortController = new AbortController();
+        return currentAbortController.signal;
+    }
+
+    /**
+     * 节流写入日志（高压力训练时避免频繁 DOM 操作）
+     */
+    function throttledAddLog(level, message) {
+        pendingLogEntries.push({ level, message });
+        if (!logThrottleTimer) {
+            logThrottleTimer = setTimeout(() => {
+                const entries = pendingLogEntries;
+                pendingLogEntries = [];
+                logThrottleTimer = null;
+                // 批量写入
+                const batch = entries.map(e => `[${e.level}] ${e.message}`).join('\n');
+                UI.addLogEntry(entries[entries.length - 1].level, batch.split('\n').pop()?.replace(/^\[.*?\]\s*/, '') || '');
+            }, LOG_THROTTLE_MS);
+        }
     }
 
     // ========== 启动应用 ==========

@@ -41,6 +41,83 @@ CRITICAL RULES:
     let cachedTemplate = null;
     let _useProxy = null; // null = 未检测, true = 代理模式, false = 直连模式
 
+    // ========== 高压力训练稳定性机制 ==========
+
+    // 全局请求超时配置（毫秒）
+    const REQUEST_TIMEOUT = 120000; // 2 分钟
+    const STREAM_TIMEOUT = 300000;  // 5 分钟（流式可能很长）
+    const MAX_RETRIES = 3;
+    const RETRY_DELAYS = [1000, 3000, 8000]; // 指数退避: 1s, 3s, 8s
+
+    /**
+     * 判断错误是否可重试
+     */
+    function isRetryableError(status, errorMessage) {
+        if (!status || status === 0) return true; // 网络错误
+        if (status === 429) return true; // 限流
+        if (status >= 500 && status < 600) return true; // 服务端错误
+        if (status === 408) return true; // 请求超时
+        // 401/403/404 不重试（认证/权限/路由问题）
+        return false;
+    }
+
+    /**
+     * 带超时的 fetch（使用 AbortController）
+     */
+    function fetchWithTimeout(url, options, timeoutMs) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        const signal = controller.signal;
+
+        return fetch(url, { ...options, signal })
+            .finally(() => clearTimeout(timeoutId));
+    }
+
+    /**
+     * 带重试的 fetch（指数退避）
+     */
+    async function fetchWithRetry(url, options, retries = MAX_RETRIES, timeoutMs = REQUEST_TIMEOUT) {
+        let lastError = null;
+
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                if (attempt > 0) {
+                    const delay = RETRY_DELAYS[Math.min(attempt - 1, RETRY_DELAYS.length - 1)];
+                    console.log(`[API] 重试 ${attempt}/${retries}，等待 ${delay}ms...`);
+                    await new Promise(r => setTimeout(r, delay));
+                }
+
+                const response = await fetchWithTimeout(url, options, timeoutMs);
+
+                if (response.ok) return response;
+
+                // 非 2xx 响应
+                if (!isRetryableError(response.status, null) || attempt >= retries) {
+                    return response; // 不可重试或已达上限，返回错误响应
+                }
+
+                console.warn(`[API] 可重试错误 ${response.status}，准备重试...`);
+                lastError = new Error(`HTTP ${response.status}`);
+
+            } catch (err) {
+                lastError = err;
+                if (err.name === 'AbortError') {
+                    console.warn(`[API] 请求超时 (${timeoutMs}ms)${attempt < retries ? '，准备重试...' : ''}`);
+                    if (attempt >= retries) throw new Error(`请求超时（${timeoutMs / 1000}秒），已重试 ${retries} 次后仍失败`);
+                    continue;
+                }
+                if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+                    console.warn(`[API] 网络错误${attempt < retries ? '，准备重试...' : ''}`);
+                    if (attempt >= retries) throw new Error(`网络连接失败，已重试 ${retries} 次后仍失败`);
+                    continue;
+                }
+                throw err; // 非可重试错误
+            }
+        }
+
+        throw lastError || new Error('请求失败');
+    }
+
     /**
      * 检测运行环境：本地代理模式 vs 直连模式
      * 规则：localhost / 127.0.0.1 视为有后端代理的本地环境
@@ -65,7 +142,8 @@ CRITICAL RULES:
 
     /**
      * 统一的请求发送函数，自动适配代理/直连模式
-     * @param {Object} opts - { messages, temperature, maxTokens, topP, stream, onChunk }
+     * 内置超时保护、自动重试（指数退避）、熔断
+     * @param {Object} opts - { messages, temperature, maxTokens, topP, stream, onChunk, signal }
      * @returns {Promise<string|Object>} 非流式返回 content 字符串，流式由 onChunk 回调处理
      */
     async function makeRequest(opts) {
@@ -74,7 +152,7 @@ CRITICAL RULES:
             throw new Error('API 未配置，请先填写 API 接口信息');
         }
 
-        const { messages, temperature = 0.7, maxTokens = 4096, topP = 1.0, stream = false, onChunk } = opts;
+        const { messages, temperature = 0.7, maxTokens = 4096, topP = 1.0, stream = false, onChunk, signal } = opts;
 
         const allMessages = [
             { role: 'system', content: SYSTEM_PROMPT },
@@ -82,6 +160,7 @@ CRITICAL RULES:
         ];
 
         const useProxy = isLocalHost();
+        const timeoutMs = stream ? STREAM_TIMEOUT : REQUEST_TIMEOUT;
 
         let fetchUrl, fetchOptions;
 
@@ -122,7 +201,15 @@ CRITICAL RULES:
             };
         }
 
-        const response = await fetch(fetchUrl, fetchOptions);
+        // 合并外部 AbortController 的 signal
+        if (signal) {
+            fetchOptions.signal = signal;
+        }
+
+        // 流式请求不重试（SSE 中断后重试会丢失上下文），但非流式请求自动重试
+        const response = stream
+            ? await fetchWithTimeout(fetchUrl, fetchOptions, timeoutMs)
+            : await fetchWithRetry(fetchUrl, fetchOptions, MAX_RETRIES, timeoutMs);
 
         if (!response.ok) {
             let errorMsg = '';
@@ -141,7 +228,7 @@ CRITICAL RULES:
         }
 
         if (stream) {
-            return handleStreamResponse(response, messages, onChunk);
+            return handleStreamResponse(response, messages, onChunk, signal);
         } else {
             return handleJsonResponse(response, messages);
         }
@@ -167,39 +254,59 @@ CRITICAL RULES:
     }
 
     /**
-     * 处理流式 SSE 响应
+     * 处理流式 SSE 响应（带超时和中断保护）
      */
-    async function handleStreamResponse(response, messages, onChunk) {
+    async function handleStreamResponse(response, messages, onChunk, signal) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
         let fullContent = '';
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+        // 读取超时保护：每 30 秒必须有新数据，否则中断
+        const CHUNK_TIMEOUT = 30000;
+        let lastChunkTime = Date.now();
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
+        const abortHandler = () => {
+            try { reader.cancel('用户中止'); } catch (_) {}
+        };
+        if (signal) {
+            signal.addEventListener('abort', abortHandler, { once: true });
+        }
 
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith('data: ')) continue;
-                const dataStr = trimmed.slice(6);
-                if (dataStr === '[DONE]') continue;
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
 
-                try {
-                    const parsed = JSON.parse(dataStr);
-                    const delta = parsed.choices?.[0]?.delta?.content;
-                    if (delta) {
-                        fullContent += delta;
-                        if (onChunk) onChunk(delta);
+                lastChunkTime = Date.now();
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.startsWith('data: ')) continue;
+                    const dataStr = trimmed.slice(6);
+                    if (dataStr === '[DONE]') continue;
+
+                    try {
+                        const parsed = JSON.parse(dataStr);
+                        const delta = parsed.choices?.[0]?.delta?.content;
+                        if (delta) {
+                            fullContent += delta;
+                            if (onChunk) onChunk(delta);
+                        }
+                    } catch (e) {
+                        // 忽略解析错误的行
                     }
-                } catch (e) {
-                    // 忽略解析错误的行
                 }
             }
+        } finally {
+            if (signal) {
+                signal.removeEventListener('abort', abortHandler);
+            }
+            // 确保 reader 被释放
+            try { reader.releaseLock(); } catch (_) {}
         }
 
         KOBGStorage.updateTokenUsage(
@@ -441,24 +548,25 @@ CRITICAL RULES:
             temperature: options.temperature || 0.7,
             maxTokens: options.maxTokens || 4096,
             topP: options.topP || 1.0,
-            stream: false
+            stream: false,
+            signal: options.signal
         });
     }
 
     /**
      * 生成 C++ 代码（单次训练，非流式）
      */
-    async function generateCppCode(userPrompt = '', qaCount = 5) {
+    async function generateCppCode(userPrompt = '', qaCount = 5, signal = null) {
         const prompt = userPrompt || buildTrainingPrompt(qaCount, '', false);
         const messages = [{ role: 'user', content: prompt }];
-        const rawOutput = await sendRequest(messages);
+        const rawOutput = await sendRequest(messages, { signal });
         return await assembleCppCode(rawOutput);
     }
 
     /**
      * 流式生成 C++ 代码（逐字输出 AI 原始内容）
      */
-    async function generateCppCodeStream(onChunk, userPrompt = '', qaCount = 5) {
+    async function generateCppCodeStream(onChunk, userPrompt = '', qaCount = 5, signal = null) {
         const prompt = userPrompt || buildTrainingPrompt(qaCount, '', false);
         const messages = [{ role: 'user', content: prompt }];
         const rawOutput = await makeRequest({
@@ -466,7 +574,8 @@ CRITICAL RULES:
             temperature: 0.7,
             maxTokens: getMaxTokens(qaCount),
             stream: true,
-            onChunk
+            onChunk,
+            signal
         });
         return await assembleCppCode(rawOutput);
     }
@@ -481,7 +590,8 @@ CRITICAL RULES:
             maxTokens: options.maxTokens || 4096,
             topP: options.topP || 1.0,
             stream: true,
-            onChunk
+            onChunk,
+            signal: options.signal
         });
     }
 

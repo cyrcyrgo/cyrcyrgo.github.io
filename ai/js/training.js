@@ -4,6 +4,12 @@
    ============================================================ */
 
 const KOBGTraining = (() => {
+    // ========== 高压力训练稳定性配置 ==========
+    const MAX_COMPILE_RESULTS = 100;    // 最多保留 100 条编译结果
+    const MAX_CONTEXT_MESSAGES = 50;    // 最多保留 50 条上下文消息
+    const MAX_CONSECUTIVE_FAILURES = 3; // 连续失败 3 轮后自动中止
+    const CODE_SIZE_WARN = 500000;      // 代码超过 500KB 时警告
+
     let trainingState = {
         isRunning: false,
         isPaused: false,
@@ -16,7 +22,9 @@ const KOBGTraining = (() => {
         compileResults: [],
         contextMessages: [], // 上下文消息
         timerInterval: null,
-        onTickCallback: null
+        onTickCallback: null,
+        consecutiveFailures: 0,  // 连续失败计数
+        waitResumeInterval: null // waitForResume 的 interval 引用
     };
 
     /**
@@ -37,11 +45,24 @@ const KOBGTraining = (() => {
      * 清除上下文
      */
     function clearContext() {
+        stopTimer();
+        cleanupWaitResume();
         trainingState.contextMessages = [];
         trainingState.generatedCode = null;
         trainingState.compileResults = [];
         trainingState.currentRound = 0;
+        trainingState.consecutiveFailures = 0;
         console.log('[Training] 上下文已清除');
+    }
+
+    /**
+     * 清理 waitForResume 的 interval
+     */
+    function cleanupWaitResume() {
+        if (trainingState.waitResumeInterval) {
+            clearInterval(trainingState.waitResumeInterval);
+            trainingState.waitResumeInterval = null;
+        }
     }
 
     /**
@@ -49,6 +70,7 @@ const KOBGTraining = (() => {
      */
     function reset() {
         stopTimer();
+        cleanupWaitResume();
         trainingState = {
             isRunning: false,
             isPaused: false,
@@ -61,7 +83,9 @@ const KOBGTraining = (() => {
             compileResults: [],
             contextMessages: [],
             timerInterval: null,
-            onTickCallback: null
+            onTickCallback: null,
+            consecutiveFailures: 0,
+            waitResumeInterval: null
         };
         console.log('[Training] 训练状态已完全重置');
     }
@@ -133,11 +157,20 @@ const KOBGTraining = (() => {
                 const progress = trainingState.currentRound / trainingState.totalRounds;
                 onProgress(progress, trainingState.currentRound, trainingState.totalRounds);
 
-                // 执行训练轮次 - 等待完成
+                // 执行训练轮次 - 等待完成，不抛异常
+                let roundResult;
                 if (onStreamChunk) {
-                    await executeTrainingRoundStream(onStreamChunk, customInstruction, trainingState.qaPerRound);
+                    roundResult = await executeTrainingRoundStream(onStreamChunk, customInstruction, trainingState.qaPerRound);
                 } else {
-                    await executeTrainingRound(customInstruction, trainingState.qaPerRound);
+                    roundResult = await executeTrainingRound(customInstruction, trainingState.qaPerRound);
+                }
+
+                // 检查连续失败（熔断）
+                if (trainingState.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                    const errMsg = `连续 ${trainingState.consecutiveFailures} 轮失败，训练自动中止`;
+                    console.error('[Training]', errMsg);
+                    onError(new Error(errMsg));
+                    return;
                 }
 
                 // 按时间模式：固定间隔；按轮数模式：仅短暂延迟后继续
@@ -163,10 +196,11 @@ const KOBGTraining = (() => {
     }
 
     /**
-     * 执行单轮训练（流式）
+     * 执行单轮训练（流式）- 带错误恢复和内存保护
      * @param {function} onStreamChunk - 流式回调 (chunkText)
      * @param {string} customInstruction - 自定义训练指令
      * @param {number} qaPerRound - 每轮问答数量
+     * @returns {Promise<{success: boolean, error?: string}>}
      */
     async function executeTrainingRoundStream(onStreamChunk, customInstruction = '', qaPerRound = 5) {
         try {
@@ -184,9 +218,10 @@ const KOBGTraining = (() => {
 
             if (code) {
                 trainingState.generatedCode = code;
-                
+                trainingState.consecutiveFailures = 0; // 重置连续失败计数
+
                 const compileResult = await KOBGCompiler.compile(code);
-                trainingState.compileResults.push({
+                pushCompileResult({
                     round: trainingState.currentRound,
                     timestamp: Date.now(),
                     success: compileResult.success,
@@ -194,21 +229,37 @@ const KOBGTraining = (() => {
                     errors: compileResult.errors
                 });
 
-                trainingState.contextMessages.push({
+                pushContextMessage({
                     role: 'assistant',
                     content: code
                 });
+
+                // 代码大小检查
+                if (code.length > CODE_SIZE_WARN) {
+                    console.warn(`[Training] 代码过大 (${(code.length / 1024).toFixed(1)}KB)，建议重置上下文`);
+                }
             }
+
+            return { success: true };
         } catch (error) {
-            console.error('[Training] Round failed:', error);
-            throw error;
+            console.error('[Training] 第 ' + trainingState.currentRound + ' 轮失败:', error.message);
+            trainingState.consecutiveFailures++;
+            pushCompileResult({
+                round: trainingState.currentRound,
+                timestamp: Date.now(),
+                success: false,
+                output: '',
+                errors: [error.message]
+            });
+            return { success: false, error: error.message };
         }
     }
 
     /**
-     * 执行单轮训练（非流式）
+     * 执行单轮训练（非流式）- 带错误恢复和内存保护
      * @param {string} customInstruction - 自定义训练指令
      * @param {number} qaPerRound - 每轮问答数量
+     * @returns {Promise<{success: boolean, error?: string}>}
      */
     async function executeTrainingRound(customInstruction = '', qaPerRound = 5) {
         try {
@@ -225,9 +276,10 @@ const KOBGTraining = (() => {
 
             if (code) {
                 trainingState.generatedCode = code;
-                
+                trainingState.consecutiveFailures = 0;
+
                 const compileResult = await KOBGCompiler.compile(code);
-                trainingState.compileResults.push({
+                pushCompileResult({
                     round: trainingState.currentRound,
                     timestamp: Date.now(),
                     success: compileResult.success,
@@ -235,14 +287,48 @@ const KOBGTraining = (() => {
                     errors: compileResult.errors
                 });
 
-                trainingState.contextMessages.push({
+                pushContextMessage({
                     role: 'assistant',
                     content: code
                 });
+
+                if (code.length > CODE_SIZE_WARN) {
+                    console.warn(`[Training] 代码过大 (${(code.length / 1024).toFixed(1)}KB)，建议重置上下文`);
+                }
             }
+
+            return { success: true };
         } catch (error) {
-            console.error('[Training] Round failed:', error);
-            throw error;
+            console.error('[Training] 第 ' + trainingState.currentRound + ' 轮失败:', error.message);
+            trainingState.consecutiveFailures++;
+            pushCompileResult({
+                round: trainingState.currentRound,
+                timestamp: Date.now(),
+                success: false,
+                output: '',
+                errors: [error.message]
+            });
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * 安全压入编译结果（自动裁剪）
+     */
+    function pushCompileResult(result) {
+        trainingState.compileResults.push(result);
+        if (trainingState.compileResults.length > MAX_COMPILE_RESULTS) {
+            trainingState.compileResults = trainingState.compileResults.slice(-MAX_COMPILE_RESULTS);
+        }
+    }
+
+    /**
+     * 安全压入上下文消息（自动裁剪）
+     */
+    function pushContextMessage(msg) {
+        trainingState.contextMessages.push(msg);
+        if (trainingState.contextMessages.length > MAX_CONTEXT_MESSAGES) {
+            trainingState.contextMessages = trainingState.contextMessages.slice(-MAX_CONTEXT_MESSAGES);
         }
     }
 
@@ -273,7 +359,8 @@ const KOBGTraining = (() => {
         trainingState.isRunning = false;
         trainingState.isPaused = false;
         stopTimer();
-        console.log('[Training] 已停止');
+        cleanupWaitResume();
+        console.log('[Training] 已停止，连续失败计数:', trainingState.consecutiveFailures);
     }
 
     /**
@@ -302,8 +389,8 @@ const KOBGTraining = (() => {
             type: r.success ? 'success' : 'error',
             round: r.round,
             time: new Date(r.timestamp).toLocaleTimeString(),
-            message: r.success ? `第 ${r.round} 轮编译成功` : `第 ${r.round} 轮编译失败: ${r.errors.join(', ')}`,
-            errors: r.errors
+            message: r.success ? `第 ${r.round} 轮编译成功` : `第 ${r.round} 轮失败: ${r.errors?.join(', ') || '未知错误'}`,
+            errors: r.errors || []
         }));
     }
 
@@ -340,10 +427,11 @@ const KOBGTraining = (() => {
     }
 
     function waitForResume() {
+        cleanupWaitResume();
         return new Promise(resolve => {
-            const check = setInterval(() => {
+            trainingState.waitResumeInterval = setInterval(() => {
                 if (!trainingState.isPaused || !trainingState.isRunning) {
-                    clearInterval(check);
+                    cleanupWaitResume();
                     resolve();
                 }
             }, 200);
