@@ -2,6 +2,7 @@
    KOBG AI - api.js - LLM API 通信模块
    负责与用户配置的大模型 API 进行通信
    核心设计：AI 只输出问答对数据，C++ 模板代码由系统内置组装
+   支持双模式：本地代理模式（localhost）和直连模式（静态托管如 GitHub Pages）
    ============================================================ */
 
 const KOBGAPI = (() => {
@@ -38,6 +39,176 @@ CRITICAL RULES:
 - You may include Chinese language Q&A pairs if the user asks in Chinese.`;
 
     let cachedTemplate = null;
+    let _useProxy = null; // null = 未检测, true = 代理模式, false = 直连模式
+
+    /**
+     * 检测运行环境：本地代理模式 vs 直连模式
+     * 规则：localhost / 127.0.0.1 视为有后端代理的本地环境
+     *       其他（如 GitHub Pages）视为静态托管，直连 API
+     */
+    function isLocalHost() {
+        const host = window.location.hostname;
+        return host === 'localhost' || host === '127.0.0.1' || host === '';
+    }
+
+    /**
+     * 构建完整的 API 端点 URL（直连模式）
+     * 确保以 /chat/completions 结尾
+     */
+    function buildDirectUrl(baseUrl) {
+        let url = baseUrl.replace(/\/+$/, '');
+        if (!url.endsWith('/chat/completions')) {
+            url += '/chat/completions';
+        }
+        return url;
+    }
+
+    /**
+     * 统一的请求发送函数，自动适配代理/直连模式
+     * @param {Object} opts - { messages, temperature, maxTokens, topP, stream, onChunk }
+     * @returns {Promise<string|Object>} 非流式返回 content 字符串，流式由 onChunk 回调处理
+     */
+    async function makeRequest(opts) {
+        const config = getConfig();
+        if (!isConfigured()) {
+            throw new Error('API 未配置，请先填写 API 接口信息');
+        }
+
+        const { messages, temperature = 0.7, maxTokens = 4096, topP = 1.0, stream = false, onChunk } = opts;
+
+        const allMessages = [
+            { role: 'system', content: SYSTEM_PROMPT },
+            ...messages
+        ];
+
+        const useProxy = isLocalHost();
+
+        let fetchUrl, fetchOptions;
+
+        if (useProxy) {
+            // 代理模式：POST 到本地 /api/chat，由 server.js 转发
+            fetchUrl = '/api/chat';
+            fetchOptions = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: config.url,
+                    apiKey: config.apiKey,
+                    model: config.model,
+                    messages: allMessages,
+                    temperature,
+                    max_tokens: maxTokens,
+                    top_p: topP,
+                    stream
+                })
+            };
+        } else {
+            // 直连模式：直接请求用户配置的 API
+            fetchUrl = buildDirectUrl(config.url);
+            fetchOptions = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${config.apiKey}`
+                },
+                body: JSON.stringify({
+                    model: config.model,
+                    messages: allMessages,
+                    temperature,
+                    max_tokens: maxTokens,
+                    top_p: topP,
+                    stream
+                })
+            };
+        }
+
+        const response = await fetch(fetchUrl, fetchOptions);
+
+        if (!response.ok) {
+            let errorMsg = '';
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.error?.message || errorData.message || JSON.stringify(errorData);
+            } catch (_) {
+                try {
+                    errorMsg = await response.text();
+                } catch (_) {
+                    errorMsg = '';
+                }
+            }
+            const msg = friendlyError(response.status, errorMsg);
+            throw new Error(msg);
+        }
+
+        if (stream) {
+            return handleStreamResponse(response, messages, onChunk);
+        } else {
+            return handleJsonResponse(response, messages);
+        }
+    }
+
+    /**
+     * 处理非流式 JSON 响应
+     */
+    async function handleJsonResponse(response, messages) {
+        const data = await response.json();
+        const usage = data.usage || {};
+        const inputTokens = usage.prompt_tokens || 0;
+        const outputTokens = usage.completion_tokens || 0;
+        KOBGStorage.updateTokenUsage(inputTokens, outputTokens);
+
+        const content = data.choices?.[0]?.message?.content || '';
+        // 处理 reasoning_content（推理模型的思考过程）
+        const reasoning = data.choices?.[0]?.message?.reasoning_content || '';
+        if (reasoning && !content) {
+            console.log('[API] Model returned only reasoning_content, waiting for final content...');
+        }
+        return cleanCodeOutput(content);
+    }
+
+    /**
+     * 处理流式 SSE 响应
+     */
+    async function handleStreamResponse(response, messages, onChunk) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullContent = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith('data: ')) continue;
+                const dataStr = trimmed.slice(6);
+                if (dataStr === '[DONE]') continue;
+
+                try {
+                    const parsed = JSON.parse(dataStr);
+                    const delta = parsed.choices?.[0]?.delta?.content;
+                    if (delta) {
+                        fullContent += delta;
+                        if (onChunk) onChunk(delta);
+                    }
+                } catch (e) {
+                    // 忽略解析错误的行
+                }
+            }
+        }
+
+        KOBGStorage.updateTokenUsage(
+            estimateTokens(messages.map(m => m.content).join('')),
+            estimateTokens(fullContent)
+        );
+
+        return cleanCodeOutput(fullContent);
+    }
 
     /**
      * 加载并缓存 C++ 模板
@@ -89,9 +260,8 @@ CRITICAL RULES:
             }
         }
 
-        // 如果标准格式没匹配到，尝试从原始文本中提取
+        // 如果标准格式没匹配到，尝试宽松匹配
         if (knowledge.length === 0) {
-            // 尝试宽松匹配
             const loosePattern = /knowledge_base\s*\[\s*"([^"]+)"\s*\]\s*=\s*"([^"]+)"/g;
             while ((match = loosePattern.exec(kbSection)) !== null) {
                 const q = match[1].trim();
@@ -180,7 +350,6 @@ CRITICAL RULES:
             kbCode += `        knowledge_base["${escapedQ}"] = "${escapedA}";\n`;
         }
 
-        // 如果没有知识库条目，添加默认占位
         if (kbCode.trim() === '') {
             kbCode = '        // AI 未生成有效知识库条目\n';
         }
@@ -200,16 +369,13 @@ CRITICAL RULES:
             testCode = '        std::vector<std::string> test_questions = {\n            "What is artificial intelligence?",\n            "What is machine learning?",\n            "What is a neural network?",\n            "What is deep learning?",\n            "What is natural language processing?"\n        };';
         }
 
-        // 在模板中替换占位符
         let result = template;
 
-        // 替换知识库区域
         result = result.replace(
             /\/\/ @@AI_CONTENT_BEGIN@@[\s\S]*?\/\/ @@AI_CONTENT_END@@/,
             `// @@AI_CONTENT_BEGIN@@\n${kbCode}        // @@AI_CONTENT_END@@`
         );
 
-        // 替换测试问题区域
         result = result.replace(
             /\/\/ @@AI_DIALOGUE_BEGIN@@[\s\S]*?\/\/ @@AI_DIALOGUE_END@@/,
             `// @@AI_DIALOGUE_BEGIN@@\n${testCode}\n        // @@AI_DIALOGUE_END@@`
@@ -220,8 +386,6 @@ CRITICAL RULES:
 
     /**
      * 从已组装的 C++ 代码中提取 AI 生成的内容（用于继续训练）
-     * @param {string} fullCode - 完整的 C++ 代码
-     * @returns {{knowledge: Array, testQuestions: Array}}
      */
     function extractAIContents(fullCode) {
         return parseAIOutput(fullCode);
@@ -234,63 +398,6 @@ CRITICAL RULES:
     function isConfigured() {
         const config = getConfig();
         return !!(config.url && config.apiKey && config.model);
-    }
-
-    function getHeaders() {
-        // 不再需要，所有请求通过服务端代理转发
-        return { 'Content-Type': 'application/json' };
-    }
-
-    function buildRequestBody(messages, options = {}) {
-        const allMessages = [
-            { role: 'system', content: SYSTEM_PROMPT },
-            ...messages
-        ];
-
-        return {
-            messages: allMessages,
-            temperature: options.temperature || 0.7,
-            max_tokens: options.maxTokens || 4096,
-            top_p: options.topP || 1.0
-        };
-    }
-
-    async function sendRequest(messages, options = {}) {
-        const config = getConfig();
-        if (!isConfigured()) {
-            throw new Error('API 未配置，请先填写 API 接口信息');
-        }
-
-        const payload = buildRequestBody(messages, options);
-        const body = {
-            url: config.url,
-            apiKey: config.apiKey,
-            model: config.model,
-            ...payload,
-            stream: false
-        };
-
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const upstreamMsg = errorData.error?.message || '';
-            const msg = friendlyError(response.status, upstreamMsg);
-            throw new Error(msg);
-        }
-
-        const data = await response.json();
-        const usage = data.usage || {};
-        const inputTokens = usage.prompt_tokens || 0;
-        const outputTokens = usage.completion_tokens || 0;
-        KOBGStorage.updateTokenUsage(inputTokens, outputTokens);
-
-        const content = data.choices?.[0]?.message?.content || '';
-        return cleanCodeOutput(content);
     }
 
     function cleanCodeOutput(text) {
@@ -326,14 +433,25 @@ CRITICAL RULES:
     }
 
     /**
+     * 发送非流式请求
+     */
+    async function sendRequest(messages, options = {}) {
+        return makeRequest({
+            messages,
+            temperature: options.temperature || 0.7,
+            maxTokens: options.maxTokens || 4096,
+            topP: options.topP || 1.0,
+            stream: false
+        });
+    }
+
+    /**
      * 生成 C++ 代码（单次训练，非流式）
      */
     async function generateCppCode(userPrompt = '', qaCount = 5) {
         const prompt = userPrompt || buildTrainingPrompt(qaCount, '', false);
-
         const messages = [{ role: 'user', content: prompt }];
         const rawOutput = await sendRequest(messages);
-
         return await assembleCppCode(rawOutput);
     }
 
@@ -343,9 +461,28 @@ CRITICAL RULES:
     async function generateCppCodeStream(onChunk, userPrompt = '', qaCount = 5) {
         const prompt = userPrompt || buildTrainingPrompt(qaCount, '', false);
         const messages = [{ role: 'user', content: prompt }];
-        const rawOutput = await sendStreamRequest(messages, { temperature: 0.7, maxTokens: getMaxTokens(qaCount) }, onChunk);
-
+        const rawOutput = await makeRequest({
+            messages,
+            temperature: 0.7,
+            maxTokens: getMaxTokens(qaCount),
+            stream: true,
+            onChunk
+        });
         return await assembleCppCode(rawOutput);
+    }
+
+    /**
+     * 发送流式请求（SSE）
+     */
+    async function sendStreamRequest(messages, options = {}, onChunk) {
+        return makeRequest({
+            messages,
+            temperature: options.temperature || 0.7,
+            maxTokens: options.maxTokens || 4096,
+            topP: options.topP || 1.0,
+            stream: true,
+            onChunk
+        });
     }
 
     /**
@@ -363,9 +500,14 @@ CRITICAL RULES:
         const prompt = `${contextPrompt}\n\n${trainingPrompt}`;
 
         const messages = [{ role: 'user', content: prompt }];
-        const rawOutput = await sendStreamRequest(messages, { temperature: 0.8, maxTokens: getMaxTokens(qaCount) }, onChunk);
+        const rawOutput = await makeRequest({
+            messages,
+            temperature: 0.8,
+            maxTokens: getMaxTokens(qaCount),
+            stream: true,
+            onChunk
+        });
 
-        // 合并旧知识和新知识
         const parsed = parseAIOutput(rawOutput);
         const mergedCode = await assembleMergedCppCode(knowledge, parsed.knowledge, testQuestions, parsed.testQuestions);
         return mergedCode;
@@ -388,7 +530,6 @@ CRITICAL RULES:
         const messages = [{ role: 'user', content: prompt }];
         const rawOutput = await sendRequest(messages, { temperature: 0.8, maxTokens: getMaxTokens(qaCount) });
 
-        // 合并旧知识和新知识
         const parsed = parseAIOutput(rawOutput);
         const mergedCode = await assembleMergedCppCode(knowledge, parsed.knowledge, testQuestions, parsed.testQuestions);
         return mergedCode;
@@ -396,7 +537,6 @@ CRITICAL RULES:
 
     /**
      * 根据 QA 数量估算 max_tokens
-     * 每个 QA 约 100-150 tokens，加上格式开销
      */
     function getMaxTokens(qaCount) {
         const base = 500;
@@ -436,7 +576,6 @@ CRITICAL RULES:
             }
         }
 
-        // 组装知识库代码
         let kbCode = '';
         for (const entry of allKnowledge) {
             const escapedQ = entry.q.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -448,7 +587,6 @@ CRITICAL RULES:
             kbCode = '        // AI 未生成有效知识库条目\n';
         }
 
-        // 组装测试问题代码
         let testCode = '';
         if (allTests.length > 0) {
             testCode = '        std::vector<std::string> test_questions = {\n';
@@ -479,112 +617,68 @@ CRITICAL RULES:
     }
 
     /**
-     * 发送流式请求（SSE）
+     * 测试连接
      */
-    async function sendStreamRequest(messages, options = {}, onChunk) {
-        const config = getConfig();
-        if (!isConfigured()) {
-            throw new Error('API 未配置，请先填写 API 接口信息');
-        }
-
-        const allMessages = [
-            { role: 'system', content: SYSTEM_PROMPT },
-            ...messages
-        ];
-
-        const body = {
-            url: config.url,
-            apiKey: config.apiKey,
-            model: config.model,
-            messages: allMessages,
-            temperature: options.temperature || 0.7,
-            max_tokens: options.maxTokens || 4096,
-            top_p: options.topP || 1.0,
-            stream: true
-        };
-
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const upstreamMsg = errorData.error?.message || '';
-            const msg = friendlyError(response.status, upstreamMsg);
-            throw new Error(msg);
-        }
-
-        let fullContent = '';
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith('data: ')) continue;
-                const data = trimmed.slice(6);
-                if (data === '[DONE]') continue;
-
-                try {
-                    const parsed = JSON.parse(data);
-                    const delta = parsed.choices?.[0]?.delta?.content;
-                    if (delta) {
-                        fullContent += delta;
-                        if (onChunk) onChunk(delta);
-                    }
-                } catch (e) {
-                    // 忽略解析错误的行
-                }
-            }
-        }
-
-        KOBGStorage.updateTokenUsage(
-            estimateTokens(messages.map(m => m.content).join('')),
-            estimateTokens(fullContent)
-        );
-
-        return cleanCodeOutput(fullContent);
-    }
-
     async function testConnection() {
         const config = getConfig();
         if (!isConfigured()) {
             throw new Error('API 未配置');
         }
 
-        const body = {
-            url: config.url,
-            apiKey: config.apiKey,
-            model: config.model,
-            messages: [{ role: 'user', content: 'Say "KOBG AI connected" and nothing else.' }],
-            max_tokens: 50,
-            stream: false
-        };
+        const useProxy = isLocalHost();
+        let fetchUrl, fetchOptions;
 
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
+        if (useProxy) {
+            fetchUrl = '/api/chat';
+            fetchOptions = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: config.url,
+                    apiKey: config.apiKey,
+                    model: config.model,
+                    messages: [{ role: 'user', content: 'Say "KOBG AI connected" and nothing else.' }],
+                    max_tokens: 200,
+                    stream: false
+                })
+            };
+        } else {
+            fetchUrl = buildDirectUrl(config.url);
+            fetchOptions = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${config.apiKey}`
+                },
+                body: JSON.stringify({
+                    model: config.model,
+                    messages: [{ role: 'user', content: 'Say "KOBG AI connected" and nothing else.' }],
+                    max_tokens: 200,
+                    stream: false
+                })
+            };
+        }
+
+        const response = await fetch(fetchUrl, fetchOptions);
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const upstreamMsg = errorData.error?.message || '';
-            throw new Error(friendlyError(response.status, upstreamMsg));
+            let errorMsg = '';
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.error?.message || errorData.message || '';
+            } catch (_) {
+                try { errorMsg = await response.text(); } catch (_) {}
+            }
+            throw new Error(friendlyError(response.status, errorMsg));
         }
 
         const data = await response.json();
-        return data.choices?.[0]?.message?.content || 'Connected';
+        const content = data.choices?.[0]?.message?.content || '';
+        if (content) return content;
+        // 处理推理模型可能返回空 content 的情况
+        const reasoning = data.choices?.[0]?.message?.reasoning_content;
+        if (reasoning) return '连接成功（模型为推理模型，已返回思考内容）';
+        return 'Connected';
     }
 
     function estimateTokens(text) {
@@ -602,14 +696,16 @@ CRITICAL RULES:
         const detail = upstreamMsg ? `: ${upstreamMsg}` : '';
 
         switch (status) {
+            case 400:
+                return `${prefix} 请求参数错误${detail}`;
             case 401:
                 return `${prefix} 鉴权失败 — 请检查 API Key 是否正确，或 Key 是否已过期${detail}`;
             case 403:
                 return `${prefix} 访问被拒绝 — 请检查 API Key 权限${detail}`;
             case 404:
-                return `${prefix} 接口不存在 — 请检查 API URL 是否正确${detail}`;
+                return `${prefix} 接口不存在 — 请检查 API URL 是否正确（应填写基础地址，不含 /chat/completions）${detail}`;
             case 405:
-                return `${prefix} 请求方法不允许 — 请检查 API URL 是否正确${detail}`;
+                return `${prefix} 请求方法不允许 — API 代理不可用，正在尝试直连模式${detail}`;
             case 429:
                 return `${prefix} 请求过于频繁 — 请稍后再试${detail}`;
             case 500:
@@ -617,6 +713,9 @@ CRITICAL RULES:
             case 503:
                 return `${prefix} 上游服务异常 — 请稍后重试或检查 API 地址${detail}`;
             default:
+                if (status === 0 || !status) {
+                    return `网络错误 — 无法连接到服务器，请检查网络或 API URL 是否正确（跨域 CORS 限制可能导致此问题）${detail}`;
+                }
                 return `${prefix}${detail}`;
         }
     }
@@ -628,6 +727,7 @@ CRITICAL RULES:
         generateCppCodeStream,
         continueTraining,
         continueTrainingStream,
+        sendRequest,
         sendStreamRequest,
         testConnection,
         estimateTokens,
@@ -637,6 +737,8 @@ CRITICAL RULES:
         extractAIContents,
         loadTemplate,
         friendlyError,
+        isLocalHost,
+        buildDirectUrl,
         SYSTEM_PROMPT
     };
 })();
