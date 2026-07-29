@@ -278,8 +278,9 @@ CRITICAL RULES:
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            const msg = errorData.error?.message || errorData.message || `HTTP ${response.status}`;
-            throw new Error(`API 请求失败 (${response.status}): ${msg}`);
+            const upstreamMsg = errorData.error?.message || '';
+            const msg = friendlyError(response.status, upstreamMsg);
+            throw new Error(msg);
         }
 
         const data = await response.json();
@@ -510,8 +511,9 @@ CRITICAL RULES:
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            const msg = errorData.error?.message || errorData.message || `HTTP ${response.status}`;
-            throw new Error(`API 请求失败 (${response.status}): ${msg}`);
+            const upstreamMsg = errorData.error?.message || '';
+            const msg = friendlyError(response.status, upstreamMsg);
+            throw new Error(msg);
         }
 
         let fullContent = '';
@@ -577,7 +579,8 @@ CRITICAL RULES:
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(`连接失败 (${response.status}): ${errorData.message || ''}`);
+            const upstreamMsg = errorData.error?.message || '';
+            throw new Error(friendlyError(response.status, upstreamMsg));
         }
 
         const data = await response.json();
@@ -589,6 +592,33 @@ CRITICAL RULES:
         const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
         const otherChars = text.length - chineseChars;
         return Math.ceil(chineseChars / 1.5 + otherChars / 4);
+    }
+
+    /**
+     * 将 HTTP 状态码和上游错误信息转为用户友好的中文提示
+     */
+    function friendlyError(status, upstreamMsg) {
+        const prefix = `请求失败 (${status})`;
+        const detail = upstreamMsg ? `: ${upstreamMsg}` : '';
+
+        switch (status) {
+            case 401:
+                return `${prefix} 鉴权失败 — 请检查 API Key 是否正确，或 Key 是否已过期${detail}`;
+            case 403:
+                return `${prefix} 访问被拒绝 — 请检查 API Key 权限${detail}`;
+            case 404:
+                return `${prefix} 接口不存在 — 请检查 API URL 是否正确${detail}`;
+            case 405:
+                return `${prefix} 请求方法不允许 — 请检查 API URL 是否正确${detail}`;
+            case 429:
+                return `${prefix} 请求过于频繁 — 请稍后再试${detail}`;
+            case 500:
+            case 502:
+            case 503:
+                return `${prefix} 上游服务异常 — 请稍后重试或检查 API 地址${detail}`;
+            default:
+                return `${prefix}${detail}`;
+        }
     }
 
     return {
@@ -606,6 +636,7 @@ CRITICAL RULES:
         assembleCppCode,
         extractAIContents,
         loadTemplate,
+        friendlyError,
         SYSTEM_PROMPT
     };
 })();
