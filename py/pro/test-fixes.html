@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix Verification - Bug 1 & Bug 2</title>
+    <style>
+        body { font-family: monospace; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .test-case { border: 1px solid #ccc; padding: 15px; margin: 15px 0; border-radius: 5px; }
+        .bug-title { color: #dc3545; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+        .fixed-title { color: #28a745; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+        .steps { background: #f8f9fa; padding: 10px; margin: 10px 0; }
+        .expected { background: #d4edda; padding: 10px; margin: 10px 0; }
+        .description { margin-bottom: 10px; }
+        code { background: #e9ecef; padding: 2px 4px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+<h1>Bug Fix Verification</h1>
+
+<div class="test-case">
+    <div class="bug-title">Bug 1: Race Condition - Missing isRunning check in runSelection()</div>
+    <div class="description">
+        <p><strong>Location:</strong> <code>py/js/app.js</code> - <code>runSelection()</code> method</p>
+        <p><strong>Description:</strong> When code is already running, pressing Shift+F5 (Run Selection) would start a second concurrent execution.
+        Both executions share the same <code>outputBuffer</code>/<code>errorBuffer</code> in pyodide-manager, causing output corruption.</p>
+        <p><strong>Trigger Scenario:</strong></p>
+        <ol>
+            <li>Run a long-running Python script (e.g., <code>import time; time.sleep(10)</code>)</li>
+            <li>While it's running, select some code and press Shift+F5 to run selection</li>
+            <li>Before fix: Two concurrent executions, output interleaved/corrupted</li>
+            <li>After fix: Toast message "Code is already running, please wait..." appears, no concurrent execution</li>
+        </ol>
+    </div>
+    <div class="expected">
+        <p><strong>✓ Expected Behavior After Fix:</strong></p>
+        <ul>
+            <li>If <code>this.isRunning === true</code>, <code>runSelection()</code> rejects immediately</li>
+            <li>Shows toast warning to user</li>
+            <li>No concurrent execution → no output buffer corruption</li>
+        </ul>
+    </div>
+</div>
+
+<div class="test-case">
+    <div class="bug-title">Bug 2: Silent data loss - stderr output silently dropped in runSelection()</div>
+    <div class="description">
+        <p><strong>Location:</strong> <code>py/js/app.js</code> - <code>runSelection()</code> method</p>
+        <p><strong>Description:</strong> <code>_executeCode()</code> correctly handles <code>result.stderr</code> and displays it to the console.
+        But <code>runSelection()</code> completely ignored <code>result.stderr</code> → any warning/error output from Python is silently lost.</p>
+        <p><strong>Trigger Scenario:</strong></p>
+        <ol>
+            <li>Select code that produces stderr output (e.g., <code>import warnings; warnings.warn("test warning")</code>)</li>
+            <li>Run selection with Shift+F5</li>
+            <li>Before fix: The warning never appears in console → user doesn't see it</li>
+            <li>After fix: The warning appears in console as error output</li>
+        </ol>
+    </div>
+    <div class="expected">
+        <p><strong>✓ Expected Behavior After Fix:</strong></p>
+        <ul>
+            <li>If <code>result.stderr</code> exists, it's written to console with <code>'error'</code> type</li>
+            <li>No silent data loss → user sees all warnings/errors</li>
+        </ul>
+    </div>
+</div>
+
+<div class="test-case">
+    <div class="fixed-title">✓ Fix Applied Summary</div>
+    <ul>
+        <li><strong>Bug 1 (Race Condition):</strong> Added <code>if (this.isRunning)</code> check before starting execution</li>
+        <li><strong>Bug 2 (Silent data loss):</strong> Added <code>if (result.stderr)</code> output handling, consistent with <code>_executeCode()</code></li>
+        <li><strong>Additional:</strong> Added missing try-catch for exceptions in <code>runSelection()</code>,
+            consistent with <code>_executeCode()</code> → prevents hanging <code>isRunning = true</code></li>
+        <li><strong>Added:</strong> Translation keys for <code>toast.alreadyRunning</code> in both Chinese and English</li>
+    </ul>
+    <p>Fix is minimal, focused, and doesn't change any other behavior.</p>
+</div>
+
+<div class="test-case">
+    <div class="fixed-title">Test Code Snippet</div>
+    <p>Copy this Python code to test Bug 2 (stderr output):</p>
+<pre>import warnings
+print("this is stdout")
+warnings.warn("this is a warning - should appear in console")
+print("stdout after warning")
+</pre>
+    <p>Expected after fix: All three lines appear (stdout + warning + stdout).</p>
+    <p>Expected before fix: Warning is silently dropped, only two stdout lines appear.</p>
+</div>
+
+</body>
+</html>

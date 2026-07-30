@@ -1,0 +1,91 @@
+# 蟒蛇 Python编译器 - 加速方案说明
+
+## 当前加速方案
+
+已配置国内镜像源，优先级如下：
+
+1. **JSDMirror国内镜像** (jsdmirror.com) - 推荐
+2. **Fastly镜像** (fastly.jsdelivr.net)
+3. **jsDelivr官方** (cdn.jsdelivr.net)
+4. **官方CDN** (pyodide-cdn2.iodide.io)
+
+---
+
+## 进一步加速 - 本地化方案
+
+### 方案一：下载Pyodide到本地
+
+1. **下载Pyodide**
+   - 下载地址：https://github.com/pyodide/pyodide/releases
+   - 或使用镜像：https://cdn.jsdmirror.com/pyodide/v0.26.0/full/
+   - 需要下载整个 `full` 文件夹（约50MB）
+
+2. **放置文件**
+   将下载的文件放入 `蟒蛇/pyodide/` 文件夹，结构如下：
+   ```
+   蟒蛇/
+   ├── index.html
+   ├── pyodide/
+   │   ├── pyodide.js
+   │   ├── pyodide.asm.wasm
+   │   ├── pyodide.asm.js
+   │   ├── ... (其他文件)
+   └── js/
+   ```
+
+3. **启用本地模式**
+   
+   编辑 `js/pyodide-manager.js`，找到：
+   ```javascript
+   this.useLocal = false;
+   ```
+   改为：
+   ```javascript
+   this.useLocal = true;
+   ```
+
+---
+
+### 方案二：使用Service Worker缓存
+
+浏览器会自动缓存已加载的资源，首次加载后再次访问会更快。
+
+---
+
+### 方案三：使用更小的Pyodide版本
+
+如果不需要科学计算库，可以使用精简版：
+
+- 完整版 (~50MB): 包含NumPy, Pandas等
+- 精简版 (~15MB): 仅Python核心
+
+---
+
+## 已优化的其他加速措施
+
+1. **Monaco Editor** 使用国内镜像
+2. **字体** 使用Google Fonts国内镜像
+3. **并行加载** 多个资源同时加载
+
+---
+
+## 预期加载时间
+
+| 网络环境 | 首次加载 | 再次加载 |
+|---------|---------|---------|
+| 国内镜像 | 10-30秒 | 1-3秒 |
+| 本地文件 | 1-2秒 | 1-2秒 |
+
+---
+
+## 问题排查
+
+如果加载失败：
+1. 检查网络连接
+2. 尝试刷新页面
+3. 清除浏览器缓存后重试
+4. 检查控制台(F12)错误信息
+
+---
+
+**联系方式**: cyr12345679@qq.com
