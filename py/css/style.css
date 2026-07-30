@@ -394,6 +394,103 @@ body {
 }
 
 /* ============================================
+   Py Pro 奢华按钮
+   ============================================ */
+.btn-py-pro {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    background: linear-gradient(135deg, #C9A84C 0%, #E2C87A 30%, #F5E6B8 50%, #D4AF5A 70%, #B8942E 100%);
+    background-size: 200% 200%;
+    border: none;
+    border-radius: 6px;
+    color: #1E1E1E;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: var(--font-family);
+    cursor: pointer;
+    text-decoration: none;
+    letter-spacing: 0.3px;
+    overflow: hidden;
+    transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1.2);
+    box-shadow:
+        0 0 0 1px rgba(212, 175, 90, 0.35),
+        0 2px 8px rgba(180, 140, 40, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    animation: py-pro-shimmer 3s ease-in-out infinite;
+}
+
+.btn-py-pro__icon {
+    font-size: 10px;
+    color: #1E1E1E;
+    text-shadow: 0 0 6px rgba(255, 215, 0, 0.6);
+    animation: py-pro-diamond 2s ease-in-out infinite;
+}
+
+.btn-py-pro__text {
+    position: relative;
+    z-index: 1;
+}
+
+.btn-py-pro__glow {
+    position: absolute;
+    inset: 0;
+    border-radius: 6px;
+    background: radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.25) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Hover 状态 */
+.btn-py-pro:hover {
+    transform: translateY(-1px) scale(1.04);
+    background: linear-gradient(135deg, #D4AF5A 0%, #F0D68A 30%, #FFF3D0 50%, #E2C87A 70%, #C9A84C 100%);
+    background-size: 200% 200%;
+    box-shadow:
+        0 0 0 1px rgba(212, 175, 90, 0.5),
+        0 4px 16px rgba(200, 160, 40, 0.4),
+        0 0 20px rgba(212, 175, 90, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    color: #000;
+    text-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+}
+
+.btn-py-pro:hover .btn-py-pro__icon {
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.9);
+}
+
+.btn-py-pro:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow:
+        0 0 0 1px rgba(212, 175, 90, 0.4),
+        0 1px 4px rgba(180, 140, 40, 0.2),
+        inset 0 1px 3px rgba(0, 0, 0, 0.15);
+    transition: all 0.1s ease;
+}
+
+@keyframes py-pro-shimmer {
+    0%, 100% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+@keyframes py-pro-diamond {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+}
+
+/* ============================================
    按钮
    ============================================ */
 .btn {
@@ -1760,6 +1857,17 @@ body {
     .language-selector select {
         font-size: 10px;
         padding: 2px 4px;
+    }
+
+    .btn-py-pro {
+        padding: 3px 8px;
+        font-size: 10px;
+        gap: 4px;
+        border-radius: 4px;
+    }
+
+    .btn-py-pro__icon {
+        font-size: 8px;
     }
 
     .output-panel {
