@@ -941,17 +941,17 @@ body {
 }
 
 .logix-watermark__grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(3, 1fr);
-    width: 140%;
-    height: 140%;
+    display: flex;
+    gap: 80px;
+    width: 100%;
     transform: rotate(-22deg);
     color: var(--python-blue);
     font-weight: 800;
     font-size: 26px;
     letter-spacing: 4px;
     user-select: none;
+    justify-content: center;
+    align-items: center;
 }
 
 .logix-watermark__grid span {
