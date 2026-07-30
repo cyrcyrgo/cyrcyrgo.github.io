@@ -175,7 +175,7 @@ body {
    ============================================ */
 .python-ide {
     display: flex; flex-direction: column;
-    height: 100vh; overflow: hidden;
+    height: 100vh;
 }
 
 /* ============================================
@@ -188,6 +188,8 @@ body {
     padding: 0 16px;
     border-bottom: 1px solid var(--border-color);
     will-change: transform;
+    position: relative;
+    z-index: 1000;
 }
 
 .menu-left { display: flex; align-items: center; gap: 20px; }
