@@ -864,6 +864,42 @@ body {
 
 .console-line.output { padding-left: 20px; }
 
+/* ---- 内联输入 — 模拟原生 Python input() 体验 ---- */
+.console-inline-input {
+    display: flex; align-items: center;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    line-height: 1.5;
+    min-height: 20px;
+}
+
+.console-inline-input .inline-text {
+    color: #D4D4D4;
+}
+
+.console-inline-input .inline-cursor {
+    color: var(--primary);
+    font-weight: 400;
+    animation: inlineBlink 1s var(--ease-in-out) infinite;
+    margin-left: 1px;
+}
+
+@keyframes inlineBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+.inline-hidden-input {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
 .console-line.error {
     color: var(--console-error);
     background: rgba(240, 96, 80, 0.06);

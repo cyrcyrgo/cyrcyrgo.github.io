@@ -194,16 +194,15 @@ class PyodideManager {
                 
                 this._inputWaiting = true;
                 
-                // 通知 app 更新控制台状态
+                // 通知 app 更新控制台状态为「等待输入」
                 if (window.app && window.app._setConsoleState) {
                     window.app._setConsoleState('awaiting-input');
                 }
                 
-                // 自动聚焦 + 更新 placeholder
-                const inputEl = document.getElementById('console-input');
-                if (inputEl) {
-                    inputEl.focus();
-                    inputEl.placeholder = window.t?.('console.inputPlaceholder') || '请输入...';
+                // 激活内联输入 — 模拟原生 Python 终端体验
+                // 用户点击输出区域即可直接输入，移动端弹出键盘
+                if (window.consoleManager) {
+                    window.consoleManager.activateInlineInput();
                 }
                 
                 // 返回 Promise — Pyodide 用 Asyncify 挂起 Python 执行
@@ -244,12 +243,6 @@ class PyodideManager {
             if (window.app && window.app._setConsoleState) {
                 window.app._setConsoleState('idle');
             }
-            
-            // 恢复 placeholder
-            const inputEl = document.getElementById('console-input');
-            if (inputEl) {
-                inputEl.placeholder = window.t?.('console.inputPlaceholder') || '输入 Python 表达式...';
-            }
         }
     }
     
@@ -263,6 +256,10 @@ class PyodideManager {
             this._stdinResolve = null;
             if (window.app && window.app._setConsoleState) {
                 window.app._setConsoleState('idle');
+            }
+            // 清理内联输入
+            if (window.consoleManager) {
+                window.consoleManager.deactivateInlineInput();
             }
         }
     }
@@ -280,10 +277,9 @@ class PyodideManager {
             this._stdinResolve = null;
         }
         
-        // 恢复控制台输入框 placeholder
-        const inputEl = document.getElementById('console-input');
-        if (inputEl) {
-            inputEl.placeholder = window.t?.('console.inputPlaceholder') || '输入 Python 表达式...';
+        // 清理内联输入
+        if (window.consoleManager) {
+            window.consoleManager.deactivateInlineInput();
         }
     }
     
