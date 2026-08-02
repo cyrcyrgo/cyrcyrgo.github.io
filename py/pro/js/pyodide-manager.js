@@ -17,8 +17,8 @@ class PyodideManager {
         
         // 交互式 input() 支持
         this._inputWaiting = false;
-        this._inputValue = null;
         this._inputPrompt = '';
+        this._stdinResolve = null;  // Promise resolve for setStdin
         
         // 镜像源列表（优先级从高到低）
         this.mirrorUrls = [
@@ -179,74 +179,41 @@ class PyodideManager {
             }
         });
         
-        // 暴露 JS 桥接函数给 Python 调用
-        // _py_input_requested: Python 调用 input() 时通知 JS
-        window._py_input_requested = (prompt) => {
-            this._inputWaiting = true;
-            this._inputValue = null;
-            this._inputPrompt = prompt || '';
-            
-            // 立即刷新 stdout 缓冲区到控制台，让 prompt 提示可见
-            this._flushStdout();
-            
-            // 通知 app 更新控制台状态为等待输入
-            if (window.app && window.app._setConsoleState) {
-                window.app._setConsoleState('awaiting-input');
-            }
-            
-            // 自动聚焦控制台输入框
-            const inputEl = document.getElementById('console-input');
-            if (inputEl) {
-                inputEl.focus();
-                inputEl.placeholder = prompt || window.t?.('console.inputPlaceholder') || '请输入...';
-            }
-        };
-        
-        // _py_try_get_input: Python 轮询是否有输入可用
-        window._py_try_get_input = () => {
-            if (this._inputValue !== null) {
-                const val = this._inputValue;
-                this._inputValue = null;
-                this._inputWaiting = false;
-                return val;
-            }
-            return null;
-        };
-        
-        // 覆盖 Python 的 input 函数，使用 time.sleep 轮询
-        // time.sleep 在 Pyodide 中使用 emscripten_sleep (Asyncify)，
-        // 会释放控制权给 JS 事件循环，使浏览器能处理用户输入
-        this.pyodide.runPython(`
-import sys
-import builtins
-import time
-
-class _InputFunction:
-    """交互式 input 函数，使用 time.sleep 轮询 JS 侧输入。
-    time.sleep 在 Pyodide 中通过 emscripten_sleep (Asyncify)
-    实现，每次 sleep 都会释放控制权给 JS 事件循环。"""
-    
-    def __call__(self, prompt=""):
-        import js
-        
-        if prompt:
-            sys.stdout.write(prompt)
-            sys.stdout.flush()
-        
-        # 通知 JS 侧等待输入
-        js._py_input_requested(prompt)
-        
-        # 轮询等待输入，每次 sleep 释放控制权
-        while True:
-            val = js._py_try_get_input()
-            if val is not None:
-                return str(val)
-            time.sleep(0.1)
-
-# 替换内置 input
-_input_func = _InputFunction()
-builtins.input = _input_func
-        `);
+        // 使用 Pyodide 原生 setStdin 实现 input() 交互
+        // Promise 机制 + Asyncify 自动挂起/恢复，比 time.sleep 轮询更可靠
+        this.pyodide.setStdin({
+            stdin: () => {
+                // 安全防护：如果还有未处理的 stdin Promise，先释放它
+                if (this._stdinResolve) {
+                    this._stdinResolve('\n');
+                    this._stdinResolve = null;
+                }
+                
+                // 先刷新 stdout 缓冲区，让 input() 的 prompt 立即显示
+                this._flushStdout();
+                
+                this._inputWaiting = true;
+                
+                // 通知 app 更新控制台状态
+                if (window.app && window.app._setConsoleState) {
+                    window.app._setConsoleState('awaiting-input');
+                }
+                
+                // 自动聚焦 + 更新 placeholder
+                const inputEl = document.getElementById('console-input');
+                if (inputEl) {
+                    inputEl.focus();
+                    inputEl.placeholder = window.t?.('console.inputPlaceholder') || '请输入...';
+                }
+                
+                // 返回 Promise — Pyodide 用 Asyncify 挂起 Python 执行
+                // 等待用户输入，不会阻塞浏览器主线程
+                return new Promise((resolve) => {
+                    this._stdinResolve = resolve;
+                });
+            },
+            isatty: true
+        });
     }
     
     /**
@@ -268,8 +235,21 @@ builtins.input = _input_func
      * @param {string} value 用户输入的值
      */
     resolveUserInput(value) {
-        if (this._inputWaiting) {
-            this._inputValue = String(value);
+        if (this._stdinResolve) {
+            this._inputWaiting = false;
+            // 传入带换行符的值，sys.stdin.readline() 才能正确返回
+            this._stdinResolve(String(value) + '\n');
+            this._stdinResolve = null;
+            
+            if (window.app && window.app._setConsoleState) {
+                window.app._setConsoleState('idle');
+            }
+            
+            // 恢复 placeholder
+            const inputEl = document.getElementById('console-input');
+            if (inputEl) {
+                inputEl.placeholder = window.t?.('console.inputPlaceholder') || '输入 Python 表达式...';
+            }
         }
     }
     
@@ -277,9 +257,10 @@ builtins.input = _input_func
      * 取消交互式输入等待（ESC 键触发），返回空字符串
      */
     cancelInput() {
-        if (this._inputWaiting) {
-            this._inputValue = '';
+        if (this._stdinResolve) {
             this._inputWaiting = false;
+            this._stdinResolve('\n');  // 返回空行，让 input() 返回空字符串
+            this._stdinResolve = null;
             if (window.app && window.app._setConsoleState) {
                 window.app._setConsoleState('idle');
             }
@@ -291,8 +272,13 @@ builtins.input = _input_func
      */
     resetInput() {
         this._inputWaiting = false;
-        this._inputValue = null;
         this._inputPrompt = '';
+        
+        // 取消任何待处理的 stdin Promise
+        if (this._stdinResolve) {
+            this._stdinResolve('\n');
+            this._stdinResolve = null;
+        }
         
         // 恢复控制台输入框 placeholder
         const inputEl = document.getElementById('console-input');
