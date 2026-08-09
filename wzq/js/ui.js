@@ -61,7 +61,10 @@ class AppUI {
     // 确认回复码
     document.getElementById('confirm-response-btn').addEventListener('click', () => this._handleConfirmResponse());
     // 返回
-    document.getElementById('back-to-login-btn').addEventListener('click', () => this._goToPage('login'));
+    document.getElementById('back-to-login-btn').addEventListener('click', () => {
+      this._resetLobby();
+      this._goToPage('login');
+    });
     document.getElementById('back-to-lobby-btn').addEventListener('click', () => this._handleBackToLobby());
 
     // ===== 游戏页 =====
@@ -139,6 +142,12 @@ class AppUI {
 
   // ========== 创建房间 ==========
   async _handleCreateRoom() {
+    // 检查是否已选择模式
+    if (!this.currentMode) {
+      alert('请先选择对战模式（内网/外网/Ngrok）');
+      return;
+    }
+
     this.isCreator = true;
     
     // 创建WebRTC连接
@@ -184,6 +193,12 @@ class AppUI {
 
   // ========== 加入房间 ==========
   async _handleJoinRoom() {
+    // 检查是否已选择模式
+    if (!this.currentMode) {
+      alert('请先选择对战模式（内网/外网/Ngrok）');
+      return;
+    }
+
     const input = document.getElementById('join-code-input').value.trim();
     if (!input) {
       alert('请输入房间码');
@@ -415,8 +430,20 @@ class AppUI {
     }
     this.game = null;
     this.pcManager = null;
+    this._resetLobbyDisplay();
     this._goToPage('lobby');
-    // 重置大厅状态
+  }
+
+  _handleBackToLobby() {
+    if (this.pcManager) {
+      this.pcManager.close();
+    }
+    this.pcManager = null;
+    this._resetLobbyDisplay();
+  }
+
+  // 重置大厅显示状态（保留模式选择）
+  _resetLobbyDisplay() {
     document.querySelectorAll('.room-action').forEach(el => el.classList.remove('hidden'));
     document.getElementById('room-code-area').classList.add('hidden');
     document.getElementById('response-input-area').classList.add('hidden');
@@ -426,19 +453,12 @@ class AppUI {
     document.getElementById('connection-status').style.color = '#999';
   }
 
-  _handleBackToLobby() {
-    if (this.pcManager) {
-      this.pcManager.close();
-    }
-    this.pcManager = null;
-    // 重置大厅状态
-    document.querySelectorAll('.room-action').forEach(el => el.classList.remove('hidden'));
-    document.getElementById('room-code-area').classList.add('hidden');
-    document.getElementById('response-input-area').classList.add('hidden');
-    document.getElementById('response-code-area').classList.add('hidden');
-    document.getElementById('waiting-msg').classList.add('hidden');
-    document.getElementById('connection-status').textContent = '⚪ 未连接';
-    document.getElementById('connection-status').style.color = '#999';
+  // 重置大厅全部状态（含模式选择）
+  _resetLobby() {
+    this._resetLobbyDisplay();
+    this.currentMode = null;
+    document.querySelectorAll('.mode-config').forEach(el => el.classList.add('hidden'));
+    document.getElementById('mode-title').textContent = '选择对战模式';
   }
 
   // ========== 聊天 ==========
