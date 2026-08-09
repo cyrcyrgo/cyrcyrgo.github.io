@@ -1986,6 +1986,10 @@
       if (!res.ok) {
         throw new Error(data.message || 'API 请求失败');
       }
+      // 检查后端业务逻辑是否成功（success 可能为 false 但 HTTP 状态码为 200）
+      if (data.success === false) {
+        throw new Error(data.message || '操作失败');
+      }
       return data;
     }
 
@@ -2705,8 +2709,8 @@
     // ================================================================
     async function loadFriends() {
       try {
-        const data = await apiFetch('/api/friends');
-        STATE.friends = data.friends || [];
+        const data = await apiFetch('/api/friends/list');
+        STATE.friends = data.data || [];
         renderFriendsList();
       } catch (err) {
         addLog('加载好友列表失败: ' + err.message);
@@ -2739,6 +2743,9 @@
         renderFriendRequestsModal();
       } catch (err) {
         addLog('加载好友请求失败: ' + err.message);
+        // 在模态框中显示错误信息
+        friendRequestsList.innerHTML = '<div style="text-align:center;padding:20px;color:var(--accent-orange);font-size:13px;">加载失败: ' + escapeHtml(err.message) + '</div>';
+        sentRequestsList.innerHTML = '';
       }
     }
 
@@ -2840,7 +2847,9 @@
       if (received.length === 0) {
         friendRequestsList.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px;">暂无好友请求</div>';
       } else {
+        const statusMap = { 'pending': '等待中', 'accepted': '已接受', 'rejected': '已拒绝' };
         friendRequestsList.innerHTML = received.map(r => {
+          const isPending = r.status === 'pending';
           return `
             <div class="friend-request-item" data-id="${r.id}">
               <div class="req-info">
@@ -2848,8 +2857,12 @@
                 <div class="req-msg">${escapeHtml(r.message || '')}</div>
               </div>
               <div class="req-actions">
-                <button class="req-accept" onclick="acceptFriendRequest('${r.id}')">接受</button>
-                <button class="req-reject" onclick="rejectFriendRequest('${r.id}')">拒绝</button>
+                ${isPending ? `
+                  <button class="req-accept" onclick="acceptFriendRequest('${r.id}')">接受</button>
+                  <button class="req-reject" onclick="rejectFriendRequest('${r.id}')">拒绝</button>
+                ` : `
+                  <span class="req-status ${r.status === 'accepted' ? 'accepted' : (r.status === 'rejected' ? 'rejected' : '')}">${statusMap[r.status] || r.status}</span>
+                `}
               </div>
             </div>
           `;
