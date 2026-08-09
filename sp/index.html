@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>即时通讯系统</title>
+  <style>
+    /* ==================== 全局重置 ==================== */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #fff;
+    }
+
+    /* ==================== 毛玻璃效果 ==================== */
+    .glass {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    /* ==================== 认证页面 ==================== */
+    #authContainer {
+      width: 400px;
+      padding: 40px;
+    }
+
+    #authContainer h1 {
+      text-align: center;
+      margin-bottom: 8px;
+      font-size: 28px;
+      font-weight: 600;
+    }
+
+    #authContainer .subtitle {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .auth-input {
+      width: 100%;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+
+    .auth-input:focus {
+      border-color: #6c63ff;
+    }
+
+    .auth-input::placeholder {
+      color: rgba(255, 255, 255, 0.35);
+    }
+
+    .auth-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #6c63ff, #5a52d5);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .auth-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(108, 99, 255, 0.4);
+    }
+
+    .auth-btn:active {
+      transform: translateY(0);
+    }
+
+    .auth-switch {
+      text-align: center;
+      margin-top: 20px;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 14px;
+    }
+
+    .auth-switch a {
+      color: #6c63ff;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .auth-switch a:hover {
+      text-decoration: underline;
+    }
+
+    .auth-error {
+      color: #ff6b6b;
+      font-size: 13px;
+      text-align: center;
+      margin-bottom: 12px;
+      min-height: 20px;
+    }
+
+    /* ==================== 主界面 ==================== */
+    #mainContainer {
+      display: none;
+      width: 900px;
+      height: 600px;
+      flex-direction: row;
+      overflow: hidden;
+    }
+
+    /* 左侧联系人面板 */
+    .sidebar {
+      width: 280px;
+      min-width: 280px;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .sidebar-header {
+      padding: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .sidebar-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .sidebar-header .account-info {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-top: 4px;
+    }
+
+    .sidebar-header .logout-btn {
+      float: right;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff;
+      padding: 4px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.2s;
+    }
+
+    .sidebar-header .logout-btn:hover {
+      background: rgba(255, 107, 107, 0.3);
+      border-color: #ff6b6b;
+    }
+
+    .contact-search {
+      padding: 12px 16px;
+    }
+
+    .contact-search input {
+      width: 100%;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .contact-search input::placeholder {
+      color: rgba(255, 255, 255, 0.3);
+    }
+
+    .contact-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .contact-list::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .contact-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+    }
+
+    .contact-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-bottom: 2px;
+    }
+
+    .contact-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .contact-item.active {
+      background: rgba(108, 99, 255, 0.2);
+      border: 1px solid rgba(108, 99, 255, 0.3);
+    }
+
+    .contact-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6c63ff, #5a52d5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 600;
+      margin-right: 12px;
+      position: relative;
+    }
+
+    .online-dot {
+      width: 10px;
+      height: 10px;
+      background: #4ade80;
+      border-radius: 50%;
+      border: 2px solid #24243e;
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+    }
+
+    .contact-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .contact-name {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .contact-status {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.4);
+      margin-top: 2px;
+    }
+
+    /* 右侧聊天面板 */
+    .chat-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .chat-header .chat-with {
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .chat-header .chat-with span {
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .call-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .call-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity 0.2s;
+    }
+
+    .call-btn:hover {
+      opacity: 0.85;
+    }
+
+    .call-btn.audio {
+      background: rgba(74, 222, 128, 0.2);
+      color: #4ade80;
+      border: 1px solid rgba(74, 222, 128, 0.3);
+    }
+
+    .call-btn.video {
+      background: rgba(108, 99, 255, 0.2);
+      color: #6c63ff;
+      border: 1px solid rgba(108, 99, 255, 0.3);
+    }
+
+    .messages-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+    }
+
+    .messages-area::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .messages-area::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+    }
+
+    .message {
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .message.self {
+      align-items: flex-end;
+    }
+
+    .message.other {
+      align-items: flex-start;
+    }
+
+    .message-bubble {
+      max-width: 70%;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .message.self .message-bubble {
+      background: linear-gradient(135deg, #6c63ff, #5a52d5);
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.other .message-bubble {
+      background: rgba(255, 255, 255, 0.08);
+      border-bottom-left-radius: 4px;
+    }
+
+    .message-time {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.3);
+      margin-top: 4px;
+      padding: 0 4px;
+    }
+
+    .message-input-area {
+      padding: 12px 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      gap: 10px;
+    }
+
+    .message-input-area input {
+      flex: 1;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .message-input-area input::placeholder {
+      color: rgba(255, 255, 255, 0.3);
+    }
+
+    .message-input-area input:focus {
+      border-color: #6c63ff;
+    }
+
+    .send-btn {
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #6c63ff, #5a52d5);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .send-btn:hover {
+      opacity: 0.85;
+    }
+
+    .empty-chat {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.2);
+      font-size: 15px;
+    }
+
+    /* ==================== 通话覆盖层 ==================== */
+    #callOverlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      z-index: 1000;
+    }
+
+    #callOverlay.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 远程视频 - 大窗口 */
+    #remoteVideo {
+      flex: 1;
+      width: 100%;
+      object-fit: contain;
+      background: #111;
+    }
+
+    /* 本地视频 - 画中画 */
+    #localVideo {
+      position: absolute;
+      bottom: 100px;
+      right: 20px;
+      width: 200px;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      background: #222;
+    }
+
+    /* 纯语音通话时的占位 */
+    .audio-call-bg {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+    }
+
+    .audio-call-bg .avatar {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6c63ff, #5a52d5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      font-weight: 600;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    /* 通话控制栏 */
+    .call-controls {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .call-control-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      font-size: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s;
+    }
+
+    .call-control-btn:hover {
+      transform: scale(1.1);
+    }
+
+    .call-control-btn.mic {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .call-control-btn.mic.muted {
+      background: rgba(255, 107, 107, 0.3);
+      color: #ff6b6b;
+    }
+
+    .call-control-btn.camera {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .call-control-btn.camera.off {
+      background: rgba(255, 107, 107, 0.3);
+      color: #ff6b6b;
+    }
+
+    .call-control-btn.hangup {
+      background: #ff4444;
+      color: #fff;
+      width: 64px;
+      height: 64px;
+      font-size: 26px;
+    }
+
+    .call-info {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      z-index: 10;
+    }
+
+    .call-info .caller-name {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .call-info .call-status {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: 4px;
+    }
+
+    /* ==================== 来电弹窗 ==================== */
+    .incoming-call-toast {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 999;
+      padding: 40px;
+      text-align: center;
+      min-width: 320px;
+    }
+
+    .incoming-call-toast .caller-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6c63ff, #5a52d5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 600;
+      margin: 0 auto 16px;
+    }
+
+    .incoming-call-toast .caller-name {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .incoming-call-toast .call-type {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 24px;
+    }
+
+    .incoming-call-toast .action-btns {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+    }
+
+    .incoming-call-toast .action-btns button {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      font-size: 24px;
+      transition: transform 0.2s;
+    }
+
+    .incoming-call-toast .action-btns button:hover {
+      transform: scale(1.1);
+    }
+
+    .incoming-call-toast .btn-accept {
+      background: #4ade80;
+      color: #fff;
+    }
+
+    .incoming-call-toast .btn-reject {
+      background: #ff4444;
+      color: #fff;
+    }
+
+    /* ==================== 响应式 ==================== */
+    @media (max-width: 920px) {
+      #mainContainer {
+        width: 100%;
+        height: 100vh;
+        border-radius: 0;
+        flex-direction: column;
+      }
+      .sidebar {
+        width: 100%;
+        min-width: auto;
+        height: 40%;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+    }
+
+    @media (max-width: 480px) {
+      #authContainer {
+        width: 90%;
+        padding: 30px 20px;
+      }
+      #localVideo {
+        width: 120px;
+        height: 90px;
+        bottom: 80px;
+        right: 10px;
+      }
+      .call-control-btn {
+        width: 48px;
+        height: 48px;
+        font-size: 18px;
+      }
+      .call-control-btn.hangup {
+        width: 56px;
+        height: 56px;
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== 认证页面 ==================== -->
+  <div id="authContainer" class="glass">
+    <h1>即时通讯</h1>
+    <p class="subtitle">安全加密 · 实时通信</p>
+    <div class="auth-error" id="authError"></div>
+    <input type="text" class="auth-input" id="authAccount" placeholder="账号" autocomplete="username">
+    <input type="password" class="auth-input" id="authPassword" placeholder="密码" autocomplete="current-password">
+    <button class="auth-btn" id="authBtn">登录</button>
+    <div class="auth-switch">
+      <span id="authSwitchText">还没有账号？</span>
+      <a id="authSwitchLink">注册</a>
+    </div>
+  </div>
+
+  <!-- ==================== 主界面 ==================== -->
+  <div id="mainContainer" class="glass">
+    <!-- 左侧联系人面板 -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <button class="logout-btn" id="logoutBtn">退出登录</button>
+        <h2>联系人</h2>
+        <div class="account-info" id="accountInfo">已登录</div>
+      </div>
+      <div class="contact-search">
+        <input type="text" id="contactSearch" placeholder="搜索联系人...">
+      </div>
+      <div class="contact-list" id="contactList"></div>
+    </div>
+
+    <!-- 右侧聊天面板 -->
+    <div class="chat-panel">
+      <div class="chat-header">
+        <div class="chat-with">选择联系人开始聊天 <span id="chatWithSub"></span></div>
+        <div class="call-buttons" id="callButtons" style="display:none;">
+          <button class="call-btn audio" id="audioCallBtn">🎤 语音</button>
+          <button class="call-btn video" id="videoCallBtn">📹 视频</button>
+        </div>
+      </div>
+      <div class="messages-area" id="messagesArea">
+        <div class="empty-chat" id="emptyChat">选择一个联系人，开始聊天</div>
+      </div>
+      <div class="message-input-area" id="messageInputArea" style="display:none;">
+        <input type="text" id="messageInput" placeholder="输入消息，按 Enter 发送" maxlength="2000">
+        <button class="send-btn" id="sendBtn">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 来电弹窗 ==================== -->
+  <div class="glass incoming-call-toast" id="incomingCallToast" style="display:none;">
+    <div class="caller-avatar" id="incomingAvatar">?</div>
+    <div class="caller-name" id="incomingCallerName">未知用户</div>
+    <div class="call-type" id="incomingCallType">视频通话邀请</div>
+    <div class="action-btns">
+      <button class="btn-accept" id="acceptCallBtn">📞</button>
+      <button class="btn-reject" id="rejectCallBtn">✕</button>
+    </div>
+  </div>
+
+  <!-- ==================== 通话覆盖层 ==================== -->
+  <div id="callOverlay">
+    <div class="call-info">
+      <div class="caller-name" id="callPeerName">用户</div>
+      <div class="call-status" id="callStatus">通话中...</div>
+    </div>
+    <!-- 远程视频（大窗口） -->
+    <video id="remoteVideo" autoplay playsinline></video>
+    <!-- 本地视频（画中画） -->
+    <video id="localVideo" autoplay playsinline muted></video>
+    <!-- 通话控制栏 -->
+    <div class="call-controls">
+      <button class="call-control-btn mic" id="micToggleBtn" title="麦克风">🎤</button>
+      <button class="call-control-btn camera" id="cameraToggleBtn" title="摄像头">📷</button>
+      <button class="call-control-btn hangup" id="hangupBtn" title="挂断">📞</button>
+    </div>
+  </div>
+
+  <script>
+    // ================================================================
+    //  全局状态
+    // ================================================================
+    const STATE = {
+      // 认证
+      token: localStorage.getItem('token') || '',
+      accountId: localStorage.getItem('accountId') || '',
+
+      // WebSocket
+      ws: null,
+      reconnectAttempt: 0,
+      maxReconnectDelay: 30000,
+
+      // 联系人 & 聊天
+      onlineUsers: [],
+      selectedContact: null,  // 当前选中的联系人
+
+      // 通话
+      pc: null,              // RTCPeerConnection
+      localStream: null,
+      remoteStream: null,
+      inCall: false,
+      isCaller: false,
+      callType: null,        // 'audio' | 'video'
+      pendingOffer: null,    // 待处理的邀请
+      callPeer: null,        // 通话对方
+    };
+
+    // 服务器地址（由后端启动时替换 crummiest-pronto-lung.ngrok-free.dev 占位符）
+    const SERVER_HOST = 'crummiest-pronto-lung.ngrok-free.dev';
+
+    // ================================================================
+    //  DOM 引用
+    // ================================================================
+    const $ = (id) => document.getElementById(id);
+    const authContainer = $('authContainer');
+    const mainContainer = $('mainContainer');
+    const authError = $('authError');
+    const authAccount = $('authAccount');
+    const authPassword = $('authPassword');
+    const authBtn = $('authBtn');
+    const authSwitchLink = $('authSwitchLink');
+    const authSwitchText = $('authSwitchText');
+    const logoutBtn = $('logoutBtn');
+    const accountInfo = $('accountInfo');
+    const contactList = $('contactList');
+    const contactSearch = $('contactSearch');
+    const messagesArea = $('messagesArea');
+    const emptyChat = $('emptyChat');
+    const messageInput = $('messageInput');
+    const messageInputArea = $('messageInputArea');
+    const sendBtn = $('sendBtn');
+    const callButtons = $('callButtons');
+    const chatWithSub = $('chatWithSub');
+    const audioCallBtn = $('audioCallBtn');
+    const videoCallBtn = $('videoCallBtn');
+
+    // 通话相关
+    const callOverlay = $('callOverlay');
+    const remoteVideo = $('remoteVideo');
+    const localVideo = $('localVideo');
+    const callPeerName = $('callPeerName');
+    const callStatus = $('callStatus');
+    const micToggleBtn = $('micToggleBtn');
+    const cameraToggleBtn = $('cameraToggleBtn');
+    const hangupBtn = $('hangupBtn');
+
+    // 来电弹窗
+    const incomingCallToast = $('incomingCallToast');
+    const incomingAvatar = $('incomingAvatar');
+    const incomingCallerName = $('incomingCallerName');
+    const incomingCallType = $('incomingCallType');
+    const acceptCallBtn = $('acceptCallBtn');
+    const rejectCallBtn = $('rejectCallBtn');
+
+    // ================================================================
+    //  工具函数
+    // ================================================================
+    function formatTime(ts) {
+      const d = new Date(ts);
+      return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+    }
+
+    function getAvatarChar(accountId) {
+      return accountId ? accountId.charAt(0).toUpperCase() : '?';
+    }
+
+    function addLog(msg) {
+      console.log('[IM]', msg);
+    }
+
+    // ================================================================
+    //  认证模块
+    // ================================================================
+    let isLoginMode = true;
+
+    authSwitchLink.addEventListener('click', () => {
+      isLoginMode = !isLoginMode;
+      authBtn.textContent = isLoginMode ? '登录' : '注册';
+      authSwitchText.textContent = isLoginMode ? '还没有账号？' : '已有账号？';
+      authSwitchLink.textContent = isLoginMode ? '注册' : '登录';
+      authError.textContent = '';
+    });
+
+    authBtn.addEventListener('click', handleAuth);
+    authAccount.addEventListener('keydown', (e) => { if (e.key === 'Enter') authPassword.focus(); });
+    authPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleAuth(); });
+
+    async function handleAuth() {
+      const accountId = authAccount.value.trim();
+      const password = authPassword.value.trim();
+      if (!accountId || !password) {
+        authError.textContent = '请填写账号和密码';
+        return;
+      }
+      authError.textContent = '';
+      authBtn.disabled = true;
+      authBtn.textContent = '处理中...';
+
+      try {
+        const endpoint = isLoginMode ? '/api/login' : '/api/register';
+        const res = await fetch(`http://${SERVER_HOST}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accountId, password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          STATE.token = data.token;
+          STATE.accountId = data.accountId;
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('accountId', data.accountId);
+          showMain();
+          connectWebSocket();
+        } else {
+          authError.textContent = data.message;
+        }
+      } catch (err) {
+        authError.textContent = '网络错误，请检查服务器是否运行';
+        addLog('认证错误: ' + err.message);
+      }
+
+      authBtn.disabled = false;
+      authBtn.textContent = isLoginMode ? '登录' : '注册';
+    }
+
+    logoutBtn.addEventListener('click', () => {
+      disconnectWebSocket();
+      STATE.token = '';
+      STATE.accountId = '';
+      localStorage.removeItem('token');
+      localStorage.removeItem('accountId');
+      showAuth();
+    });
+
+    function showAuth() {
+      authContainer.style.display = 'block';
+      mainContainer.style.display = 'none';
+      callOverlay.classList.remove('active');
+      callOverlay.style.display = 'none';
+    }
+
+    function showMain() {
+      authContainer.style.display = 'none';
+      mainContainer.style.display = 'flex';
+      accountInfo.textContent = '已登录：' + STATE.accountId;
+    }
+
+    // 检查是否已有登录状态
+    if (STATE.token && STATE.accountId) {
+      showMain();
+      connectWebSocket();
+    }
+
+    // ================================================================
+    //  WebSocket 模块
+    // ================================================================
+    function connectWebSocket() {
+      if (STATE.ws) {
+        try { STATE.ws.close(); } catch {}
+      }
+
+      const wsUrl = `wss://${SERVER_HOST}/?token=${STATE.token}&accountId=${STATE.accountId}`;
+      addLog('正在连接WebSocket: ' + SERVER_HOST);
+
+      STATE.ws = new WebSocket(wsUrl);
+
+      STATE.ws.onopen = () => {
+        addLog('WebSocket已连接');
+        STATE.reconnectAttempt = 0;
+      };
+
+      STATE.ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleWSMessage(msg);
+        } catch (err) {
+          addLog('消息解析失败: ' + err.message);
+        }
+      };
+
+      STATE.ws.onclose = () => {
+        addLog('WebSocket已断开');
+        if (STATE.inCall) {
+          hangupCall();
+        }
+        scheduleReconnect();
+      };
+
+      STATE.ws.onerror = () => {
+        addLog('WebSocket错误');
+      };
+    }
+
+    function disconnectWebSocket() {
+      STATE.reconnectAttempt = Infinity; // 阻止重连
+      if (STATE.ws) {
+        try { STATE.ws.close(); } catch {}
+        STATE.ws = null;
+      }
+    }
+
+    function scheduleReconnect() {
+      if (STATE.reconnectAttempt >= Infinity) return;
+      STATE.reconnectAttempt++;
+      const delay = Math.min(1000 * Math.pow(2, STATE.reconnectAttempt - 1), STATE.maxReconnectDelay);
+      addLog(`将在 ${Math.round(delay/1000)} 秒后重连...`);
+      setTimeout(() => {
+        if (STATE.token && STATE.accountId) {
+          connectWebSocket();
+        }
+      }, delay);
+    }
+
+    function sendWSMessage(data) {
+      if (STATE.ws && STATE.ws.readyState === WebSocket.OPEN) {
+        STATE.ws.send(JSON.stringify(data));
+        return true;
+      }
+      return false;
+    }
+
+    // ================================================================
+    //  WebSocket 消息处理
+    // ================================================================
+    function handleWSMessage(msg) {
+      switch (msg.type) {
+        case 'welcome':
+          addLog('欢迎: ' + msg.accountId);
+          break;
+
+        case 'online-users':
+          STATE.onlineUsers = msg.users || [];
+          renderContactList();
+          break;
+
+        case 'chat':
+          // 收到消息 - 如果当前正好在和对方聊天，显示消息
+          if (STATE.selectedContact === msg.from) {
+            appendMessage(msg.from, msg.content, false, msg.timestamp);
+          }
+          // 更新联系人列表中的最近消息提示
+          renderContactList();
+          break;
+
+        case 'chat-ack':
+          // 消息发送回执
+          if (STATE.selectedContact === msg.to) {
+            appendMessage(msg.to, msg.content, true, msg.timestamp, msg.delivered);
+          }
+          break;
+
+        case 'call-offer':
+          // 收到通话邀请
+          STATE.pendingOffer = msg;
+          showIncomingCall(msg.from, msg.callType);
+          break;
+
+        case 'call-answer':
+          // 对方接受了通话
+          if (STATE.pc && STATE.isCaller) {
+            handleRemoteAnswer(msg.sdp);
+          }
+          break;
+
+        case 'ice-candidate':
+          // 收到ICE候选
+          if (STATE.pc && msg.candidate) {
+            STATE.pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(e => {
+              addLog('添加ICE候选失败: ' + e.message);
+            });
+          }
+          break;
+
+        case 'call-end':
+          // 对方挂断
+          addLog('对方挂断了通话');
+          if (STATE.inCall) {
+            hangupCall();
+          }
+          // 关闭来电弹窗
+          incomingCallToast.style.display = 'none';
+          break;
+
+        case 'error':
+          addLog('服务器错误: ' + msg.message);
+          break;
+      }
+    }
+
+    // ================================================================
+    //  联系人列表
+    // ================================================================
+    function renderContactList() {
+      const searchTerm = contactSearch.value.trim().toLowerCase();
+      let users = STATE.onlineUsers.filter(u => u !== STATE.accountId);
+
+      if (searchTerm) {
+        users = users.filter(u => u.toLowerCase().includes(searchTerm));
+      }
+
+      if (users.length === 0) {
+        contactList.innerHTML = `
+          <div style="text-align:center;padding:30px;color:rgba(255,255,255,0.2);font-size:13px;">
+            ${searchTerm ? '无匹配联系人' : '暂无在线用户'}
+          </div>
+        `;
+        return;
+      }
+
+      contactList.innerHTML = users.map(u => {
+        const isActive = STATE.selectedContact === u;
+        const avatarChar = getAvatarChar(u);
+        return `
+          <div class="contact-item ${isActive ? 'active' : ''}" data-account="${u}" onclick="selectContact('${u}')">
+            <div class="contact-avatar">
+              ${avatarChar}
+              <span class="online-dot"></span>
+            </div>
+            <div class="contact-info">
+              <div class="contact-name">${u}</div>
+              <div class="contact-status">在线</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 搜索过滤
+    contactSearch.addEventListener('input', renderContactList);
+
+    // 选择联系人（全局函数，供 onclick 调用）
+    window.selectContact = function(accountId) {
+      STATE.selectedContact = accountId;
+      renderContactList();
+
+      // 显示聊天区域
+      chatWithSub.textContent = '与 ' + accountId + ' 聊天中';
+      callButtons.style.display = 'flex';
+      messageInputArea.style.display = 'flex';
+      emptyChat.style.display = 'none';
+      messagesArea.innerHTML = '';
+      messageInput.focus();
+    };
+
+    // ================================================================
+    //  短信聊天
+    // ================================================================
+    function sendMessage() {
+      const content = messageInput.value.trim();
+      if (!content || !STATE.selectedContact) return;
+
+      if (sendWSMessage({
+        type: 'chat',
+        to: STATE.selectedContact,
+        content: content
+      })) {
+        messageInput.value = '';
+      }
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    function appendMessage(accountId, content, isSelf, timestamp, delivered) {
+      // 移除空状态提示
+      emptyChat.style.display = 'none';
+
+      const div = document.createElement('div');
+      div.className = 'message ' + (isSelf ? 'self' : 'other');
+
+      const timeStr = formatTime(timestamp || Date.now());
+      const statusText = isSelf ? (delivered !== false ? '· 已送达' : '· 未送达') : '';
+
+      div.innerHTML = `
+        <div class="message-bubble">${escapeHtml(content)}</div>
+        <div class="message-time">${timeStr} ${statusText}</div>
+      `;
+
+      messagesArea.appendChild(div);
+      messagesArea.scrollTop = messagesArea.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ================================================================
+    //  通话按钮
+    // ================================================================
+    audioCallBtn.addEventListener('click', () => startCall('audio'));
+    videoCallBtn.addEventListener('click', () => startCall('video'));
+
+    async function startCall(callType) {
+      if (!STATE.selectedContact) return;
+      if (STATE.inCall) return;
+
+      STATE.isCaller = true;
+      STATE.callType = callType;
+      STATE.callPeer = STATE.selectedContact;
+
+      try {
+        // 获取本地媒体流
+        const constraints = {
+          audio: true,
+          video: callType === 'video'
+        };
+        STATE.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        // 创建PeerConnection
+        createPeerConnection();
+
+        // 添加本地流
+        STATE.localStream.getTracks().forEach(track => {
+          STATE.pc.addTrack(track, STATE.localStream);
+        });
+
+        // 创建Offer
+        const offer = await STATE.pc.createOffer();
+        await STATE.pc.setLocalDescription(offer);
+
+        // 发送Offer
+        sendWSMessage({
+          type: 'call-offer',
+          to: STATE.selectedContact,
+          sdp: STATE.pc.localDescription,
+          callType: callType
+        });
+
+        // 显示通话界面
+        showCallUI(callType);
+        addLog(`已发起${callType === 'video' ? '视频' : '语音'}通话`);
+
+      } catch (err) {
+        addLog('发起通话失败: ' + err.message);
+        cleanupCall();
+        alert('无法获取摄像头/麦克风权限或发起通话失败');
+      }
+    }
+
+    // ================================================================
+    //  来电处理
+    // ================================================================
+    function showIncomingCall(from, callType) {
+      incomingAvatar.textContent = getAvatarChar(from);
+      incomingCallerName.textContent = from;
+      incomingCallType.textContent = callType === 'video' ? '视频通话邀请' : '语音通话邀请';
+      incomingCallToast.style.display = 'block';
+    }
+
+    acceptCallBtn.addEventListener('click', async () => {
+      if (!STATE.pendingOffer) return;
+      incomingCallToast.style.display = 'none';
+
+      const { from, sdp, callType } = STATE.pendingOffer;
+      STATE.pendingOffer = null;
+      STATE.isCaller = false;
+      STATE.callType = callType;
+      STATE.callPeer = from;
+
+      try {
+        const constraints = {
+          audio: true,
+          video: callType === 'video'
+        };
+        STATE.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        createPeerConnection();
+
+        STATE.localStream.getTracks().forEach(track => {
+          STATE.pc.addTrack(track, STATE.localStream);
+        });
+
+        // 设置远程描述（对方的Offer）
+        await STATE.pc.setRemoteDescription(new RTCSessionDescription(sdp));
+
+        // 创建Answer
+        const answer = await STATE.pc.createAnswer();
+        await STATE.pc.setLocalDescription(answer);
+
+        sendWSMessage({
+          type: 'call-answer',
+          to: from,
+          sdp: STATE.pc.localDescription
+        });
+
+        showCallUI(callType);
+        addLog('已接受通话');
+
+      } catch (err) {
+        addLog('接受通话失败: ' + err.message);
+        cleanupCall();
+      }
+    });
+
+    rejectCallBtn.addEventListener('click', () => {
+      if (STATE.pendingOffer) {
+        sendWSMessage({
+          type: 'call-end',
+          to: STATE.pendingOffer.from
+        });
+      }
+      STATE.pendingOffer = null;
+      incomingCallToast.style.display = 'none';
+    });
+
+    // ================================================================
+    //  PeerConnection 管理
+    // ================================================================
+    function createPeerConnection() {
+      // 配置：强制中继模式（非P2P），使用Google STUN/TURN
+      const config = {
+        iceTransportPolicy: 'relay',  // 强制非P2P，所有数据走TURN中继
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          {
+            urls: 'turn:relay1.expressturn.com:3478',
+            username: 'efGHOTR7GRSJYM6W3W',
+            credential: '9s6f7HFR8Br3IhEH'
+          }
+        ]
+      };
+
+      STATE.pc = new RTCPeerConnection(config);
+
+      // 处理ICE候选
+      STATE.pc.onicecandidate = (event) => {
+        if (event.candidate && STATE.callPeer) {
+          sendWSMessage({
+            type: 'ice-candidate',
+            to: STATE.callPeer,
+            candidate: event.candidate
+          });
+        }
+      };
+
+      // 处理远程流
+      STATE.pc.ontrack = (event) => {
+        if (!STATE.remoteStream) {
+          STATE.remoteStream = new MediaStream();
+        }
+        event.streams[0].getTracks().forEach(track => {
+          STATE.remoteStream.addTrack(track);
+        });
+        remoteVideo.srcObject = STATE.remoteStream;
+      };
+
+      // 连接状态变化
+      STATE.pc.onconnectionstatechange = () => {
+        addLog('连接状态: ' + STATE.pc.connectionState);
+        if (STATE.pc.connectionState === 'disconnected' ||
+            STATE.pc.connectionState === 'failed' ||
+            STATE.pc.connectionState === 'closed') {
+          if (STATE.inCall) {
+            hangupCall();
+          }
+        }
+      };
+
+      STATE.inCall = true;
+    }
+
+    async function handleRemoteAnswer(sdp) {
+      try {
+        await STATE.pc.setRemoteDescription(new RTCSessionDescription(sdp));
+
+        // 设置码率限制（10Mbps宽带限制，720p/1.5Mbps）
+        const senders = STATE.pc.getSenders();
+        for (const sender of senders) {
+          if (sender.track && sender.track.kind === 'video') {
+            try {
+              const params = sender.getParameters();
+              if (!params.encodings) {
+                params.encodings = [{}];
+              }
+              params.encodings.forEach(enc => {
+                enc.maxBitrate = 1500000; // 1.5Mbps
+              });
+              await sender.setParameters(params);
+              addLog('视频码率已限制为 1.5Mbps');
+            } catch (e) {
+              addLog('设置码率失败: ' + e.message);
+            }
+          }
+        }
+      } catch (err) {
+        addLog('处理Answer失败: ' + err.message);
+      }
+    }
+
+    // ================================================================
+    //  通话界面
+    // ================================================================
+    function showCallUI(callType) {
+      callOverlay.style.display = 'flex';
+      callOverlay.classList.add('active');
+      incomingCallToast.style.display = 'none';
+
+      callPeerName.textContent = STATE.callPeer;
+      callStatus.textContent = '通话中';
+
+      // 显示本地视频
+      if (STATE.localStream) {
+        localVideo.srcObject = STATE.localStream;
+      }
+
+      // 如果是语音通话，隐藏视频元素，显示音频占位
+      if (callType === 'audio') {
+        remoteVideo.style.display = 'none';
+        localVideo.style.display = 'none';
+        // 添加音频占位
+        const bg = document.createElement('div');
+        bg.className = 'audio-call-bg';
+        bg.id = 'audioCallBg';
+        bg.innerHTML = `<div class="avatar">${getAvatarChar(STATE.callPeer)}</div>`;
+        callOverlay.insertBefore(bg, callOverlay.firstChild);
+      } else {
+        remoteVideo.style.display = 'block';
+        localVideo.style.display = 'block';
+        const existing = document.getElementById('audioCallBg');
+        if (existing) existing.remove();
+      }
+
+      // 重置麦克风/摄像头按钮状态
+      micToggleBtn.classList.remove('muted');
+      cameraToggleBtn.classList.remove('off');
+    }
+
+    // 麦克风切换
+    micToggleBtn.addEventListener('click', () => {
+      if (STATE.localStream) {
+        const audioTrack = STATE.localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = !audioTrack.enabled;
+          micToggleBtn.classList.toggle('muted');
+        }
+      }
+    });
+
+    // 摄像头切换
+    cameraToggleBtn.addEventListener('click', () => {
+      if (STATE.localStream) {
+        const videoTrack = STATE.localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.enabled = !videoTrack.enabled;
+          cameraToggleBtn.classList.toggle('off');
+        }
+      }
+    });
+
+    // 挂断
+    hangupBtn.addEventListener('click', () => {
+      if (STATE.callPeer) {
+        sendWSMessage({
+          type: 'call-end',
+          to: STATE.callPeer
+        });
+      }
+      hangupCall();
+    });
+
+    function hangupCall() {
+      // 通知对方（如果还未通知）
+      if (STATE.inCall && STATE.callPeer) {
+        sendWSMessage({
+          type: 'call-end',
+          to: STATE.callPeer
+        });
+      }
+
+      cleanupCall();
+      callOverlay.style.display = 'none';
+      callOverlay.classList.remove('active');
+
+      // 移除音频占位背景
+      const audioBg = document.getElementById('audioCallBg');
+      if (audioBg) audioBg.remove();
+
+      // 恢复视频显示
+      remoteVideo.style.display = 'block';
+      localVideo.style.display = 'block';
+
+      addLog('通话已结束');
+    }
+
+    function cleanupCall() {
+      STATE.inCall = false;
+      STATE.isCaller = false;
+      STATE.callPeer = null;
+      STATE.pendingOffer = null;
+
+      // 关闭PeerConnection
+      if (STATE.pc) {
+        try { STATE.pc.close(); } catch {}
+        STATE.pc = null;
+      }
+
+      // 释放本地流
+      if (STATE.localStream) {
+        STATE.localStream.getTracks().forEach(track => track.stop());
+        STATE.localStream = null;
+      }
+
+      // 清除远程流
+      if (STATE.remoteStream) {
+        STATE.remoteStream.getTracks().forEach(track => track.stop());
+        STATE.remoteStream = null;
+      }
+
+      remoteVideo.srcObject = null;
+      localVideo.srcObject = null;
+    }
+
+    // ================================================================
+    //  初始化
+    // ================================================================
+    addLog('即时通讯系统已加载，服务器地址: ' + SERVER_HOST);
+  </script>
+</body>
+</html>
