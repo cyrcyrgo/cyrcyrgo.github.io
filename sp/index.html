@@ -2715,10 +2715,26 @@
 
     async function loadFriendRequests() {
       try {
-        const data = await apiFetch('/api/friend-requests');
-        STATE.friendRequests = data.received || [];
-        STATE.sentRequests = data.sent || [];
-        STATE.friendRequestCount = STATE.friendRequests.length;
+        // 并发请求收到的和已发送的请求
+        const [receivedRes, sentRes] = await Promise.all([
+          apiFetch('/api/friends/requests/received'),
+          apiFetch('/api/friends/requests/sent')
+        ]);
+        STATE.friendRequests = (receivedRes.data || []).map(r => ({
+          id: r.id,
+          from: r.fromUser,
+          message: r.message || '',
+          status: r.status,
+          createdAt: r.createdAt
+        }));
+        STATE.sentRequests = (sentRes.data || []).map(r => ({
+          id: r.id,
+          to: r.toUser,
+          message: r.message || '',
+          status: r.status,
+          createdAt: r.createdAt
+        }));
+        STATE.friendRequestCount = STATE.friendRequests.filter(r => r.status === 'pending').length;
         updateFriendRequestBadge();
         renderFriendRequestsModal();
       } catch (err) {
@@ -2790,9 +2806,9 @@
         return;
       }
       try {
-        await apiFetch('/api/friend-request', {
+        await apiFetch('/api/friends/request', {
           method: 'POST',
-          body: JSON.stringify({ to: targetAccount, message: message || '你好，我想加你为好友' })
+          body: JSON.stringify({ toUser: targetAccount, message: message || '你好，我想加你为好友' })
         });
         alert('好友请求已发送');
         addFriendModal.style.display = 'none';
@@ -2864,7 +2880,10 @@
     // 接受好友请求（全局函数）
     window.acceptFriendRequest = async function(requestId) {
       try {
-        await apiFetch('/api/friend-request/' + requestId + '/accept', { method: 'POST' });
+        await apiFetch('/api/friends/respond', {
+          method: 'POST',
+          body: JSON.stringify({ requestId: parseInt(requestId), action: 'accept' })
+        });
         loadFriendRequests();
         loadFriends();
         STATE.friendRequestCount = Math.max(0, (STATE.friendRequestCount || 0) - 1);
@@ -2877,7 +2896,10 @@
     // 拒绝好友请求（全局函数）
     window.rejectFriendRequest = async function(requestId) {
       try {
-        await apiFetch('/api/friend-request/' + requestId + '/reject', { method: 'POST' });
+        await apiFetch('/api/friends/respond', {
+          method: 'POST',
+          body: JSON.stringify({ requestId: parseInt(requestId), action: 'reject' })
+        });
         loadFriendRequests();
         STATE.friendRequestCount = Math.max(0, (STATE.friendRequestCount || 0) - 1);
         updateFriendRequestBadge();
