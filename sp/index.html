@@ -5,6 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>即时通讯系统</title>
   <style>
+    /* ==================== CSS 自定义属性 ==================== */
+    :root {
+      --primary: #6c63ff;
+      --primary-light: #8b83ff;
+      --primary-dark: #5a52d5;
+      --accent-green: #4ade80;
+      --accent-red: #ff4444;
+      --accent-orange: #ff6b6b;
+      --bg-dark: #0f0c29;
+      --bg-mid: #302b63;
+      --bg-light: #24243e;
+      --glass-bg: rgba(255, 255, 255, 0.07);
+      --glass-border: rgba(255, 255, 255, 0.10);
+      --glass-blur: 24px;
+      --text-primary: #fff;
+      --text-secondary: rgba(255, 255, 255, 0.6);
+      --text-muted: rgba(255, 255, 255, 0.35);
+      --text-dim: rgba(255, 255, 255, 0.2);
+      --shadow-glow: 0 0 20px rgba(108, 99, 255, 0.3);
+      --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
     /* ==================== 全局重置 ==================== */
     * {
       margin: 0;
@@ -14,28 +36,164 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
       min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
-      color: #fff;
+      color: var(--text-primary);
+      overflow: hidden;
+      position: relative;
+      background: linear-gradient(135deg, var(--bg-dark), var(--bg-mid), var(--bg-light));
+      background-size: 400% 400%;
+      animation: gradientShift 15s ease infinite;
     }
 
-    /* ==================== 毛玻璃效果 ==================== */
+    @keyframes gradientShift {
+      0% { background-position: 0% 50%; }
+      25% { background-position: 100% 0%; }
+      50% { background-position: 100% 100%; }
+      75% { background-position: 0% 100%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* ==================== 浮动粒子 ==================== */
+    .particles {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .particle {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 50%;
+      animation: floatParticle linear infinite;
+    }
+    .particle:nth-child(1) { left: 10%; width: 4px; height: 4px; animation-duration: 22s; animation-delay: 0s; }
+    .particle:nth-child(2) { left: 20%; width: 8px; height: 8px; animation-duration: 28s; animation-delay: 2s; }
+    .particle:nth-child(3) { left: 35%; width: 5px; height: 5px; animation-duration: 18s; animation-delay: 4s; }
+    .particle:nth-child(4) { left: 50%; width: 3px; height: 3px; animation-duration: 25s; animation-delay: 1s; }
+    .particle:nth-child(5) { left: 65%; width: 7px; height: 7px; animation-duration: 20s; animation-delay: 3s; }
+    .particle:nth-child(6) { left: 75%; width: 4px; height: 4px; animation-duration: 30s; animation-delay: 5s; }
+    .particle:nth-child(7) { left: 85%; width: 6px; height: 6px; animation-duration: 24s; animation-delay: 0.5s; }
+    .particle:nth-child(8) { left: 45%; width: 9px; height: 9px; animation-duration: 26s; animation-delay: 3.5s; }
+    .particle:nth-child(9) { left: 15%; width: 5px; height: 5px; animation-duration: 19s; animation-delay: 1.5s; }
+    .particle:nth-child(10) { left: 90%; width: 3px; height: 3px; animation-duration: 27s; animation-delay: 2.5s; }
+    .particle:nth-child(11) { left: 5%; width: 7px; height: 7px; animation-duration: 21s; animation-delay: 4.5s; }
+    .particle:nth-child(12) { left: 55%; width: 4px; height: 4px; animation-duration: 23s; animation-delay: 0.8s; }
+
+    @keyframes floatParticle {
+      0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translateY(-10vh) rotate(720deg); opacity: 0; }
+    }
+
+    /* ==================== 扫描线纹理 ==================== */
+    .scanline-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(255, 255, 255, 0.015) 2px,
+        rgba(255, 255, 255, 0.015) 4px
+      );
+    }
+
+    /* ==================== 动画关键帧 ==================== */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes glowPulse {
+      0%, 100% { box-shadow: 0 0 8px rgba(108, 99, 255, 0.3); }
+      50% { box-shadow: 0 0 20px rgba(108, 99, 255, 0.6); }
+    }
+
+    @keyframes typingDot {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-6px); opacity: 1; }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes badgePulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+    }
+
+    @keyframes recordingPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ==================== 毛玻璃效果（增强） ==================== */
     .glass {
-      background: rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: var(--glass-bg);
+      backdrop-filter: blur(var(--glass-blur));
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    /* ==================== 加载动画 ==================== */
+    .loading-spinner {
+      display: inline-block;
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .loading-spinner.small {
+      width: 18px;
+      height: 18px;
+      border-width: 2px;
+    }
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      backdrop-filter: blur(4px);
     }
 
     /* ==================== 认证页面 ==================== */
     #authContainer {
       width: 400px;
       padding: 40px;
+      animation: fadeInUp 0.6s ease-out;
+      position: relative;
+      z-index: 10;
     }
 
     #authContainer h1 {
@@ -43,11 +201,15 @@
       margin-bottom: 8px;
       font-size: 28px;
       font-weight: 600;
+      background: linear-gradient(135deg, var(--primary-light), var(--primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     #authContainer .subtitle {
       text-align: center;
-      color: rgba(255, 255, 255, 0.6);
+      color: var(--text-secondary);
       margin-bottom: 30px;
       font-size: 14px;
     }
@@ -57,63 +219,83 @@
       padding: 14px 16px;
       margin-bottom: 16px;
       background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 10px;
-      color: #fff;
+      color: var(--text-primary);
       font-size: 15px;
       outline: none;
-      transition: border-color 0.3s;
+      transition: var(--transition-smooth);
     }
 
     .auth-input:focus {
-      border-color: #6c63ff;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
     }
 
     .auth-input::placeholder {
-      color: rgba(255, 255, 255, 0.35);
+      color: var(--text-muted);
     }
 
     .auth-btn {
       width: 100%;
       padding: 14px;
-      background: linear-gradient(135deg, #6c63ff, #5a52d5);
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
       border: none;
       border-radius: 10px;
-      color: #fff;
+      color: var(--text-primary);
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
+      transition: var(--transition-smooth);
+      position: relative;
+      overflow: hidden;
     }
 
     .auth-btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 20px rgba(108, 99, 255, 0.4);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(108, 99, 255, 0.45);
     }
 
     .auth-btn:active {
       transform: translateY(0);
     }
 
+    .auth-btn::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .auth-btn:hover::after {
+      opacity: 1;
+    }
+
     .auth-switch {
       text-align: center;
       margin-top: 20px;
-      color: rgba(255, 255, 255, 0.5);
+      color: var(--text-muted);
       font-size: 14px;
     }
 
     .auth-switch a {
-      color: #6c63ff;
+      color: var(--primary);
       cursor: pointer;
       text-decoration: none;
+      transition: color 0.2s;
     }
 
     .auth-switch a:hover {
+      color: var(--primary-light);
       text-decoration: underline;
     }
 
     .auth-error {
-      color: #ff6b6b;
+      color: var(--accent-orange);
       font-size: 13px;
       text-align: center;
       margin-bottom: 12px;
@@ -127,6 +309,9 @@
       height: 600px;
       flex-direction: row;
       overflow: hidden;
+      animation: fadeIn 0.5s ease-out;
+      position: relative;
+      z-index: 10;
     }
 
     /* 左侧联系人面板 */
@@ -135,12 +320,12 @@
       min-width: 280px;
       display: flex;
       flex-direction: column;
-      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      border-right: 1px solid rgba(255, 255, 255, 0.06);
     }
 
     .sidebar-header {
       padding: 20px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
 
     .sidebar-header h2 {
@@ -150,25 +335,26 @@
 
     .sidebar-header .account-info {
       font-size: 12px;
-      color: rgba(255, 255, 255, 0.5);
+      color: var(--text-secondary);
       margin-top: 4px;
     }
 
     .sidebar-header .logout-btn {
       float: right;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #fff;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-primary);
       padding: 4px 12px;
       border-radius: 6px;
       cursor: pointer;
       font-size: 12px;
-      transition: background 0.2s;
+      transition: var(--transition-smooth);
     }
 
     .sidebar-header .logout-btn:hover {
-      background: rgba(255, 107, 107, 0.3);
-      border-color: #ff6b6b;
+      background: rgba(255, 107, 107, 0.25);
+      border-color: var(--accent-orange);
+      box-shadow: 0 0 12px rgba(255, 107, 107, 0.2);
     }
 
     .contact-search {
@@ -178,16 +364,22 @@
     .contact-search input {
       width: 100%;
       padding: 10px 14px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px;
-      color: #fff;
+      color: var(--text-primary);
       font-size: 13px;
       outline: none;
+      transition: var(--transition-smooth);
+    }
+
+    .contact-search input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(108, 99, 255, 0.1);
     }
 
     .contact-search input::placeholder {
-      color: rgba(255, 255, 255, 0.3);
+      color: rgba(255, 255, 255, 0.25);
     }
 
     .contact-list {
@@ -201,7 +393,7 @@
     }
 
     .contact-list::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.12);
       border-radius: 2px;
     }
 
@@ -211,24 +403,27 @@
       padding: 12px 14px;
       border-radius: 10px;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: var(--transition-smooth);
       margin-bottom: 2px;
+      position: relative;
     }
 
     .contact-item:hover {
       background: rgba(255, 255, 255, 0.06);
+      transform: scale(1.02);
     }
 
     .contact-item.active {
-      background: rgba(108, 99, 255, 0.2);
-      border: 1px solid rgba(108, 99, 255, 0.3);
+      background: rgba(108, 99, 255, 0.18);
+      border: 1px solid rgba(108, 99, 255, 0.25);
+      box-shadow: inset 0 0 20px rgba(108, 99, 255, 0.05);
     }
 
     .contact-avatar {
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #6c63ff, #5a52d5);
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
       display: flex;
       align-items: center;
       justify-content: center;
@@ -236,17 +431,28 @@
       font-weight: 600;
       margin-right: 12px;
       position: relative;
+      flex-shrink: 0;
     }
 
     .online-dot {
       width: 10px;
       height: 10px;
-      background: #4ade80;
+      background: var(--accent-green);
       border-radius: 50%;
-      border: 2px solid #24243e;
+      border: 2px solid var(--bg-light);
       position: absolute;
       bottom: -2px;
       right: -2px;
+    }
+
+    .online-dot.away {
+      background: #facc15;
+    }
+    .online-dot.busy {
+      background: var(--accent-orange);
+    }
+    .online-dot.offline {
+      background: rgba(255, 255, 255, 0.2);
     }
 
     .contact-info {
@@ -261,11 +467,37 @@
 
     .contact-status {
       font-size: 11px;
-      color: rgba(255, 255, 255, 0.4);
+      color: var(--text-secondary);
       margin-top: 2px;
     }
 
-    /* 右侧聊天面板 */
+    /* ==================== 未读消息徽章 ==================== */
+    .unread-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      background: var(--accent-red);
+      color: #fff;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: badgePulse 2s ease-in-out infinite;
+      box-shadow: 0 0 8px rgba(255, 68, 68, 0.4);
+    }
+
+    .contact-item .unread-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+    }
+
+    /* ==================== 右侧聊天面板 ==================== */
     .chat-panel {
       flex: 1;
       display: flex;
@@ -274,7 +506,7 @@
 
     .chat-header {
       padding: 16px 20px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -286,7 +518,7 @@
     }
 
     .chat-header .chat-with span {
-      color: rgba(255, 255, 255, 0.4);
+      color: var(--text-secondary);
     }
 
     .call-buttons {
@@ -304,23 +536,30 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      transition: opacity 0.2s;
+      transition: var(--transition-smooth);
     }
 
     .call-btn:hover {
-      opacity: 0.85;
+      opacity: 0.9;
+      transform: translateY(-1px);
     }
 
     .call-btn.audio {
-      background: rgba(74, 222, 128, 0.2);
-      color: #4ade80;
-      border: 1px solid rgba(74, 222, 128, 0.3);
+      background: rgba(74, 222, 128, 0.15);
+      color: var(--accent-green);
+      border: 1px solid rgba(74, 222, 128, 0.25);
+    }
+    .call-btn.audio:hover {
+      box-shadow: 0 0 16px rgba(74, 222, 128, 0.2);
     }
 
     .call-btn.video {
-      background: rgba(108, 99, 255, 0.2);
-      color: #6c63ff;
-      border: 1px solid rgba(108, 99, 255, 0.3);
+      background: rgba(108, 99, 255, 0.15);
+      color: var(--primary);
+      border: 1px solid rgba(108, 99, 255, 0.25);
+    }
+    .call-btn.video:hover {
+      box-shadow: 0 0 16px rgba(108, 99, 255, 0.2);
     }
 
     .messages-area {
@@ -334,7 +573,7 @@
     }
 
     .messages-area::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.12);
       border-radius: 2px;
     }
 
@@ -342,6 +581,7 @@
       margin-bottom: 12px;
       display: flex;
       flex-direction: column;
+      animation: fadeIn 0.3s ease-out;
     }
 
     .message.self {
@@ -359,65 +599,158 @@
       font-size: 14px;
       line-height: 1.5;
       word-break: break-word;
+      position: relative;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     }
 
     .message.self .message-bubble {
-      background: linear-gradient(135deg, #6c63ff, #5a52d5);
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
       border-bottom-right-radius: 4px;
+      border: 1px solid rgba(108, 99, 255, 0.3);
     }
 
     .message.other .message-bubble {
       background: rgba(255, 255, 255, 0.08);
       border-bottom-left-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
     }
 
     .message-time {
       font-size: 11px;
-      color: rgba(255, 255, 255, 0.3);
+      color: rgba(255, 255, 255, 0.25);
       margin-top: 4px;
       padding: 0 4px;
     }
 
+    /* ==================== 语音消息气泡 ==================== */
+    .voice-message {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 160px;
+    }
+    .voice-play-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition-smooth);
+      flex-shrink: 0;
+    }
+    .voice-play-btn:hover {
+      background: var(--primary);
+      transform: scale(1.1);
+    }
+    .voice-play-btn.playing {
+      background: var(--primary);
+      animation: glowPulse 1s ease-in-out infinite;
+    }
+    .voice-wave {
+      flex: 1;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .voice-wave-bar {
+      flex: 1;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      transition: background 0.2s;
+    }
+    .voice-wave-bar.active {
+      background: var(--primary);
+    }
+    .voice-duration {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.4);
+      flex-shrink: 0;
+      min-width: 30px;
+      text-align: right;
+    }
+
+    /* ==================== 消息输入区 ==================== */
     .message-input-area {
       padding: 12px 16px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
       display: flex;
       gap: 10px;
+      align-items: center;
     }
 
     .message-input-area input {
       flex: 1;
       padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 10px;
-      color: #fff;
+      color: var(--text-primary);
       font-size: 14px;
       outline: none;
+      transition: var(--transition-smooth);
     }
 
     .message-input-area input::placeholder {
-      color: rgba(255, 255, 255, 0.3);
+      color: rgba(255, 255, 255, 0.25);
     }
 
     .message-input-area input:focus {
-      border-color: #6c63ff;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(108, 99, 255, 0.1);
+    }
+
+    .mic-btn {
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 16px;
+      transition: var(--transition-smooth);
+      line-height: 1;
+    }
+    .mic-btn:hover {
+      background: rgba(108, 99, 255, 0.15);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    .mic-btn.recording {
+      background: rgba(255, 68, 68, 0.2);
+      border-color: var(--accent-red);
+      color: var(--accent-red);
+      animation: glowPulse 1s ease-in-out infinite;
     }
 
     .send-btn {
       padding: 12px 20px;
-      background: linear-gradient(135deg, #6c63ff, #5a52d5);
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
       border: none;
       border-radius: 10px;
-      color: #fff;
+      color: var(--text-primary);
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
-      transition: opacity 0.2s;
+      transition: var(--transition-smooth);
+      position: relative;
+      overflow: hidden;
     }
 
     .send-btn:hover {
-      opacity: 0.85;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(108, 99, 255, 0.4);
+    }
+
+    .send-btn:active {
+      transform: translateY(0);
     }
 
     .empty-chat {
@@ -425,9 +758,85 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      color: rgba(255, 255, 255, 0.2);
+      color: var(--text-dim);
       font-size: 15px;
     }
+
+    /* ==================== 录音指示器 ==================== */
+    .recording-indicator {
+      display: none;
+      flex: 1;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: rgba(255, 68, 68, 0.06);
+      border: 1px solid rgba(255, 68, 68, 0.15);
+      border-radius: 10px;
+    }
+    .recording-indicator.active {
+      display: flex;
+    }
+    .recording-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-red);
+      animation: recordingPulse 1s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .recording-timer {
+      font-size: 14px;
+      color: var(--accent-red);
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .recording-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      flex: 1;
+    }
+    .recording-cancel-btn {
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 12px;
+      transition: var(--transition-smooth);
+    }
+    .recording-cancel-btn:hover {
+      background: rgba(255, 68, 68, 0.2);
+      border-color: var(--accent-red);
+      color: var(--accent-red);
+    }
+
+    /* ==================== 输入提示动画 ==================== */
+    .typing-indicator {
+      display: none;
+      padding: 4px 16px 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .typing-indicator.show {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .typing-dots {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+    }
+    .typing-dots span {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--text-secondary);
+      animation: typingDot 1.4s ease-in-out infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
 
     /* ==================== 通话覆盖层 ==================== */
     #callOverlay {
@@ -463,7 +872,7 @@
       height: 150px;
       object-fit: cover;
       border-radius: 12px;
-      border: 2px solid rgba(255, 255, 255, 0.2);
+      border: 2px solid rgba(255, 255, 255, 0.15);
       background: #222;
     }
 
@@ -480,7 +889,7 @@
       width: 120px;
       height: 120px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #6c63ff, #5a52d5);
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
       display: flex;
       align-items: center;
       justify-content: center;
@@ -515,7 +924,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: transform 0.2s;
+      transition: var(--transition-smooth);
     }
 
     .call-control-btn:hover {
@@ -524,27 +933,27 @@
 
     .call-control-btn.mic {
       background: rgba(255, 255, 255, 0.1);
-      color: #fff;
+      color: var(--text-primary);
     }
 
     .call-control-btn.mic.muted {
-      background: rgba(255, 107, 107, 0.3);
-      color: #ff6b6b;
+      background: rgba(255, 107, 107, 0.25);
+      color: var(--accent-orange);
     }
 
     .call-control-btn.camera {
       background: rgba(255, 255, 255, 0.1);
-      color: #fff;
+      color: var(--text-primary);
     }
 
     .call-control-btn.camera.off {
-      background: rgba(255, 107, 107, 0.3);
-      color: #ff6b6b;
+      background: rgba(255, 107, 107, 0.25);
+      color: var(--accent-orange);
     }
 
     .call-control-btn.hangup {
-      background: #ff4444;
-      color: #fff;
+      background: var(--accent-red);
+      color: var(--text-primary);
       width: 64px;
       height: 64px;
       font-size: 26px;
@@ -566,7 +975,7 @@
 
     .call-info .call-status {
       font-size: 13px;
-      color: rgba(255, 255, 255, 0.6);
+      color: var(--text-secondary);
       margin-top: 4px;
     }
 
@@ -580,13 +989,14 @@
       padding: 40px;
       text-align: center;
       min-width: 320px;
+      animation: fadeInUp 0.4s ease-out;
     }
 
     .incoming-call-toast .caller-avatar {
       width: 80px;
       height: 80px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #6c63ff, #5a52d5);
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
       display: flex;
       align-items: center;
       justify-content: center;
@@ -603,7 +1013,7 @@
 
     .incoming-call-toast .call-type {
       font-size: 14px;
-      color: rgba(255, 255, 255, 0.5);
+      color: var(--text-secondary);
       margin-bottom: 24px;
     }
 
@@ -620,7 +1030,7 @@
       border: none;
       cursor: pointer;
       font-size: 24px;
-      transition: transform 0.2s;
+      transition: var(--transition-smooth);
     }
 
     .incoming-call-toast .action-btns button:hover {
@@ -628,13 +1038,13 @@
     }
 
     .incoming-call-toast .btn-accept {
-      background: #4ade80;
-      color: #fff;
+      background: var(--accent-green);
+      color: var(--text-primary);
     }
 
     .incoming-call-toast .btn-reject {
-      background: #ff4444;
-      color: #fff;
+      background: var(--accent-red);
+      color: var(--text-primary);
     }
 
     /* ==================== 响应式 ==================== */
@@ -650,7 +1060,7 @@
         min-width: auto;
         height: 40%;
         border-right: none;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       }
     }
 
@@ -675,10 +1085,33 @@
         height: 56px;
         font-size: 22px;
       }
+      .incoming-call-toast {
+        min-width: 260px;
+        padding: 24px;
+      }
     }
   </style>
 </head>
 <body>
+
+  <!-- ==================== 浮动粒子 ==================== -->
+  <div class="particles" aria-hidden="true">
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+  </div>
+
+  <!-- ==================== 扫描线纹理 ==================== -->
+  <div class="scanline-overlay" aria-hidden="true"></div>
 
   <!-- ==================== 认证页面 ==================== -->
   <div id="authContainer" class="glass">
@@ -721,8 +1154,23 @@
       <div class="messages-area" id="messagesArea">
         <div class="empty-chat" id="emptyChat">选择一个联系人，开始聊天</div>
       </div>
+      <!-- 输入提示 -->
+      <div class="typing-indicator" id="typingIndicator">
+        <span>对方正在输入</span>
+        <div class="typing-dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
       <div class="message-input-area" id="messageInputArea" style="display:none;">
+        <!-- 录音指示器 -->
+        <div class="recording-indicator" id="recordingIndicator">
+          <div class="recording-dot"></div>
+          <span class="recording-timer" id="recordingTimer">00:00</span>
+          <span class="recording-label">录音中...</span>
+          <button class="recording-cancel-btn" id="recordingCancelBtn">取消</button>
+        </div>
         <input type="text" id="messageInput" placeholder="输入消息，按 Enter 发送" maxlength="2000">
+        <button class="mic-btn" id="micBtn" title="语音消息">🎤</button>
         <button class="send-btn" id="sendBtn">发送</button>
       </div>
     </div>
@@ -774,6 +1222,7 @@
       // 联系人 & 聊天
       onlineUsers: [],
       selectedContact: null,  // 当前选中的联系人
+      unreadCounts: {},       // { accountId: count }
 
       // 通话
       pc: null,              // RTCPeerConnection
@@ -788,6 +1237,194 @@
 
     // 服务器地址（由后端启动时替换 crummiest-pronto-lung.ngrok-free.dev 占位符）
     const SERVER_HOST = 'crummiest-pronto-lung.ngrok-free.dev';
+
+    // ================================================================
+    //  音效管理器 (Web Audio API)
+    // ================================================================
+    const SoundManager = {
+      audioCtx: null,
+      _ringtoneInterval: null,
+
+      init() {
+        try {
+          this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+          console.warn('[SoundManager] Web Audio API 不可用', e);
+        }
+      },
+
+      ensureCtx() {
+        if (!this.audioCtx) this.init();
+        if (this.audioCtx && this.audioCtx.state === 'suspended') {
+          this.audioCtx.resume();
+        }
+      },
+
+      // 发送消息提示音 - 短促清脆的"叮"
+      playSend() {
+        this.ensureCtx();
+        if (!this.audioCtx) return;
+        this._playTone(800, 0.1, 'sine', 0.3);
+      },
+
+      // 收到消息提示音 - 柔和的"叮咚"双音
+      playReceive() {
+        this.ensureCtx();
+        if (!this.audioCtx) return;
+        this._playTone(1047, 0.15, 'sine', 0.25);
+        setTimeout(() => {
+          this._playTone(1319, 0.15, 'sine', 0.25);
+        }, 160);
+      },
+
+      // 来电铃声 - 循环的"叮~叮~"节奏
+      playRingtone() {
+        this.ensureCtx();
+        if (!this.audioCtx) return;
+        this.stopRingtone();
+        const playBeep = () => {
+          if (!this.audioCtx) return;
+          this._playTone(440, 0.5, 'sawtooth', 0.2);
+        };
+        playBeep();
+        this._ringtoneInterval = setInterval(playBeep, 800);
+      },
+
+      stopRingtone() {
+        if (this._ringtoneInterval) {
+          clearInterval(this._ringtoneInterval);
+          this._ringtoneInterval = null;
+        }
+      },
+
+      // 辅助方法：播放单音
+      _playTone(freq, duration, type, volume) {
+        if (!this.audioCtx) return;
+        try {
+          const osc = this.audioCtx.createOscillator();
+          const gain = this.audioCtx.createGain();
+          osc.type = type || 'sine';
+          osc.frequency.setValueAtTime(freq, this.audioCtx.currentTime);
+          gain.gain.setValueAtTime(volume || 0.3, this.audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(this.audioCtx.destination);
+          osc.start();
+          osc.stop(this.audioCtx.currentTime + duration);
+        } catch (e) {
+          // 静默忽略音频错误
+        }
+      }
+    };
+
+    // ================================================================
+    //  语音录制器
+    // ================================================================
+    const VoiceRecorder = {
+      mediaRecorder: null,
+      audioChunks: [],
+      isRecording: false,
+      startTime: null,
+      timerInterval: null,
+
+      async start() {
+        if (this.isRecording) return;
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          this.audioChunks = [];
+          this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+
+          this.mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+              this.audioChunks.push(e.data);
+            }
+          };
+
+          this.mediaRecorder.onstop = () => {
+            // 停止所有轨道
+            stream.getTracks().forEach(t => t.stop());
+            // 如果有关闭的 chunks，处理
+            if (this.audioChunks.length > 0 && !this._cancelled) {
+              this._encodeAndSend();
+            }
+            this.audioChunks = [];
+            this.isRecording = false;
+          };
+
+          this.mediaRecorder.start(100);
+          this.isRecording = true;
+          this._cancelled = false;
+          this.startTime = Date.now();
+
+          // 启动计时器
+          const timerEl = document.getElementById('recordingTimer');
+          this.timerInterval = setInterval(() => {
+            if (!this.startTime) return;
+            const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+            const min = String(Math.floor(elapsed / 60)).padStart(2, '0');
+            const sec = String(elapsed % 60).padStart(2, '0');
+            timerEl.textContent = min + ':' + sec;
+          }, 200);
+
+          return true;
+        } catch (err) {
+          console.warn('[VoiceRecorder] 启动录音失败:', err.message);
+          alert('无法访问麦克风，请检查权限设置');
+          return false;
+        }
+      },
+
+      stop() {
+        if (!this.isRecording || !this.mediaRecorder) return;
+        this._cancelled = false;
+        try {
+          this.mediaRecorder.stop();
+        } catch (e) {
+          // 忽略
+        }
+        this.isRecording = false;
+        this._stopTimer();
+      },
+
+      cancel() {
+        if (!this.isRecording || !this.mediaRecorder) return;
+        this._cancelled = true;
+        try {
+          this.mediaRecorder.stop();
+        } catch (e) {
+          // 忽略
+        }
+        this.isRecording = false;
+        this.audioChunks = [];
+        this._stopTimer();
+      },
+
+      _stopTimer() {
+        if (this.timerInterval) {
+          clearInterval(this.timerInterval);
+          this.timerInterval = null;
+        }
+      },
+
+      _encodeAndSend() {
+        const blob = new Blob(this.audioChunks, { type: 'audio/webm;codecs=opus' });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = reader.result.split(',')[1];
+          if (base64 && STATE.selectedContact) {
+            sendWSMessage({
+              type: 'voice-chat',
+              to: STATE.selectedContact,
+              audioData: base64,
+              duration: Math.floor((Date.now() - this.startTime) / 1000)
+            });
+            // 播放发送音效
+            SoundManager.playSend();
+          }
+        };
+        reader.readAsDataURL(blob);
+      }
+    };
 
     // ================================================================
     //  DOM 引用
@@ -814,6 +1451,11 @@
     const chatWithSub = $('chatWithSub');
     const audioCallBtn = $('audioCallBtn');
     const videoCallBtn = $('videoCallBtn');
+    const micBtn = $('micBtn');
+    const recordingIndicator = $('recordingIndicator');
+    const recordingTimer = $('recordingTimer');
+    const recordingCancelBtn = $('recordingCancelBtn');
+    const typingIndicator = $('typingIndicator');
 
     // 通话相关
     const callOverlay = $('callOverlay');
@@ -948,6 +1590,8 @@
       STATE.ws.onopen = () => {
         addLog('WebSocket已连接');
         STATE.reconnectAttempt = 0;
+        // 初始化音效管理器
+        SoundManager.init();
       };
 
       STATE.ws.onmessage = (event) => {
@@ -1018,9 +1662,15 @@
           // 收到消息 - 如果当前正好在和对方聊天，显示消息
           if (STATE.selectedContact === msg.from) {
             appendMessage(msg.from, msg.content, false, msg.timestamp);
+            // 播放收到消息音效
+            SoundManager.playReceive();
+          } else {
+            // 不在聊天中，累加未读计数
+            STATE.unreadCounts[msg.from] = (STATE.unreadCounts[msg.from] || 0) + 1;
+            renderContactList();
+            // 仍然播放音效
+            SoundManager.playReceive();
           }
-          // 更新联系人列表中的最近消息提示
-          renderContactList();
           break;
 
         case 'chat-ack':
@@ -1030,14 +1680,28 @@
           }
           break;
 
+        case 'voice-chat':
+          // 收到语音消息
+          if (STATE.selectedContact === msg.from) {
+            appendVoiceMessage(msg.from, msg.audioData, msg.duration, false, msg.timestamp);
+            SoundManager.playReceive();
+          } else {
+            STATE.unreadCounts[msg.from] = (STATE.unreadCounts[msg.from] || 0) + 1;
+            renderContactList();
+            SoundManager.playReceive();
+          }
+          break;
+
         case 'call-offer':
           // 收到通话邀请
           STATE.pendingOffer = msg;
           showIncomingCall(msg.from, msg.callType);
+          SoundManager.playRingtone();
           break;
 
         case 'call-answer':
           // 对方接受了通话
+          SoundManager.stopRingtone();
           if (STATE.pc && STATE.isCaller) {
             handleRemoteAnswer(msg.sdp);
           }
@@ -1054,6 +1718,7 @@
 
         case 'call-end':
           // 对方挂断
+          SoundManager.stopRingtone();
           addLog('对方挂断了通话');
           if (STATE.inCall) {
             hangupCall();
@@ -1081,25 +1746,36 @@
 
       if (users.length === 0) {
         contactList.innerHTML = `
-          <div style="text-align:center;padding:30px;color:rgba(255,255,255,0.2);font-size:13px;">
+          <div style="text-align:center;padding:30px;color:var(--text-dim);font-size:13px;">
             ${searchTerm ? '无匹配联系人' : '暂无在线用户'}
           </div>
         `;
         return;
       }
 
-      contactList.innerHTML = users.map(u => {
+      // 对用户列表排序：有未读消息的排前面
+      const sortedUsers = [...users].sort((a, b) => {
+        const unreadA = STATE.unreadCounts[a] || 0;
+        const unreadB = STATE.unreadCounts[b] || 0;
+        if (unreadB !== unreadA) return unreadB - unreadA;
+        return a.localeCompare(b);
+      });
+
+      contactList.innerHTML = sortedUsers.map(u => {
         const isActive = STATE.selectedContact === u;
         const avatarChar = getAvatarChar(u);
+        const unreadCount = STATE.unreadCounts[u] || 0;
+        const badgeHtml = unreadCount > 0 ? `<span class="unread-badge">${unreadCount > 99 ? '99+' : unreadCount}</span>` : '';
         return `
           <div class="contact-item ${isActive ? 'active' : ''}" data-account="${u}" onclick="selectContact('${u}')">
             <div class="contact-avatar">
               ${avatarChar}
               <span class="online-dot"></span>
+              ${badgeHtml}
             </div>
             <div class="contact-info">
               <div class="contact-name">${u}</div>
-              <div class="contact-status">在线</div>
+              <div class="contact-status">${unreadCount > 0 ? unreadCount + ' 条未读消息' : '在线'}</div>
             </div>
           </div>
         `;
@@ -1112,6 +1788,8 @@
     // 选择联系人（全局函数，供 onclick 调用）
     window.selectContact = function(accountId) {
       STATE.selectedContact = accountId;
+      // 清除该联系人的未读计数
+      STATE.unreadCounts[accountId] = 0;
       renderContactList();
 
       // 显示聊天区域
@@ -1136,6 +1814,8 @@
         content: content
       })) {
         messageInput.value = '';
+        // 播放发送音效
+        SoundManager.playSend();
       }
     }
 
@@ -1168,6 +1848,152 @@
       div.textContent = text;
       return div.innerHTML;
     }
+
+    // ================================================================
+    //  语音消息
+    // ================================================================
+    function appendVoiceMessage(accountId, audioData, duration, isSelf, timestamp) {
+      emptyChat.style.display = 'none';
+
+      const div = document.createElement('div');
+      div.className = 'message ' + (isSelf ? 'self' : 'other');
+
+      const timeStr = formatTime(timestamp || Date.now());
+      const durationStr = duration ? formatDuration(duration) : '--';
+
+      // 构建语音消息气泡
+      div.innerHTML = `
+        <div class="message-bubble">
+          <div class="voice-message">
+            <button class="voice-play-btn" data-audio="${escapeHtml(audioData)}">▶</button>
+            <div class="voice-wave">
+              ${Array.from({length: 20}, (_, i) => `<div class="voice-wave-bar" data-index="${i}"></div>`).join('')}
+            </div>
+            <span class="voice-duration">${durationStr}</span>
+          </div>
+        </div>
+        <div class="message-time">${timeStr}</div>
+      `;
+
+      messagesArea.appendChild(div);
+      messagesArea.scrollTop = messagesArea.scrollHeight;
+
+      // 绑定播放事件
+      const playBtn = div.querySelector('.voice-play-btn');
+      if (playBtn) {
+        playBtn.addEventListener('click', function() {
+          const audioBase64 = this.getAttribute('data-audio');
+          if (this.classList.contains('playing')) {
+            // 停止播放
+            if (window._voiceAudio) {
+              window._voiceAudio.pause();
+              window._voiceAudio = null;
+            }
+            this.classList.remove('playing');
+            this.textContent = '▶';
+            // 重置波形
+            div.querySelectorAll('.voice-wave-bar').forEach(b => b.classList.remove('active'));
+            return;
+          }
+
+          // 停止之前的播放
+          if (window._voiceAudio) {
+            window._voiceAudio.pause();
+            window._voiceAudio = null;
+          }
+          document.querySelectorAll('.voice-play-btn.playing').forEach(b => {
+            b.classList.remove('playing');
+            b.textContent = '▶';
+          });
+          document.querySelectorAll('.voice-wave-bar.active').forEach(b => b.classList.remove('active'));
+
+          try {
+            const audio = new Audio('data:audio/webm;codecs=opus;base64,' + audioBase64);
+            window._voiceAudio = audio;
+            this.classList.add('playing');
+            this.textContent = '⏹';
+
+            const bars = div.querySelectorAll('.voice-wave-bar');
+            let animFrame = null;
+
+            function animateWave() {
+              if (!audio.paused && !audio.ended) {
+                bars.forEach((bar, i) => {
+                  const val = Math.sin(Date.now() / 200 + i * 0.5) * 0.5 + 0.5;
+                  const height = 4 + val * 20;
+                  bar.style.height = height + 'px';
+                  bar.classList.toggle('active', val > 0.6);
+                });
+                animFrame = requestAnimationFrame(animateWave);
+              }
+            }
+            animateWave();
+
+            audio.onended = () => {
+              this.classList.remove('playing');
+              this.textContent = '▶';
+              bars.forEach(b => {
+                b.classList.remove('active');
+                b.style.height = '';
+              });
+              if (animFrame) cancelAnimationFrame(animFrame);
+              window._voiceAudio = null;
+            };
+
+            audio.play().catch(() => {
+              this.classList.remove('playing');
+              this.textContent = '▶';
+            });
+          } catch (e) {
+            this.classList.remove('playing');
+            this.textContent = '▶';
+          }
+        });
+      }
+    }
+
+    function formatDuration(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return m + ':' + String(s).padStart(2, '0');
+    }
+
+    // ================================================================
+    //  语音录制 UI
+    // ================================================================
+    let isRecordingMode = false;
+
+    micBtn.addEventListener('click', async () => {
+      if (VoiceRecorder.isRecording) {
+        // 停止录音
+        VoiceRecorder.stop();
+        micBtn.classList.remove('recording');
+        recordingIndicator.classList.remove('active');
+        messageInput.style.display = '';
+        micBtn.textContent = '🎤';
+        isRecordingMode = false;
+      } else {
+        // 开始录音
+        const success = await VoiceRecorder.start();
+        if (success) {
+          micBtn.classList.add('recording');
+          recordingIndicator.classList.add('active');
+          messageInput.style.display = 'none';
+          micBtn.textContent = '⏹';
+          isRecordingMode = true;
+          recordingTimer.textContent = '00:00';
+        }
+      }
+    });
+
+    recordingCancelBtn.addEventListener('click', () => {
+      VoiceRecorder.cancel();
+      micBtn.classList.remove('recording');
+      recordingIndicator.classList.remove('active');
+      messageInput.style.display = '';
+      micBtn.textContent = '🎤';
+      isRecordingMode = false;
+    });
 
     // ================================================================
     //  通话按钮
@@ -1230,11 +2056,13 @@
       incomingCallerName.textContent = from;
       incomingCallType.textContent = callType === 'video' ? '视频通话邀请' : '语音通话邀请';
       incomingCallToast.style.display = 'block';
+      SoundManager.playRingtone();
     }
 
     acceptCallBtn.addEventListener('click', async () => {
       if (!STATE.pendingOffer) return;
       incomingCallToast.style.display = 'none';
+      SoundManager.stopRingtone();
 
       const { from, sdp, callType } = STATE.pendingOffer;
       STATE.pendingOffer = null;
@@ -1286,6 +2114,7 @@
       }
       STATE.pendingOffer = null;
       incomingCallToast.style.display = 'none';
+      SoundManager.stopRingtone();
     });
 
     // ================================================================
@@ -1444,6 +2273,7 @@
     });
 
     function hangupCall() {
+      SoundManager.stopRingtone();
       // 通知对方（如果还未通知）
       if (STATE.inCall && STATE.callPeer) {
         sendWSMessage({
