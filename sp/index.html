@@ -324,7 +324,7 @@
     }
 
     .sidebar-header {
-      padding: 20px;
+      padding: 16px 20px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
 
@@ -357,13 +357,53 @@
       box-shadow: 0 0 12px rgba(255, 107, 107, 0.2);
     }
 
+    /* ==================== 侧边栏标签 ==================== */
+    .sidebar-tabs {
+      display: flex;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .sidebar-tabs .tab {
+      flex: 1;
+      padding: 10px 4px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+      position: relative;
+      border-bottom: 2px solid transparent;
+    }
+    .sidebar-tabs .tab:hover {
+      color: var(--text-secondary);
+    }
+    .sidebar-tabs .tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    .sidebar-tabs .tab .badge {
+      display: inline-block;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 5px;
+      background: var(--accent-red);
+      color: #fff;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 16px;
+      margin-left: 4px;
+      vertical-align: top;
+      animation: badgePulse 2s ease-in-out infinite;
+    }
+
     .contact-search {
-      padding: 12px 16px;
+      padding: 8px 12px;
     }
 
     .contact-search input {
       width: 100%;
-      padding: 10px 14px;
+      padding: 8px 12px;
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px;
@@ -385,7 +425,7 @@
     .contact-list {
       flex: 1;
       overflow-y: auto;
-      padding: 8px;
+      padding: 6px;
     }
 
     .contact-list::-webkit-scrollbar {
@@ -400,7 +440,7 @@
     .contact-item {
       display: flex;
       align-items: center;
-      padding: 12px 14px;
+      padding: 10px 12px;
       border-radius: 10px;
       cursor: pointer;
       transition: var(--transition-smooth);
@@ -497,6 +537,242 @@
       right: 8px;
     }
 
+    /* ==================== 好友/群聊页面 ==================== */
+    #friendsView, #groupsView {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      overflow-y: auto;
+    }
+    #friendsView::-webkit-scrollbar, #groupsView::-webkit-scrollbar {
+      width: 4px;
+    }
+    #friendsView::-webkit-scrollbar-thumb, #groupsView::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 2px;
+    }
+    .friends-header, .groups-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .friends-header h3, .groups-header h3 {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    .add-friend-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border: none;
+      color: var(--text-primary);
+      font-size: 18px;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .add-friend-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 16px rgba(108, 99, 255, 0.4);
+    }
+    .friend-item, .group-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+      margin-bottom: 2px;
+    }
+    .friend-item:hover, .group-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .friend-item.active, .group-item.active {
+      background: rgba(108, 99, 255, 0.18);
+      border: 1px solid rgba(108, 99, 255, 0.25);
+    }
+    .friend-requests-link {
+      font-size: 12px;
+      color: var(--primary);
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: var(--transition-smooth);
+    }
+    .friend-requests-link:hover {
+      background: rgba(108, 99, 255, 0.15);
+    }
+    .friend-requests-link .badge {
+      display: inline-block;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 5px;
+      background: var(--accent-red);
+      color: #fff;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 16px;
+      margin-left: 4px;
+      animation: badgePulse 2s ease-in-out infinite;
+    }
+    .group-member-count {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .create-group-btn {
+      width: 100%;
+      padding: 8px;
+      background: rgba(108, 99, 255, 0.12);
+      border: 1px dashed rgba(108, 99, 255, 0.3);
+      border-radius: 8px;
+      color: var(--primary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+      margin-bottom: 8px;
+    }
+    .create-group-btn:hover {
+      background: rgba(108, 99, 255, 0.2);
+    }
+
+    /* ==================== 弹窗 ==================== */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(8px);
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s ease-out;
+    }
+    .modal-content {
+      width: 400px;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 30px;
+      animation: fadeInUp 0.3s ease-out;
+    }
+    .modal-content h3 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .modal-content .modal-input {
+      width: 100%;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 14px;
+      outline: none;
+      transition: var(--transition-smooth);
+    }
+    .modal-content .modal-input:focus {
+      border-color: var(--primary);
+    }
+    .modal-content .modal-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border: none;
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+    }
+    .modal-content .modal-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(108, 99, 255, 0.4);
+    }
+    .modal-content .modal-close {
+      float: right;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .modal-content .modal-close:hover {
+      background: rgba(255, 107, 107, 0.2);
+      color: var(--accent-orange);
+    }
+    .friend-request-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .friend-request-item .req-info {
+      flex: 1;
+    }
+    .friend-request-item .req-name {
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .friend-request-item .req-msg {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .friend-request-item .req-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .friend-request-item .req-actions button {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: var(--transition-smooth);
+    }
+    .friend-request-item .req-accept {
+      background: var(--accent-green);
+      color: #000;
+    }
+    .friend-request-item .req-accept:hover {
+      box-shadow: 0 0 12px rgba(74, 222, 128, 0.3);
+    }
+    .friend-request-item .req-reject {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-secondary);
+    }
+    .friend-request-item .req-reject:hover {
+      background: rgba(255, 107, 107, 0.2);
+      color: var(--accent-orange);
+    }
+    .friend-request-item .req-status {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .friend-request-item .req-status.accepted {
+      color: var(--accent-green);
+    }
+    .friend-request-item .req-status.rejected {
+      color: var(--accent-orange);
+    }
+
     /* ==================== 右侧聊天面板 ==================== */
     .chat-panel {
       flex: 1;
@@ -519,6 +795,15 @@
 
     .chat-header .chat-with span {
       color: var(--text-secondary);
+    }
+
+    .chat-header .chat-type-tag {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 8px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
     }
 
     .call-buttons {
@@ -562,6 +847,12 @@
       box-shadow: 0 0 16px rgba(108, 99, 255, 0.2);
     }
 
+    .call-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
     .messages-area {
       flex: 1;
       overflow-y: auto;
@@ -592,6 +883,10 @@
       align-items: flex-start;
     }
 
+    .message.system {
+      align-items: center;
+    }
+
     .message-bubble {
       max-width: 70%;
       padding: 10px 16px;
@@ -615,11 +910,38 @@
       border: 1px solid rgba(255, 255, 255, 0.06);
     }
 
+    .message.system .message-bubble {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      max-width: 90%;
+    }
+
     .message-time {
       font-size: 11px;
       color: rgba(255, 255, 255, 0.25);
       margin-top: 4px;
       padding: 0 4px;
+    }
+
+    /* ==================== 加载更多 ==================== */
+    .load-more {
+      text-align: center;
+      padding: 10px;
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+    }
+    .load-more:hover {
+      color: var(--primary);
+    }
+    .load-more.loading {
+      cursor: default;
+      color: var(--text-muted);
     }
 
     /* ==================== 语音消息气泡 ==================== */
@@ -1129,23 +1451,59 @@
 
   <!-- ==================== 主界面 ==================== -->
   <div id="mainContainer" class="glass">
-    <!-- 左侧联系人面板 -->
-    <div class="sidebar">
+    <!-- 左侧面板 -->
+    <div class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <button class="logout-btn" id="logoutBtn">退出登录</button>
-        <h2>联系人</h2>
+        <h2>即时通讯</h2>
         <div class="account-info" id="accountInfo">已登录</div>
       </div>
-      <div class="contact-search">
-        <input type="text" id="contactSearch" placeholder="搜索联系人...">
+
+      <!-- 侧边栏标签 -->
+      <div class="sidebar-tabs" id="sidebarTabs">
+        <button class="tab active" data-tab="contacts">联系人</button>
+        <button class="tab" data-tab="friends">好友 <span class="badge" id="friendRequestBadge" style="display:none">0</span></button>
+        <button class="tab" data-tab="groups">群聊</button>
       </div>
-      <div class="contact-list" id="contactList"></div>
+
+      <!-- 联系人视图 -->
+      <div id="contactsView">
+        <div class="contact-search">
+          <input type="text" id="contactSearch" placeholder="搜索联系人...">
+        </div>
+        <div class="contact-list" id="contactList"></div>
+      </div>
+
+      <!-- 好友视图 -->
+      <div id="friendsView" style="display:none">
+        <div class="friends-header">
+          <h3>我的好友</h3>
+          <div>
+            <span class="friend-requests-link" id="friendRequestsLink">请求 <span class="badge" id="friendReqBadge" style="display:none">0</span></span>
+            <button class="add-friend-btn" id="addFriendBtn" title="添加好友">+</button>
+          </div>
+        </div>
+        <div class="contact-list" id="friendsList"></div>
+      </div>
+
+      <!-- 群聊视图 -->
+      <div id="groupsView" style="display:none">
+        <div class="groups-header">
+          <h3>我的群聊</h3>
+        </div>
+        <button class="create-group-btn" id="createGroupBtn">+ 创建群聊</button>
+        <div class="contact-list" id="groupsList"></div>
+      </div>
     </div>
 
     <!-- 右侧聊天面板 -->
     <div class="chat-panel">
       <div class="chat-header">
-        <div class="chat-with">选择联系人开始聊天 <span id="chatWithSub"></span></div>
+        <div class="chat-with">
+          选择联系人开始聊天
+          <span id="chatWithSub"></span>
+          <span class="chat-type-tag" id="chatTypeTag" style="display:none"></span>
+        </div>
         <div class="call-buttons" id="callButtons" style="display:none;">
           <button class="call-btn audio" id="audioCallBtn">🎤 语音</button>
           <button class="call-btn video" id="videoCallBtn">📹 视频</button>
@@ -1205,6 +1563,46 @@
     </div>
   </div>
 
+  <!-- ==================== 添加好友弹窗 ==================== -->
+  <div id="addFriendModal" style="display:none;">
+    <div class="modal-overlay">
+      <div class="modal-content glass">
+        <button class="modal-close" id="addFriendModalClose">✕</button>
+        <h3>添加好友</h3>
+        <input type="text" class="modal-input" id="addFriendAccount" placeholder="对方账号">
+        <input type="text" class="modal-input" id="addFriendMessage" placeholder="添加好友消息（选填）">
+        <button class="modal-btn" id="addFriendSubmit">发送好友请求</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 好友请求列表弹窗 ==================== -->
+  <div id="friendRequestsModal" style="display:none;">
+    <div class="modal-overlay">
+      <div class="modal-content glass">
+        <button class="modal-close" id="friendRequestsModalClose">✕</button>
+        <h3>好友请求</h3>
+        <div id="friendRequestsList"></div>
+        <div id="sentFriendRequestsList" style="margin-top:16px;">
+          <h4 style="font-size:14px;color:var(--text-muted);margin-bottom:8px;">已发送的请求</h4>
+          <div id="sentRequestsList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 创建群聊弹窗 ==================== -->
+  <div id="createGroupModal" style="display:none;">
+    <div class="modal-overlay">
+      <div class="modal-content glass">
+        <button class="modal-close" id="createGroupModalClose">✕</button>
+        <h3>创建群聊</h3>
+        <input type="text" class="modal-input" id="createGroupName" placeholder="群聊名称">
+        <button class="modal-btn" id="createGroupSubmit">创建</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ================================================================
     //  全局状态
@@ -1222,7 +1620,24 @@
       // 联系人 & 聊天
       onlineUsers: [],
       selectedContact: null,  // 当前选中的联系人
+      selectedContactType: null, // 'user' | 'friend' | 'group'
       unreadCounts: {},       // { accountId: count }
+
+      // 好友系统
+      friends: [],
+      friendRequests: [],
+      sentRequests: [],
+      friendRequestCount: 0,
+
+      // 群聊
+      groups: [],
+      currentGroupMembers: [],
+
+      // 消息历史
+      currentMessages: [],
+      messagePage: 0,
+      messageLoading: false,
+      hasMoreMessages: true,
 
       // 通话
       pc: null,              // RTCPeerConnection
@@ -1233,6 +1648,9 @@
       callType: null,        // 'audio' | 'video'
       pendingOffer: null,    // 待处理的邀请
       callPeer: null,        // 通话对方
+      callStartTime: null,   // 通话开始时间
+      callTimeoutId: null,   // 通话超时定时器
+      callTimerInterval: null, // 通话计时器
     };
 
     // 服务器地址（由后端启动时替换 crummiest-pronto-lung.ngrok-free.dev 占位符）
@@ -1415,6 +1833,7 @@
             sendWSMessage({
               type: 'voice-chat',
               to: STATE.selectedContact,
+              toType: STATE.selectedContactType,
               audioData: base64,
               duration: Math.floor((Date.now() - this.startTime) / 1000)
             });
@@ -1449,6 +1868,7 @@
     const sendBtn = $('sendBtn');
     const callButtons = $('callButtons');
     const chatWithSub = $('chatWithSub');
+    const chatTypeTag = $('chatTypeTag');
     const audioCallBtn = $('audioCallBtn');
     const videoCallBtn = $('videoCallBtn');
     const micBtn = $('micBtn');
@@ -1475,6 +1895,32 @@
     const acceptCallBtn = $('acceptCallBtn');
     const rejectCallBtn = $('rejectCallBtn');
 
+    // 好友/群聊相关
+    const sidebarTabs = $('sidebarTabs');
+    const contactsView = $('contactsView');
+    const friendsView = $('friendsView');
+    const groupsView = $('groupsView');
+    const friendsList = $('friendsList');
+    const groupsList = $('groupsList');
+    const addFriendBtn = $('addFriendBtn');
+    const addFriendModal = $('addFriendModal');
+    const addFriendModalClose = $('addFriendModalClose');
+    const addFriendAccount = $('addFriendAccount');
+    const addFriendMessage = $('addFriendMessage');
+    const addFriendSubmit = $('addFriendSubmit');
+    const friendRequestsLink = $('friendRequestsLink');
+    const friendRequestsModal = $('friendRequestsModal');
+    const friendRequestsModalClose = $('friendRequestsModalClose');
+    const friendRequestsList = $('friendRequestsList');
+    const sentRequestsList = $('sentRequestsList');
+    const friendRequestBadge = $('friendRequestBadge');
+    const friendReqBadge = $('friendReqBadge');
+    const createGroupBtn = $('createGroupBtn');
+    const createGroupModal = $('createGroupModal');
+    const createGroupModalClose = $('createGroupModalClose');
+    const createGroupName = $('createGroupName');
+    const createGroupSubmit = $('createGroupSubmit');
+
     // ================================================================
     //  工具函数
     // ================================================================
@@ -1483,12 +1929,64 @@
       return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
     }
 
+    function formatDateTime(ts) {
+      const d = new Date(ts);
+      const month = (d.getMonth() + 1).toString().padStart(2, '0');
+      const day = d.getDate().toString().padStart(2, '0');
+      const hours = d.getHours().toString().padStart(2, '0');
+      const mins = d.getMinutes().toString().padStart(2, '0');
+      return month + '-' + day + ' ' + hours + ':' + mins;
+    }
+
     function getAvatarChar(accountId) {
       return accountId ? accountId.charAt(0).toUpperCase() : '?';
     }
 
     function addLog(msg) {
       console.log('[IM]', msg);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatDuration(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return m + ':' + String(s).padStart(2, '0');
+    }
+
+    function formatCallDuration(seconds) {
+      if (seconds < 60) return seconds + '秒';
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return m + '分' + s + '秒';
+    }
+
+    // ================================================================
+    //  HTTP API 调用
+    // ================================================================
+    async function apiFetch(endpoint, options = {}) {
+      const url = 'https://' + SERVER_HOST + endpoint;
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      };
+      if (STATE.token) {
+        headers['Authorization'] = 'Bearer ' + STATE.token;
+      }
+      const res = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'API 请求失败');
+      }
+      return data;
     }
 
     // ================================================================
@@ -1521,10 +2019,11 @@
 
       try {
         const endpoint = isLoginMode ? '/api/login' : '/api/register';
-        const res = await fetch(`https://${SERVER_HOST}${endpoint}`, {
+        const res = await fetch('https://' + SERVER_HOST + endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accountId, password })
+          body: JSON.stringify({ accountId, password }),
+          credentials: 'include'
         });
         const data = await res.json();
         if (data.success) {
@@ -1532,8 +2031,14 @@
           STATE.accountId = data.accountId;
           localStorage.setItem('token', data.token);
           localStorage.setItem('accountId', data.accountId);
+          // 存储 cookie
+          document.cookie = 'token=' + data.token + '; path=/; max-age=86400';
+          document.cookie = 'accountId=' + data.accountId + '; path=/; max-age=86400';
           showMain();
           connectWebSocket();
+          loadFriends();
+          loadGroups();
+          loadFriendRequests();
         } else {
           authError.textContent = data.message;
         }
@@ -1552,6 +2057,9 @@
       STATE.accountId = '';
       localStorage.removeItem('token');
       localStorage.removeItem('accountId');
+      // 清除 cookie
+      document.cookie = 'token=; path=/; max-age=0';
+      document.cookie = 'accountId=; path=/; max-age=0';
       showAuth();
     });
 
@@ -1568,11 +2076,29 @@
       accountInfo.textContent = '已登录：' + STATE.accountId;
     }
 
-    // 检查是否已有登录状态
-    if (STATE.token && STATE.accountId) {
-      showMain();
-      connectWebSocket();
+    // 检查是否已有登录状态 - 同时检查 cookie
+    async function checkAuthOnLoad() {
+      if (STATE.token && STATE.accountId) {
+        // 尝试验证 token
+        try {
+          await apiFetch('/api/auth/check');
+          showMain();
+          connectWebSocket();
+          loadFriends();
+          loadGroups();
+          loadFriendRequests();
+        } catch (e) {
+          // token 无效，尝试刷新
+          addLog('Token 验证失败，需要重新登录');
+          STATE.token = '';
+          STATE.accountId = '';
+          localStorage.removeItem('token');
+          localStorage.removeItem('accountId');
+        }
+      }
     }
+
+    checkAuthOnLoad();
 
     // ================================================================
     //  WebSocket 模块
@@ -1582,7 +2108,7 @@
         try { STATE.ws.close(); } catch {}
       }
 
-      const wsUrl = `wss://${SERVER_HOST}/?token=${STATE.token}&accountId=${STATE.accountId}`;
+      const wsUrl = 'wss://' + SERVER_HOST + '/?token=' + STATE.token + '&accountId=' + STATE.accountId;
       addLog('正在连接WebSocket: ' + SERVER_HOST);
 
       STATE.ws = new WebSocket(wsUrl);
@@ -1628,7 +2154,7 @@
       if (STATE.reconnectAttempt >= Infinity) return;
       STATE.reconnectAttempt++;
       const delay = Math.min(1000 * Math.pow(2, STATE.reconnectAttempt - 1), STATE.maxReconnectDelay);
-      addLog(`将在 ${Math.round(delay/1000)} 秒后重连...`);
+      addLog('将在 ' + Math.round(delay/1000) + ' 秒后重连...');
       setTimeout(() => {
         if (STATE.token && STATE.accountId) {
           connectWebSocket();
@@ -1659,16 +2185,13 @@
           break;
 
         case 'chat':
-          // 收到消息 - 如果当前正好在和对方聊天，显示消息
-          if (STATE.selectedContact === msg.from) {
+          // 收到消息
+          if (STATE.selectedContact === msg.from && STATE.selectedContactType === 'user') {
             appendMessage(msg.from, msg.content, false, msg.timestamp);
-            // 播放收到消息音效
             SoundManager.playReceive();
           } else {
-            // 不在聊天中，累加未读计数
             STATE.unreadCounts[msg.from] = (STATE.unreadCounts[msg.from] || 0) + 1;
             renderContactList();
-            // 仍然播放音效
             SoundManager.playReceive();
           }
           break;
@@ -1682,7 +2205,7 @@
 
         case 'voice-chat':
           // 收到语音消息
-          if (STATE.selectedContact === msg.from) {
+          if (STATE.selectedContact === msg.from && STATE.selectedContactType === 'user') {
             appendVoiceMessage(msg.from, msg.audioData, msg.duration, false, msg.timestamp);
             SoundManager.playReceive();
           } else {
@@ -1702,6 +2225,7 @@
         case 'call-answer':
           // 对方接受了通话
           SoundManager.stopRingtone();
+          clearCallTimeout();
           if (STATE.pc && STATE.isCaller) {
             handleRemoteAnswer(msg.sdp);
           }
@@ -1719,12 +2243,79 @@
         case 'call-end':
           // 对方挂断
           SoundManager.stopRingtone();
+          clearCallTimeout();
           addLog('对方挂断了通话');
           if (STATE.inCall) {
             hangupCall();
           }
-          // 关闭来电弹窗
           incomingCallToast.style.display = 'none';
+          break;
+
+        case 'call-timeout':
+          // 对方未响应
+          SoundManager.stopRingtone();
+          clearCallTimeout();
+          addLog('对方未响应');
+          if (STATE.inCall) {
+            hangupCall();
+          }
+          incomingCallToast.style.display = 'none';
+          break;
+
+        case 'friend-request':
+          // 收到好友请求
+          STATE.friendRequestCount = (STATE.friendRequestCount || 0) + 1;
+          updateFriendRequestBadge();
+          if (msg.from) {
+            addLog('收到来自 ' + msg.from + ' 的好友请求');
+          }
+          break;
+
+        case 'friend-request-accepted':
+          // 好友请求被接受
+          addLog(msg.from + ' 接受了你的好友请求');
+          loadFriends();
+          break;
+
+        case 'friend-request-rejected':
+          // 好友请求被拒绝
+          addLog(msg.from + ' 拒绝了你的好友请求');
+          loadFriendRequests();
+          break;
+
+        case 'friend-removed':
+          addLog(msg.from + ' 已将你从好友列表中移除');
+          loadFriends();
+          break;
+
+        case 'group-created':
+          addLog('群聊 ' + msg.groupName + ' 创建成功');
+          loadGroups();
+          break;
+
+        case 'group-message':
+          if (STATE.selectedContact === msg.groupId && STATE.selectedContactType === 'group') {
+            appendMessage(msg.from, msg.content, false, msg.timestamp, false, true);
+          } else {
+            STATE.unreadCounts[msg.groupId] = (STATE.unreadCounts[msg.groupId] || 0) + 1;
+            renderContactList();
+          }
+          break;
+
+        case 'group-updated':
+          loadGroups();
+          if (STATE.selectedContact === msg.groupId) {
+            loadGroupMembers(msg.groupId);
+          }
+          break;
+
+        case 'group-voice-call-start':
+          // 群语音通话开始
+          addLog('群语音通话已开始');
+          break;
+
+        case 'group-voice-call-end':
+          addLog('群语音通话已结束');
           break;
 
         case 'error':
@@ -1732,6 +2323,22 @@
           break;
       }
     }
+
+    // ================================================================
+    //  侧边栏标签切换
+    // ================================================================
+    sidebarTabs.addEventListener('click', (e) => {
+      const tab = e.target.closest('.tab');
+      if (!tab) return;
+
+      document.querySelectorAll('.sidebar-tabs .tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      const tabName = tab.getAttribute('data-tab');
+      contactsView.style.display = tabName === 'contacts' ? 'block' : 'none';
+      friendsView.style.display = tabName === 'friends' ? 'flex' : 'none';
+      groupsView.style.display = tabName === 'groups' ? 'flex' : 'none';
+    });
 
     // ================================================================
     //  联系人列表
@@ -1762,20 +2369,21 @@
       });
 
       contactList.innerHTML = sortedUsers.map(u => {
-        const isActive = STATE.selectedContact === u;
+        const isActive = STATE.selectedContact === u && STATE.selectedContactType === 'user';
         const avatarChar = getAvatarChar(u);
         const unreadCount = STATE.unreadCounts[u] || 0;
-        const badgeHtml = unreadCount > 0 ? `<span class="unread-badge">${unreadCount > 99 ? '99+' : unreadCount}</span>` : '';
+        const badgeHtml = unreadCount > 0 ? '<span class="unread-badge">' + (unreadCount > 99 ? '99+' : unreadCount) + '</span>' : '';
+        const isOnline = STATE.onlineUsers.includes(u);
         return `
-          <div class="contact-item ${isActive ? 'active' : ''}" data-account="${u}" onclick="selectContact('${u}')">
+          <div class="contact-item ${isActive ? 'active' : ''}" data-account="${u}" onclick="selectContact('${u}', 'user')">
             <div class="contact-avatar">
               ${avatarChar}
-              <span class="online-dot"></span>
+              <span class="online-dot ${isOnline ? '' : 'offline'}"></span>
               ${badgeHtml}
             </div>
             <div class="contact-info">
               <div class="contact-name">${u}</div>
-              <div class="contact-status">${unreadCount > 0 ? unreadCount + ' 条未读消息' : '在线'}</div>
+              <div class="contact-status">${isOnline ? '在线' : '离线'}</div>
             </div>
           </div>
         `;
@@ -1786,20 +2394,99 @@
     contactSearch.addEventListener('input', renderContactList);
 
     // 选择联系人（全局函数，供 onclick 调用）
-    window.selectContact = function(accountId) {
+    window.selectContact = function(accountId, type) {
       STATE.selectedContact = accountId;
+      STATE.selectedContactType = type || 'user';
+      STATE.messagePage = 0;
+      STATE.hasMoreMessages = true;
+      STATE.currentMessages = [];
+
       // 清除该联系人的未读计数
-      STATE.unreadCounts[accountId] = 0;
+      if (type === 'group') {
+        STATE.unreadCounts[accountId] = 0;
+      } else {
+        STATE.unreadCounts[accountId] = 0;
+      }
       renderContactList();
+      renderFriendsList();
+      renderGroupsList();
 
       // 显示聊天区域
-      chatWithSub.textContent = '与 ' + accountId + ' 聊天中';
+      if (type === 'group') {
+        chatWithSub.textContent = '群聊：' + accountId;
+        chatTypeTag.style.display = 'inline';
+        chatTypeTag.textContent = '群聊';
+      } else {
+        chatWithSub.textContent = '与 ' + accountId + ' 聊天中';
+        chatTypeTag.style.display = 'none';
+      }
       callButtons.style.display = 'flex';
       messageInputArea.style.display = 'flex';
       emptyChat.style.display = 'none';
       messagesArea.innerHTML = '';
       messageInput.focus();
+
+      // 加载消息历史
+      loadMessageHistory(accountId, type);
+
+      // 如果是群聊，加载群成员
+      if (type === 'group') {
+        loadGroupMembers(accountId);
+      }
     };
+
+    // ================================================================
+    //  消息历史
+    // ================================================================
+    async function loadMessageHistory(targetId, type) {
+      if (STATE.messageLoading) return;
+      STATE.messageLoading = true;
+
+      try {
+        const endpoint = type === 'group' ? '/api/messages/group/' + targetId : '/api/messages/' + targetId;
+        const page = STATE.messagePage;
+        const data = await apiFetch(endpoint + '?page=' + page + '&limit=20');
+
+        if (data.messages && data.messages.length > 0) {
+          STATE.hasMoreMessages = data.messages.length >= 20;
+
+          // 移除加载更多指示器
+          const loadMoreEl = document.querySelector('.load-more');
+          if (loadMoreEl) loadMoreEl.remove();
+
+          // 渲染消息
+          data.messages.reverse().forEach(msg => {
+            if (msg.type === 'call-record') {
+              appendCallRecord(msg, msg.isSelf);
+            } else if (msg.type === 'voice') {
+              appendVoiceMessage(msg.from, msg.audioData, msg.duration, msg.isSelf, msg.timestamp, type === 'group');
+            } else {
+              appendMessage(msg.from, msg.content, msg.isSelf, msg.timestamp, msg.delivered, type === 'group');
+            }
+          });
+
+          // 如果还有更多消息，添加加载更多按钮
+          if (STATE.hasMoreMessages) {
+            const loadMoreDiv = document.createElement('div');
+            loadMoreDiv.className = 'load-more';
+            loadMoreDiv.textContent = '加载更多...';
+            loadMoreDiv.addEventListener('click', () => {
+              STATE.messagePage++;
+              loadMessageHistory(targetId, type);
+            });
+            messagesArea.insertBefore(loadMoreDiv, messagesArea.firstChild);
+          }
+
+          STATE.messagePage++;
+        } else {
+          STATE.hasMoreMessages = false;
+        }
+      } catch (err) {
+        addLog('加载消息历史失败: ' + err.message);
+      }
+
+      STATE.messageLoading = false;
+    }
 
     // ================================================================
     //  短信聊天
@@ -1808,8 +2495,10 @@
       const content = messageInput.value.trim();
       if (!content || !STATE.selectedContact) return;
 
+      const msgType = STATE.selectedContactType === 'group' ? 'group-chat' : 'chat';
+
       if (sendWSMessage({
-        type: 'chat',
+        type: msgType,
         to: STATE.selectedContact,
         content: content
       })) {
@@ -1824,7 +2513,7 @@
       if (e.key === 'Enter') sendMessage();
     });
 
-    function appendMessage(accountId, content, isSelf, timestamp, delivered) {
+    function appendMessage(accountId, content, isSelf, timestamp, delivered, isGroup) {
       // 移除空状态提示
       emptyChat.style.display = 'none';
 
@@ -1833,9 +2522,10 @@
 
       const timeStr = formatTime(timestamp || Date.now());
       const statusText = isSelf ? (delivered !== false ? '· 已送达' : '· 未送达') : '';
+      const senderLabel = isGroup && !isSelf ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">' + escapeHtml(accountId) + '</div>' : '';
 
       div.innerHTML = `
-        <div class="message-bubble">${escapeHtml(content)}</div>
+        <div class="message-bubble">${senderLabel}${escapeHtml(content)}</div>
         <div class="message-time">${timeStr} ${statusText}</div>
       `;
 
@@ -1843,16 +2533,10 @@
       messagesArea.scrollTop = messagesArea.scrollHeight;
     }
 
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
     // ================================================================
     //  语音消息
     // ================================================================
-    function appendVoiceMessage(accountId, audioData, duration, isSelf, timestamp) {
+    function appendVoiceMessage(accountId, audioData, duration, isSelf, timestamp, isGroup) {
       emptyChat.style.display = 'none';
 
       const div = document.createElement('div');
@@ -1860,14 +2544,16 @@
 
       const timeStr = formatTime(timestamp || Date.now());
       const durationStr = duration ? formatDuration(duration) : '--';
+      const senderLabel = isGroup && !isSelf ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">' + escapeHtml(accountId) + '</div>' : '';
 
       // 构建语音消息气泡
       div.innerHTML = `
         <div class="message-bubble">
+          ${senderLabel}
           <div class="voice-message">
             <button class="voice-play-btn" data-audio="${escapeHtml(audioData)}">▶</button>
             <div class="voice-wave">
-              ${Array.from({length: 20}, (_, i) => `<div class="voice-wave-bar" data-index="${i}"></div>`).join('')}
+              ${Array.from({length: 20}, (_, i) => '<div class="voice-wave-bar" data-index="' + i + '"></div>').join('')}
             </div>
             <span class="voice-duration">${durationStr}</span>
           </div>
@@ -1952,10 +2638,29 @@
       }
     }
 
-    function formatDuration(seconds) {
-      const m = Math.floor(seconds / 60);
-      const s = seconds % 60;
-      return m + ':' + String(s).padStart(2, '0');
+    // ================================================================
+    //  通话记录
+    // ================================================================
+    function appendCallRecord(msg, isSelf) {
+      emptyChat.style.display = 'none';
+
+      const div = document.createElement('div');
+      div.className = 'message system';
+
+      const timeStr = formatDateTime(msg.timestamp || Date.now());
+      const callType = msg.callType === 'video' ? '视频通话' : '语音通话';
+      const durationStr = msg.duration ? formatCallDuration(msg.duration) : '未接通';
+      const direction = isSelf ? '已拨出' : '已接听';
+
+      div.innerHTML = `
+        <div class="message-bubble">
+          ${callType} ${direction} · ${durationStr}
+        </div>
+        <div class="message-time">${timeStr}</div>
+      `;
+
+      messagesArea.appendChild(div);
+      messagesArea.scrollTop = messagesArea.scrollHeight;
     }
 
     // ================================================================
@@ -1996,6 +2701,286 @@
     });
 
     // ================================================================
+    //  好友系统
+    // ================================================================
+    async function loadFriends() {
+      try {
+        const data = await apiFetch('/api/friends');
+        STATE.friends = data.friends || [];
+        renderFriendsList();
+      } catch (err) {
+        addLog('加载好友列表失败: ' + err.message);
+      }
+    }
+
+    async function loadFriendRequests() {
+      try {
+        const data = await apiFetch('/api/friend-requests');
+        STATE.friendRequests = data.received || [];
+        STATE.sentRequests = data.sent || [];
+        STATE.friendRequestCount = STATE.friendRequests.length;
+        updateFriendRequestBadge();
+        renderFriendRequestsModal();
+      } catch (err) {
+        addLog('加载好友请求失败: ' + err.message);
+      }
+    }
+
+    function updateFriendRequestBadge() {
+      const count = STATE.friendRequestCount || 0;
+      const badgeEls = [friendRequestBadge, friendReqBadge];
+      badgeEls.forEach(el => {
+        if (count > 0) {
+          el.style.display = 'inline-block';
+          el.textContent = count > 99 ? '99+' : count;
+        } else {
+          el.style.display = 'none';
+        }
+      });
+    }
+
+    function renderFriendsList() {
+      const list = STATE.friends;
+      if (list.length === 0) {
+        friendsList.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-dim);font-size:13px;">暂无好友，点击 + 添加好友</div>';
+        return;
+      }
+      friendsList.innerHTML = list.map(f => {
+        const isActive = STATE.selectedContact === f.accountId && STATE.selectedContactType === 'friend';
+        const avatarChar = getAvatarChar(f.accountId);
+        const isOnline = STATE.onlineUsers.includes(f.accountId);
+        return `
+          <div class="friend-item ${isActive ? 'active' : ''}" onclick="selectContact('${f.accountId}', 'friend')">
+            <div class="contact-avatar">
+              ${avatarChar}
+              <span class="online-dot ${isOnline ? '' : 'offline'}"></span>
+            </div>
+            <div class="contact-info">
+              <div class="contact-name">${f.accountId}</div>
+              <div class="contact-status">${isOnline ? '在线' : '离线'}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 添加好友弹窗
+    addFriendBtn.addEventListener('click', () => {
+      addFriendModal.style.display = 'block';
+      addFriendAccount.value = '';
+      addFriendMessage.value = '';
+      addFriendAccount.focus();
+    });
+
+    addFriendModalClose.addEventListener('click', () => {
+      addFriendModal.style.display = 'none';
+    });
+
+    addFriendModal.addEventListener('click', (e) => {
+      if (e.target === addFriendModal) {
+        addFriendModal.style.display = 'none';
+      }
+    });
+
+    addFriendSubmit.addEventListener('click', async () => {
+      const targetAccount = addFriendAccount.value.trim();
+      const message = addFriendMessage.value.trim();
+      if (!targetAccount) {
+        alert('请输入对方账号');
+        return;
+      }
+      try {
+        await apiFetch('/api/friend-request', {
+          method: 'POST',
+          body: JSON.stringify({ to: targetAccount, message: message || '你好，我想加你为好友' })
+        });
+        alert('好友请求已发送');
+        addFriendModal.style.display = 'none';
+        loadFriendRequests();
+      } catch (err) {
+        alert('发送好友请求失败: ' + err.message);
+      }
+    });
+
+    // 好友请求列表弹窗
+    friendRequestsLink.addEventListener('click', () => {
+      friendRequestsModal.style.display = 'block';
+      loadFriendRequests();
+    });
+
+    friendRequestsModalClose.addEventListener('click', () => {
+      friendRequestsModal.style.display = 'none';
+    });
+
+    friendRequestsModal.addEventListener('click', (e) => {
+      if (e.target === friendRequestsModal) {
+        friendRequestsModal.style.display = 'none';
+      }
+    });
+
+    function renderFriendRequestsModal() {
+      // 收到的请求
+      const received = STATE.friendRequests;
+      if (received.length === 0) {
+        friendRequestsList.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px;">暂无好友请求</div>';
+      } else {
+        friendRequestsList.innerHTML = received.map(r => {
+          return `
+            <div class="friend-request-item" data-id="${r.id}">
+              <div class="req-info">
+                <div class="req-name">${r.from}</div>
+                <div class="req-msg">${escapeHtml(r.message || '')}</div>
+              </div>
+              <div class="req-actions">
+                <button class="req-accept" onclick="acceptFriendRequest('${r.id}')">接受</button>
+                <button class="req-reject" onclick="rejectFriendRequest('${r.id}')">拒绝</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // 已发送的请求
+      const sent = STATE.sentRequests;
+      if (sent.length === 0) {
+        sentRequestsList.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px;">暂无已发送的请求</div>';
+      } else {
+        const statusMap = { 'pending': '等待中', 'accepted': '已接受', 'rejected': '已拒绝' };
+        sentRequestsList.innerHTML = sent.map(r => {
+          const statusClass = r.status === 'accepted' ? 'accepted' : (r.status === 'rejected' ? 'rejected' : '');
+          return `
+            <div class="friend-request-item">
+              <div class="req-info">
+                <div class="req-name">${r.to}</div>
+                <div class="req-msg">${escapeHtml(r.message || '')}</div>
+              </div>
+              <span class="req-status ${statusClass}">${statusMap[r.status] || r.status}</span>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // 接受好友请求（全局函数）
+    window.acceptFriendRequest = async function(requestId) {
+      try {
+        await apiFetch('/api/friend-request/' + requestId + '/accept', { method: 'POST' });
+        loadFriendRequests();
+        loadFriends();
+        STATE.friendRequestCount = Math.max(0, (STATE.friendRequestCount || 0) - 1);
+        updateFriendRequestBadge();
+      } catch (err) {
+        alert('接受好友请求失败: ' + err.message);
+      }
+    };
+
+    // 拒绝好友请求（全局函数）
+    window.rejectFriendRequest = async function(requestId) {
+      try {
+        await apiFetch('/api/friend-request/' + requestId + '/reject', { method: 'POST' });
+        loadFriendRequests();
+        STATE.friendRequestCount = Math.max(0, (STATE.friendRequestCount || 0) - 1);
+        updateFriendRequestBadge();
+      } catch (err) {
+        alert('拒绝好友请求失败: ' + err.message);
+      }
+    };
+
+    // ================================================================
+    //  群聊系统
+    // ================================================================
+    async function loadGroups() {
+      try {
+        const data = await apiFetch('/api/groups');
+        STATE.groups = data.groups || [];
+        renderGroupsList();
+      } catch (err) {
+        addLog('加载群聊列表失败: ' + err.message);
+      }
+    }
+
+    function renderGroupsList() {
+      const list = STATE.groups;
+      if (list.length === 0) {
+        groupsList.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-dim);font-size:13px;">暂无群聊，点击上方按钮创建</div>';
+        return;
+      }
+      groupsList.innerHTML = list.map(g => {
+        const isActive = STATE.selectedContact === g.groupId && STATE.selectedContactType === 'group';
+        const avatarChar = getAvatarChar(g.groupName || g.groupId);
+        const unreadCount = STATE.unreadCounts[g.groupId] || 0;
+        const badgeHtml = unreadCount > 0 ? '<span class="unread-badge">' + (unreadCount > 99 ? '99+' : unreadCount) + '</span>' : '';
+        return `
+          <div class="group-item ${isActive ? 'active' : ''}" onclick="selectContact('${g.groupId}', 'group')">
+            <div class="contact-avatar" style="background:linear-gradient(135deg,#4ade80,#22c55e)">
+              ${avatarChar}
+              ${badgeHtml}
+            </div>
+            <div class="contact-info">
+              <div class="contact-name">${escapeHtml(g.groupName || g.groupId)}</div>
+              <div class="group-member-count">${g.memberCount || 0} 人</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function loadGroupMembers(groupId) {
+      try {
+        const data = await apiFetch('/api/groups/' + groupId + '/members');
+        STATE.currentGroupMembers = data.members || [];
+        updateGroupCallButtons();
+      } catch (err) {
+        addLog('加载群成员失败: ' + err.message);
+      }
+    }
+
+    function updateGroupCallButtons() {
+      if (STATE.selectedContactType !== 'group') return;
+      const onlineCount = STATE.currentGroupMembers.filter(m => m !== STATE.accountId && STATE.onlineUsers.includes(m)).length;
+      audioCallBtn.disabled = onlineCount < 1;
+      videoCallBtn.disabled = onlineCount < 1;
+      audioCallBtn.title = onlineCount < 1 ? '暂无其他成员在线' : '群语音通话';
+      videoCallBtn.title = onlineCount < 1 ? '暂无其他成员在线' : '群视频通话';
+    }
+
+    // 创建群聊弹窗
+    createGroupBtn.addEventListener('click', () => {
+      createGroupModal.style.display = 'block';
+      createGroupName.value = '';
+      createGroupName.focus();
+    });
+
+    createGroupModalClose.addEventListener('click', () => {
+      createGroupModal.style.display = 'none';
+    });
+
+    createGroupModal.addEventListener('click', (e) => {
+      if (e.target === createGroupModal) {
+        createGroupModal.style.display = 'none';
+      }
+    });
+
+    createGroupSubmit.addEventListener('click', async () => {
+      const groupName = createGroupName.value.trim();
+      if (!groupName) {
+        alert('请输入群聊名称');
+        return;
+      }
+      try {
+        await apiFetch('/api/groups', {
+          method: 'POST',
+          body: JSON.stringify({ groupName: groupName })
+        });
+        alert('群聊创建成功');
+        createGroupModal.style.display = 'none';
+        loadGroups();
+      } catch (err) {
+        alert('创建群聊失败: ' + err.message);
+      }
+    });
+
+    // ================================================================
     //  通话按钮
     // ================================================================
     audioCallBtn.addEventListener('click', () => startCall('audio'));
@@ -2030,8 +3015,9 @@
         await STATE.pc.setLocalDescription(offer);
 
         // 发送Offer
+        const msgType = STATE.selectedContactType === 'group' ? 'group-call-offer' : 'call-offer';
         sendWSMessage({
-          type: 'call-offer',
+          type: msgType,
           to: STATE.selectedContact,
           sdp: STATE.pc.localDescription,
           callType: callType
@@ -2039,12 +3025,42 @@
 
         // 显示通话界面
         showCallUI(callType);
-        addLog(`已发起${callType === 'video' ? '视频' : '语音'}通话`);
+        addLog('已发起' + (callType === 'video' ? '视频' : '语音') + '通话');
+
+        // 设置通话超时（30秒）
+        startCallTimeout();
 
       } catch (err) {
         addLog('发起通话失败: ' + err.message);
         cleanupCall();
-        alert('无法获取摄像头/麦克风权限或发起通话失败');
+        alert('无法获取摄像头/麦克风权限或发起通话失败: ' + err.message);
+      }
+    }
+
+    // ================================================================
+    //  通话超时
+    // ================================================================
+    function startCallTimeout() {
+      clearCallTimeout();
+      callStatus.textContent = '等待对方接听...';
+      STATE.callTimeoutId = setTimeout(() => {
+        addLog('通话超时，对方无响应');
+        if (STATE.inCall) {
+          // 发送超时消息
+          sendWSMessage({
+            type: 'call-timeout',
+            to: STATE.callPeer
+          });
+          alert('对方无响应');
+          hangupCall();
+        }
+      }, 30000);
+    }
+
+    function clearCallTimeout() {
+      if (STATE.callTimeoutId) {
+        clearTimeout(STATE.callTimeoutId);
+        STATE.callTimeoutId = null;
       }
     }
 
@@ -2118,14 +3134,16 @@
     });
 
     // ================================================================
-    //  PeerConnection 管理
+    //  PeerConnection 管理（WebRTC 修复）
     // ================================================================
     function createPeerConnection() {
-      // 配置：强制中继模式（非P2P），使用Google STUN/TURN
+      // 配置：使用 all 模式（先 STUN 再 TURN），添加多个 Google STUN 服务器
       const config = {
-        iceTransportPolicy: 'relay',  // 强制非P2P，所有数据走TURN中继
+        iceTransportPolicy: 'all',
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
           {
             urls: 'turn:relay1.expressturn.com:3478',
             username: 'efGHOTR7GRSJYM6W3W',
@@ -2155,7 +3173,24 @@
         event.streams[0].getTracks().forEach(track => {
           STATE.remoteStream.addTrack(track);
         });
+        // 确保远程视频正确渲染
         remoteVideo.srcObject = STATE.remoteStream;
+        remoteVideo.onloadedmetadata = () => {
+          remoteVideo.play().catch(e => addLog('远程视频播放失败: ' + e.message));
+        };
+      };
+
+      // ICE连接状态变化处理
+      STATE.pc.oniceconnectionstatechange = () => {
+        addLog('ICE连接状态: ' + STATE.pc.iceConnectionState);
+        if (STATE.pc.iceConnectionState === 'failed' ||
+            STATE.pc.iceConnectionState === 'disconnected') {
+          addLog('ICE连接失败，自动挂断');
+          if (STATE.inCall) {
+            alert('连接失败，通话已结束');
+            hangupCall();
+          }
+        }
       };
 
       // 连接状态变化
@@ -2171,6 +3206,7 @@
       };
 
       STATE.inCall = true;
+      STATE.callStartTime = Date.now();
     }
 
     async function handleRemoteAnswer(sdp) {
@@ -2196,8 +3232,36 @@
             }
           }
         }
+
+        // 通话已接通，更新状态
+        callStatus.textContent = '通话中';
+        startCallTimer();
       } catch (err) {
         addLog('处理Answer失败: ' + err.message);
+      }
+    }
+
+    // ================================================================
+    //  通话计时器
+    // ================================================================
+    function startCallTimer() {
+      if (STATE.callTimerInterval) {
+        clearInterval(STATE.callTimerInterval);
+      }
+      STATE.callTimerInterval = setInterval(() => {
+        if (STATE.callStartTime) {
+          const elapsed = Math.floor((Date.now() - STATE.callStartTime) / 1000);
+          const min = String(Math.floor(elapsed / 60)).padStart(2, '0');
+          const sec = String(elapsed % 60).padStart(2, '0');
+          callStatus.textContent = '通话中 ' + min + ':' + sec;
+        }
+      }, 1000);
+    }
+
+    function stopCallTimer() {
+      if (STATE.callTimerInterval) {
+        clearInterval(STATE.callTimerInterval);
+        STATE.callTimerInterval = null;
       }
     }
 
@@ -2210,11 +3274,14 @@
       incomingCallToast.style.display = 'none';
 
       callPeerName.textContent = STATE.callPeer;
-      callStatus.textContent = '通话中';
+      callStatus.textContent = STATE.isCaller ? '等待对方接听...' : '通话中';
 
       // 显示本地视频
       if (STATE.localStream) {
         localVideo.srcObject = STATE.localStream;
+        localVideo.onloadedmetadata = () => {
+          localVideo.play().catch(e => addLog('本地视频播放失败: ' + e.message));
+        };
       }
 
       // 如果是语音通话，隐藏视频元素，显示音频占位
@@ -2225,7 +3292,7 @@
         const bg = document.createElement('div');
         bg.className = 'audio-call-bg';
         bg.id = 'audioCallBg';
-        bg.innerHTML = `<div class="avatar">${getAvatarChar(STATE.callPeer)}</div>`;
+        bg.innerHTML = '<div class="avatar">' + getAvatarChar(STATE.callPeer) + '</div>';
         callOverlay.insertBefore(bg, callOverlay.firstChild);
       } else {
         remoteVideo.style.display = 'block';
@@ -2274,6 +3341,15 @@
 
     function hangupCall() {
       SoundManager.stopRingtone();
+      clearCallTimeout();
+      stopCallTimer();
+
+      // 记录通话时长
+      let callDuration = 0;
+      if (STATE.callStartTime) {
+        callDuration = Math.floor((Date.now() - STATE.callStartTime) / 1000);
+      }
+
       // 通知对方（如果还未通知）
       if (STATE.inCall && STATE.callPeer) {
         sendWSMessage({
@@ -2282,6 +3358,7 @@
         });
       }
 
+      // 清理资源
       cleanupCall();
       callOverlay.style.display = 'none';
       callOverlay.classList.remove('active');
@@ -2302,6 +3379,7 @@
       STATE.isCaller = false;
       STATE.callPeer = null;
       STATE.pendingOffer = null;
+      STATE.callStartTime = null;
 
       // 关闭PeerConnection
       if (STATE.pc) {
@@ -2309,18 +3387,23 @@
         STATE.pc = null;
       }
 
-      // 释放本地流
+      // 释放本地流 - 停止所有轨道
       if (STATE.localStream) {
-        STATE.localStream.getTracks().forEach(track => track.stop());
+        STATE.localStream.getTracks().forEach(track => {
+          try { track.stop(); } catch {}
+        });
         STATE.localStream = null;
       }
 
       // 清除远程流
       if (STATE.remoteStream) {
-        STATE.remoteStream.getTracks().forEach(track => track.stop());
+        STATE.remoteStream.getTracks().forEach(track => {
+          try { track.stop(); } catch {}
+        });
         STATE.remoteStream = null;
       }
 
+      // 清空视频元素
       remoteVideo.srcObject = null;
       localVideo.srcObject = null;
     }
