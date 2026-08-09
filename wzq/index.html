@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P2P双人五子棋</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="container">
+
+    <!-- ========== Toast提示 ========== -->
+    <div id="toast" class="toast"></div>
+
+    <!-- ========== 登录页 ========== -->
+    <div id="login-page" class="page active">
+      <div class="card login-box">
+        <h1>♟ 五子棋</h1>
+        <p class="subtitle">P2P双人对战 · 内网/外网/Ngrok 三种模式</p>
+        
+        <div class="input-group">
+          <label for="username-input">输入你的用户名</label>
+          <input type="text" id="username-input" placeholder="请输入用户名..." autocomplete="off">
+        </div>
+
+        <button id="login-btn" class="btn btn-primary btn-block">进入大厅</button>
+      </div>
+    </div>
+
+    <!-- ========== 大厅页 ========== -->
+    <div id="lobby-page" class="page">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h2 style="margin:0;text-align:left;" id="mode-title">选择对战模式</h2>
+          <button id="back-to-login-btn" class="btn btn-secondary btn-sm">返回</button>
+        </div>
+
+        <!-- 模式选择 -->
+        <div class="mode-selector">
+          <div class="mode-btn" data-mode="lan">
+            <span class="mode-icon">🏠</span>
+            <span class="mode-name">内网模式</span>
+            <span class="mode-desc">宿舍/办公室局域网直连</span>
+          </div>
+          <div class="mode-btn" data-mode="wan">
+            <span class="mode-icon">🌐</span>
+            <span class="mode-name">外网模式</span>
+            <span class="mode-desc">公网IP + STUN穿透</span>
+          </div>
+          <div class="mode-btn" data-mode="ngrok">
+            <span class="mode-icon">🚀</span>
+            <span class="mode-name">Ngrok模式</span>
+            <span class="mode-desc">无公网IP后备方案</span>
+          </div>
+        </div>
+
+        <!-- 连接状态 -->
+        <div class="connection-status-bar">
+          <span>状态:</span>
+          <span id="connection-status" style="color:#999;">⚪ 未连接</span>
+        </div>
+
+        <!-- ===== 内网模式配置 ===== -->
+        <div id="lan-config" class="config-section mode-config hidden">
+          <div class="info-row">
+            <span class="info-label">本机内网IP</span>
+            <span class="info-value" id="lan-ip-display">检测中...</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">说明</span>
+            <span class="info-value" style="font-family:inherit;font-size:0.85em;color:#999;">
+              内网模式下，双方需在同一局域网
+            </span>
+          </div>
+        </div>
+
+        <!-- ===== 外网模式配置 ===== -->
+        <div id="wan-config" class="config-section mode-config hidden">
+          <div class="info-row">
+            <span class="info-label">公网IP</span>
+            <span class="info-value" id="wan-ip-status">检测中...</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">说明</span>
+            <span class="info-value" style="font-family:inherit;font-size:0.85em;color:#999;">
+              外网模式下，使用Google STUN服务器进行NAT穿透
+            </span>
+          </div>
+        </div>
+
+        <!-- ===== Ngrok模式配置 ===== -->
+        <div id="ngrok-config" class="config-section mode-config hidden">
+          <div class="info-row" style="flex-direction:column;align-items:stretch;gap:8px;">
+            <span class="info-label">Ngrok令牌（自动保存）</span>
+            <input type="text" id="ngrok-token-input" placeholder="输入你的Ngrok Authtoken...">
+            <span style="font-size:0.8em;color:#666;">
+              获取令牌: <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" style="color:#f0a500;">https://dashboard.ngrok.com</a>
+            </span>
+          </div>
+          <div class="info-row" style="margin-top:8px;">
+            <span class="info-label">Ngrok状态</span>
+            <span class="info-value" id="ngrok-status" style="font-size:0.85em;">检测中...</span>
+          </div>
+          <div class="info-row" style="flex-direction:column;align-items:flex-start;gap:4px;padding-top:8px;">
+            <span class="info-label" style="margin-bottom:4px;">启动命令（手动执行）:</span>
+            <code style="background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:4px;font-size:0.85em;color:#f7d94f;display:block;width:100%;">
+              ngrok http 8080 --authtoken 你的令牌
+            </code>
+          </div>
+        </div>
+
+        <!-- 创建/加入操作按钮 -->
+        <div class="room-actions">
+          <button id="create-room-btn" class="btn btn-primary" style="flex:1;">创建房间</button>
+          <button id="join-room-btn" class="btn btn-success" style="flex:1;">加入房间</button>
+        </div>
+
+        <!-- 加入房间输入 -->
+        <div id="join-input-area" style="margin-top:12px;">
+          <input type="text" id="join-code-input" placeholder="粘贴房间码或输入内网IP:端口..." style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#fff;font-size:0.9em;outline:none;font-family:'Courier New',monospace;">
+        </div>
+
+        <!-- 房间码显示区（创建者） -->
+        <div id="room-code-area" class="hidden" style="margin-top:16px;">
+          <h3>📋 房间码</h3>
+          <div class="code-display" id="room-code-full"></div>
+          <div class="code-actions">
+            <button id="copy-code-btn" class="btn btn-primary btn-sm">📋 复制房间码</button>
+          </div>
+          <div style="margin-top:8px;font-size:0.8em;color:#888;">
+            将房间码发送给对手（通过聊天软件等外部渠道）
+          </div>
+        </div>
+
+        <!-- 回复码输入区（创建者等待回复） -->
+        <div id="response-input-area" class="hidden" style="margin-top:16px;">
+          <h3>📨 等待对方回复码</h3>
+          <div class="waiting-msg" id="waiting-msg">⏳ 等待对方粘贴房间码连接...</div>
+          <input type="text" id="response-code-input" placeholder="粘贴对手回复的回复码..." style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#fff;font-size:0.9em;outline:none;font-family:'Courier New',monospace;margin-top:8px;">
+          <button id="confirm-response-btn" class="btn btn-success btn-block mt-8">确认连接</button>
+        </div>
+
+        <!-- 回复码显示区（加入者） -->
+        <div id="response-code-area" class="hidden" style="margin-top:16px;">
+          <h3>📨 回复码</h3>
+          <div class="code-display" id="response-code-display"></div>
+          <div class="code-actions">
+            <button id="copy-response-btn" class="btn btn-success btn-sm">📋 复制回复码</button>
+          </div>
+          <div style="margin-top:8px;font-size:0.8em;color:#888;">
+            将回复码发送给房间创建者以完成连接
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 游戏页 ========== -->
+    <div id="game-page" class="page">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h2 style="margin:0;text-align:left;">♟ 五子棋对战</h2>
+          <button id="back-to-lobby-btn" class="btn btn-secondary btn-sm">返回大厅</button>
+        </div>
+
+        <div class="game-layout">
+          <!-- 棋盘区 -->
+          <div class="game-board-wrapper">
+            <canvas id="game-canvas"></canvas>
+          </div>
+
+          <!-- 侧边栏 -->
+          <div class="game-sidebar">
+            <!-- 玩家信息 -->
+            <div class="player-info">
+              <div class="player-row">
+                <span class="player-label">你</span>
+                <span class="player-value" id="player-name">-</span>
+              </div>
+              <div class="player-row">
+                <span class="player-label">你的颜色</span>
+                <span class="player-value" id="player-color">-</span>
+              </div>
+              <div class="player-row">
+                <span class="player-label">对手</span>
+                <span class="player-value" id="opponent-name">-</span>
+              </div>
+              <div class="player-row">
+                <span class="player-label">对手颜色</span>
+                <span class="player-value" id="opponent-color">-</span>
+              </div>
+            </div>
+
+            <!-- 回合指示 -->
+            <div class="turn-indicator" id="turn-indicator">🎯 等待开始...</div>
+
+            <!-- 连接状态 -->
+            <div class="connection-status-bar" style="margin-bottom:0;">
+              <span>状态:</span>
+              <span id="game-connection-status" style="color:#999;">⚪ 未连接</span>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="game-buttons">
+              <button id="restart-btn" class="btn btn-secondary">🔄 重开</button>
+              <button id="quit-btn" class="btn btn-danger">🚪 退出</button>
+            </div>
+
+            <!-- 聊天 -->
+            <div class="chat-box">
+              <div class="chat-header">💬 聊天</div>
+              <div class="chat-messages" id="chat-messages"></div>
+              <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="输入消息..." autocomplete="off">
+                <button id="send-chat-btn" class="btn btn-primary btn-sm">发送</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ========== 脚本加载 ========== -->
+  <script src="js/config.js"></script>
+  <script src="js/network.js"></script>
+  <script src="js/room.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
