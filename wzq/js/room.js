@@ -38,7 +38,8 @@ function generateRoomCode(mode, { sdp, ip, nickname, ngrokUrl }) {
   // 生成显示用的房间码
   let display;
   if (mode === 'lan') {
-    display = `${ip}:8888`;
+    // 内网模式也显示完整的Base64码，因为WebRTC需要SDP信令
+    display = `LAN-${base64.substring(0, 8)}...`;
   } else if (mode === 'ngrok') {
     display = `NGROK-${base64.substring(0, 8)}...`;
   } else {

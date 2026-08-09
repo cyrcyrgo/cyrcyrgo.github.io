@@ -114,8 +114,15 @@ class AppUI {
     document.querySelectorAll('.mode-config').forEach(el => el.classList.add('hidden'));
     document.getElementById(`${mode}-config`).classList.remove('hidden');
 
-    // 隐藏所有操作区域
-    document.querySelectorAll('.room-action').forEach(el => el.classList.add('hidden'));
+    // 重新显示操作按钮和输入区（如果之前被隐藏）
+    document.querySelectorAll('.room-actions').forEach(el => el.classList.remove('hidden'));
+    document.getElementById('join-input-area').classList.remove('hidden');
+
+    // 隐藏房间码和回复码区域
+    document.getElementById('room-code-area').classList.add('hidden');
+    document.getElementById('response-input-area').classList.add('hidden');
+    document.getElementById('response-code-area').classList.add('hidden');
+    document.getElementById('waiting-msg').classList.add('hidden');
 
     // 获取IP
     if (mode === 'lan') {
@@ -160,7 +167,7 @@ class AppUI {
       // 生成Offer SDP
       const sdp = await this.pcManager.createOffer();
 
-      // 生成房间码
+        // 生成房间码
       const roomInfo = {
         sdp: sdp,
         nickname: this.username,
@@ -171,8 +178,7 @@ class AppUI {
       const result = generateRoomCode(this.currentMode, roomInfo);
       this.roomCode = result.code;
 
-      // 显示房间码
-      document.getElementById('room-code-display').textContent = result.display;
+      // 显示房间码（所有模式都显示完整的Base64码，包含SDP信令）
       document.getElementById('room-code-full').textContent = result.code;
       document.getElementById('room-code-area').classList.remove('hidden');
 
@@ -181,8 +187,9 @@ class AppUI {
       document.getElementById('waiting-msg').textContent = '⏳ 等待对方粘贴房间码连接...';
       document.getElementById('waiting-msg').classList.remove('hidden');
 
-      // 隐藏创建/加入按钮
-      document.querySelectorAll('.room-action').forEach(el => el.classList.add('hidden'));
+      // 隐藏创建/加入按钮和加入输入区
+      document.querySelectorAll('.room-actions').forEach(el => el.classList.add('hidden'));
+      document.getElementById('join-input-area').classList.add('hidden');
 
       this._updateConnectionState(CONN_STATE.WAITING);
     } catch (e) {
@@ -233,8 +240,9 @@ class AppUI {
       document.getElementById('response-code-display').textContent = responseCode;
       document.getElementById('response-code-area').classList.remove('hidden');
 
-      // 隐藏创建/加入按钮
-      document.querySelectorAll('.room-action').forEach(el => el.classList.add('hidden'));
+      // 隐藏创建/加入按钮和加入输入区
+      document.querySelectorAll('.room-actions').forEach(el => el.classList.add('hidden'));
+      document.getElementById('join-input-area').classList.add('hidden');
 
       this._updateConnectionState(CONN_STATE.CONNECTING);
     } catch (e) {
@@ -444,11 +452,12 @@ class AppUI {
 
   // 重置大厅显示状态（保留模式选择）
   _resetLobbyDisplay() {
-    document.querySelectorAll('.room-action').forEach(el => el.classList.remove('hidden'));
+    document.querySelectorAll('.room-actions').forEach(el => el.classList.remove('hidden'));
     document.getElementById('room-code-area').classList.add('hidden');
     document.getElementById('response-input-area').classList.add('hidden');
     document.getElementById('response-code-area').classList.add('hidden');
     document.getElementById('waiting-msg').classList.add('hidden');
+    document.getElementById('join-input-area').classList.remove('hidden');
     document.getElementById('connection-status').textContent = '⚪ 未连接';
     document.getElementById('connection-status').style.color = '#999';
   }
