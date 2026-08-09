@@ -1,231 +1,1593 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>P2P双人五子棋</title>
-  <link rel="stylesheet" href="css/style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2P五子棋 · 零服务器联机</title>
+<style>
+/* ===== 全局样式 ===== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+  color: #e0e0e0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+.hidden { display: none !important; }
+
+/* ===== 页面容器 ===== */
+.page {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 20px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== 登录页 ===== */
+#loginPage .logo {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+#loginPage h1 {
+  font-size: 24px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #f7971e, #ffd200);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 32px;
+}
+.input-group {
+  width: 100%;
+  margin-bottom: 20px;
+}
+.input-group label {
+  display: block;
+  font-size: 14px;
+  color: #aaa;
+  margin-bottom: 6px;
+}
+.input-group input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #444;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.3s;
+}
+.input-group input:focus {
+  border-color: #ffd200;
+}
+.mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+}
+.mode-card {
+  background: rgba(255,255,255,0.06);
+  border: 2px solid #444;
+  border-radius: 16px;
+  padding: 20px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.mode-card:hover {
+  border-color: #ffd200;
+  background: rgba(255,255,255,0.1);
+  transform: translateY(-2px);
+}
+.mode-card .icon { font-size: 32px; margin-bottom: 8px; }
+.mode-card .title { font-size: 15px; font-weight: 600; }
+.mode-card .desc { font-size: 11px; color: #999; margin-top: 4px; }
+.mode-card.full-width {
+  grid-column: 1 / -1;
+}
+
+/* ===== 大厅页 ===== */
+#lobbyPage {
+  justify-content: flex-start;
+  padding-top: 40px;
+}
+.lobby-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.back-btn {
+  background: none;
+  border: none;
+  color: #ffd200;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.lobby-header h2 {
+  flex: 1;
+  text-align: center;
+  font-size: 18px;
+}
+.lobby-user {
+  font-size: 14px;
+  color: #aaa;
+}
+.card {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card-title {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.room-code-display {
+  background: rgba(0,0,0,0.3);
+  border-radius: 10px;
+  padding: 14px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  word-break: break-all;
+  color: #ffd200;
+  text-align: center;
+  margin-bottom: 12px;
+  user-select: all;
+}
+.btn-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn {
+  flex: 1;
+  min-width: 80px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #f7971e, #ffd200);
+  color: #1a1a2e;
+}
+.btn-primary:hover { opacity: 0.9; transform: scale(1.02); }
+.btn-secondary {
+  background: rgba(255,255,255,0.1);
+  color: #e0e0e0;
+  border: 1px solid #555;
+}
+.btn-secondary:hover { background: rgba(255,255,255,0.15); }
+.btn-danger {
+  background: rgba(220,50,50,0.2);
+  color: #ff6b6b;
+  border: 1px solid rgba(220,50,50,0.3);
+}
+
+/* 等待动画 */
+.waiting-area {
+  text-align: center;
+  padding: 16px 0;
+}
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #444;
+  border-top-color: #ffd200;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.waiting-text { font-size: 14px; color: #aaa; }
+
+/* 输入框+按钮横排 */
+.join-row {
+  display: flex;
+  gap: 8px;
+}
+.join-row input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 2px solid #444;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+}
+.join-row input:focus { border-color: #ffd200; }
+
+/* ===== QR码 ===== */
+.qr-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.qr-box {
+  background: #1a1a2e;
+  border-radius: 20px;
+  padding: 24px;
+  text-align: center;
+  max-width: 320px;
+}
+.qr-box canvas { margin: 16px 0; border-radius: 8px; }
+.qr-box .close-qr {
+  margin-top: 12px;
+  padding: 8px 24px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid #555;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+}
+
+/* ===== Ngrok配置 ===== */
+.ngrok-config {
+  margin-top: 12px;
+}
+.ngrok-config input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #444;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  margin-bottom: 8px;
+}
+
+/* ===== 棋盘页 ===== */
+#gamePage {
+  justify-content: flex-start;
+  padding-top: 16px;
+}
+.game-header {
+  width: 100%;
+  text-align: center;
+  margin-bottom: 12px;
+}
+.game-header h2 { font-size: 18px; margin-bottom: 4px; }
+.game-status {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.status-dot.connected { background: #4caf50; }
+.status-dot.disconnected { background: #f44336; }
+.turn-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.stone-icon {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.stone-icon.black { background: #111; border: 1px solid #555; }
+.stone-icon.white { background: #eee; border: 1px solid #999; }
+
+/* 棋盘容器 */
+.board-container {
+  position: relative;
+  margin: 8px auto;
+}
+canvas#board {
+  display: block;
+  border-radius: 8px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* 游戏信息栏 */
+.game-info {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 13px;
+}
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.player-info.active { color: #ffd200; font-weight: 600; }
+
+/* 游戏按钮 */
+.game-btns {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+.game-btns .btn { font-size: 13px; padding: 10px; }
+
+/* ===== 聊天 ===== */
+.chat-panel {
+  width: 100%;
+  margin-top: 12px;
+}
+.chat-messages {
+  background: rgba(0,0,0,0.3);
+  border-radius: 12px;
+  padding: 12px;
+  height: 120px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.chat-msg {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+.chat-msg .name { color: #ffd200; font-weight: 600; }
+.chat-msg .text { color: #ccc; }
+.chat-msg.system { color: #888; font-style: italic; }
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+}
+.chat-input-row input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid #444;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+}
+.chat-input-row input:focus { border-color: #ffd200; }
+
+/* ===== Toast 提示 ===== */
+.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 20px;
+  font-size: 14px;
+  z-index: 9999;
+  animation: toastIn 0.3s ease;
+  pointer-events: none;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ===== 胜利弹窗 ===== */
+.win-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.win-box {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 2px solid #ffd200;
+  border-radius: 24px;
+  padding: 40px;
+  text-align: center;
+  animation: popIn 0.4s ease;
+}
+@keyframes popIn {
+  from { transform: scale(0.7); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.win-box .trophy { font-size: 64px; margin-bottom: 12px; }
+.win-box h2 { font-size: 24px; color: #ffd200; margin-bottom: 8px; }
+.win-box p { color: #aaa; margin-bottom: 20px; }
+
+/* ===== 响应式 ===== */
+@media (max-width: 360px) {
+  .mode-grid { grid-template-columns: 1fr; }
+  .mode-card.full-width { grid-column: 1; }
+}
+</style>
 </head>
 <body>
-  <div class="container">
 
-    <!-- ========== Toast提示 ========== -->
-    <div id="toast" class="toast"></div>
-
-    <!-- ========== 登录页 ========== -->
-    <div id="login-page" class="page active">
-      <div class="card login-box">
-        <h1>♟ 五子棋</h1>
-        <p class="subtitle">P2P双人对战 · 内网/外网/Ngrok 三种模式</p>
-        
-        <div class="input-group">
-          <label for="username-input">输入你的用户名</label>
-          <input type="text" id="username-input" placeholder="请输入用户名..." autocomplete="off">
-        </div>
-
-        <button id="login-btn" class="btn btn-primary btn-block">进入大厅</button>
-      </div>
+<!-- ===== 登录页 ===== -->
+<div id="loginPage" class="page">
+  <div class="logo">🎮</div>
+  <h1>P2P五子棋 · 零服务器联机</h1>
+  <div class="input-group">
+    <label>👤 输入你的昵称</label>
+    <input type="text" id="nicknameInput" placeholder="取个响亮的名字..." maxlength="12" autocomplete="off">
+  </div>
+  <div class="mode-grid">
+    <div class="mode-card" onclick="selectMode('lan')">
+      <div class="icon">🏠</div>
+      <div class="title">内网对战</div>
+      <div class="desc">宿舍/办公室直连</div>
     </div>
-
-    <!-- ========== 大厅页 ========== -->
-    <div id="lobby-page" class="page">
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h2 style="margin:0;text-align:left;" id="mode-title">选择对战模式</h2>
-          <button id="back-to-login-btn" class="btn btn-secondary btn-sm">返回</button>
-        </div>
-
-        <!-- 模式选择 -->
-        <div class="mode-selector">
-          <div class="mode-btn" data-mode="lan">
-            <span class="mode-icon">🏠</span>
-            <span class="mode-name">内网模式</span>
-            <span class="mode-desc">宿舍/办公室局域网直连</span>
-          </div>
-          <div class="mode-btn" data-mode="wan">
-            <span class="mode-icon">🌐</span>
-            <span class="mode-name">外网模式</span>
-            <span class="mode-desc">公网IP + STUN穿透</span>
-          </div>
-          <div class="mode-btn" data-mode="ngrok">
-            <span class="mode-icon">🚀</span>
-            <span class="mode-name">Ngrok模式</span>
-            <span class="mode-desc">无公网IP后备方案</span>
-          </div>
-        </div>
-
-        <!-- 连接状态 -->
-        <div class="connection-status-bar">
-          <span>状态:</span>
-          <span id="connection-status" style="color:#999;">⚪ 未连接</span>
-        </div>
-
-        <!-- ===== 内网模式配置 ===== -->
-        <div id="lan-config" class="config-section mode-config hidden">
-          <div class="info-row">
-            <span class="info-label">本机内网IP</span>
-            <span class="info-value" id="lan-ip-display">检测中...</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">说明</span>
-            <span class="info-value" style="font-family:inherit;font-size:0.85em;color:#999;">
-              内网模式下，双方需在同一局域网
-            </span>
-          </div>
-        </div>
-
-        <!-- ===== 外网模式配置 ===== -->
-        <div id="wan-config" class="config-section mode-config hidden">
-          <div class="info-row">
-            <span class="info-label">公网IP</span>
-            <span class="info-value" id="wan-ip-status">检测中...</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">说明</span>
-            <span class="info-value" style="font-family:inherit;font-size:0.85em;color:#999;">
-              外网模式下，使用Google STUN服务器进行NAT穿透
-            </span>
-          </div>
-        </div>
-
-        <!-- ===== Ngrok模式配置 ===== -->
-        <div id="ngrok-config" class="config-section mode-config hidden">
-          <div class="info-row" style="flex-direction:column;align-items:stretch;gap:8px;">
-            <span class="info-label">Ngrok令牌（自动保存）</span>
-            <input type="text" id="ngrok-token-input" placeholder="输入你的Ngrok Authtoken...">
-            <span style="font-size:0.8em;color:#666;">
-              获取令牌: <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" style="color:#f0a500;">https://dashboard.ngrok.com</a>
-            </span>
-          </div>
-          <div class="info-row" style="margin-top:8px;">
-            <span class="info-label">Ngrok状态</span>
-            <span class="info-value" id="ngrok-status" style="font-size:0.85em;">检测中...</span>
-          </div>
-          <div class="info-row" style="flex-direction:column;align-items:flex-start;gap:4px;padding-top:8px;">
-            <span class="info-label" style="margin-bottom:4px;">启动命令（手动执行）:</span>
-            <code style="background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:4px;font-size:0.85em;color:#f7d94f;display:block;width:100%;">
-              ngrok http 8080 --authtoken 你的令牌
-            </code>
-          </div>
-        </div>
-
-        <!-- 创建/加入操作按钮 -->
-        <div class="room-actions">
-          <button id="create-room-btn" class="btn btn-primary" style="flex:1;">创建房间</button>
-          <button id="join-room-btn" class="btn btn-success" style="flex:1;">加入房间</button>
-        </div>
-
-        <!-- 加入房间输入 -->
-        <div id="join-input-area" style="margin-top:12px;">
-          <input type="text" id="join-code-input" placeholder="粘贴房间码或输入内网IP:端口..." style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#fff;font-size:0.9em;outline:none;font-family:'Courier New',monospace;">
-        </div>
-
-        <!-- 房间码显示区（创建者） -->
-        <div id="room-code-area" class="hidden" style="margin-top:16px;">
-          <h3>📋 房间码</h3>
-          <div class="code-display" id="room-code-full"></div>
-          <div class="code-actions">
-            <button id="copy-code-btn" class="btn btn-primary btn-sm">📋 复制房间码</button>
-          </div>
-          <div style="margin-top:8px;font-size:0.8em;color:#888;">
-            将房间码发送给对手（通过聊天软件等外部渠道）
-          </div>
-        </div>
-
-        <!-- 回复码输入区（创建者等待回复） -->
-        <div id="response-input-area" class="hidden" style="margin-top:16px;">
-          <h3>📨 等待对方回复码</h3>
-          <div class="waiting-msg" id="waiting-msg">⏳ 等待对方粘贴房间码连接...</div>
-          <input type="text" id="response-code-input" placeholder="粘贴对手回复的回复码..." style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#fff;font-size:0.9em;outline:none;font-family:'Courier New',monospace;margin-top:8px;">
-          <button id="confirm-response-btn" class="btn btn-success btn-block mt-8">确认连接</button>
-        </div>
-
-        <!-- 回复码显示区（加入者） -->
-        <div id="response-code-area" class="hidden" style="margin-top:16px;">
-          <h3>📨 回复码</h3>
-          <div class="code-display" id="response-code-display"></div>
-          <div class="code-actions">
-            <button id="copy-response-btn" class="btn btn-success btn-sm">📋 复制回复码</button>
-          </div>
-          <div style="margin-top:8px;font-size:0.8em;color:#888;">
-            将回复码发送给房间创建者以完成连接
-          </div>
-        </div>
-      </div>
+    <div class="mode-card" onclick="selectMode('p2p')">
+      <div class="icon">🌐</div>
+      <div class="title">外网P2P</div>
+      <div class="desc">WebRTC+STUN</div>
     </div>
-
-    <!-- ========== 游戏页 ========== -->
-    <div id="game-page" class="page">
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h2 style="margin:0;text-align:left;">♟ 五子棋对战</h2>
-          <button id="back-to-lobby-btn" class="btn btn-secondary btn-sm">返回大厅</button>
-        </div>
-
-        <div class="game-layout">
-          <!-- 棋盘区 -->
-          <div class="game-board-wrapper">
-            <canvas id="game-canvas"></canvas>
-          </div>
-
-          <!-- 侧边栏 -->
-          <div class="game-sidebar">
-            <!-- 玩家信息 -->
-            <div class="player-info">
-              <div class="player-row">
-                <span class="player-label">你</span>
-                <span class="player-value" id="player-name">-</span>
-              </div>
-              <div class="player-row">
-                <span class="player-label">你的颜色</span>
-                <span class="player-value" id="player-color">-</span>
-              </div>
-              <div class="player-row">
-                <span class="player-label">对手</span>
-                <span class="player-value" id="opponent-name">-</span>
-              </div>
-              <div class="player-row">
-                <span class="player-label">对手颜色</span>
-                <span class="player-value" id="opponent-color">-</span>
-              </div>
-            </div>
-
-            <!-- 回合指示 -->
-            <div class="turn-indicator" id="turn-indicator">🎯 等待开始...</div>
-
-            <!-- 连接状态 -->
-            <div class="connection-status-bar" style="margin-bottom:0;">
-              <span>状态:</span>
-              <span id="game-connection-status" style="color:#999;">⚪ 未连接</span>
-            </div>
-
-            <!-- 操作按钮 -->
-            <div class="game-buttons">
-              <button id="restart-btn" class="btn btn-secondary">🔄 重开</button>
-              <button id="quit-btn" class="btn btn-danger">🚪 退出</button>
-            </div>
-
-            <!-- 聊天 -->
-            <div class="chat-box">
-              <div class="chat-header">💬 聊天</div>
-              <div class="chat-messages" id="chat-messages"></div>
-              <div class="chat-input-area">
-                <input type="text" id="chat-input" placeholder="输入消息..." autocomplete="off">
-                <button id="send-chat-btn" class="btn btn-primary btn-sm">发送</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div class="mode-card full-width" onclick="selectMode('ngrok')">
+      <div class="icon">🚀</div>
+      <div class="title">Ngrok穿透</div>
+      <div class="desc">无公网IP备用方案</div>
     </div>
+  </div>
+</div>
 
+<!-- ===== 大厅页 ===== -->
+<div id="lobbyPage" class="page hidden">
+  <div class="lobby-header">
+    <button class="back-btn" onclick="goBack()">←</button>
+    <h2 id="lobbyTitle">🏠 内网模式</h2>
+    <span class="lobby-user" id="lobbyUser"></span>
   </div>
 
-  <!-- ========== 脚本加载 ========== -->
-  <script src="js/config.js"></script>
-  <script src="js/network.js"></script>
-  <script src="js/room.js"></script>
-  <script src="js/game.js"></script>
-  <script src="js/ui.js"></script>
+  <!-- 房间码卡片 -->
+  <div class="card">
+    <div class="card-title">📋 你的房间码</div>
+    <div class="room-code-display" id="roomCodeDisplay">生成中...</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="copyRoomCode()">📋 复制</button>
+      <button class="btn btn-secondary" onclick="showQRCode()">📱 二维码</button>
+    </div>
+  </div>
+
+  <!-- 等待区域 -->
+  <div class="card">
+    <div class="waiting-area">
+      <div class="spinner"></div>
+      <div class="waiting-text" id="waitingText">等待对手加入...</div>
+    </div>
+  </div>
+
+  <!-- 加入房间 -->
+  <div class="card">
+    <div class="card-title">🔗 或输入对手房间码加入</div>
+    <div class="join-row">
+      <input type="text" id="joinCodeInput" placeholder="粘贴房间码..." autocomplete="off">
+      <button class="btn btn-primary" onclick="joinRoom()">加入</button>
+    </div>
+  </div>
+
+  <!-- Ngrok配置（仅Ngrok模式显示） -->
+  <div class="card ngrok-config hidden" id="ngrokConfigCard">
+    <div class="card-title">🔑 Ngrok 配置</div>
+    <input type="text" id="ngrokTokenInput" placeholder="输入你的Ngrok Authtoken..." autocomplete="off">
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveNgrokToken()">💾 保存</button>
+      <button class="btn btn-secondary" onclick="startNgrokTunnel()">🚀 启动隧道</button>
+    </div>
+    <div id="ngrokStatus" style="margin-top:10px;font-size:13px;color:#888;"></div>
+  </div>
+</div>
+
+<!-- ===== 棋盘页 ===== -->
+<div id="gamePage" class="page hidden">
+  <div class="game-header">
+    <h2 id="gameTitle">对战中</h2>
+    <div class="game-status">
+      <span class="status-dot connected" id="statusDot"></span>
+      <span id="connectionText">已连接</span>
+      <span style="margin:0 8px">·</span>
+      <span class="turn-indicator" id="turnIndicator">
+        <span class="stone-icon black"></span> 黑棋回合
+      </span>
+    </div>
+  </div>
+
+  <div class="game-info">
+    <div class="player-info" id="blackPlayer">
+      <span class="stone-icon black"></span>
+      <span id="blackName">黑方</span>
+    </div>
+    <div style="font-size:20px">⚔️</div>
+    <div class="player-info" id="whitePlayer">
+      <span id="whiteName">白方</span>
+      <span class="stone-icon white"></span>
+    </div>
+  </div>
+
+  <div class="board-container">
+    <canvas id="board"></canvas>
+  </div>
+
+  <div class="game-btns">
+    <button class="btn btn-secondary" onclick="requestRestart()">🔄 重新开局</button>
+    <button class="btn btn-secondary" onclick="toggleChat()">💬 聊天</button>
+    <button class="btn btn-danger" onclick="exitGame()">🚪 退出</button>
+  </div>
+
+  <!-- 聊天面板 -->
+  <div class="chat-panel hidden" id="chatPanel">
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chatInput" placeholder="说点什么..." maxlength="100" autocomplete="off">
+      <button class="btn btn-primary" onclick="sendChat()" style="flex:0;padding:8px 16px;">发送</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 二维码弹窗 ===== -->
+<div class="qr-modal hidden" id="qrModal">
+  <div class="qr-box">
+    <div style="font-size:14px;color:#888;">扫描二维码加入房间</div>
+    <canvas id="qrCanvas" width="200" height="200"></canvas>
+    <button class="close-qr" onclick="closeQRCode()">关闭</button>
+  </div>
+</div>
+
+<!-- ===== 胜利弹窗 ===== -->
+<div class="win-modal hidden" id="winModal">
+  <div class="win-box">
+    <div class="trophy" id="winTrophy">🏆</div>
+    <h2 id="winTitle">胜利！</h2>
+    <p id="winDesc">恭喜获胜</p>
+    <button class="btn btn-primary" onclick="closeWinModal()" style="margin:0 auto;">确定</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// P2P五子棋 · 完整实现
+// ============================================================
+
+// ===== 全局状态 =====
+const state = {
+  nickname: '',
+  mode: '',          // 'lan' | 'p2p' | 'ngrok'
+  isHost: false,     // 是否是房主
+  myColor: '',       // 'black' | 'white'
+  currentTurn: 'black',
+  connected: false,
+  localIP: '',
+  publicIP: '',
+  ngrokUrl: '',
+  ngrokToken: '',
+  peerConnection: null,
+  dataChannel: null,
+  board: [],         // 15x15 二维数组
+  gameOver: false,
+  chatOpen: false,
+  lastMove: null,
+  signalingServer: null,
+  iceCandidates: [],
+  localSDP: '',
+  pendingAnswer: null,
+};
+
+// 15x15棋盘
+const BOARD_SIZE = 15;
+
+// ===== 页面切换 =====
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+
+// ===== Toast提示 =====
+function showToast(msg, duration = 2000) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), duration);
+}
+
+// ===== 登录逻辑 =====
+const savedNick = localStorage.getItem('wzq_nickname');
+if (savedNick) document.getElementById('nicknameInput').value = savedNick;
+
+function selectMode(mode) {
+  const nick = document.getElementById('nicknameInput').value.trim();
+  if (!nick) {
+    showToast('请先输入昵称！');
+    return;
+  }
+  state.nickname = nick;
+  state.mode = mode;
+  state.isHost = true; // 默认创建者为房主
+  localStorage.setItem('wzq_nickname', nick);
+
+  // 更新大厅标题
+  const titles = { lan: '🏠 内网模式', p2p: '🌐 外网P2P', ngrok: '🚀 Ngrok穿透' };
+  document.getElementById('lobbyTitle').textContent = titles[mode];
+  document.getElementById('lobbyUser').textContent = '👤 ' + nick;
+
+  // Ngrok模式显示配置卡片
+  const ngrokCard = document.getElementById('ngrokConfigCard');
+  if (mode === 'ngrok') {
+    ngrokCard.classList.remove('hidden');
+    const savedToken = localStorage.getItem('wzq_ngrok_token');
+    if (savedToken) {
+      document.getElementById('ngrokTokenInput').value = savedToken;
+      state.ngrokToken = savedToken;
+    }
+  } else {
+    ngrokCard.classList.add('hidden');
+  }
+
+  showPage('lobbyPage');
+  initLobby();
+}
+
+function goBack() {
+  cleanup();
+  showPage('loginPage');
+}
+
+// ===== 初始化大厅 =====
+async function initLobby() {
+  state.isHost = true;
+  state.iceCandidates = [];
+  state.localSDP = '';
+
+  if (state.mode === 'lan') {
+    await initLANLobby();
+  } else if (state.mode === 'p2p') {
+    await initP2PLobby();
+  } else if (state.mode === 'ngrok') {
+    initNgrokLobby();
+  }
+}
+
+// ===== 内网模式大厅 =====
+async function initLANLobby() {
+  document.getElementById('waitingText').textContent = '正在获取内网IP...';
+  const ip = await getLocalIP();
+  state.localIP = ip;
+  const code = ip + ':8888';
+  document.getElementById('roomCodeDisplay').textContent = code;
+  document.getElementById('waitingText').textContent = '等待对手加入...（让对手输入此房间码）';
+  // 内网模式下，房主作为WebRTC监听方，等待offer
+  await createHostPeer();
+}
+
+// ===== 外网P2P大厅 =====
+async function initP2PLobby() {
+  document.getElementById('waitingText').textContent = '正在获取公网IP...';
+  try {
+    const ip = await getPublicIP();
+    state.publicIP = ip;
+  } catch {
+    state.publicIP = '未知';
+  }
+  document.getElementById('waitingText').textContent = '正在生成信令...';
+  await createHostPeer();
+}
+
+// ===== Ngrok大厅 =====
+function initNgrokLobby() {
+  const savedToken = localStorage.getItem('wzq_ngrok_token');
+  if (savedToken) {
+    state.ngrokToken = savedToken;
+    document.getElementById('ngrokStatus').innerHTML = '✅ 已配置令牌，请点击"启动隧道"';
+  } else {
+    document.getElementById('ngrokStatus').innerHTML = '⚠️ 请先输入Ngrok Authtoken并保存';
+  }
+  document.getElementById('roomCodeDisplay').textContent = '请先启动Ngrok隧道';
+  document.getElementById('waitingText').textContent = '等待配置Ngrok...';
+}
+
+function saveNgrokToken() {
+  const token = document.getElementById('ngrokTokenInput').value.trim();
+  if (!token) { showToast('请输入Ngrok令牌'); return; }
+  state.ngrokToken = token;
+  localStorage.setItem('wzq_ngrok_token', token);
+  showToast('✅ 令牌已保存');
+  document.getElementById('ngrokStatus').innerHTML = '✅ 令牌已保存，请点击"启动隧道"';
+}
+
+// Ngrok隧道启动（通过后端代理或提示用户手动操作）
+async function startNgrokTunnel() {
+  if (!state.ngrokToken) { showToast('请先保存Ngrok令牌'); return; }
+  document.getElementById('ngrokStatus').innerHTML = '⏳ 正在尝试启动隧道...';
+  // 注意：纯前端无法直接启动ngrok，提示用户手动操作
+  // 实际场景需要配合本地代理服务器
+  document.getElementById('ngrokStatus').innerHTML =
+    '⚠️ 纯前端无法直接启动Ngrok，请手动执行：<br>' +
+    '<code style="background:rgba(0,0,0,0.3);padding:4px 8px;border-radius:4px;font-size:12px;">ngrok http 8080 --authtoken ' +
+    state.ngrokToken.substring(0, 10) + '...</code><br>' +
+    '启动后，将Ngrok HTTPS URL输入下方房间码区域';
+
+  // 尝试获取已运行的ngrok URL
+  try {
+    const res = await fetch('http://127.0.0.1:4040/api/tunnels');
+    const data = await res.json();
+    const httpsTunnel = data.tunnels.find(t => t.proto === 'https');
+    if (httpsTunnel) {
+      state.ngrokUrl = httpsTunnel.public_url;
+      document.getElementById('roomCodeDisplay').textContent = state.ngrokUrl;
+      document.getElementById('waitingText').textContent = '隧道已就绪，等待对手加入...';
+      showToast('✅ Ngrok隧道已连接');
+      await createHostPeer();
+    }
+  } catch {
+    document.getElementById('ngrokStatus').innerHTML += '<br>❌ 未检测到Ngrok本地API，请确认Ngrok已启动';
+  }
+}
+
+// ===== WebRTC核心 =====
+function getRTCConfig() {
+  if (state.mode === 'lan') {
+    return { iceServers: [] };
+  }
+  return {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+    ]
+  };
+}
+
+// 创建房主Peer（等待加入者的offer）
+async function createHostPeer() {
+  const pc = new RTCPeerConnection(getRTCConfig());
+  state.peerConnection = pc;
+
+  // 收集ICE候选
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      state.iceCandidates.push(e.candidate);
+    }
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+      onConnected();
+    }
+  };
+
+  // 房主准备接收DataChannel
+  pc.ondatachannel = (e) => {
+    setupDataChannel(e.channel);
+  };
+
+  // 生成房主的offer SDP（供加入者使用）
+  const dc = pc.createDataChannel('game');
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  state.localSDP = pc.localDescription;
+
+  // 等待ICE收集完成
+  await waitForICEComplete(pc);
+
+  // 生成房间码
+  generateRoomCode();
+}
+
+// 创建加入者Peer
+async function createJoinerPeer(offerSDP, iceCandidates) {
+  const pc = new RTCPeerConnection(getRTCConfig());
+  state.peerConnection = pc;
+
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      state.iceCandidates.push(e.candidate);
+    }
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+      onConnected();
+    }
+  };
+
+  pc.ondatachannel = (e) => {
+    setupDataChannel(e.channel);
+  };
+
+  // 设置房主的远端描述
+  await pc.setRemoteDescription(new RTCSessionDescription(offerSDP));
+
+  // 添加ICE候选
+  for (const c of iceCandidates) {
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(c));
+    } catch (err) {
+      console.warn('ICE candidate error:', err);
+    }
+  }
+
+  // 创建应答
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  state.localSDP = pc.localDescription;
+
+  // 等待ICE收集完成
+  await waitForICEComplete(pc);
+
+  return pc.localDescription;
+}
+
+// 等待ICE收集完成
+function waitForICEComplete(pc) {
+  return new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') {
+      resolve();
+      return;
+    }
+    const check = () => {
+      if (pc.iceGatheringState === 'complete') {
+        pc.removeEventListener('icegatheringstatechange', check);
+        resolve();
+      }
+    };
+    pc.addEventListener('icegatheringstatechange', check);
+    // 超时兜底
+    setTimeout(resolve, 5000);
+  });
+}
+
+// 生成房间码
+function generateRoomCode() {
+  let codeObj;
+  if (state.mode === 'lan') {
+    // 内网：简单格式
+    const code = state.localIP + ':8888';
+    document.getElementById('roomCodeDisplay').textContent = code;
+    return;
+  }
+
+  if (state.mode === 'ngrok') {
+    codeObj = {
+      type: 'ngrok',
+      url: state.ngrokUrl,
+      nickname: state.nickname,
+      sdp: state.localSDP,
+      ice: state.iceCandidates,
+      timestamp: Date.now()
+    };
+  } else {
+    codeObj = {
+      type: 'p2p',
+      ip: state.publicIP,
+      nickname: state.nickname,
+      sdp: state.localSDP,
+      ice: state.iceCandidates,
+      timestamp: Date.now()
+    };
+  }
+
+  const jsonStr = JSON.stringify(codeObj);
+  const code = btoa(unescape(encodeURIComponent(jsonStr)));
+  document.getElementById('roomCodeDisplay').textContent = code;
+}
+
+// 设置DataChannel
+function setupDataChannel(channel) {
+  state.dataChannel = channel;
+
+  channel.onopen = () => {
+    state.connected = true;
+    onConnected();
+  };
+
+  channel.onclose = () => {
+    state.connected = false;
+    updateConnectionUI(false);
+  };
+
+  channel.onmessage = (e) => {
+    handleGameMessage(JSON.parse(e.data));
+  };
+}
+
+// 连接建立
+function onConnected() {
+  state.connected = true;
+  updateConnectionUI(true);
+  // 如果不在游戏页，进入游戏
+  if (!document.getElementById('gamePage').classList.contains('hidden')) return;
+  enterGame();
+}
+
+function updateConnectionUI(connected) {
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('connectionText');
+  if (connected) {
+    dot.className = 'status-dot connected';
+    text.textContent = '已连接';
+  } else {
+    dot.className = 'status-dot disconnected';
+    text.textContent = '已断开';
+  }
+}
+
+// ===== 加入房间 =====
+async function joinRoom() {
+  const code = document.getElementById('joinCodeInput').value.trim();
+  if (!code) { showToast('请输入房间码'); return; }
+
+  state.isHost = false;
+  state.iceCandidates = [];
+
+  try {
+    // 尝试解析为内网格式
+    if (/^\d+\.\d+\.\d+\.\d+:\d+$/.test(code)) {
+      await joinLANRoom(code);
+      return;
+    }
+
+    // 尝试解析为Base64
+    const jsonStr = decodeURIComponent(escape(atob(code)));
+    const codeObj = JSON.parse(jsonStr);
+
+    if (codeObj.type === 'p2p' || codeObj.type === 'ngrok') {
+      showToast('正在连接...');
+      document.getElementById('waitingText').textContent = '正在建立连接...';
+      state.mode = codeObj.type === 'ngrok' ? 'ngrok' : 'p2p';
+
+      // 创建加入者Peer
+      const answerDesc = await createJoinerPeer(codeObj.sdp, codeObj.ice || []);
+
+      // 将应答信息编码为房间码，通过其他渠道发回房主
+      // 这里简化：由于是P2P无服务器，需要手动交换应答
+      const answerCode = btoa(unescape(encodeURIComponent(JSON.stringify({
+        type: 'answer',
+        nickname: state.nickname,
+        sdp: answerDesc,
+        ice: state.iceCandidates
+      }))));
+
+      // 显示应答码让用户发回房主
+      document.getElementById('roomCodeDisplay').textContent = answerCode;
+      document.getElementById('waitingText').innerHTML =
+        '✅ 连接请求已发送！<br>请将下方应答码发给房主，<br>房主点击"接收应答"完成连接。';
+
+      // 切换到接收应答模式
+      document.getElementById('joinCodeInput').placeholder = '粘贴房主的应答码...';
+      document.querySelector('#lobbyPage .card:nth-child(4) .card-title').textContent = '🔑 粘贴房主应答码完成连接';
+      document.querySelector('#lobbyPage .card:nth-child(4) .btn').textContent = '连接';
+      document.querySelector('#lobbyPage .card:nth-child(4) .btn').onclick = async () => {
+        await receiveAnswer();
+      };
+    }
+  } catch (err) {
+    showToast('房间码解析失败: ' + err.message);
+  }
+}
+
+// 接收应答码
+async function receiveAnswer() {
+  const code = document.getElementById('joinCodeInput').value.trim();
+  if (!code) { showToast('请输入应答码'); return; }
+  try {
+    const jsonStr = decodeURIComponent(escape(atob(code)));
+    const answerObj = JSON.parse(jsonStr);
+    await state.peerConnection.setRemoteDescription(new RTCSessionDescription(answerObj.sdp));
+    for (const c of (answerObj.ice || [])) {
+      try {
+        await state.peerConnection.addIceCandidate(new RTCIceCandidate(c));
+      } catch (err) {
+        console.warn('ICE error:', err);
+      }
+    }
+    showToast('✅ 应答已接收，正在连接...');
+  } catch (err) {
+    showToast('应答码解析失败: ' + err.message);
+  }
+}
+
+// 内网模式加入
+async function joinLANRoom(code) {
+  showToast('正在连接内网...');
+  // 内网模式需要配合本地信令服务器，这里简化处理
+  // 实际上内网WebRTC也需要某种信令机制
+  // 简化方案：直接提示用户在同一网络下使用外网P2P模式
+  showToast('内网直连需要信令服务器支持，建议使用外网P2P模式');
+}
+
+// ===== 游戏逻辑 =====
+function enterGame() {
+  // 初始化棋盘
+  state.board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+  state.currentTurn = 'black';
+  state.gameOver = false;
+  state.lastMove = null;
+
+  // 分配颜色：房主执黑，加入者执白
+  state.myColor = state.isHost ? 'black' : 'white';
+
+  // 更新UI
+  const blackName = state.isHost ? state.nickname : (state.opponentName || '对手');
+  const whiteName = state.isHost ? (state.opponentName || '对手') : state.nickname;
+  document.getElementById('blackName').textContent = blackName;
+  document.getElementById('whiteName').textContent = whiteName;
+
+  if (state.myColor === 'black') {
+    document.getElementById('blackPlayer').classList.add('active');
+    document.getElementById('whitePlayer').classList.remove('active');
+  } else {
+    document.getElementById('whitePlayer').classList.add('active');
+    document.getElementById('blackPlayer').classList.remove('active');
+  }
+
+  document.getElementById('gameTitle').textContent =
+    (state.mode === 'lan' ? '🏠' : state.mode === 'ngrok' ? '🚀' : '🌐') + ' ' +
+    state.nickname + ' 🆚 ' + (state.opponentName || '对手');
+
+  updateTurnUI();
+  showPage('gamePage');
+  drawBoard();
+}
+
+// 绘制棋盘
+function drawBoard() {
+  const canvas = document.getElementById('board');
+  const container = canvas.parentElement;
+  const size = Math.min(window.innerWidth - 40, 440);
+  const dpr = window.devicePixelRatio || 1;
+
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+  canvas.style.width = size + 'px';
+  canvas.style.height = size + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const cellSize = size / (BOARD_SIZE + 1);
+  const padding = cellSize;
+
+  // 背景
+  ctx.fillStyle = '#c8a55a';
+  ctx.fillRect(0, 0, size, size);
+
+  // 木纹效果
+  ctx.fillStyle = 'rgba(0,0,0,0.03)';
+  for (let i = 0; i < size; i += 3) {
+    ctx.fillRect(0, i, size, 1);
+  }
+
+  // 网格线
+  ctx.strokeStyle = '#5a4a2a';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < BOARD_SIZE; i++) {
+    // 横线
+    ctx.beginPath();
+    ctx.moveTo(padding, padding + i * cellSize);
+    ctx.lineTo(padding + (BOARD_SIZE - 1) * cellSize, padding + i * cellSize);
+    ctx.stroke();
+    // 竖线
+    ctx.beginPath();
+    ctx.moveTo(padding + i * cellSize, padding);
+    ctx.lineTo(padding + i * cellSize, padding + (BOARD_SIZE - 1) * cellSize);
+    ctx.stroke();
+  }
+
+  // 星位（天元 + 四星）
+  const starPoints = [
+    [3, 3], [3, 11], [7, 7], [11, 3], [11, 11],
+    [3, 7], [7, 3], [7, 11], [11, 7]
+  ];
+  ctx.fillStyle = '#5a4a2a';
+  for (const [r, c] of starPoints) {
+    ctx.beginPath();
+    ctx.arc(padding + c * cellSize, padding + r * cellSize, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 绘制棋子
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (state.board[r][c]) {
+        drawStone(ctx, r, c, state.board[r][c], cellSize, padding);
+      }
+    }
+  }
+
+  // 最后落子标记
+  if (state.lastMove) {
+    const { r, c } = state.lastMove;
+    const x = padding + c * cellSize;
+    const y = padding + r * cellSize;
+    ctx.strokeStyle = '#ff4444';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, cellSize * 0.35, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function drawStone(ctx, row, col, color, cellSize, padding) {
+  const x = padding + col * cellSize;
+  const y = padding + row * cellSize;
+  const radius = cellSize * 0.38;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+
+  if (color === 'black') {
+    const grad = ctx.createRadialGradient(x - 2, y - 2, 1, x, y, radius);
+    grad.addColorStop(0, '#555');
+    grad.addColorStop(1, '#111');
+    ctx.fillStyle = grad;
+  } else {
+    const grad = ctx.createRadialGradient(x - 2, y - 2, 1, x, y, radius);
+    grad.addColorStop(0, '#fff');
+    grad.addColorStop(1, '#ccc');
+    ctx.fillStyle = grad;
+  }
+
+  ctx.shadowColor = 'rgba(0,0,0,0.4)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetX = 2;
+  ctx.shadowOffsetY = 2;
+  ctx.fill();
+  ctx.restore();
+}
+
+// 棋盘点击
+document.getElementById('board').addEventListener('click', (e) => {
+  if (state.gameOver || !state.connected) return;
+  if (state.currentTurn !== state.myColor) {
+    showToast('还没到你的回合！');
+    return;
+  }
+
+  const canvas = e.target;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const size = parseFloat(canvas.style.width);
+  const cellSize = size / (BOARD_SIZE + 1);
+  const padding = cellSize;
+
+  const x = (e.clientX - rect.left);
+  const y = (e.clientY - rect.top);
+
+  const col = Math.round((x - padding) / cellSize);
+  const row = Math.round((y - padding) / cellSize);
+
+  if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) return;
+  if (state.board[row][col]) return;
+
+  // 落子
+  placeStone(row, col, state.myColor, true);
+});
+
+// 触摸支持
+document.getElementById('board').addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const clickEvent = new MouseEvent('click', {
+    clientX: touch.clientX,
+    clientY: touch.clientY
+  });
+  e.target.dispatchEvent(clickEvent);
+}, { passive: false });
+
+function placeStone(row, col, color, send) {
+  state.board[row][col] = color;
+  state.lastMove = { r: row, c: col };
+  drawBoard();
+
+  // 发送给对手
+  if (send && state.dataChannel && state.dataChannel.readyState === 'open') {
+    state.dataChannel.send(JSON.stringify({
+      type: 'move',
+      x: col,
+      y: row,
+      color: color
+    }));
+  }
+
+  // 检查胜负
+  if (checkWin(row, col, color)) {
+    state.gameOver = true;
+    const isWinner = color === state.myColor;
+    showWinModal(isWinner);
+    return;
+  }
+
+  // 检查平局
+  if (isBoardFull()) {
+    state.gameOver = true;
+    showWinModal(null); // 平局
+    return;
+  }
+
+  // 切换回合
+  state.currentTurn = color === 'black' ? 'white' : 'black';
+  updateTurnUI();
+}
+
+function updateTurnUI() {
+  const indicator = document.getElementById('turnIndicator');
+  const isMyTurn = state.currentTurn === state.myColor;
+  if (state.currentTurn === 'black') {
+    indicator.innerHTML = '<span class="stone-icon black"></span> 黑棋回合' +
+      (isMyTurn ? '（你）' : '');
+  } else {
+    indicator.innerHTML = '<span class="stone-icon white"></span> 白棋回合' +
+      (isMyTurn ? '（你）' : '');
+  }
+
+  // 高亮当前玩家
+  document.getElementById('blackPlayer').classList.toggle('active', state.currentTurn === 'black');
+  document.getElementById('whitePlayer').classList.toggle('active', state.currentTurn === 'white');
+}
+
+// 五子连珠判定
+function checkWin(row, col, color) {
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (const [dr, dc] of dirs) {
+    let count = 1;
+    // 正方向
+    for (let i = 1; i < 5; i++) {
+      const nr = row + dr * i, nc = col + dc * i;
+      if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && state.board[nr][nc] === color) {
+        count++;
+      } else break;
+    }
+    // 反方向
+    for (let i = 1; i < 5; i++) {
+      const nr = row - dr * i, nc = col - dc * i;
+      if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && state.board[nr][nc] === color) {
+        count++;
+      } else break;
+    }
+    if (count >= 5) return true;
+  }
+  return false;
+}
+
+function isBoardFull() {
+  return state.board.every(row => row.every(cell => cell !== 0));
+}
+
+// 处理游戏消息
+function handleGameMessage(msg) {
+  switch (msg.type) {
+    case 'move':
+      placeStone(msg.y, msg.x, msg.color, false);
+      break;
+    case 'restart':
+      // 对手请求重新开局
+      if (confirm('对手请求重新开局，是否同意？')) {
+        resetBoard();
+        sendGameMessage({ type: 'restart_ack' });
+      }
+      break;
+    case 'restart_ack':
+      resetBoard();
+      showToast('✅ 新一局开始！');
+      break;
+    case 'chat':
+      addChatMessage(msg.name, msg.text);
+      break;
+    case 'info':
+      state.opponentName = msg.nickname;
+      document.getElementById('gameTitle').textContent =
+        (state.mode === 'lan' ? '🏠' : state.mode === 'ngrok' ? '🚀' : '🌐') + ' ' +
+        state.nickname + ' 🆚 ' + state.opponentName;
+      // 更新颜色显示
+      if (state.isHost) {
+        document.getElementById('whiteName').textContent = state.opponentName;
+      } else {
+        document.getElementById('blackName').textContent = state.opponentName;
+      }
+      break;
+  }
+}
+
+function sendGameMessage(msg) {
+  if (state.dataChannel && state.dataChannel.readyState === 'open') {
+    state.dataChannel.send(JSON.stringify(msg));
+  }
+}
+
+// 发送个人信息
+function sendPlayerInfo() {
+  sendGameMessage({ type: 'info', nickname: state.nickname });
+}
+
+// ===== 重新开局 =====
+function requestRestart() {
+  if (!state.connected) { showToast('未连接对手'); return; }
+  sendGameMessage({ type: 'restart' });
+  showToast('已发送重新开局请求');
+}
+
+function resetBoard() {
+  state.board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+  state.currentTurn = 'black';
+  state.gameOver = false;
+  state.lastMove = null;
+  updateTurnUI();
+  drawBoard();
+  closeWinModal();
+}
+
+// ===== 胜利弹窗 =====
+function showWinModal(isWinner) {
+  const modal = document.getElementById('winModal');
+  const trophy = document.getElementById('winTrophy');
+  const title = document.getElementById('winTitle');
+  const desc = document.getElementById('winDesc');
+
+  if (isWinner === null) {
+    trophy.textContent = '🤝';
+    title.textContent = '平局！';
+    desc.textContent = '棋盘已满，握手言和';
+  } else if (isWinner) {
+    trophy.textContent = '🏆';
+    title.textContent = '恭喜胜利！';
+    desc.textContent = '你赢了这局棋！';
+  } else {
+    trophy.textContent = '😢';
+    title.textContent = '遗憾落败';
+    desc.textContent = '下次再接再厉！';
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeWinModal() {
+  document.getElementById('winModal').classList.add('hidden');
+}
+
+// ===== 聊天 =====
+function toggleChat() {
+  state.chatOpen = !state.chatOpen;
+  document.getElementById('chatPanel').classList.toggle('hidden', !state.chatOpen);
+}
+
+function sendChat() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  addChatMessage(state.nickname, text, true);
+  sendGameMessage({ type: 'chat', name: state.nickname, text });
+  input.value = '';
+}
+
+function addChatMessage(name, text, isMe = false) {
+  const container = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg';
+  div.innerHTML = `<span class="name">${escapeHtml(name)}:</span> <span class="text">${escapeHtml(text)}</span>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addSystemMessage(text) {
+  const container = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg system';
+  div.textContent = text;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+// 聊天回车发送
+document.getElementById('chatInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendChat();
+});
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ===== 退出游戏 =====
+function exitGame() {
+  if (!confirm('确定退出对战？')) return;
+  cleanup();
+  showPage('loginPage');
+}
+
+function cleanup() {
+  if (state.dataChannel) {
+    try { state.dataChannel.close(); } catch {}
+  }
+  if (state.peerConnection) {
+    try { state.peerConnection.close(); } catch {}
+  }
+  state.dataChannel = null;
+  state.peerConnection = null;
+  state.connected = false;
+  state.gameOver = false;
+  state.board = [];
+  state.iceCandidates = [];
+  state.localSDP = '';
+  state.opponentName = '';
+}
+
+// ===== 复制房间码 =====
+function copyRoomCode() {
+  const code = document.getElementById('roomCodeDisplay').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    showToast('✅ 房间码已复制');
+  }).catch(() => {
+    // fallback
+    const textarea = document.createElement('textarea');
+    textarea.value = code;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    showToast('✅ 房间码已复制');
+  });
+}
+
+// ===== 二维码 =====
+function showQRCode() {
+  const code = document.getElementById('roomCodeDisplay').textContent;
+  if (code === '生成中...' || code === '请先启动Ngrok隧道') {
+    showToast('房间码还未生成');
+    return;
+  }
+
+  const modal = document.getElementById('qrModal');
+  modal.classList.remove('hidden');
+
+  // 生成二维码（简易实现）
+  const canvas = document.getElementById('qrCanvas');
+  const url = window.location.href.split('?')[0] + '?code=' + encodeURIComponent(code);
+  drawSimpleQR(canvas, url);
+}
+
+function closeQRCode() {
+  document.getElementById('qrModal').classList.add('hidden');
+}
+
+// 简易QR码绘制（使用第三方库太重，这里用简单方案）
+function drawSimpleQR(canvas, text) {
+  // 使用QR码生成算法的简化版本
+  // 实际项目中建议引入 qrcode.js
+  const ctx = canvas.getContext('2d');
+  const size = 200;
+  canvas.width = size;
+  canvas.height = size;
+
+  // 绘制提示信息
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#333';
+  ctx.font = '14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('请复制房间码发送给对手', size/2, size/2 - 20);
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#888';
+  ctx.fillText('（QR码生成需要引入第三方库）', size/2, size/2 + 10);
+
+  // 绘制简单的图案
+  ctx.strokeStyle = '#ffd200';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(20, 20, size-40, size-40);
+
+  // 中间图标
+  ctx.font = '48px sans-serif';
+  ctx.fillText('📋', size/2, size/2 + 50);
+}
+
+// ===== 获取内网IP =====
+function getLocalIP() {
+  return new Promise(resolve => {
+    try {
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      const dc = pc.createDataChannel('ipcheck');
+      pc.createOffer().then(o => pc.setLocalDescription(o));
+      let resolved = false;
+      pc.onicecandidate = (e) => {
+        if (e.candidate && !resolved) {
+          const match = e.candidate.candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
+          if (match && !match[1].startsWith('127.') && !match[1].startsWith('0.')) {
+            resolved = true;
+            resolve(match[1]);
+            pc.close();
+          }
+        }
+      };
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve('127.0.0.1');
+          try { pc.close(); } catch {}
+        }
+      }, 3000);
+    } catch {
+      resolve('127.0.0.1');
+    }
+  });
+}
+
+// ===== 获取公网IP =====
+async function getPublicIP() {
+  const apis = [
+    'https://api.ipify.org?format=json',
+    'https://api.my-ip.io/v2/ip.json',
+    'https://ipinfo.io/json',
+  ];
+  for (const api of apis) {
+    try {
+      const res = await fetch(api, { signal: AbortSignal.timeout(3000) });
+      const data = await res.json();
+      return data.ip || data.query || '';
+    } catch {}
+  }
+  throw new Error('无法获取公网IP');
+}
+
+// ===== 窗口大小变化重绘 =====
+window.addEventListener('resize', () => {
+  if (!document.getElementById('gamePage').classList.contains('hidden')) {
+    drawBoard();
+  }
+});
+
+// ===== 页面加载时检查URL参数（用于快速加入） =====
+window.addEventListener('load', () => {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (code) {
+    document.getElementById('joinCodeInput').value = code;
+    showToast('已从链接获取房间码，请输入昵称后加入');
+  }
+});
+
+// ===== DataChannel打开后发送个人信息 =====
+const origOnConnected = onConnected;
+onConnected = function() {
+  origOnConnected();
+  setTimeout(() => {
+    sendPlayerInfo();
+    addSystemMessage('已连接到对手！');
+  }, 500);
+};
+
+// ===== 初始化 =====
+console.log('🎮 P2P五子棋已加载');
+</script>
 </body>
 </html>
