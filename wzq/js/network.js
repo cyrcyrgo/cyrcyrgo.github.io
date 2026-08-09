@@ -31,16 +31,33 @@ function getLocalIP() {
   });
 }
 
-// ========== 公网IP获取 ==========
+// ========== 公网IP获取（多后备API） ==========
+// 部分网络环境下 api.ipify.org 可能被屏蔽，使用多个后备API轮询
+const PUBLIC_IP_SERVICES = [
+  { url: 'https://api.ipify.org?format=json', parse: (d) => d.ip },
+  { url: 'https://api.my-ip.io/ip.json', parse: (d) => d.ip },
+  { url: 'https://ip-api.com/json/', parse: (d) => d.query },
+  { url: 'https://httpbin.org/ip', parse: (d) => d.origin }
+];
+
 async function getPublicIP() {
-  try {
-    const res = await fetch('https://api.ipify.org?format=json');
-    const data = await res.json();
-    return data.ip;
-  } catch (e) {
-    console.error('获取公网IP失败:', e);
-    return null;
+  for (const service of PUBLIC_IP_SERVICES) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(service.url, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const ip = service.parse(data);
+      if (ip) return ip;
+    } catch (e) {
+      console.warn(`公网IP服务 ${service.url} 失败:`, e.message);
+      continue;
+    }
   }
+  console.error('所有公网IP服务均失败');
+  return null;
 }
 
 // ========== Ngrok管理 ==========
@@ -195,22 +212,26 @@ class PeerConnectionManager {
   // 等待ICE收集完成，带超时
   _waitForIceGathering() {
     return new Promise((resolve) => {
+      // 如果已经收集完成，直接返回
       if (this.pc.iceGatheringState === 'complete') {
         resolve();
         return;
       }
-      // 监听ICE收集状态变化
-      this.pc.onicegatheringstatechange = () => {
+      // 使用 addEventListener 而非赋值，避免覆盖其他监听器
+      const handler = () => {
         if (this.pc.iceGatheringState === 'complete') {
+          this.pc.removeEventListener('icegatheringstatechange', handler);
           resolve();
         }
       };
-      // 超时保护
+      this.pc.addEventListener('icegatheringstatechange', handler);
+      // 超时保护：即使ICE收集未完成也继续
       setTimeout(() => {
+        this.pc.removeEventListener('icegatheringstatechange', handler);
         if (this.pc.iceGatheringState !== 'complete') {
           console.warn('ICE收集超时，使用当前可用候选');
-          resolve();
         }
+        resolve();
       }, ICE_GATHERING_TIMEOUT);
     });
   }

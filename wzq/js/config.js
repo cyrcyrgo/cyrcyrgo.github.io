@@ -67,4 +67,4 @@ const NGROK_PORT = 8080;
 const NGROK_API_URL = 'http://127.0.0.1:4040/api/tunnels';
 
 // ========== 公网IP API ==========
-const PUBLIC_IP_API = 'https://api.ipify.org?format=json';
+// 实际实现在 network.js 中，使用多个后备API轮询
