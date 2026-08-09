@@ -9,21 +9,31 @@ function getLocalIP() {
   return new Promise((resolve) => {
     try {
       const pc = new RTCPeerConnection({ iceServers: [] });
-      pc.createDataChannel('ip-detection');
-      pc.createOffer().then(offer => pc.setLocalDescription(offer));
+      let resolved = false;
+
+      // 必须先设置ICE候选处理器，再触发setLocalDescription
       pc.onicecandidate = (e) => {
+        if (resolved) return;
         if (e.candidate) {
           const match = e.candidate.candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
           if (match && !match[1].startsWith('127.')) {
+            resolved = true;
             pc.close();
             resolve(match[1]);
           }
         }
       };
+
+      pc.createDataChannel('ip-detection');
+      pc.createOffer().then(offer => pc.setLocalDescription(offer));
+
       // 3秒超时，返回回环地址
       setTimeout(() => {
-        pc.close();
-        resolve('127.0.0.1');
+        if (!resolved) {
+          resolved = true;
+          pc.close();
+          resolve('127.0.0.1');
+        }
       }, 3000);
     } catch (e) {
       resolve('127.0.0.1');
