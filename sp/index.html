@@ -879,7 +879,7 @@
 
       try {
         const endpoint = isLoginMode ? '/api/login' : '/api/register';
-        const res = await fetch(`http://${SERVER_HOST}${endpoint}`, {
+        const res = await fetch(`https://${SERVER_HOST}${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accountId, password })
