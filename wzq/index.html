@@ -205,6 +205,7 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
       <button class="btn btn-scan btn-sm" onclick="startScan('inp-answer')">
         <span class="scan-anim">📷</span> 扫描应答码
       </button>
+      <button class="btn btn-ghost btn-sm" onclick="openGallery('inp-answer')">🖼️ 相册</button>
       <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-answer')">📋 粘贴</button>
     </div>
     <button class="btn btn-accent btn-block" onclick="acceptAnswer()" style="margin-top:.8rem">确认连接</button>
@@ -224,6 +225,7 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
       <button class="btn btn-scan btn-sm" onclick="startScan('inp-room-code')">
         <span class="scan-anim">📷</span> 扫描房间码
       </button>
+      <button class="btn btn-ghost btn-sm" onclick="openGallery('inp-room-code')">🖼️ 相册</button>
       <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-room-code')">📋 粘贴</button>
     </div>
     <button class="btn btn-accent btn-block" onclick="joinRoom()" style="margin-top:.8rem">生成应答码</button>
@@ -267,6 +269,7 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
 </div>
 
 <!-- ============ 扫描器模态框 ============ -->
+<input type="file" id="gallery-input" accept="image/*" style="display:none" onchange="onGallerySelect(event)">
 <div class="modal-overlay" id="scanner-modal">
   <button class="modal-close" onclick="stopScanner()">✕</button>
   <p class="scan-tip">📷 将二维码对准扫描框</p>
@@ -294,11 +297,23 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
 const S={name:'',mode:'lan',role:'',pc:null,dc:null,connected:false,gameStarted:false,
   board:null,myColor:'',turn:'black',over:false,moves:0,lastMove:null,opponentName:''};
 
+const STUN=[
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun1.l.google.com:19302'},
+  {urls:'stun:stun2.l.google.com:19302'},
+  {urls:'stun:stun.miwifi.com'},
+  {urls:'stun:stun.qq.com:3478'}
+];
+const TURN=[
+  {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}
+];
 const ICE={
   lan:{iceServers:[]},
-  p2p:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]},
-  ngrok:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]},
-  auto:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]}
+  p2p:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'},
+  ngrok:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'},
+  auto:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'}
 };
 const MLABELS={lan:'🏠 内网模式',p2p:'🌐 外网P2P',ngrok:'🚀 Ngrok穿透',auto:'⚡ 自动优选'};
 
@@ -379,6 +394,14 @@ function doLogin(){
    ============================================================== */
 function createPC(){
   const pc=new RTCPeerConnection(iceCfg());
+  /* 连接超时检测 */
+  setTimeout(()=>{
+    if(!S.gameStarted&&!S.connected&&S.dc&&S.dc.readyState!=='open'){
+      toast('连接超时，请检查网络或尝试Ngrok模式','err');
+      if(document.getElementById('create-status'))document.getElementById('create-status').textContent='连接超时，建议尝试Ngrok模式';
+      if(document.getElementById('game-info'))document.getElementById('game-info').textContent='连接超时';
+    }
+  },25000);
   pc.onconnectionstatechange=()=>{
     if(pc.connectionState==='connected'){
       /* 不在这里设置S.connected或toast，等DC真正open再确认 */
@@ -398,13 +421,19 @@ function createPC(){
       }
     }
     if(pc.connectionState==='disconnected'||pc.connectionState==='failed'){
-      S.connected=false;toast('连接断开','err');
+      S.connected=false;
+      if(!S.gameStarted){
+        toast('连接失败：可能双方网络均受限，请尝试Ngrok模式','err');
+        if(document.getElementById('create-status'))document.getElementById('create-status').textContent='连接失败，请尝试Ngrok模式';
+      }else{
+        toast('连接断开','err');
+      }
       if(document.getElementById('game-info'))document.getElementById('game-info').textContent='连接已断开';
     }
   };
   return pc;
 }
-function waitICE(pc,timeout=8000){
+function waitICE(pc,timeout=15000){
   return new Promise(r=>{
     if(pc.iceGatheringState==='complete'){r();return}
     const chk=()=>{if(pc.iceGatheringState==='complete'){clearTimeout(t);r()}};
@@ -889,11 +918,46 @@ function onScanResult(data){
     target.value=data;
     // 如果有对应按钮，自动触发
     if(scanTargetId==='inp-room-code'){
-      toast('已填入房间码，点击"生成应答码"继续','info');
+      toast('已填入房间码，点击“生成应答码”继续','info');
     }else if(scanTargetId==='inp-answer'){
-      toast('已填入应答码，点击"确认连接"继续','info');
+      toast('已填入应答码，点击“确认连接”继续','info');
     }
   }
+}
+
+/* ==============================================================
+   相册选图扫码
+   ============================================================== */
+let galleryTargetId=null;
+function openGallery(targetId){
+  galleryTargetId=targetId;
+  document.getElementById('gallery-input').click();
+}
+function onGallerySelect(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const img=new Image();
+  img.onload=()=>{
+    const c=document.createElement('canvas');
+    c.width=img.width;c.height=img.height;
+    const ctx=c.getContext('2d');
+    ctx.drawImage(img,0,0);
+    const imgData=ctx.getImageData(0,0,c.width,c.height);
+    if(typeof jsQR!=='undefined'){
+      const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:'dontInvert'});
+      if(code&&code.data){
+        onScanResult(code.data);
+      }else{
+        toast('未识别到二维码','err');
+      }
+    }else{
+      toast('QR解析库未加载','err');
+    }
+    URL.revokeObjectURL(img.src);
+  };
+  img.onerror=()=>toast('图片加载失败','err');
+  img.src=URL.createObjectURL(file);
+  e.target.value='';
 }
 
 /* ==============================================================
