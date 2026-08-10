@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>P2P五子棋 · 零服务器联机</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<style>
+:root{
+  --bg:#0b0b10;--surface:#14141c;--surface2:#1c1c28;--border:#2a2a38;
+  --accent:#c9a961;--accent2:#dfc07a;--text:#e8e4dc;--dim:#7a7568;
+  --board:#d4ad60;--boardline:#b08c3a;
+  --ok:#5cb85c;--err:#d9534f;--info:#5bc0de;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Serif SC',serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+.mono{font-family:'DM Mono',monospace}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");opacity:.4}
+
+.screen{display:none;min-height:100vh;padding:1.5rem;flex-direction:column;align-items:center;justify-content:center}
+.screen.active{display:flex}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:2rem;width:100%;max-width:440px;margin:.75rem 0}
+.card h2{font-size:1.25rem;margin-bottom:1rem;color:var(--accent)}
+.card p{font-size:.85rem;color:var(--dim);line-height:1.7}
+input[type=text],textarea{width:100%;padding:.7rem 1rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.9rem;outline:none;transition:border .2s}
+input[type=text]:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:80px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:.65rem 1.3rem;border:none;border-radius:8px;font-family:inherit;font-size:.9rem;cursor:pointer;transition:all .2s;letter-spacing:.02em}
+.btn-accent{background:var(--accent);color:#000;font-weight:700}
+.btn-accent:hover{background:var(--accent2);transform:translateY(-1px)}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:.4rem .8rem;font-size:.8rem}
+.btn-block{width:100%;margin-top:.5rem}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:1rem 0}
+.mode-btn{padding:1.1rem .8rem;background:var(--surface2);border:2px solid var(--border);border-radius:10px;cursor:pointer;text-align:center;transition:all .25s}
+.mode-btn:hover,.mode-btn.selected{border-color:var(--accent);background:rgba(201,169,97,.08)}
+.mode-btn .icon{font-size:1.6rem;display:block;margin-bottom:.35rem}
+.mode-btn .label{font-size:.82rem;color:var(--dim)}
+.mode-btn.selected .label{color:var(--accent)}
+.code-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.8rem;word-break:break-all;font-family:'DM Mono',monospace;font-size:.72rem;max-height:120px;overflow-y:auto;margin:.6rem 0;line-height:1.5;color:var(--dim)}
+.qr-wrap{display:flex;flex-direction:column;align-items:center;gap:.6rem;margin:.8rem 0}
+.qr-wrap img{border-radius:6px;background:#fff;padding:8px}
+.status-bar{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--dim);margin:.6rem 0}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.status-dot.connected{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.status-dot.waiting{background:var(--accent);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.steps{display:flex;gap:.4rem;margin-bottom:1rem}
+.step{flex:1;height:3px;border-radius:2px;background:var(--border);transition:background .3s}
+.step.active{background:var(--accent)}
+.step.done{background:var(--ok)}
+
+/* 扫码按钮醒目样式 */
+.btn-scan{background:linear-gradient(135deg,#1a3a2a,#0d2520);border:1px solid #2a6a4a;color:#6fdfaf;font-weight:600;font-size:.95rem;padding:.75rem 1.2rem}
+.btn-scan:hover{background:linear-gradient(135deg,#1f4a35,#10302a);border-color:#4ae08a;transform:translateY(-1px)}
+.btn-scan .scan-anim{display:inline-block;animation:scanPulse 2s infinite}
+@keyframes scanPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.15)}}
+
+/* 游戏棋盘 */
+#game-screen.active{justify-content:flex-start;padding-top:1rem}
+.game-header{width:100%;max-width:520px;display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
+.game-header .players{display:flex;gap:1rem;font-size:.85rem}
+.player-tag{display:flex;align-items:center;gap:.35rem;padding:.3rem .7rem;border-radius:6px;background:var(--surface2);border:1px solid var(--border)}
+.player-tag.turn{border-color:var(--accent);color:var(--accent)}
+.stone-icon{display:inline-block;width:14px;height:14px;border-radius:50%;border:1px solid #555}
+.stone-icon.black{background:radial-gradient(circle at 35% 35%,#555,#111)}
+.stone-icon.white{background:radial-gradient(circle at 35% 35%,#fff,#bbb)}
+.game-info{font-size:.78rem;color:var(--dim);text-align:center;margin-bottom:.4rem}
+canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0,.5)}
+.game-controls{display:flex;gap:.5rem;margin-top:.7rem;flex-wrap:wrap;justify-content:center}
+.chat-panel{width:100%;max-width:520px;margin-top:.6rem}
+.chat-messages{height:100px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.5rem;font-size:.78rem;line-height:1.6;margin-bottom:.4rem}
+.chat-messages .sys{color:var(--dim);font-style:italic}
+.chat-messages .msg{margin:2px 0}
+.chat-messages .msg .name{color:var(--accent);margin-right:.3rem}
+.chat-row{display:flex;gap:.4rem}
+.chat-row input{flex:1}
+
+/* 扫描器模态框 — 全屏 + 瞄准动画 */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:1000;flex-direction:column;gap:1rem}
+.modal-overlay.open{display:flex}
+.modal-overlay .scan-viewport{position:relative;width:min(80vw,360px);height:min(80vw,360px);border-radius:12px;overflow:hidden}
+.modal-overlay video{width:100%;height:100%;object-fit:cover;border-radius:12px}
+.modal-overlay canvas{display:none}
+/* 扫描框动画 */
+.scan-frame{position:absolute;inset:0;pointer-events:none}
+.scan-frame::before,.scan-frame::after{content:'';position:absolute;width:40px;height:40px;border-color:var(--accent);border-style:solid;border-width:0}
+.scan-frame::before{top:8px;left:8px;border-top-width:3px;border-left-width:3px;border-radius:4px 0 0 0}
+.scan-frame::after{top:8px;right:8px;border-top-width:3px;border-right-width:3px;border-radius:0 4px 0 0}
+.scan-frame .bl,.scan-frame .br{position:absolute;width:40px;height:40px;border-color:var(--accent);border-style:solid;border-width:0}
+.scan-frame .bl{bottom:8px;left:8px;border-bottom-width:3px;border-left-width:3px;border-radius:0 0 0 4px}
+.scan-frame .br{bottom:8px;right:8px;border-bottom-width:3px;border-right-width:3px;border-radius:0 0 4px 0}
+.scan-line{position:absolute;left:10%;right:10%;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scanLine 2.2s ease-in-out infinite;border-radius:2px;box-shadow:0 0 8px var(--accent)}
+@keyframes scanLine{0%,100%{top:10%}50%{top:88%}}
+.modal-close{position:absolute;top:1.2rem;right:1.2rem;font-size:1.8rem;cursor:pointer;color:var(--text);background:rgba(0,0,0,.4);border:none;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:10}
+.modal-close:hover{background:rgba(255,255,255,.15)}
+.scan-tip{color:var(--accent);font-size:.88rem;text-align:center}
+
+/* 全屏QR模态框 */
+.modal-overlay#qr-modal{cursor:pointer}
+.modal-overlay#qr-modal .qr-box{background:#fff;padding:16px;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:.5rem}
+
+/* Toast */
+#toast-box{position:fixed;top:1rem;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:.4rem;pointer-events:none}
+.toast{padding:.6rem 1.2rem;border-radius:8px;font-size:.82rem;color:#fff;pointer-events:auto;animation:toastIn .3s ease,toastOut .3s ease 2.7s forwards;max-width:340px;text-align:center}
+.toast.ok{background:rgba(92,184,92,.92)}.toast.err{background:rgba(217,83,79,.92)}.toast.info{background:rgba(91,192,222,.92)}
+@keyframes toastIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateY(-10px)}}
+
+@media(max-width:480px){.card{padding:1.2rem}canvas#board{max-width:96vw!important}}
+</style>
+</head>
+<body>
+<div id="toast-box"></div>
+
+<!-- ============ 登录页 ============ -->
+<div id="login-screen" class="screen active">
+  <div class="card" style="text-align:center">
+    <h2 style="font-size:1.5rem;margin-bottom:.3rem">P2P五子棋</h2>
+    <p style="margin-bottom:1.5rem">零服务器 · 联机对战</p>
+    <input type="text" id="inp-name" placeholder="输入你的昵称" maxlength="12" style="margin-bottom:1rem">
+    <div class="mode-grid">
+      <div class="mode-btn selected" data-mode="lan" onclick="selectMode(this)">
+        <span class="icon">🏠</span><span class="label">内网对战</span>
+      </div>
+      <div class="mode-btn" data-mode="p2p" onclick="selectMode(this)">
+        <span class="icon">🌐</span><span class="label">外网P2P</span>
+      </div>
+      <div class="mode-btn" data-mode="ngrok" onclick="selectMode(this)">
+        <span class="icon">🚀</span><span class="label">Ngrok穿透</span>
+      </div>
+      <div class="mode-btn" data-mode="auto" onclick="selectMode(this)">
+        <span class="icon">⚡</span><span class="label">自动优选</span>
+      </div>
+    </div>
+    <button class="btn btn-accent btn-block" onclick="doLogin()">进入大厅</button>
+  </div>
+</div>
+
+<!-- ============ 大厅页 ============ -->
+<div id="lobby-screen" class="screen">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <button class="btn btn-ghost btn-sm" onclick="goTo('login-screen')">← 返回</button>
+      <span class="mono" id="lobby-mode-label" style="font-size:.8rem;color:var(--dim)">🏠 内网</span>
+      <span id="lobby-user" style="font-size:.85rem"></span>
+    </div>
+    <button class="btn btn-accent btn-block" onclick="createRoom()">创建房间</button>
+    <div style="text-align:center;color:var(--dim);margin:.6rem 0;font-size:.8rem">— 或 —</div>
+    <button class="btn btn-ghost btn-block" onclick="goTo('join-screen')">手动加入房间</button>
+    <div style="text-align:center;color:var(--dim);margin:.6rem 0;font-size:.8rem">— 或 —</div>
+    <!-- 大厅页扫码快捷入口 -->
+    <button class="btn btn-scan btn-block" onclick="lobbyScanJoin()">
+      <span class="scan-anim">📷</span> 扫码加入房间
+    </button>
+  </div>
+</div>
+
+<!-- ============ 创建房间 ============ -->
+<div id="create-screen" class="screen">
+  <div class="card">
+    <div class="steps"><div class="step active" id="cs1"></div><div class="step" id="cs2"></div></div>
+    <h2>创建房间</h2>
+    <div class="status-bar"><div class="status-dot waiting"></div><span id="create-status">正在生成连接码...</span></div>
+    <div id="create-code-area" style="display:none">
+      <p style="font-size:.82rem;color:var(--dim);margin-bottom:.3rem">将以下房间码分享给对手：</p>
+      <div class="code-box" id="create-code"></div>
+      <div class="qr-wrap"><div id="create-qr"></div></div>
+      <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center">
+        <button class="btn btn-ghost btn-sm" onclick="copyCode('create-code')">📋 复制</button>
+        <button class="btn btn-ghost btn-sm" onclick="showQRFull('create-code')">📱 全屏QR</button>
+      </div>
+    </div>
+    <hr style="border-color:var(--border);margin:1rem 0">
+    <!-- 步骤2：接收应答码，支持扫码 -->
+    <p style="font-size:.82rem;color:var(--dim);margin-bottom:.3rem">步骤2：获取对手的应答码</p>
+    <textarea id="inp-answer" placeholder="在此粘贴对手的应答码..."></textarea>
+    <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
+      <button class="btn btn-scan btn-sm" onclick="startScan('inp-answer')">
+        <span class="scan-anim">📷</span> 扫描应答码
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-answer')">📋 粘贴</button>
+    </div>
+    <button class="btn btn-accent btn-block" onclick="acceptAnswer()" style="margin-top:.8rem">确认连接</button>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="goTo('lobby-screen')">取消</button>
+  </div>
+</div>
+
+<!-- ============ 加入房间 ============ -->
+<div id="join-screen" class="screen">
+  <div class="card">
+    <div class="steps"><div class="step" id="js1"></div><div class="step" id="js2"></div></div>
+    <h2>加入房间</h2>
+    <p style="font-size:.82rem;color:var(--dim);margin-bottom:.5rem">输入对手的房间码，或直接扫码：</p>
+    <textarea id="inp-room-code" placeholder="在此粘贴房间码..."></textarea>
+    <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
+      <!-- 扫码按钮突出显示 -->
+      <button class="btn btn-scan btn-sm" onclick="startScan('inp-room-code')">
+        <span class="scan-anim">📷</span> 扫描房间码
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-room-code')">📋 粘贴</button>
+    </div>
+    <button class="btn btn-accent btn-block" onclick="joinRoom()" style="margin-top:.8rem">生成应答码</button>
+    <div id="answer-area" style="display:none;margin-top:1rem">
+      <div class="status-bar"><div class="status-dot waiting"></div><span>请将应答码分享给房主：</span></div>
+      <div class="code-box" id="join-answer-code"></div>
+      <div class="qr-wrap"><div id="join-answer-qr"></div></div>
+      <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center">
+        <button class="btn btn-ghost btn-sm" onclick="copyCode('join-answer-code')">📋 复制</button>
+        <button class="btn btn-ghost btn-sm" onclick="showQRFull('join-answer-code')">📱 全屏QR</button>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="goTo('lobby-screen')" style="margin-top:.8rem">返回</button>
+  </div>
+</div>
+
+<!-- ============ 游戏页 ============ -->
+<div id="game-screen" class="screen">
+  <div class="game-header">
+    <div class="players">
+      <div class="player-tag" id="p1-tag"><div class="stone-icon black"></div><span id="p1-name">—</span></div>
+      <span style="color:var(--dim);font-size:.8rem">VS</span>
+      <div class="player-tag" id="p2-tag"><div class="stone-icon white"></div><span id="p2-name">—</span></div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="exitGame()">退出</button>
+  </div>
+  <div class="game-info" id="game-info">等待连接...</div>
+  <canvas id="board"></canvas>
+  <div class="game-controls">
+    <button class="btn btn-ghost btn-sm" id="btn-rematch" onclick="requestRematch()" style="display:none">🔄 再来一局</button>
+    <span class="mono" id="move-count" style="font-size:.75rem;color:var(--dim)"></span>
+  </div>
+  <div class="chat-panel">
+    <div class="chat-messages" id="chat-msgs"></div>
+    <div class="chat-row">
+      <input type="text" id="chat-input" placeholder="发送消息..." maxlength="200" onkeydown="if(event.key==='Enter')sendChat()">
+      <button class="btn btn-accent btn-sm" onclick="sendChat()">发送</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 扫描器模态框 ============ -->
+<div class="modal-overlay" id="scanner-modal">
+  <button class="modal-close" onclick="stopScanner()">✕</button>
+  <p class="scan-tip">📷 将二维码对准扫描框</p>
+  <div class="scan-viewport">
+    <video id="scanner-video" playsinline muted></video>
+    <canvas id="scanner-canvas"></canvas>
+    <div class="scan-frame">
+      <div class="bl"></div>
+      <div class="br"></div>
+      <div class="scan-line"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 全屏QR模态框 ============ -->
+<div class="modal-overlay" id="qr-modal" onclick="this.classList.remove('open')">
+  <div class="qr-box" id="qr-modal-box"></div>
+  <p style="color:var(--dim);margin-top:.5rem;font-size:.8rem">点击任意处关闭</p>
+</div>
+
+<script>
+/* ==============================================================
+   全局状态
+   ============================================================== */
+const S={name:'',mode:'lan',role:'',pc:null,dc:null,connected:false,
+  board:null,myColor:'',turn:'black',over:false,moves:0,lastMove:null,opponentName:''};
+
+const ICE={
+  lan:{iceServers:[]},
+  p2p:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]},
+  ngrok:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]},
+  auto:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]}
+};
+const MLABELS={lan:'🏠 内网模式',p2p:'🌐 外网P2P',ngrok:'🚀 Ngrok穿透',auto:'⚡ 自动优选'};
+
+/* ==============================================================
+   工具
+   ============================================================== */
+function goTo(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active')}
+function toast(m,t='info'){const d=document.createElement('div');d.className='toast '+t;d.textContent=m;document.getElementById('toast-box').appendChild(d);setTimeout(()=>d.remove(),3200)}
+function b64enc(s){return btoa(unescape(encodeURIComponent(s)))}
+function b64dec(b){try{return decodeURIComponent(escape(atob(b)))}catch(e){return''}}
+function iceCfg(){return ICE[S.mode]||ICE.lan}
+
+function copyCode(elId){
+  const t=document.getElementById(elId).textContent||'';
+  navigator.clipboard.writeText(t).then(()=>toast('已复制','ok')).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('已复制','ok');
+  });
+}
+async function pasteClip(tid){
+  try{document.getElementById(tid).value=await navigator.clipboard.readText();toast('已粘贴','ok')}catch(e){toast('请手动粘贴','err')}
+}
+
+/* ==============================================================
+   登录 & 模式
+   ============================================================== */
+function selectMode(el){document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');S.mode=el.dataset.mode}
+function doLogin(){
+  const n=document.getElementById('inp-name').value.trim();
+  if(!n){toast('请输入昵称','err');return}
+  S.name=n;
+  document.getElementById('lobby-user').textContent='👤 '+n;
+  document.getElementById('lobby-mode-label').textContent=MLABELS[S.mode];
+  goTo('lobby-screen');
+}
+
+/* ==============================================================
+   WebRTC 核心
+   ============================================================== */
+function createPC(){
+  const pc=new RTCPeerConnection(iceCfg());
+  pc.onconnectionstatechange=()=>{
+    if(pc.connectionState==='connected'){S.connected=true;toast('连接成功!','ok')}
+    if(pc.connectionState==='disconnected'||pc.connectionState==='failed'){S.connected=false;toast('连接断开','err');document.getElementById('game-info').textContent='连接已断开'}
+  };
+  return pc;
+}
+function waitICE(pc,timeout=8000){
+  return new Promise(r=>{
+    if(pc.iceGatheringState==='complete'){r();return}
+    const chk=()=>{if(pc.iceGatheringState==='complete'){clearTimeout(t);r()}};
+    pc.addEventListener('icegatheringstatechange',chk);
+    const t=setTimeout(()=>{pc.removeEventListener('icegatheringstatechange',chk);r()},timeout);
+  });
+}
+function mkCode(o){return b64enc(JSON.stringify(o))}
+function parseCode(s){
+  s=s.trim();
+  try{const j=JSON.parse(b64dec(s));if(j&&j.sdp)return j}catch(e){}
+  try{const j=JSON.parse(s);if(j&&j.sdp)return j}catch(e){}
+  return null;
+}
+async function applyRemote(pc,d){
+  await pc.setRemoteDescription(new RTCSessionDescription({type:d.sdp.type,sdp:d.sdp.sdp}));
+  if(d.ice&&d.ice.length)for(const c of d.ice)try{await pc.addIceCandidate(new RTCIceCandidate(c))}catch(e){}
+}
+
+/* ==============================================================
+   数据通道
+   ============================================================== */
+function bindDC(dc,isHost){
+  S.dc=dc;
+  dc.onopen=()=>{
+    S.connected=true;
+    dc.send(JSON.stringify({type:'info',name:S.name}));
+    startGame(isHost);
+  };
+  dc.onclose=()=>{S.connected=false;toast('通道关闭','err')};
+  dc.onmessage=e=>handleMsg(JSON.parse(e.data));
+}
+function handleMsg(m){
+  switch(m.type){
+    case 'info':
+      S.opponentName=m.name;
+      (S.role==='host'?document.getElementById('p2-name'):document.getElementById('p1-name')).textContent=m.name;
+      break;
+    case 'move': applyMove(m.x,m.y,false); break;
+    case 'chat': addChat(S.opponentName||'对手',m.text,false); break;
+    case 'rematch-req':
+      if(confirm((S.opponentName||'对手')+' 请求再来一局')){S.dc.send(JSON.stringify({type:'rematch-ok'}));resetBoard()}
+      break;
+    case 'rematch-ok': toast('对手同意再来一局','ok');resetBoard(); break;
+  }
+}
+
+/* ==============================================================
+   创建房间
+   ============================================================== */
+async function createRoom(){
+  S.role='host';goTo('create-screen');
+  document.getElementById('create-status').textContent='正在生成连接码...';
+  document.getElementById('create-code-area').style.display='none';
+  document.getElementById('cs1').className='step active';document.getElementById('cs2').className='step';
+  try{
+    const pc=createPC();S.pc=pc;
+    const dc=pc.createDataChannel('game');
+    dc.onopen=()=>bindDC(dc,true);
+    dc.onmessage=e=>handleMsg(JSON.parse(e.data));
+
+    const offer=await pc.createOffer();await pc.setLocalDescription(offer);await waitICE(pc);
+    const code=mkCode({sdp:pc.localDescription,name:S.name,mode:S.mode,ts:Date.now()});
+
+    document.getElementById('create-status').textContent='等待对手加入...';
+    document.getElementById('create-code').textContent=code;
+    document.getElementById('create-code-area').style.display='block';
+    document.getElementById('cs1').className='step done';
+    document.getElementById('cs2').className='step active';
+    genQR('create-qr',code);
+  }catch(e){toast('创建失败: '+e.message,'err')}
+}
+
+async function acceptAnswer(){
+  const raw=document.getElementById('inp-answer').value.trim();
+  if(!raw){toast('请粘贴或扫描应答码','err');return}
+  const d=parseCode(raw);
+  if(!d){toast('无效的应答码','err');return}
+  try{
+    await applyRemote(S.pc,d);
+    toast('已连接!','ok');
+    document.getElementById('cs2').className='step done';
+  }catch(e){toast('连接失败: '+e.message,'err')}
+}
+
+/* ==============================================================
+   加入房间
+   ============================================================== */
+async function joinRoom(){
+  const raw=document.getElementById('inp-room-code').value.trim();
+  if(!raw){toast('请输入或扫描房间码','err');return}
+  const d=parseCode(raw);
+  if(!d){toast('无效的房间码','err');return}
+  S.role='join';
+  document.getElementById('js1').className='step active';
+  try{
+    const pc=createPC();S.pc=pc;
+    await applyRemote(pc,d);
+    const ans=await pc.createAnswer();await pc.setLocalDescription(ans);await waitICE(pc);
+    const code=mkCode({sdp:pc.localDescription,name:S.name,ts:Date.now()});
+
+    document.getElementById('join-answer-code').textContent=code;
+    document.getElementById('answer-area').style.display='block';
+    document.getElementById('js1').className='step done';
+    document.getElementById('js2').className='step active';
+    genQR('join-answer-qr',code);
+
+    pc.ondatachannel=e=>bindDC(e.channel,false);
+  }catch(e){toast('加入失败: '+e.message,'err')}
+}
+
+/* 大厅页：扫码后自动跳转加入流程 */
+function lobbyScanJoin(){
+  startScan('__lobby_scan__');
+}
+
+/* ==============================================================
+   游戏逻辑
+   ============================================================== */
+function startGame(isHost){
+  S.myColor=isHost?'black':'white';
+  S.over=false;S.moves=0;S.lastMove=null;
+  initBoard();
+  goTo('game-screen');
+  resizeCanvas();
+  const p1t=document.getElementById('p1-tag'),p2t=document.getElementById('p2-tag');
+  if(isHost){
+    p1t.innerHTML='<div class="stone-icon black"></div><span>'+esc(S.name)+'</span>';
+    p2t.innerHTML='<div class="stone-icon white"></div><span>'+esc(S.opponentName||'对手')+'</span>';
+  }else{
+    p1t.innerHTML='<div class="stone-icon black"></div><span>'+esc(S.opponentName||'对手')+'</span>';
+    p2t.innerHTML='<div class="stone-icon white"></div><span>'+esc(S.name)+'</span>';
+  }
+  updTurn();
+}
+function initBoard(){S.board=Array.from({length:15},()=>Array(15).fill(null));S.turn='black';S.over=false;S.moves=0;S.lastMove=null;renderBoard()}
+function resetBoard(){initBoard();document.getElementById('btn-rematch').style.display='none';document.getElementById('game-info').textContent='新一局! 黑棋先行';updTurn()}
+function applyMove(x,y,local){
+  if(S.over||S.board[x][y])return;
+  const color=local?S.myColor:(S.myColor==='black'?'white':'black');
+  S.board[x][y]=color;S.moves++;S.lastMove={x,y};
+  if(local&&S.dc&&S.dc.readyState==='open')S.dc.send(JSON.stringify({type:'move',x,y}));
+  renderBoard();
+  document.getElementById('move-count').textContent='第 '+S.moves+' 手';
+  if(checkWin(x,y,color)){
+    S.over=true;
+    const w=(color===S.myColor)?'你赢了! 🎉':'对手获胜!';
+    document.getElementById('game-info').textContent=w;toast(w,'ok');
+    document.getElementById('btn-rematch').style.display='inline-flex';return;
+  }
+  if(S.moves===225){S.over=true;document.getElementById('game-info').textContent='平局!';document.getElementById('btn-rematch').style.display='inline-flex';return}
+  S.turn=S.turn==='black'?'white':'black';updTurn();
+}
+function updTurn(){
+  const my=S.turn===S.myColor;
+  document.getElementById('game-info').textContent=my?'轮到你 ('+(S.myColor==='black'?'黑':'白')+')':'等待对手...';
+  document.getElementById('p1-tag').classList.toggle('turn',S.turn==='black');
+  document.getElementById('p2-tag').classList.toggle('turn',S.turn==='white');
+}
+function checkWin(x,y,c){
+  const D=[[1,0],[0,1],[1,1],[1,-1]];
+  for(const[dx,dy] of D){
+    let n=1;
+    for(let i=1;i<5;i++){const nx=x+dx*i,ny=y+dy*i;if(nx>=0&&nx<15&&ny>=0&&ny<15&&S.board[nx][ny]===c)n++;else break}
+    for(let i=1;i<5;i++){const nx=x-dx*i,ny=y-dy*i;if(nx>=0&&nx<15&&ny>=0&&ny<15&&S.board[nx][ny]===c)n++;else break}
+    if(n>=5)return true;
+  }
+  return false;
+}
+function requestRematch(){if(S.dc&&S.dc.readyState==='open'){S.dc.send(JSON.stringify({type:'rematch-req'}));toast('已发送请求','info')}}
+function exitGame(){if(S.pc){S.pc.close();S.pc=null}S.dc=null;S.connected=false;goTo('lobby-screen')}
+
+/* ==============================================================
+   Canvas 渲染
+   ============================================================== */
+function resizeCanvas(){
+  const c=document.getElementById('board');
+  const sz=Math.min(window.innerWidth-32,window.innerHeight-310,540);
+  const s=Math.max(260,sz);c.width=s;c.height=s;c.style.width=s+'px';c.style.height=s+'px';renderBoard();
+}
+window.addEventListener('resize',resizeCanvas);
+
+function renderBoard(){
+  const c=document.getElementById('board');if(!c)return;
+  const ctx=c.getContext('2d'),W=c.width,N=15,cell=W/(N+1),off=cell;
+  ctx.fillStyle='#c8a84e';ctx.fillRect(0,0,W,W);
+  ctx.save();
+  for(let i=0;i<W;i+=3){ctx.strokeStyle='rgba(160,120,40,'+(0.04+Math.random()*0.04)+')';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,i+Math.random()*2);ctx.lineTo(W,i+Math.random()*2);ctx.stroke()}
+  ctx.restore();
+  ctx.strokeStyle='#9a7a2a';ctx.lineWidth=0.8;
+  for(let i=0;i<N;i++){ctx.beginPath();ctx.moveTo(off+i*cell,off);ctx.lineTo(off+i*cell,off+(N-1)*cell);ctx.stroke();ctx.beginPath();ctx.moveTo(off,off+i*cell);ctx.lineTo(off+(N-1)*cell,off+i*cell);ctx.stroke()}
+  ctx.fillStyle='#8a6a1a';
+  [3,7,11].forEach(sx=>{[3,7,11].forEach(sy=>{ctx.beginPath();ctx.arc(off+sx*cell,off+sy*cell,cell*0.12,0,Math.PI*2);ctx.fill()})});
+  ctx.fillStyle='#7a6a3a';ctx.font=(cell*0.32)+'px DM Mono,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+  for(let i=0;i<N;i++){ctx.fillText(String.fromCharCode(65+i),off+i*cell,off-cell*0.65);ctx.fillText(String(i+1),off-cell*0.7,off+i*cell)}
+  if(!S.board)return;
+  for(let x=0;x<N;x++)for(let y=0;y<N;y++){
+    const v=S.board[x][y];if(!v)continue;
+    const cx=off+x*cell,cy=off+y*cell,r=cell*0.43;
+    ctx.save();ctx.shadowColor='rgba(0,0,0,0.35)';ctx.shadowBlur=4;ctx.shadowOffsetX=1.5;ctx.shadowOffsetY=1.5;
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
+    if(v==='black'){const g=ctx.createRadialGradient(cx-r*.3,cy-r*.3,r*.08,cx,cy,r);g.addColorStop(0,'#555');g.addColorStop(1,'#111');ctx.fillStyle=g}
+    else{const g=ctx.createRadialGradient(cx-r*.3,cy-r*.3,r*.08,cx,cy,r);g.addColorStop(0,'#fff');g.addColorStop(1,'#c8c4ba');ctx.fillStyle=g}
+    ctx.fill();ctx.restore();
+  }
+  if(S.lastMove){const mx=off+S.lastMove.x*cell,my=off+S.lastMove.y*cell;ctx.strokeStyle='rgba(255,60,60,.7)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(mx,my,cell*0.15,0,Math.PI*2);ctx.stroke()}
+}
+
+document.getElementById('board').addEventListener('click',e=>{
+  if(S.over||!S.connected||S.turn!==S.myColor){if(S.connected&&!S.over)toast('还没轮到你','info');return}
+  const c=e.target,rect=c.getBoundingClientRect(),sx=c.width/rect.width;
+  const px=(e.clientX-rect.left)*sx,py=(e.clientY-rect.top)*sx;
+  const W=c.width,N=15,cell=W/(N+1),off=cell;
+  const bx=Math.round((px-off)/cell),by=Math.round((py-off)/cell);
+  if(bx<0||bx>=N||by<0||by>=N||S.board[bx][by])return;
+  applyMove(bx,by,true);
+});
+document.getElementById('board').addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0];e.target.dispatchEvent(new MouseEvent('click',{clientX:t.clientX,clientY:t.clientY}))},{passive:false});
+
+/* ==============================================================
+   聊天
+   ============================================================== */
+function sendChat(){
+  const inp=document.getElementById('chat-input'),t=inp.value.trim();if(!t)return;inp.value='';
+  addChat(S.name,t,true);
+  if(S.dc&&S.dc.readyState==='open')S.dc.send(JSON.stringify({type:'chat',text:t}));
+}
+function addChat(name,text,self){
+  const box=document.getElementById('chat-msgs'),d=document.createElement('div');
+  d.className='msg';d.innerHTML='<span class="name" style="'+(self?'color:var(--ok)':'')+'">'+esc(name)+':</span>'+esc(text);
+  box.appendChild(d);box.scrollTop=box.scrollHeight;
+}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+/* ==============================================================
+   二维码生成
+   ============================================================== */
+function genQR(cid,text){
+  const el=document.getElementById(cid);el.innerHTML='';
+  try{
+    if(text.length>2500){el.innerHTML='<p style="color:var(--err);font-size:.78rem">数据过长，请使用复制</p>';return}
+    const qr=qrcode(0,'L');qr.addData(text);qr.make();
+    const img=document.createElement('img');img.src=qr.createDataURL(5,2);img.style.width='200px';img.style.height='200px';img.alt='QR';
+    el.appendChild(img);
+  }catch(e){el.innerHTML='<p style="color:var(--err);font-size:.78rem">QR生成失败</p>'}
+}
+function showQRFull(elId){
+  const text=document.getElementById(elId).textContent||'';if(!text){toast('无内容','info');return}
+  const box=document.getElementById('qr-modal-box');box.innerHTML='';
+  try{
+    const qr=qrcode(0,'L');qr.addData(text);qr.make();
+    const img=document.createElement('img');img.src=qr.createDataURL(8,2);
+    const s=Math.min(window.innerWidth-80,380);img.style.width=s+'px';img.style.height=s+'px';
+    box.appendChild(img);
+    document.getElementById('qr-modal').classList.add('open');
+  }catch(e){toast('QR生成失败','err')}
+}
+
+/* ==============================================================
+   二维码扫描 — 完整实现
+   ============================================================== */
+let scannerStream=null, scanAnimId=null, scanTargetId=null;
+
+/**
+ * 启动摄像头扫描二维码
+ * @param {string} targetId - 扫描成功后将结果填入的 input/textarea 的 ID
+ *                             特殊值 '__lobby_scan__' 表示从大厅直接扫码加入
+ */
+function startScan(targetId){
+  scanTargetId=targetId;
+  const modal=document.getElementById('scanner-modal');
+  const video=document.getElementById('scanner-video');
+  const canvas=document.getElementById('scanner-canvas');
+
+  // 检查浏览器是否支持
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    toast('当前浏览器不支持摄像头，请手动粘贴','err');return;
+  }
+
+  navigator.mediaDevices.getUserMedia({
+    video:{facingMode:'environment',width:{ideal:640},height:{ideal:480}}
+  }).then(stream=>{
+    scannerStream=stream;
+    video.srcObject=stream;
+    video.setAttribute('playsinline','true');
+    video.play();
+    modal.classList.add('open');
+
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});
+    let scanning=true;
+
+    function scan(){
+      if(!scanning)return;
+      if(video.readyState>=video.HAVE_ENOUGH_DATA){
+        canvas.width=video.videoWidth;
+        canvas.height=video.videoHeight;
+        ctx.drawImage(video,0,0);
+        const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+
+        if(typeof jsQR!=='undefined'){
+          const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:'dontInvert'});
+          if(code&&code.data&&code.data.length>10){
+            scanning=false;
+            stopScanner();
+            onScanResult(code.data);
+            return;
+          }
+        }
+      }
+      scanAnimId=requestAnimationFrame(scan);
+    }
+    // 延迟开始，等摄像头就绪
+    video.onloadeddata=()=>{scan()};
+    // 超时保护
+    setTimeout(()=>{
+      if(scanning){scanning=false;stopScanner();toast('扫描超时，请手动输入','err')}
+    },30000);
+
+  }).catch(err=>{
+    console.error('摄像头错误:',err);
+    if(err.name==='NotAllowedError')toast('摄像头权限被拒绝','err');
+    else if(err.name==='NotFoundError')toast('未找到摄像头设备','err');
+    else toast('摄像头无法使用: '+err.message,'err');
+  });
+}
+
+function stopScanner(){
+  if(scanAnimId){cancelAnimationFrame(scanAnimId);scanAnimId=null}
+  if(scannerStream){scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null}
+  document.getElementById('scanner-modal').classList.remove('open');
+}
+
+/**
+ * 扫描结果处理
+ */
+function onScanResult(data){
+  console.log('扫码结果:',data.substring(0,80)+'...');
+  toast('扫描成功!','ok');
+
+  // 大厅快捷扫码 → 自动填入并跳转加入流程
+  if(scanTargetId==='__lobby_scan__'){
+    document.getElementById('inp-room-code').value=data;
+    goTo('join-screen');
+    // 自动触发加入
+    setTimeout(()=>joinRoom(),300);
+    return;
+  }
+
+  // 普通扫码 → 填入目标框
+  const target=document.getElementById(scanTargetId);
+  if(target){
+    target.value=data;
+    // 如果有对应按钮，自动触发
+    if(scanTargetId==='inp-room-code'){
+      toast('已填入房间码，点击"生成应答码"继续','info');
+    }else if(scanTargetId==='inp-answer'){
+      toast('已填入应答码，点击"确认连接"继续','info');
+    }
+  }
+}
+
+/* ==============================================================
+   键盘 & 初始化
+   ============================================================== */
+document.getElementById('inp-name').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+document.addEventListener('gesturestart',e=>e.preventDefault());
+
+// 禁止 iOS 双击缩放
+let lastTouch=0;
+document.addEventListener('touchend',e=>{
+  const now=Date.now();if(now-lastTouch<=300)e.preventDefault();lastTouch=now;
+},{passive:false});
+
+renderBoard();
+
+/* ==============================================================
+   部署工具 (控制台调用)
+   ============================================================== */
+window.deployToGitHub=async function(){
+  const token='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';
+  const repo='cyrcyrgo/cyrcyrgo.github.io',path='wzq/index.html';
+  const html=document.documentElement.outerHTML;
+  const content=btoa(unescape(encodeURIComponent(html)));
+  try{
+    const r1=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{headers:{'Authorization':'token '+token}});
+    let sha;if(r1.ok){sha=(await r1.json()).sha}
+    const r2=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{
+      method:'PUT',headers:{'Authorization':'token '+token,'Content-Type':'application/json'},
+      body:JSON.stringify({message:'Deploy P2P五子棋',content,sha,branch:'main'})
+    });
+    r2.ok?console.log('✅ 部署成功! https://cyrcyrgo.github.io/wzq/'):console.error('❌',await r2.json());
+  }catch(e){console.error('❌',e)}
+};
+
+console.log('%cP2P五子棋','font-size:20px;color:#c9a961;font-weight:bold');
+console.log('控制台输入 deployToGitHub() 可部署到 GitHub Pages');
+</script>
+</body>
+</html>
