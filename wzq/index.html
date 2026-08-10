@@ -270,7 +270,7 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
 /* ==============================================================
    全局状态
    ============================================================== */
-const S={name:'',mode:'lan',role:'',pc:null,dc:null,connected:false,
+const S={name:'',mode:'lan',role:'',pc:null,dc:null,connected:false,gameStarted:false,
   board:null,myColor:'',turn:'black',over:false,moves:0,lastMove:null,opponentName:''};
 
 const ICE={
@@ -319,7 +319,15 @@ function doLogin(){
 function createPC(){
   const pc=new RTCPeerConnection(iceCfg());
   pc.onconnectionstatechange=()=>{
-    if(pc.connectionState==='connected'){S.connected=true;toast('连接成功!','ok')}
+    if(pc.connectionState==='connected'){
+      S.connected=true;toast('连接成功!','ok');
+      /* 备用触发：如果dc.onopen未正常触发，此处兜底启动游戏 */
+      if(!S.gameStarted&&S.dc&&S.dc.readyState==='open'){
+        const isH=(S.role==='host');
+        S.dc.send(JSON.stringify({type:'info',name:S.name}));
+        startGame(isH);
+      }
+    }
     if(pc.connectionState==='disconnected'||pc.connectionState==='failed'){S.connected=false;toast('连接断开','err');document.getElementById('game-info').textContent='连接已断开'}
   };
   return pc;
@@ -407,6 +415,11 @@ async function acceptAnswer(){
     await applyRemote(S.pc,d);
     toast('已连接!','ok');
     document.getElementById('cs2').className='step done';
+    /* 主机端备用触发：applyRemote后立即检查dc状态 */
+    if(!S.gameStarted&&S.dc&&S.dc.readyState==='open'){
+      S.dc.send(JSON.stringify({type:'info',name:S.name}));
+      startGame(true);
+    }
   }catch(e){toast('连接失败: '+e.message,'err')}
 }
 
@@ -445,6 +458,8 @@ function lobbyScanJoin(){
    游戏逻辑
    ============================================================== */
 function startGame(isHost){
+  if(S.gameStarted)return; /* 防止重复调用 */
+  S.gameStarted=true;
   S.myColor=isHost?'black':'white';
   S.over=false;S.moves=0;S.lastMove=null;
   initBoard();
@@ -495,7 +510,7 @@ function checkWin(x,y,c){
   return false;
 }
 function requestRematch(){if(S.dc&&S.dc.readyState==='open'){S.dc.send(JSON.stringify({type:'rematch-req'}));toast('已发送请求','info')}}
-function exitGame(){if(S.pc){S.pc.close();S.pc=null}S.dc=null;S.connected=false;goTo('lobby-screen')}
+function exitGame(){if(S.pc){S.pc.close();S.pc=null}S.dc=null;S.connected=false;S.gameStarted=false;goTo('lobby-screen')}
 
 /* ==============================================================
    Canvas 渲染
