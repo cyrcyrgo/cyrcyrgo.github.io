@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<title>P2P五子棋 · 零服务器联机</title>
+<title>P2P五子棋 v1.01 · 零服务器联机</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
@@ -122,7 +122,7 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
 <!-- ============ 登录页 ============ -->
 <div id="login-screen" class="screen active">
   <div class="card" style="text-align:center">
-    <h2 style="font-size:1.5rem;margin-bottom:.3rem">P2P五子棋</h2>
+    <h2 style="font-size:1.5rem;margin-bottom:.3rem">P2P五子棋 <span style="font-size:.7rem;color:var(--dim);font-weight:400;vertical-align:middle">v1.01</span></h2>
     <p style="margin-bottom:1.5rem">零服务器 · 联机对战</p>
     <input type="text" id="inp-name" placeholder="输入你的昵称" maxlength="12" style="margin-bottom:1rem">
     <div class="mode-grid">
@@ -384,13 +384,14 @@ function handleMsg(m){
    创建房间
    ============================================================== */
 async function createRoom(){
-  S.role='host';goTo('create-screen');
+  S.role='host';S.gameStarted=false;goTo('create-screen');
   document.getElementById('create-status').textContent='正在生成连接码...';
   document.getElementById('create-code-area').style.display='none';
   document.getElementById('cs1').className='step active';document.getElementById('cs2').className='step';
   try{
     const pc=createPC();S.pc=pc;
     const dc=pc.createDataChannel('game');
+    S.dc=dc; /* 立即设置，确保备用触发可用 */
     dc.onopen=()=>bindDC(dc,true);
     dc.onmessage=e=>handleMsg(JSON.parse(e.data));
 
@@ -419,6 +420,19 @@ async function acceptAnswer(){
     if(!S.gameStarted&&S.dc&&S.dc.readyState==='open'){
       S.dc.send(JSON.stringify({type:'info',name:S.name}));
       startGame(true);
+    }
+    /* 终极兜底：延迟轮询dc状态，确保万无一失 */
+    if(!S.gameStarted){
+      let tries=0;
+      const poll=setInterval(()=>{
+        tries++;
+        if(S.gameStarted||tries>50){clearInterval(poll);return}
+        if(S.dc&&S.dc.readyState==='open'){
+          clearInterval(poll);
+          S.dc.send(JSON.stringify({type:'info',name:S.name}));
+          startGame(true);
+        }
+      },100);
     }
   }catch(e){toast('连接失败: '+e.message,'err')}
 }
@@ -734,7 +748,7 @@ window.deployToGitHub=async function(){
   }catch(e){console.error('❌',e)}
 };
 
-console.log('%cP2P五子棋','font-size:20px;color:#c9a961;font-weight:bold');
+console.log('%cP2P五子棋 v1.01','font-size:20px;color:#c9a961;font-weight:bold');
 console.log('控制台输入 deployToGitHub() 可部署到 GitHub Pages');
 </script>
 </body>
