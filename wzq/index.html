@@ -394,14 +394,8 @@ function doLogin(){
    ============================================================== */
 function createPC(){
   const pc=new RTCPeerConnection(iceCfg());
-  /* 连接超时检测 */
-  setTimeout(()=>{
-    if(!S.gameStarted&&!S.connected&&S.dc&&S.dc.readyState!=='open'){
-      toast('连接超时，请检查网络或尝试Ngrok模式','err');
-      if(document.getElementById('create-status'))document.getElementById('create-status').textContent='连接超时，建议尝试Ngrok模式';
-      if(document.getElementById('game-info'))document.getElementById('game-info').textContent='连接超时';
-    }
-  },25000);
+  /* 连接超时：仅在双方交换SDP后启动，不从创建PC就开始 */
+  S._pcCreated=Date.now();
   pc.onconnectionstatechange=()=>{
     if(pc.connectionState==='connected'){
       /* 不在这里设置S.connected或toast，等DC真正open再确认 */
@@ -509,7 +503,9 @@ async function createRoom(){
     dc.onopen=()=>bindDC(dc,true);
     dc.onmessage=e=>handleMsg(JSON.parse(e.data));
 
-    const offer=await pc.createOffer();await pc.setLocalDescription(offer);await waitICE(pc);
+    const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+    /* ICE收集超时8秒（TURN候选需要更长时间） */
+    await waitICE(pc,8000);
     const code=mkCode({sdp:pc.localDescription,name:S.name,mode:S.mode,ts:Date.now()});
 
     document.getElementById('create-status').textContent='等待对手加入...';
@@ -528,7 +524,7 @@ async function acceptAnswer(){
   if(!d){toast('无效的应答码','err');return}
   try{
     await applyRemote(S.pc,d);
-    toast('已连接!','ok');
+    toast('已连接，等待数据通道打开...','ok');
     document.getElementById('cs2').className='step done';
     /* 主机端备用触发：applyRemote后立即检查dc状态 */
     if(!S.gameStarted&&S.dc&&S.dc.readyState==='open'){
@@ -540,7 +536,7 @@ async function acceptAnswer(){
       let tries=0;
       const poll=setInterval(()=>{
         tries++;
-        if(S.gameStarted||tries>50){clearInterval(poll);return}
+        if(S.gameStarted||tries>80){clearInterval(poll);return}
         if(S.dc&&S.dc.readyState==='open'){
           clearInterval(poll);
           S.dc.send(JSON.stringify({type:'info',name:S.name}));
@@ -548,6 +544,13 @@ async function acceptAnswer(){
         }
       },100);
     }
+    /* 超时检测：从交换SDP后开始计时 */
+    setTimeout(()=>{
+      if(!S.gameStarted&&!S.connected){
+        toast('连接超时，双方网络可能无法互通，请尝试Ngrok模式','err');
+        if(document.getElementById('create-status'))document.getElementById('create-status').textContent='连接超时，请尝试Ngrok模式';
+      }
+    },30000);
   }catch(e){toast('连接失败: '+e.message,'err')}
 }
 
@@ -564,7 +567,11 @@ async function joinRoom(){
   try{
     const pc=createPC();S.pc=pc;
     await applyRemote(pc,d);
-    const ans=await pc.createAnswer();await pc.setLocalDescription(ans);await waitICE(pc);
+    toast('正在生成应答码...','info');
+    const ans=await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    /* 不等待ICE收集完成，直接用当前SDP生成应答码
+       ICE候选已嵌入SDP，后续会通过ICE trickle补充 */
     const code=mkCode({sdp:pc.localDescription,name:S.name,ts:Date.now()});
 
     document.getElementById('join-answer-code').textContent=code;
@@ -572,9 +579,16 @@ async function joinRoom(){
     document.getElementById('js1').className='step done';
     document.getElementById('js2').className='step active';
     genQR('join-answer-qr',code);
+    toast('应答码已生成，请发送给房主','ok');
 
     pc.ondatachannel=e=>bindDC(e.channel,false);
-  }catch(e){toast('加入失败: '+e.message,'err')}
+    /* 超时检测：从生成应答码开始 */
+    setTimeout(()=>{
+      if(!S.gameStarted&&!S.connected){
+        toast('连接超时，房主可能未确认或网络不通','err');
+      }
+    },30000);
+  }catch(e){toast('加入失败: '+e.message,'err');console.error('joinRoom error:',e)}
 }
 
 /* 大厅页：扫码后自动跳转加入流程 */
