@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<title>P2P五子棋 v1.50 · 零服务器联机</title>
+<title>P2P五子棋 v1.61 · 零服务器联机</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
@@ -40,6 +40,7 @@ textarea{resize:vertical;min-height:80px}
 .wifi-warn{display:none;font-size:.75rem;color:var(--err);margin-top:.4rem;align-items:center;gap:.3rem}
 .wifi-warn.show{display:flex}
 .mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:1rem 0}
+.network-info{margin:1rem 0;padding:1rem;background:var(--surface2);border-radius:8px;border:1px solid var(--border)}
 .mode-btn{padding:1.1rem .8rem;background:var(--surface2);border:2px solid var(--border);border-radius:10px;cursor:pointer;text-align:center;transition:all .25s}
 .mode-btn:hover,.mode-btn.selected{border-color:var(--accent);background:rgba(201,169,97,.08)}
 .mode-btn .icon{font-size:1.6rem;display:block;margin-bottom:.35rem}
@@ -141,7 +142,7 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
 <!-- ============ 登录页 ============ -->
 <div id="login-screen" class="screen active">
   <div class="card" style="text-align:center">
-    <h2 style="font-size:1.5rem;margin-bottom:.3rem">P2P五子棋 <span style="font-size:.7rem;color:var(--dim);font-weight:400;vertical-align:middle">v1.50</span></h2>
+    <h2 style="font-size:1.5rem;margin-bottom:.3rem">P2P五子棋 <span style="font-size:.7rem;color:var(--dim);font-weight:400;vertical-align:middle">v1.61</span></h2>
     <p style="margin-bottom:1.5rem">零服务器 · 联机对战</p>
     <input type="text" id="inp-name" placeholder="输入你的昵称" maxlength="12" style="margin-bottom:1rem">
     <div class="wifi-warn" id="wifi-warn">⚠️ 未检测到WiFi，内网模式不可用</div>
@@ -158,6 +159,29 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
       <div class="mode-btn" data-mode="auto" onclick="selectMode(this)">
         <span class="icon">⚡</span><span class="label">自动优选</span>
       </div>
+    </div>
+    <!-- 网络信息区域 -->
+    <div class="network-info" style="margin:1rem 0;padding:1rem;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+      <div style="font-size:.75rem;color:var(--dim);margin-bottom:.5rem;font-weight:600">🌐 网络状态</div>
+      <div style="display:grid;gap:.4rem;font-size:.75rem">
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--dim)">环境:</span>
+          <span id="net-env" style="font-family:'DM Mono',monospace">检测中...</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--dim)">内网IP:</span>
+          <span id="lan-ip" style="font-family:'DM Mono',monospace">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--dim)">外网IP:</span>
+          <span id="wan-ip" style="font-family:'DM Mono',monospace">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="color:var(--dim)">连接Token:</span>
+          <span id="conn-token" style="font-family:'DM Mono',monospace;font-size:1rem;font-weight:700;color:var(--accent)">—</span>
+        </div>
+      </div>
+      <p style="font-size:.65rem;color:var(--dim);margin-top:.5rem;line-height:1.5">🔑 Token为5位随机码，每次进入页面自动刷新。内网模式下连接方需输入该Token进行校验。</p>
     </div>
     <button class="btn btn-accent btn-block" onclick="doLogin()">进入大厅</button>
   </div>
@@ -228,6 +252,11 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
       <button class="btn btn-ghost btn-sm" onclick="openGallery('inp-room-code')">🖼️ 相册</button>
       <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-room-code')">📋 粘贴</button>
     </div>
+    <!-- Token校验输入（内网模式连接时必填） -->
+    <div style="margin-top:.8rem">
+      <p style="font-size:.78rem;color:var(--dim);margin-bottom:.3rem">🔑 连接Token <span style="color:var(--err)">(内网模式必填)</span>：</p>
+      <input type="text" id="inp-token" placeholder="输入5位连接Token" maxlength="5" style="font-family:'DM Mono',monospace;letter-spacing:.3em;text-align:center">
+    </div>
     <button class="btn btn-accent btn-block" onclick="joinRoom()" style="margin-top:.8rem">生成应答码</button>
     <div id="answer-area" style="display:none;margin-top:1rem">
       <div class="status-bar"><div class="status-dot waiting"></div><span>请将应答码分享给房主：</span></div>
@@ -295,7 +324,7 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
    全局状态
    ============================================================== */
 const S={name:'',mode:'lan',role:'',pc:null,dc:null,connected:false,gameStarted:false,
-  board:null,myColor:'',turn:'black',over:false,moves:0,lastMove:null,opponentName:''};
+  board:null,myColor:'',turn:'black',over:false,moves:0,lastMove:null,opponentName:'',token:''};
 
 const STUN=[
   {urls:'stun:stun.l.google.com:19302'},
@@ -316,6 +345,87 @@ const ICE={
   auto:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'}
 };
 const MLABELS={lan:'🏠 内网模式',p2p:'🌐 外网P2P',ngrok:'🚀 Ngrok穿透',auto:'⚡ 自动优选'};
+
+/* ==============================================================
+   网络信息获取
+   ============================================================== */
+// 获取网络环境
+function getNetworkType(){
+  try{
+    const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+    if(!c) return '未知';
+    const t=(c.type||c.effectiveType||'').toLowerCase();
+    if(['wifi','ethernet','cellular','4g','3g','2g','slow-2g'].includes(t)) return t;
+    return c.effectiveType || 'unknown';
+  }catch(e){return '未知'}
+}
+
+// 获取内网IP
+async function getLocalIP(){
+  return new Promise(resolve=>{
+    try{
+      const pc=new RTCPeerConnection({iceServers:[]});
+      let done=false;
+      const finish=(ip)=>{if(done)return;done=true;try{pc.close()}catch(e){};resolve(ip||'获取失败')};
+      pc.onicecandidate=ice=>{
+        if(ice.candidate&&ice.candidate.candidate){
+          const ipMatch=ice.candidate.candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
+          if(ipMatch)finish(ipMatch[0]);
+        }
+      };
+      pc.createOffer().then(o=>pc.setLocalDescription(o)).catch(()=>finish('获取失败'));
+      setTimeout(()=>finish('获取失败'),3000);
+    }catch(e){resolve('获取失败')}
+  });
+}
+
+// 获取外网IP
+async function getPublicIP(){
+  try{
+    const responses=await Promise.allSettled([
+      fetch('https://api.ipify.org?format=json').then(r=>r.json()),
+      fetch('https://api.ip.sb/ip').then(r=>r.text()),
+      fetch('https://ifconfig.me/ip').then(r=>r.text())
+    ]);
+    for(const res of responses){
+      if(res.status==='fulfilled'){
+        const ip=typeof res.value==='object' ? res.value.ip : res.value.trim();
+        if(ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) return ip;
+      }
+    }
+    return '获取失败';
+  }catch(e){return '获取失败'}
+}
+
+// 生成5位数随机Token
+function generateToken(){
+  return Math.floor(10000 + Math.random() * 90000).toString();
+}
+
+// 初始化网络信息
+async function initNetworkInfo(){
+  const netEnv=document.getElementById('net-env');
+  const lanIp=document.getElementById('lan-ip');
+  const wanIp=document.getElementById('wan-ip');
+  const tokenEl=document.getElementById('conn-token');
+
+  if(netEnv) netEnv.textContent = getNetworkType();
+  if(lanIp) lanIp.textContent = '获取中...';
+
+  // 生成并显示5位连接Token
+  const token=generateToken();
+  S.token=token;
+  if(tokenEl) tokenEl.textContent = token;
+
+  // 并行获取IP
+  const [ip1, ip2]=await Promise.all([
+    getLocalIP(),
+    getPublicIP()
+  ]);
+
+  if(lanIp) lanIp.textContent = ip1;
+  if(wanIp) wanIp.textContent = ip2;
+}
 
 /* ==============================================================
    工具
@@ -506,7 +616,8 @@ async function createRoom(){
     const offer=await pc.createOffer();await pc.setLocalDescription(offer);
     /* ICE收集超时8秒（TURN候选需要更长时间） */
     await waitICE(pc,8000);
-    const code=mkCode({sdp:pc.localDescription,name:S.name,mode:S.mode,ts:Date.now()});
+    /* 生成连接码，附带Token用于校验 */
+    const code=mkCode({sdp:pc.localDescription,name:S.name,mode:S.mode,token:S.token,ts:Date.now()});
 
     document.getElementById('create-status').textContent='等待对手加入...';
     document.getElementById('create-code').textContent=code;
@@ -522,6 +633,12 @@ async function acceptAnswer(){
   if(!raw){toast('请粘贴或扫描应答码','err');return}
   const d=parseCode(raw);
   if(!d){toast('无效的应答码','err');return}
+  /* 房主校验应答码中的Token（若存在） */
+  const answerToken=d.token||'';
+  if(answerToken&&answerToken!==S.token){
+    toast('Token校验失败：应答方Token不匹配','err');
+    return;
+  }
   try{
     await applyRemote(S.pc,d);
     toast('已连接，等待数据通道打开...','ok');
@@ -562,6 +679,12 @@ async function joinRoom(){
   if(!raw){toast('请输入或扫描房间码','err');return}
   const d=parseCode(raw);
   if(!d){toast('无效的房间码','err');return}
+  /* Token校验：内网/自动模式必须提供Token */
+  const hostToken=d.token||'';
+  let inputToken=document.getElementById('inp-token').value.trim();
+  if(!inputToken&&hostToken){toast('请输入连接Token','err');return}
+  if(inputToken&&hostToken&&inputToken!==hostToken){toast('Token校验失败，请检查后重试','err');return}
+  if(inputToken&&!hostToken&&S.mode==='lan'){toast('房间码不含Token，无需校验','info')}
   S.role='join';
   document.getElementById('js1').className='step active';
   try{
@@ -572,7 +695,7 @@ async function joinRoom(){
     await pc.setLocalDescription(ans);
     /* 不等待ICE收集完成，直接用当前SDP生成应答码
        ICE候选已嵌入SDP，后续会通过ICE trickle补充 */
-    const code=mkCode({sdp:pc.localDescription,name:S.name,ts:Date.now()});
+    const code=mkCode({sdp:pc.localDescription,name:S.name,token:S.token,ts:Date.now()});
 
     document.getElementById('join-answer-code').textContent=code;
     document.getElementById('answer-area').style.display='block';
@@ -988,6 +1111,7 @@ document.addEventListener('touchend',e=>{
 
 renderBoard();
 updateNetworkUI(); /* 初始化网络状态检测 */
+initNetworkInfo(); /* 初始化网络信息与Token生成 */
 
 /* ==============================================================
    部署工具 (控制台调用)
@@ -1008,7 +1132,7 @@ window.deployToGitHub=async function(){
   }catch(e){console.error('❌',e)}
 };
 
-console.log('%cP2P五子棋 v1.50','font-size:20px;color:#c9a961;font-weight:bold');
+console.log('%cP2P五子棋 v1.61','font-size:20px;color:#c9a961;font-weight:bold');
 console.log('控制台输入 deployToGitHub() 可部署到 GitHub Pages');
 </script>
 </body>
