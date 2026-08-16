@@ -381,43 +381,66 @@ function getNetworkType(){
 
 // 获取内网IP
 async function getLocalIP(){
-  // 优先本地WebRTC探测；失败则回退到 WebRTC 的 srflx/mDNS 及多备用通道
-  const fromWebRTC=c=>new Promise(resolve=>{
+  /* 多策略获取内网IP：
+     1) host 候选直接携带 IPv4（Firefox / 未开启mDNS时可用）
+     2) srflx(STUN反射)候选的 raddr 字段（Chrome mDNS混淆下仍保留真实内网IP）—— 关键来源
+     3) IPv6 兜底 */
+  const probe=withSTUN=>new Promise(resolve=>{
     try{
-      const pc=new RTCPeerConnection({iceServers:[]});
+      const pc=new RTCPeerConnection({iceServers:withSTUN
+        ?[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'}]
+        :[]});
       const ips=new Set();
       let done=false;
-      const finish=(ip)=>{if(done)return;done=true;try{pc.close()}catch(e){};resolve(ip||'')};
-      // 非 host 类型(如 srflx/prflx)一般不含内网IP，跳过
+      const finish=ip=>{if(done)return;done=true;try{pc.close()}catch(e){};resolve(ip||'')};
+      const addIP=ip=>{
+        if(!ip)return;
+        if(ip.startsWith('0.')||ip.startsWith('127.')||ip.startsWith('169.254.'))return;
+        if(ip==='0.0.0.0'||ip==='255.255.255.255')return;
+        ips.add(ip);
+      };
       pc.onicecandidate=ice=>{
         if(!ice.candidate||!ice.candidate.candidate)return;
-        if(!c.allowNonHost&&!/typ host/i.test(ice.candidate.candidate))return;
-        // mDNS 占位符如 "abcd.local" 匹配不到真实IP，跳过
-        const m=ice.candidate.candidate.match(/([0-9]{1,3}(?:\.[0-9]{1,3}){3})\s*$/);
-        if(m){
-          const ip=m[1];
-          if(ip!=='0.0.0.0'&&!/^0\./.test(ip)&&!/^(127\.|169\.254\.)/.test(ip))ips.add(ip);
+        const c=ice.candidate.candidate;
+        /* mDNS 占位符直接跳过（xxx.local 无真实IP） */
+        if(/\.local/i.test(c))return;
+        if(/typ host/i.test(c)){
+          /* host候选：IP位于 "协议 优先级 IP 端口 typ host" 之间 */
+          const m4=c.match(/^candidate:\S+ \d+ \S+ \d+ (\d{1,3}(?:\.\d{1,3}){3}) \d+ typ host/i);
+          if(m4){addIP(m4[1]);return}
+          /* IPv6 host 候选兜底 */
+          const m6=c.match(/^candidate:\S+ \d+ \S+ \d+ ([0-9a-f:]+(?:%[0-9a-z]+)?) \d+ typ host/i);
+          if(m6)addIP(m6[1].replace(/%\S+$/,''));
+        }else if(/typ srflx/i.test(c)){
+          /* srflx候选：raddr 即真实内网IP（Chrome mDNS下也保留） */
+          const m=c.match(/raddr (\d{1,3}(?:\.\d{1,3}){3})/i);
+          if(m)addIP(m[1]);
         }
       };
       pc.onicegatheringstatechange=()=>{
         if(pc.iceGatheringState==='complete')finish(pick(ips));
       };
-      // 需要数据通道才会触发候选
       pc.createDataChannel('probe');
       pc.createOffer().then(o=>pc.setLocalDescription(o)).catch(()=>finish(''));
-      setTimeout(()=>finish(pick(ips)),3000);
+      /* STUN反射需要时间，给足4.5秒 */
+      setTimeout(()=>finish(pick(ips)),4500);
     }catch(e){resolve('')}
   });
   function pick(ipSet){
     const list=[...ipSet];
     if(!list.length)return '';
-    // 优选内网私有网段，其次任意
-    return list.find(ip=>/^(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\./.test(ip))||list[0];
+    /* 优选内网私有网段 IPv4，其次任意 IPv4，最后 IPv6 */
+    const v4=list.filter(ip=>/^\d+\.\d+\.\d+\.\d+$/.test(ip));
+    const priv=v4.find(ip=>/^(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\./.test(ip));
+    if(priv)return priv;
+    if(v4.length)return v4[0];
+    return list[0];
   }
-  const r=await fromWebRTC({allowNonHost:false});
+  /* 第一轮：带STUN（关键，获取 srflx raddr） */
+  const r=await probe(true);
   if(r)return r;
-  // 兜底：允许 srflx 等候选再试一次
-  const r2=await fromWebRTC({allowNonHost:true});
+  /* 兜底：无STUN */
+  const r2=await probe(false);
   return r2||'获取失败';
 }
 
