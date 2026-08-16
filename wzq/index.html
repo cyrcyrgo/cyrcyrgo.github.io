@@ -8,8 +8,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-<!-- PeerJS 公共信令中继：用于跨网络 Token 配对 -->
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 :root{
   --bg:#0b0b10;--surface:#14141c;--surface2:#1c1c28;--border:#2a2a38;
@@ -572,7 +570,7 @@ function doLogin(){
     if(panel)panel.style.display='block';
     tokSetStatus('正在初始化配对通道...');
     tokBtnDisable(false);
-    setTimeout(()=>tokInitPeer(),300);
+    setTimeout(()=>tokStartListen(),300);
     goTo('login-screen'); /* 停留在登录页，显示配对面板 */
     toast('Token配对已就绪：把下方Token发给对方','ok');
     return;
@@ -595,77 +593,139 @@ function tokBtnDisable(disable){
   const b=document.getElementById('tok-connect-btn');
   if(b)b.disabled=disable;
 }
-/* 初始化 Peer 实例（用我自己的 token 作为 peer.id） */
-function tokInitPeer(){
-  if(!window.Peer){toast('PeerJS 加载失败，请检查网络','err');return null}
-  if(S.peer){try{S.peer.destroy()}catch(e){}}
-  const peer=new Peer('gm-tok-'+S.token,{debug:1,reliable:false});
-  S.peer=peer;
-  peer.on('open',id=>{
-    console.log('Token配对已就绪:',id);
-    const tst=document.getElementById('tok-status-text');
-    if(tst&&S.mode==='tok')tst.textContent='配对通道已就绪，等待对方连接...';
-  });
-  peer.on('error',err=>{
-    console.warn('PeerJS error:',err);
-    if(err.type==='peer-unavailable'){
-      tokSetStatus('对方Token不可用或已离线');toast('对方Token不可用，请确认双方同时在线','err');
-      tokBtnDisable(false);
-    }else if(err.type==='unavailable-id'){
-      tokSetStatus('Token被占用，已自动重置');S.token=generateToken();
-      const te=document.getElementById('conn-token'),tm=document.getElementById('tok-my');
-      if(te)te.textContent=S.token;if(tm)tm.textContent=S.token;
-      setTimeout(()=>tokInitPeer(),600);
-    }else if(err.type==='browser-incompatible'){
-      toast('当前浏览器不支持WebRTC信令','err');
-    }
-  });
-  peer.on('connection',conn=>{
-    console.log('收到对方token连接请求');
-    /* 收到连接：作为加入方(Join)，校验握手并绑定DC */
-    S.role='join';
-    bindTokenDC(conn,false);
-  });
-  return peer;
+/* ==============================================================
+   Token 配对 (ntfy.sh 公共信令中继)
+   用 token 作为 ntfy topic，双方通过 HTTP 发布/订阅交换
+   WebRTC offer/answer/ICE，任意网络环境下仅凭 token 配对。
+   ============================================================== */
+const NTFY='https://ntfy.sh/';
+let tokES=null;      /* EventSource 订阅 */
+let tokPC=null;      /* 配对用 RTCPeerConnection */
+let tokWaiting=false;/* 是否正在等待应答 */
+
+function tokTopic(t){return 'gm-tk-'+t}
+
+function tokSetStatus(txt){
+  const st=document.getElementById('tok-status');
+  const stt=document.getElementById('tok-status-text');
+  if(st)st.style.display=txt?'flex':'none';
+  if(stt)stt.textContent=txt||'';
 }
-/* 绑定 PeerJS DataConnection 为游戏通道 */
-function bindTokenDC(conn,selfInvited){
-  S.peerConn=conn;
-  conn.on('open',()=>{
-    S.connected=true;
-    tokSetStatus('配对成功，连接已建立!');
-    toast('Token配对成功!','ok');
-    try{conn.send({type:'info',name:S.name})}catch(e){}
-    startGame(S.role==='host');
-  });
-  conn.on('data',d=>{
-    try{handleMsg(typeof d==='object'?d:JSON.parse(d))}catch(e){}
-  });
-  conn.on('close',()=>{S.connected=false;toast('Token通道已断开','err')});
-  conn.on('error',()=>{tokSetStatus('连接失败');toast('Token连接失败','err')});
-  /* 若已open竞态 */
-  if(conn.open){
-    setTimeout(()=>{
-      if(!S.gameStarted){S.connected=true;tokSetStatus('配对成功');try{conn.send({type:'info',name:S.name})}catch(e){};startGame(S.role==='host')}
-    },0);
-  }
+function tokBtnDisable(disable){
+  const b=document.getElementById('tok-connect-btn');
+  if(b)b.disabled=disable;
 }
-/* 用户点击"连接对方"：以对方 token 建立连接 */
-function tokenConnect(){
+/* 发布一条信令消息到指定 token 的 topic */
+async function tokPublish(toToken,msg){
+  try{
+    const body={...msg,from:S.token,ts:Date.now()};
+    await fetch(NTFY+tokTopic(toToken),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  }catch(e){console.warn('tokPublish fail',e)}
+}
+/* 订阅自己的 topic，持续监听对方的 offer/answer/ice */
+function tokStartListen(){
+  tokStopListen();
+  if(!S.token){tokSetStatus('Token无效，请刷新页面');return}
+  try{
+    tokES=new EventSource(NTFY+tokTopic(S.token)+'/json');
+    tokES.onopen=()=>{
+      if(S.mode==='tok')tokSetStatus('配对通道已就绪，等待对方连接...');
+    };
+    tokES.onmessage=e=>{
+      try{
+        const raw=JSON.parse(e.data);
+        if(!raw||!raw.message)return;
+        const msg=JSON.parse(raw.message);
+        if(!msg||msg.from===S.token)return; /* 忽略自己的消息 */
+        tokHandleMsg(msg);
+      }catch(err){}
+    };
+    tokES.onerror=()=>{ /* EventSource 自动重连 */ };
+  }catch(e){tokSetStatus('配对通道初始化失败，请刷新重试')}
+}
+function tokStopListen(){
+  if(tokES){tokES.close();tokES=null}
+}
+/* 信令消息分发 */
+function tokHandleMsg(msg){
+  if(msg.type==='offer')tokOnOffer(msg);
+  else if(msg.type==='answer')tokOnAnswer(msg);
+  else if(msg.type==='ice')tokOnIce(msg);
+}
+/* 加入方收到 offer：创建PC、应答 */
+async function tokOnOffer(msg){
+  if(S.connected||S.gameStarted||S.role==='host')return;
+  if(!msg.sdp||!msg.sdp.sdp)return;
+  S.role='join';
+  tokBtnDisable(true);
+  tokSetStatus('收到 '+msg.name+' 的配对请求，正在应答...');
+  try{
+    const pc=new RTCPeerConnection(ICE.tok);
+    tokPC=pc;S.pc=pc;
+    pc.onicecandidate=e=>{if(e.candidate)tokPublish(msg.from,{type:'ice',candidate:e.candidate.toJSON()})};
+    pc.ondatachannel=e=>{
+      const dc=e.channel;
+      S.dc=dc;
+      dc.onopen=()=>{S.connected=true;tokSetStatus('配对成功，连接已建立!');toast('Token配对成功!','ok');startGame(false)};
+      dc.onmessage=ev=>{try{handleMsg(JSON.parse(ev.data))}catch(x){}};
+      dc.onclose=()=>{S.connected=false;toast('Token通道已断开','err')};
+    };
+    await pc.setRemoteDescription(msg.sdp);
+    const ans=await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    await tokPublish(msg.from,{type:'answer',name:S.name,sdp:pc.localDescription});
+    tokSetStatus('已发送应答，等待数据通道建立...');
+  }catch(e){tokSetStatus('应答失败: '+e.message);tokBtnDisable(false)}
+}
+/* 发起方收到 answer */
+async function tokOnAnswer(msg){
+  if(!tokPC||S.connected||!msg.sdp)return;
+  tokSetStatus('对方已应答，正在建立数据通道...');
+  try{
+    await tokPC.setRemoteDescription(msg.sdp);
+  }catch(e){tokSetStatus('应答处理失败')}
+}
+/* 收到 ICE 候选 */
+async function tokOnIce(msg){
+  if(!tokPC)return;
+  try{await tokPC.addIceCandidate(msg.candidate)}catch(e){}
+}
+/* 用户点击"连接对方"：作为发起方(Host)创建PC并发offer */
+async function tokenConnect(){
   const input=document.getElementById('tok-input').value.trim();
   if(!input){toast('请输入对方5位Token','err');return}
   if(!/^\d{5}$/.test(input)){toast('Token必须为5位数字','err');return}
   if(input===S.token){toast('不能连接自己的Token','err');return}
-  if(!S.peer){tokInitPeer()}
-  S.role='host'; /* Token配对中，输入方作为发起方（Host） */
+  /* 确保自己也在监听自己的 topic（接收对方的 answer/ice） */
+  if(!tokES)tokStartListen();
+  /* 若已有旧PC先关闭 */
+  if(tokPC){try{tokPC.close()}catch(e){};tokPC=null}
+  S.role='host';
   tokBtnDisable(true);
   tokSetStatus('正在连接对方Token: '+input+' ...');
-  const conn=S.peer.connect('gm-tok-'+input,{reliable:false});
-  bindTokenDC(conn,true);
-  /* 超时提示 */
-  setTimeout(()=>{
-    if(!S.connected&&!S.gameStarted){tokSetStatus('连接超时，对方可能不在线');tokBtnDisable(false)}
-  },25000);
+  try{
+    const pc=new RTCPeerConnection(ICE.tok);
+    tokPC=pc;S.pc=pc;
+    /* 发起方创建数据通道 */
+    const dc=pc.createDataChannel('game');
+    S.dc=dc;
+    dc.onopen=()=>{S.connected=true;tokSetStatus('配对成功，连接已建立!');toast('Token配对成功!','ok');startGame(true)};
+    dc.onmessage=e=>{try{handleMsg(JSON.parse(e.data))}catch(x){}};
+    dc.onclose=()=>{S.connected=false;toast('Token通道已断开','err')};
+    /* trickle ICE：候选逐条发送（ntfy 单消息限4KB，SDP不带候选） */
+    pc.onicecandidate=e=>{if(e.candidate)tokPublish(input,{type:'ice',candidate:e.candidate.toJSON()})};
+    const offer=await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await tokPublish(input,{type:'offer',name:S.name,sdp:pc.localDescription});
+    tokSetStatus('已发送配对请求，等待对方应答...');
+    /* 超时提示 */
+    setTimeout(()=>{
+      if(!S.connected&&!S.gameStarted){
+        tokSetStatus('连接超时，对方可能不在线');
+        tokBtnDisable(false);
+      }
+    },30000);
+  }catch(e){tokSetStatus('发起失败: '+e.message);tokBtnDisable(false)}
 }
 
 /* ==============================================================
@@ -944,7 +1004,21 @@ function checkWin(x,y,c){
   return false;
 }
 function requestRematch(){if(S.dc&&S.dc.readyState==='open'){S.dc.send(JSON.stringify({type:'rematch-req'}));toast('已发送请求','info')}}
-function exitGame(){if(S.pc){S.pc.close();S.pc=null}S.dc=null;S.connected=false;S.gameStarted=false;goTo('lobby-screen')}
+function exitGame(){
+  if(S.pc){S.pc.close();S.pc=null}
+  if(tokPC){try{tokPC.close()}catch(e){};tokPC=null}
+  S.dc=null;S.connected=false;S.gameStarted=false;S.role='';
+  if(S.mode==='tok'){
+    /* Token配对：退出后回到登录页配对面板，可重新配对 */
+    const panel=document.getElementById('token-panel');
+    if(panel)panel.style.display='block';
+    tokBtnDisable(false);
+    tokSetStatus('已退出对局，可重新配对');
+    goTo('login-screen');
+    return;
+  }
+  goTo('lobby-screen');
+}
 
 /* ==============================================================
    Canvas 渲染
