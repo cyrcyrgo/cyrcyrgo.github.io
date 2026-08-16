@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<title>P2P五子棋 v1.61 · 零服务器联机</title>
+<title>P2P五子棋 v2.01 · 零服务器联机</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<!-- PeerJS 公共信令中继：用于跨网络 Token 配对 -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 :root{
   --bg:#0b0b10;--surface:#14141c;--surface2:#1c1c28;--border:#2a2a38;
@@ -142,7 +144,7 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
 <!-- ============ 登录页 ============ -->
 <div id="login-screen" class="screen active">
   <div class="card" style="text-align:center">
-    <h2 style="font-size:1.5rem;margin-bottom:.3rem">P2P五子棋 <span style="font-size:.7rem;color:var(--dim);font-weight:400;vertical-align:middle">v1.61</span></h2>
+    <h2 style="font-size:1.5rem;margin-bottom:.3rem">P2P五子棋 <span style="font-size:.7rem;color:var(--dim);font-weight:400;vertical-align:middle">v2.01</span></h2>
     <p style="margin-bottom:1.5rem">零服务器 · 联机对战</p>
     <input type="text" id="inp-name" placeholder="输入你的昵称" maxlength="12" style="margin-bottom:1rem">
     <div class="wifi-warn" id="wifi-warn">⚠️ 未检测到WiFi，内网模式不可用</div>
@@ -158,6 +160,9 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
       </div>
       <div class="mode-btn" data-mode="auto" onclick="selectMode(this)">
         <span class="icon">⚡</span><span class="label">自动优选</span>
+      </div>
+      <div class="mode-btn" data-mode="tok" onclick="selectMode(this)">
+        <span class="icon">🔑</span><span class="label">Token配对</span>
       </div>
     </div>
     <!-- 网络信息区域 -->
@@ -182,6 +187,18 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
         </div>
       </div>
       <p style="font-size:.65rem;color:var(--dim);margin-top:.5rem;line-height:1.5">🔑 Token为5位随机码，每次进入页面自动刷新。内网模式下连接方需输入该Token进行校验。</p>
+    </div>
+    <!-- Token 配对面板（仅 Token配对 模式显示） -->
+    <div id="token-panel" style="margin:1rem 0;padding:1rem;background:var(--surface2);border-radius:8px;border:1px solid var(--accent);display:none">
+      <div style="font-size:.78rem;color:var(--accent);margin-bottom:.5rem;font-weight:600">🔑 Token 跨网配对</div>
+      <p style="font-size:.7rem;color:var(--dim);margin-bottom:.5rem;line-height:1.5">将你的5位Token发给对方，对方在任意网络输入此Token即可配对，无需交换房间码。</p>
+      <p style="font-size:.7rem;color:var(--dim);margin-bottom:.5rem">我的配对Token：<span id="tok-my" style="font-family:'DM Mono',monospace;font-size:1.1rem;font-weight:700;color:var(--accent);letter-spacing:.15em">—</span></p>
+      <div style="display:flex;gap:.4rem;align-items:center;margin-top:.4rem">
+        <input type="text" id="tok-input" placeholder="输入对方5位Token" maxlength="5" style="flex:1;font-family:'DM Mono',monospace;letter-spacing:.2em;text-align:center">
+      </div>
+      <p style="font-size:.65rem;color:var(--dim);margin:.3rem 0 .5rem">注意：双方需在同一时间在线。对方Token过期/占位会提示。</p>
+      <button class="btn btn-accent btn-block" onclick="tokenConnect()" id="tok-connect-btn">🔗 连接对方</button>
+      <div class="status-bar" id="tok-status" style="display:none"><div class="status-dot waiting"></div><span id="tok-status-text">等待配对...</span></div>
     </div>
     <button class="btn btn-accent btn-block" onclick="doLogin()">进入大厅</button>
   </div>
@@ -324,7 +341,8 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
    全局状态
    ============================================================== */
 const S={name:'',mode:'lan',role:'',pc:null,dc:null,connected:false,gameStarted:false,
-  board:null,myColor:'',turn:'black',over:false,moves:0,lastMove:null,opponentName:'',token:''};
+  board:null,myColor:'',turn:'black',over:false,moves:0,lastMove:null,opponentName:'',token:'',
+  peer:null,peerConn:null};
 
 const STUN=[
   {urls:'stun:stun.l.google.com:19302'},
@@ -342,9 +360,10 @@ const ICE={
   lan:{iceServers:[]},
   p2p:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'},
   ngrok:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'},
-  auto:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'}
+  auto:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'},
+  tok:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'}
 };
-const MLABELS={lan:'🏠 内网模式',p2p:'🌐 外网P2P',ngrok:'🚀 Ngrok穿透',auto:'⚡ 自动优选'};
+const MLABELS={lan:'🏠 内网模式',p2p:'🌐 外网P2P',ngrok:'🚀 Ngrok穿透',auto:'⚡ 自动优选',tok:'🔑 Token配对'};
 
 /* ==============================================================
    网络信息获取
@@ -439,6 +458,8 @@ async function initNetworkInfo(){
   const token=generateToken();
   S.token=token;
   if(tokenEl) tokenEl.textContent = token;
+  const tokMyEl=document.getElementById('tok-my');
+  if(tokMyEl) tokMyEl.textContent = token;
 
   // 并行获取IP
   const [ip1, ip2]=await Promise.all([
@@ -479,6 +500,9 @@ function selectMode(el){
   }
   document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('selected'));
   el.classList.add('selected');S.mode=el.dataset.mode;
+  /* 切换 Token配对 面板显示 */
+  const panel=document.getElementById('token-panel');
+  if(panel)panel.style.display=(S.mode==='tok')?'block':'none';
 }
 /* 网络环境检测 */
 function isWiFi(){
@@ -519,7 +543,106 @@ function doLogin(){
   S.name=n;
   document.getElementById('lobby-user').textContent='👤 '+n;
   document.getElementById('lobby-mode-label').textContent=MLABELS[S.mode];
+  /* Token配对模式：登录后不进入大厅，直接在此面板配对 */
+  if(S.mode==='tok'){
+    const panel=document.getElementById('token-panel');
+    if(panel)panel.style.display='block';
+    tokSetStatus('正在初始化配对通道...');
+    tokBtnDisable(false);
+    setTimeout(()=>tokInitPeer(),300);
+    goTo('login-screen'); /* 停留在登录页，显示配对面板 */
+    toast('Token配对已就绪：把下方Token发给对方','ok');
+    return;
+  }
   goTo('lobby-screen');
+}
+
+/* ==============================================================
+   Token 配对 (PeerJS 公共信令中继)
+   ============================================================== */
+/* Token 配对网关：用 token 作为 PeerJS 房间名，双方加入同一 peer 广播，
+   从而在任意网络环境下仅凭 token 建立连接。 */
+function tokSetStatus(txt){
+  const st=document.getElementById('tok-status');
+  const stt=document.getElementById('tok-status-text');
+  if(st)st.style.display=txt?'flex':'none';
+  if(stt)stt.textContent=txt||'';
+}
+function tokBtnDisable(disable){
+  const b=document.getElementById('tok-connect-btn');
+  if(b)b.disabled=disable;
+}
+/* 初始化 Peer 实例（用我自己的 token 作为 peer.id） */
+function tokInitPeer(){
+  if(!window.Peer){toast('PeerJS 加载失败，请检查网络','err');return null}
+  if(S.peer){try{S.peer.destroy()}catch(e){}}
+  const peer=new Peer('gm-tok-'+S.token,{debug:1,reliable:false});
+  S.peer=peer;
+  peer.on('open',id=>{
+    console.log('Token配对已就绪:',id);
+    const tst=document.getElementById('tok-status-text');
+    if(tst&&S.mode==='tok')tst.textContent='配对通道已就绪，等待对方连接...';
+  });
+  peer.on('error',err=>{
+    console.warn('PeerJS error:',err);
+    if(err.type==='peer-unavailable'){
+      tokSetStatus('对方Token不可用或已离线');toast('对方Token不可用，请确认双方同时在线','err');
+      tokBtnDisable(false);
+    }else if(err.type==='unavailable-id'){
+      tokSetStatus('Token被占用，已自动重置');S.token=generateToken();
+      const te=document.getElementById('conn-token'),tm=document.getElementById('tok-my');
+      if(te)te.textContent=S.token;if(tm)tm.textContent=S.token;
+      setTimeout(()=>tokInitPeer(),600);
+    }else if(err.type==='browser-incompatible'){
+      toast('当前浏览器不支持WebRTC信令','err');
+    }
+  });
+  peer.on('connection',conn=>{
+    console.log('收到对方token连接请求');
+    /* 收到连接：作为加入方(Join)，校验握手并绑定DC */
+    S.role='join';
+    bindTokenDC(conn,false);
+  });
+  return peer;
+}
+/* 绑定 PeerJS DataConnection 为游戏通道 */
+function bindTokenDC(conn,selfInvited){
+  S.peerConn=conn;
+  conn.on('open',()=>{
+    S.connected=true;
+    tokSetStatus('配对成功，连接已建立!');
+    toast('Token配对成功!','ok');
+    try{conn.send({type:'info',name:S.name})}catch(e){}
+    startGame(S.role==='host');
+  });
+  conn.on('data',d=>{
+    try{handleMsg(typeof d==='object'?d:JSON.parse(d))}catch(e){}
+  });
+  conn.on('close',()=>{S.connected=false;toast('Token通道已断开','err')});
+  conn.on('error',()=>{tokSetStatus('连接失败');toast('Token连接失败','err')});
+  /* 若已open竞态 */
+  if(conn.open){
+    setTimeout(()=>{
+      if(!S.gameStarted){S.connected=true;tokSetStatus('配对成功');try{conn.send({type:'info',name:S.name})}catch(e){};startGame(S.role==='host')}
+    },0);
+  }
+}
+/* 用户点击"连接对方"：以对方 token 建立连接 */
+function tokenConnect(){
+  const input=document.getElementById('tok-input').value.trim();
+  if(!input){toast('请输入对方5位Token','err');return}
+  if(!/^\d{5}$/.test(input)){toast('Token必须为5位数字','err');return}
+  if(input===S.token){toast('不能连接自己的Token','err');return}
+  if(!S.peer){tokInitPeer()}
+  S.role='host'; /* Token配对中，输入方作为发起方（Host） */
+  tokBtnDisable(true);
+  tokSetStatus('正在连接对方Token: '+input+' ...');
+  const conn=S.peer.connect('gm-tok-'+input,{reliable:false});
+  bindTokenDC(conn,true);
+  /* 超时提示 */
+  setTimeout(()=>{
+    if(!S.connected&&!S.gameStarted){tokSetStatus('连接超时，对方可能不在线');tokBtnDisable(false)}
+  },25000);
 }
 
 /* ==============================================================
@@ -1155,7 +1278,7 @@ window.deployToGitHub=async function(){
   }catch(e){console.error('❌',e)}
 };
 
-console.log('%cP2P五子棋 v1.61','font-size:20px;color:#c9a961;font-weight:bold');
+console.log('%cP2P五子棋 v2.01','font-size:20px;color:#c9a961;font-weight:bold');
 console.log('控制台输入 deployToGitHub() 可部署到 GitHub Pages');
 </script>
 </body>
