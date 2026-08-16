@@ -3,549 +3,181 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<meta name="theme-color" content="#0d0d12">
-<meta name="description" content="墨棋 · 零服务器P2P五子棋，禁手规则、AI对手、复盘分析">
-<title>墨棋 · 零服务器五子棋 v2.0</title>
+<title>P2P五子棋 v1.50 · 零服务器联机</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600;900&family=Ma+Shan+Zheng&family=DM+Mono:wght@400;500&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <style>
-/* ============================================================
-   主题变量 — 墨韵 (默认) / 玉石 / 朱砂
-   ============================================================ */
-:root, [data-theme="ink"]{
-  --bg:radial-gradient(ellipse at top,#16121a 0%,#0a0a0e 60%,#060608 100%);
-  --ink-deep:#0a0a0e;--ink-soft:#1a1620;
-  --surface:rgba(26,22,32,.72);--surface-2:rgba(36,30,42,.55);
-  --surface-3:rgba(48,40,56,.4);
-  --border:rgba(201,169,97,.18);--border-2:rgba(201,169,97,.32);
-  --accent:#c9a961;--accent-2:#e6c879;--accent-soft:rgba(201,169,97,.15);
-  --jade:#5fb39b;--jade-soft:rgba(95,179,155,.18);
-  --cinnabar:#d9685a;--cinnabar-soft:rgba(217,104,90,.18);
-  --text:#e8e4dc;--text-dim:#8a8273;--text-faint:#5a5448;
-  --board-a:#d9b46a;--board-b:#c89c50;--board-shadow:#6b4a18;
-  --stone-b-a:#3a3a40;--stone-b-b:#0a0a0e;--stone-b-h:#5e5e68;
-  --stone-w-a:#fefefe;--stone-w-b:#bcb4a4;--stone-w-h:#fff;
-  --ok:#5cb85c;--warn:#e0a93b;--err:#d9685a;--info:#5fb3c5;
-  --shadow-1:0 2px 8px rgba(0,0,0,.35);
-  --shadow-2:0 8px 32px rgba(0,0,0,.55),0 2px 6px rgba(0,0,0,.35);
-  --shadow-3:0 16px 48px rgba(0,0,0,.6),0 0 0 1px rgba(201,169,97,.08) inset;
-  --radius-sm:6px;--radius:10px;--radius-lg:16px;--radius-xl:24px;
-  --tx:.35s cubic-bezier(.4,0,.2,1);
-  --tx-spring:.5s cubic-bezier(.34,1.56,.64,1);
+:root{
+  --bg:#0b0b10;--surface:#14141c;--surface2:#1c1c28;--border:#2a2a38;
+  --accent:#c9a961;--accent2:#dfc07a;--text:#e8e4dc;--dim:#7a7568;
+  --board:#d4ad60;--boardline:#b08c3a;
+  --ok:#5cb85c;--err:#d9534f;--info:#5bc0de;
 }
-[data-theme="jade"]{
-  --bg:radial-gradient(ellipse at top,#0e1a18 0%,#080f0e 60%,#04080a 100%);
-  --accent:#5fb39b;--accent-2:#7fd0b6;--accent-soft:rgba(95,179,155,.15);
-  --border:rgba(95,179,155,.22);--border-2:rgba(95,179,155,.38);
-  --board-a:#1e4a3e;--board-b:#163a30;--board-shadow:#082018;
-  --stone-b-a:#1a1a1c;--stone-b-b:#06060a;--stone-b-h:#3a3a40;
-  --stone-w-a:#d6f0e4;--stone-w-b:#8fc8b3;--stone-w-h:#fff;
-  --cinnabar:#d9a85a;--cinnabar-soft:rgba(217,168,90,.18);
-}
-[data-theme="cinnabar"]{
-  --bg:radial-gradient(ellipse at top,#1c0f10 0%,#0e0808 60%,#060404 100%);
-  --accent:#d9685a;--accent-2:#e6877a;--accent-soft:rgba(217,104,90,.15);
-  --border:rgba(217,104,90,.22);--border-2:rgba(217,104,90,.38);
-  --board-a:#5a2418;--board-b:#3e180f;--board-shadow:#1c0805;
-  --stone-b-a:#1a1612;--stone-b-b:#080606;--stone-b-h:#3a322a;
-  --stone-w-a:#f8e4d8;--stone-w-b:#c89a82;--stone-w-h:#fff;
-}
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%}
-body{
-  font-family:'Noto Serif SC',serif;
-  background:var(--bg);background-attachment:fixed;
-  color:var(--text);min-height:100vh;overflow-x:hidden;
-  -webkit-font-smoothing:antialiased;
-  transition:background 1s var(--tx);
-}
-body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
-  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E");
-  mix-blend-mode:overlay;opacity:.6}
-body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;
-  background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,.55) 100%)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Serif SC',serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
 .mono{font-family:'DM Mono',monospace}
-.cursive{font-family:'Ma Shan Zheng',cursive}
-.xiaowei{font-family:'ZCOOL XiaoWei',serif}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");opacity:.4}
 
-/* ============================================================
-   通用组件
-   ============================================================ */
-.screen{display:none;min-height:100vh;padding:1.5rem;flex-direction:column;align-items:center;justify-content:center;animation:screenIn .5s var(--tx) both}
+.screen{display:none;min-height:100vh;padding:1.5rem;flex-direction:column;align-items:center;justify-content:center}
 .screen.active{display:flex}
-@keyframes screenIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-
-.card{
-  background:var(--surface);backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);
-  border:1px solid var(--border);border-radius:var(--radius-lg);
-  padding:1.8rem;width:100%;max-width:460px;margin:.75rem 0;
-  box-shadow:var(--shadow-2);
-  position:relative;overflow:hidden;
-}
-.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
-  background:linear-gradient(90deg,transparent,var(--accent-soft),transparent)}
-.card h2{font-size:1.2rem;margin-bottom:1rem;color:var(--accent);font-weight:600;letter-spacing:.04em}
-.card p{font-size:.85rem;color:var(--text-dim);line-height:1.75}
-.card-divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:1.2rem 0}
-
-input[type=text],textarea{
-  width:100%;padding:.7rem .9rem;
-  background:var(--surface-2);backdrop-filter:blur(8px);
-  border:1px solid var(--border);border-radius:var(--radius);
-  color:var(--text);font-family:inherit;font-size:.9rem;outline:none;
-  transition:all var(--tx);
-}
-input[type=text]:focus,textarea:focus{
-  border-color:var(--accent);
-  background:var(--surface-3);
-  box-shadow:0 0 0 3px var(--accent-soft);
-}
-textarea{resize:vertical;min-height:80px;line-height:1.6}
-
-.btn{
-  display:inline-flex;align-items:center;justify-content:center;gap:.4rem;
-  padding:.65rem 1.3rem;border:none;border-radius:var(--radius);
-  font-family:inherit;font-size:.9rem;cursor:pointer;
-  transition:all var(--tx);letter-spacing:.02em;
-  position:relative;overflow:hidden;
-  user-select:none;-webkit-user-select:none;
-}
-.btn:active{transform:scale(.97)}
-.btn-accent{
-  background:linear-gradient(135deg,var(--accent),var(--accent-2));
-  color:#0a0a0e;font-weight:700;
-  box-shadow:0 4px 14px rgba(201,169,97,.25),0 1px 0 rgba(255,255,255,.15) inset;
-}
-.btn-accent:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(201,169,97,.4),0 1px 0 rgba(255,255,255,.2) inset}
-.btn-ghost{
-  background:var(--surface-2);backdrop-filter:blur(8px);
-  border:1px solid var(--border);color:var(--text);
-}
-.btn-ghost:hover{border-color:var(--accent);color:var(--accent);background:var(--surface-3)}
-.btn-jade{
-  background:linear-gradient(135deg,var(--jade),#7fd0b6);
-  color:#0a0a0e;font-weight:700;
-  box-shadow:0 4px 14px rgba(95,179,155,.25);
-}
-.btn-cinnabar{
-  background:linear-gradient(135deg,var(--cinnabar),#e6877a);
-  color:#0a0a0e;font-weight:700;
-}
-.btn-sm{padding:.42rem .85rem;font-size:.8rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:2rem;width:100%;max-width:440px;margin:.75rem 0}
+.card h2{font-size:1.25rem;margin-bottom:1rem;color:var(--accent)}
+.card p{font-size:.85rem;color:var(--dim);line-height:1.7}
+input[type=text],textarea{width:100%;padding:.7rem 1rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.9rem;outline:none;transition:border .2s}
+input[type=text]:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:80px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:.65rem 1.3rem;border:none;border-radius:8px;font-family:inherit;font-size:.9rem;cursor:pointer;transition:all .2s;letter-spacing:.02em}
+.btn-accent{background:var(--accent);color:#000;font-weight:700}
+.btn-accent:hover{background:var(--accent2);transform:translateY(-1px)}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:.4rem .8rem;font-size:.8rem}
 .btn-block{width:100%;margin-top:.5rem}
-.btn-icon{width:40px;height:40px;padding:0;border-radius:50%}
-.btn:disabled{opacity:.35;cursor:not-allowed;transform:none!important;filter:grayscale(.5)}
-
-/* 模式选择 */
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.wifi-warn{display:none;font-size:.75rem;color:var(--err);margin-top:.4rem;align-items:center;gap:.3rem}
+.wifi-warn.show{display:flex}
 .mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:1rem 0}
-.mode-btn{
-  padding:1.2rem .8rem;
-  background:var(--surface-2);backdrop-filter:blur(8px);
-  border:1.5px solid var(--border);border-radius:var(--radius);
-  cursor:pointer;text-align:center;
-  transition:all var(--tx);
-  position:relative;overflow:hidden;
-}
-.mode-btn:hover{transform:translateY(-2px);border-color:var(--border-2);background:var(--surface-3)}
-.mode-btn.selected{
-  border-color:var(--accent);
-  background:linear-gradient(135deg,var(--accent-soft),transparent);
-  box-shadow:0 0 0 1px var(--accent-soft),0 4px 16px rgba(201,169,97,.15);
-}
-.mode-btn .icon{font-size:1.7rem;display:block;margin-bottom:.4rem;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
-.mode-btn .label{font-size:.82rem;color:var(--text-dim);font-weight:500}
+.mode-btn{padding:1.1rem .8rem;background:var(--surface2);border:2px solid var(--border);border-radius:10px;cursor:pointer;text-align:center;transition:all .25s}
+.mode-btn:hover,.mode-btn.selected{border-color:var(--accent);background:rgba(201,169,97,.08)}
+.mode-btn .icon{font-size:1.6rem;display:block;margin-bottom:.35rem}
+.mode-btn .label{font-size:.82rem;color:var(--dim)}
 .mode-btn.selected .label{color:var(--accent)}
-.mode-btn .badge{position:absolute;top:6px;right:6px;font-size:.62rem;padding:1px 6px;border-radius:99px;background:var(--jade-soft);color:var(--jade);font-weight:600;letter-spacing:.04em}
-.mode-btn .badge.new{background:var(--cinnabar-soft);color:var(--cinnabar)}
-.mode-btn[data-mode="lan"][data-disabled="true"]{opacity:.4;cursor:not-allowed;filter:grayscale(.3)}
-.mode-btn[data-mode="lan"][data-disabled="true"]:hover{transform:none}
-
-/* 状态/进度 */
-.steps{display:flex;gap:.4rem;margin-bottom:1.2rem}
-.step{flex:1;height:3px;border-radius:2px;background:var(--surface-3);transition:all var(--tx);position:relative;overflow:hidden}
-.step::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));transform:translateX(-100%);transition:transform var(--tx)}
-.step.active{background:var(--surface-3)}.step.active::after{transform:translateX(0)}
-.step.done{background:var(--accent)}.step.done::after{transform:translateX(0);background:var(--ok)}
-
-.status-bar{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--text-dim);margin:.6rem 0}
-.status-dot{width:8px;height:8px;border-radius:50%;background:var(--text-faint);flex-shrink:0}
-.status-dot.connected{background:var(--ok);box-shadow:0 0 8px var(--ok)}
-.status-dot.waiting{background:var(--accent);animation:pulse 1.4s infinite}
-.status-dot.err{background:var(--err);box-shadow:0 0 8px var(--err)}
-@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.7)}}
-
-/* 代码/二维码 */
-.code-box{
-  background:var(--surface-2);border:1px solid var(--border);
-  border-radius:var(--radius);padding:.85rem;
-  word-break:break-all;
-  font-family:'DM Mono',monospace;font-size:.7rem;
-  max-height:120px;overflow-y:auto;
-  margin:.6rem 0;line-height:1.6;
-  color:var(--text-dim);
-  scrollbar-width:thin;scrollbar-color:var(--border) transparent;
-}
-.code-box::-webkit-scrollbar{width:6px;height:6px}
-.code-box::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.code-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.8rem;word-break:break-all;font-family:'DM Mono',monospace;font-size:.72rem;max-height:120px;overflow-y:auto;margin:.6rem 0;line-height:1.5;color:var(--dim)}
 .qr-wrap{display:flex;flex-direction:column;align-items:center;gap:.6rem;margin:.8rem 0}
-.qr-wrap img{border-radius:var(--radius);background:#fff;padding:10px;box-shadow:var(--shadow-1)}
+.qr-wrap img{border-radius:6px;background:#fff;padding:8px}
+.status-bar{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--dim);margin:.6rem 0}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.status-dot.connected{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.status-dot.waiting{background:var(--accent);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.steps{display:flex;gap:.4rem;margin-bottom:1rem}
+.step{flex:1;height:3px;border-radius:2px;background:var(--border);transition:background .3s}
+.step.active{background:var(--accent)}
+.step.done{background:var(--ok)}
 
-/* 顶栏 */
-.topbar{
-  width:100%;max-width:520px;
-  display:flex;justify-content:space-between;align-items:center;
-  margin-bottom:1rem;padding:.3rem 0;
-}
-.topbar .back{background:none;border:none;color:var(--text-dim);font-size:1rem;cursor:pointer;padding:.4rem .6rem;border-radius:var(--radius-sm);transition:all var(--tx);font-family:inherit}
-.topbar .back:hover{color:var(--accent);background:var(--surface-2)}
-.topbar .title{font-family:'Ma Shan Zheng',cursive;font-size:1.3rem;color:var(--accent);letter-spacing:.08em}
-.topbar .meta{font-size:.78rem;color:var(--text-dim)}
+/* 扫码按钮醒目样式 */
+.btn-scan{background:linear-gradient(135deg,#1a3a2a,#0d2520);border:1px solid #2a6a4a;color:#6fdfaf;font-weight:600;font-size:.95rem;padding:.75rem 1.2rem}
+.btn-scan:hover{background:linear-gradient(135deg,#1f4a35,#10302a);border-color:#4ae08a;transform:translateY(-1px)}
+.btn-scan .scan-anim{display:inline-block;animation:scanPulse 2s infinite}
+@keyframes scanPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.15)}}
 
-/* ============================================================
-   游戏页
-   ============================================================ */
-#game-screen.active{justify-content:flex-start;padding-top:.8rem;padding-bottom:1rem}
-.game-header{width:100%;max-width:520px;display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;padding:0 .2rem}
-.players{display:flex;gap:.6rem;font-size:.85rem;align-items:center}
-.player-tag{
-  display:flex;align-items:center;gap:.4rem;
-  padding:.4rem .75rem;border-radius:var(--radius);
-  background:var(--surface);backdrop-filter:blur(8px);
-  border:1.5px solid var(--border);
-  transition:all var(--tx);
-  min-width:80px;
-}
-.player-tag.active{
-  border-color:var(--accent);
-  background:linear-gradient(135deg,var(--accent-soft),transparent);
-  box-shadow:0 0 16px var(--accent-soft);
-  transform:translateY(-1px);
-}
-.player-tag.active::before{
-  content:'';position:absolute;
-  width:6px;height:6px;border-radius:50%;
-  background:var(--accent);
-  box-shadow:0 0 8px var(--accent);
-  margin-left:-15px;
-}
-.player-tag .stone-icon{width:14px;height:14px;border-radius:50%;border:1px solid rgba(255,255,255,.1);flex-shrink:0}
-.player-tag .stone-icon.black{background:radial-gradient(circle at 35% 30%,var(--stone-b-h),var(--stone-b-b) 75%)}
-.player-tag .stone-icon.white{background:radial-gradient(circle at 35% 30%,var(--stone-w-h),var(--stone-w-b) 75%)}
-.player-tag .name{font-size:.82rem;font-weight:500;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.player-tag .timer{font-size:.7rem;color:var(--text-faint);font-family:'DM Mono',monospace}
-.game-info{
-  text-align:center;font-size:.88rem;color:var(--text);
-  margin-bottom:.4rem;font-weight:500;letter-spacing:.02em;
-  min-height:1.4em;
-  transition:all var(--tx);
-}
-.game-info.win{color:var(--accent);font-family:'Ma Shan Zheng',cursive;font-size:1.5rem;letter-spacing:.16em}
-.game-info.lose{color:var(--text-dim);font-family:'Ma Shan Zheng',cursive;font-size:1.2rem;letter-spacing:.1em}
-
-.board-wrap{
-  position:relative;
-  border-radius:var(--radius-lg);
-  padding:6px;
-  background:linear-gradient(135deg,rgba(201,169,97,.15),rgba(201,169,97,.05));
-  box-shadow:var(--shadow-3);
-}
-canvas#board{
-  display:block;border-radius:var(--radius);
-  cursor:crosshair;
-  background:var(--board-a);
-  transition:filter .3s;
-}
-canvas#board.disabled{cursor:not-allowed;filter:brightness(.85) saturate(.8)}
-canvas#board.win-flash{animation:winFlash 1.2s ease}
-@keyframes winFlash{0%,100%{box-shadow:0 0 0 rgba(0,0,0,0)}50%{box-shadow:0 0 60px var(--accent)}}
-
-.game-controls{
-  display:flex;gap:.4rem;margin-top:.7rem;flex-wrap:wrap;justify-content:center;align-items:center;
-}
-.move-counter{font-size:.74rem;color:var(--text-faint);font-family:'DM Mono',monospace;margin-left:auto}
-.undo-tag{font-size:.7rem;color:var(--jade);margin-left:.4rem}
-
-/* 聊天 */
+/* 游戏棋盘 */
+#game-screen.active{justify-content:flex-start;padding-top:1rem}
+.game-header{width:100%;max-width:520px;display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
+.game-header .players{display:flex;gap:1rem;font-size:.85rem}
+.player-tag{display:flex;align-items:center;gap:.35rem;padding:.3rem .7rem;border-radius:6px;background:var(--surface2);border:1px solid var(--border)}
+.player-tag.turn{border-color:var(--accent);color:var(--accent)}
+.stone-icon{display:inline-block;width:14px;height:14px;border-radius:50%;border:1px solid #555}
+.stone-icon.black{background:radial-gradient(circle at 35% 35%,#555,#111)}
+.stone-icon.white{background:radial-gradient(circle at 35% 35%,#fff,#bbb)}
+.game-info{font-size:.78rem;color:var(--dim);text-align:center;margin-bottom:.4rem}
+canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0,.5)}
+.game-controls{display:flex;gap:.5rem;margin-top:.7rem;flex-wrap:wrap;justify-content:center}
 .chat-panel{width:100%;max-width:520px;margin-top:.6rem}
-.chat-messages{
-  height:90px;overflow-y:auto;
-  background:var(--surface-2);backdrop-filter:blur(8px);
-  border:1px solid var(--border);border-radius:var(--radius);
-  padding:.5rem .7rem;font-size:.78rem;line-height:1.65;margin-bottom:.4rem;
-  scrollbar-width:thin;scrollbar-color:var(--border) transparent;
-}
-.chat-messages::-webkit-scrollbar{width:5px}
-.chat-messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-.chat-messages .sys{color:var(--text-faint);font-style:italic;text-align:center;font-size:.72rem;padding:.2rem 0}
-.chat-messages .msg{margin:1px 0;animation:msgIn .25s var(--tx)}
-@keyframes msgIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-.chat-messages .msg .name{color:var(--accent);margin-right:.35rem;font-weight:500}
-.chat-messages .msg.self .name{color:var(--jade)}
+.chat-messages{height:100px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.5rem;font-size:.78rem;line-height:1.6;margin-bottom:.4rem}
+.chat-messages .sys{color:var(--dim);font-style:italic}
+.chat-messages .msg{margin:2px 0}
+.chat-messages .msg .name{color:var(--accent);margin-right:.3rem}
 .chat-row{display:flex;gap:.4rem;align-items:center}
 .chat-row input{flex:1}
-.btn-voice{
-  flex-shrink:0;width:38px;height:38px;border-radius:50%;
-  background:var(--surface-2);backdrop-filter:blur(8px);
-  border:1px solid var(--border);color:var(--text);
-  font-size:1.05rem;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  transition:all var(--tx);
-  user-select:none;-webkit-user-select:none;touch-action:none;
-}
+.btn-voice{flex-shrink:0;width:38px;height:38px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;user-select:none;-webkit-user-select:none;touch-action:none}
 .btn-voice:hover{border-color:var(--accent);color:var(--accent)}
-.btn-voice.recording{
-  background:linear-gradient(135deg,var(--cinnabar),#e6877a);
-  border-color:var(--cinnabar);color:#fff;
-  animation:recPulse .9s infinite;
-  box-shadow:0 0 16px var(--cinnabar-soft);
-}
+.btn-voice.recording{background:var(--err);border-color:var(--err);color:#fff;animation:recPulse .8s infinite}
 @keyframes recPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+.voice-msg{display:inline-flex;align-items:center;gap:.4rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.3rem .6rem;cursor:pointer;transition:border .2s}
+.voice-msg:hover{border-color:var(--accent)}
+.voice-msg .wave{display:flex;align-items:center;gap:2px;height:18px}
+.voice-msg .wave span{display:block;width:3px;background:var(--accent);border-radius:2px;animation:waveBar .6s ease-in-out infinite alternate}
+.voice-msg .wave span:nth-child(1){height:6px;animation-delay:0s}
+.voice-msg .wave span:nth-child(2){height:12px;animation-delay:.15s}
+.voice-msg .wave span:nth-child(3){height:8px;animation-delay:.3s}
+.voice-msg .wave span:nth-child(4){height:14px;animation-delay:.1s}
+.voice-msg .wave span:nth-child(5){height:6px;animation-delay:.25s}
+@keyframes waveBar{0%{height:4px}100%{height:16px}}
+.voice-msg .dur{font-size:.7rem;color:var(--dim)}
+.voice-playing .wave span{animation-play-state:running}
+.voice-paused .wave span{animation-play-state:paused}
 
-/* 语音消息气泡 */
-.voice-msg{
-  display:inline-flex;align-items:center;gap:.45rem;
-  background:var(--surface-3);border:1px solid var(--border);
-  border-radius:14px;padding:.3rem .65rem;cursor:pointer;
-  transition:all var(--tx);
-  vertical-align:middle;
-}
-.voice-msg:hover{border-color:var(--accent);background:var(--accent-soft)}
-.voice-msg .wave{display:flex;align-items:center;gap:2px;height:16px}
-.voice-msg .wave span{
-  display:block;width:2.5px;background:var(--accent);
-  border-radius:2px;
-  transition:height .15s;
-}
-.voice-msg .wave span:nth-child(1){height:5px;--h1:5px;--h2:9px}
-.voice-msg .wave span:nth-child(2){height:11px;--h1:11px;--h2:5px}
-.voice-msg .wave span:nth-child(3){height:7px;--h1:7px;--h2:13px}
-.voice-msg .wave span:nth-child(4){height:13px;--h1:13px;--h2:6px}
-.voice-msg .wave span:nth-child(5){height:5px;--h1:5px;--h2:10px}
-.voice-msg.playing .wave span{animation:waveBar .55s ease-in-out infinite alternate}
-.voice-msg.playing .wave span:nth-child(1){animation-delay:0s}
-.voice-msg.playing .wave span:nth-child(2){animation-delay:.12s}
-.voice-msg.playing .wave span:nth-child(3){animation-delay:.24s}
-.voice-msg.playing .wave span:nth-child(4){animation-delay:.08s}
-.voice-msg.playing .wave span:nth-child(5){animation-delay:.2s}
-@keyframes waveBar{0%{height:var(--h1,4px)}100%{height:var(--h2,14px)}}
-.voice-msg .dur{font-size:.68rem;color:var(--text-dim);font-family:'DM Mono',monospace}
-.voice-msg.playing{background:var(--accent-soft);border-color:var(--accent)}
-
-/* ============================================================
-   模态框 / Toast
-   ============================================================ */
-.modal-overlay{
-  position:fixed;inset:0;
-  background:rgba(6,6,8,.88);backdrop-filter:blur(8px);
-  display:none;align-items:center;justify-content:center;
-  z-index:1000;flex-direction:column;gap:1rem;
-  animation:fadeIn .25s var(--tx);
-}
-@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+/* 扫描器模态框 — 全屏 + 瞄准动画 */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:1000;flex-direction:column;gap:1rem}
 .modal-overlay.open{display:flex}
-.scan-viewport{position:relative;width:min(78vw,340px);height:min(78vw,340px);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-3)}
-.modal-overlay video{width:100%;height:100%;object-fit:cover}
+.modal-overlay .scan-viewport{position:relative;width:min(80vw,360px);height:min(80vw,360px);border-radius:12px;overflow:hidden}
+.modal-overlay video{width:100%;height:100%;object-fit:cover;border-radius:12px}
 .modal-overlay canvas{display:none}
+/* 扫描框动画 */
 .scan-frame{position:absolute;inset:0;pointer-events:none}
-.scan-frame .corner{position:absolute;width:36px;height:36px;border-color:var(--accent);border-style:solid;border-width:0;filter:drop-shadow(0 0 4px var(--accent))}
-.scan-frame .tl{top:10px;left:10px;border-top-width:3px;border-left-width:3px;border-radius:6px 0 0 0}
-.scan-frame .tr{top:10px;right:10px;border-top-width:3px;border-right-width:3px;border-radius:0 6px 0 0}
-.scan-frame .bl{bottom:10px;left:10px;border-bottom-width:3px;border-left-width:3px;border-radius:0 0 0 6px}
-.scan-frame .br{bottom:10px;right:10px;border-bottom-width:3px;border-right-width:3px;border-radius:0 0 6px 0}
-.scan-line{position:absolute;left:8%;right:8%;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scanLine 2.2s ease-in-out infinite;border-radius:2px;box-shadow:0 0 12px var(--accent);top:0}
-@keyframes scanLine{0%,100%{top:8%}50%{top:90%}}
-.modal-close{position:absolute;top:1.2rem;right:1.2rem;font-size:1.5rem;cursor:pointer;color:var(--text);background:rgba(0,0,0,.5);border:none;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:10;transition:all var(--tx);backdrop-filter:blur(8px)}
-.modal-close:hover{background:rgba(255,255,255,.15);transform:rotate(90deg)}
-.scan-tip{color:var(--accent);font-size:.88rem;text-align:center;font-weight:500;letter-spacing:.04em}
+.scan-frame::before,.scan-frame::after{content:'';position:absolute;width:40px;height:40px;border-color:var(--accent);border-style:solid;border-width:0}
+.scan-frame::before{top:8px;left:8px;border-top-width:3px;border-left-width:3px;border-radius:4px 0 0 0}
+.scan-frame::after{top:8px;right:8px;border-top-width:3px;border-right-width:3px;border-radius:0 4px 0 0}
+.scan-frame .bl,.scan-frame .br{position:absolute;width:40px;height:40px;border-color:var(--accent);border-style:solid;border-width:0}
+.scan-frame .bl{bottom:8px;left:8px;border-bottom-width:3px;border-left-width:3px;border-radius:0 0 0 4px}
+.scan-frame .br{bottom:8px;right:8px;border-bottom-width:3px;border-right-width:3px;border-radius:0 0 4px 0}
+.scan-line{position:absolute;left:10%;right:10%;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scanLine 2.2s ease-in-out infinite;border-radius:2px;box-shadow:0 0 8px var(--accent)}
+@keyframes scanLine{0%,100%{top:10%}50%{top:88%}}
+.modal-close{position:absolute;top:1.2rem;right:1.2rem;font-size:1.8rem;cursor:pointer;color:var(--text);background:rgba(0,0,0,.4);border:none;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:10}
+.modal-close:hover{background:rgba(255,255,255,.15)}
+.scan-tip{color:var(--accent);font-size:.88rem;text-align:center}
+
+/* 全屏QR模态框 */
 .modal-overlay#qr-modal{cursor:pointer}
-.modal-overlay#qr-modal .qr-box{background:#fff;padding:18px;border-radius:var(--radius-lg);box-shadow:var(--shadow-3)}
+.modal-overlay#qr-modal .qr-box{background:#fff;padding:16px;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:.5rem}
 
 /* Toast */
-#toast-box{position:fixed;top:1.2rem;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:.4rem;pointer-events:none;align-items:center}
-.toast{
-  padding:.65rem 1.2rem;border-radius:var(--radius);
-  font-size:.82rem;color:#fff;pointer-events:auto;
-  animation:toastIn .35s var(--tx-spring),toastOut .35s var(--tx) 2.7s forwards;
-  max-width:340px;text-align:center;font-weight:500;
-  backdrop-filter:blur(12px);
-  box-shadow:var(--shadow-2);
-  border:1px solid rgba(255,255,255,.08);
-}
-.toast.ok{background:rgba(92,184,92,.92)}
-.toast.err{background:rgba(217,104,90,.92)}
-.toast.info{background:rgba(91,192,222,.92)}
-.toast.warn{background:rgba(224,169,59,.92)}
-@keyframes toastIn{from{opacity:0;transform:translateY(-12px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
-@keyframes toastOut{to{opacity:0;transform:translateY(-12px) scale(.95)}}
+#toast-box{position:fixed;top:1rem;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:.4rem;pointer-events:none}
+.toast{padding:.6rem 1.2rem;border-radius:8px;font-size:.82rem;color:#fff;pointer-events:auto;animation:toastIn .3s ease,toastOut .3s ease 2.7s forwards;max-width:340px;text-align:center}
+.toast.ok{background:rgba(92,184,92,.92)}.toast.err{background:rgba(217,83,79,.92)}.toast.info{background:rgba(91,192,222,.92)}
+@keyframes toastIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateY(-10px)}}
 
-/* 主题切换器 */
-.theme-switcher{
-  position:fixed;top:1rem;right:1rem;z-index:100;
-  display:flex;gap:.35rem;
-  background:var(--surface);backdrop-filter:blur(12px);
-  border:1px solid var(--border);border-radius:99px;
-  padding:.3rem;
-  box-shadow:var(--shadow-1);
-}
-.theme-btn{
-  width:28px;height:28px;border-radius:50%;
-  border:1.5px solid transparent;cursor:pointer;
-  transition:all var(--tx);
-  background:transparent;
-}
-.theme-btn[data-t="ink"]{background:linear-gradient(135deg,#1a1620,#c9a961)}
-.theme-btn[data-t="jade"]{background:linear-gradient(135deg,#0e1a18,#5fb39b)}
-.theme-btn[data-t="cinnabar"]{background:linear-gradient(135deg,#1c0f10,#d9685a)}
-.theme-btn.active{border-color:var(--text);transform:scale(1.1)}
-
-/* AI 难度选择 */
-.diff-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.8rem 0}
-.diff-btn{
-  padding:.7rem .4rem;
-  background:var(--surface-2);
-  border:1.5px solid var(--border);
-  border-radius:var(--radius);
-  cursor:pointer;text-align:center;
-  transition:all var(--tx);
-  font-size:.8rem;
-}
-.diff-btn:hover{border-color:var(--border-2)}
-.diff-btn.selected{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
-.diff-btn .level{font-weight:700;font-size:.95rem;display:block;margin-bottom:.15rem}
-.diff-btn .desc{font-size:.7rem;color:var(--text-faint)}
-
-/* 棋谱/复盘面板 */
-.replay-bar{
-  display:flex;gap:.3rem;align-items:center;
-  margin-top:.5rem;padding:.4rem .5rem;
-  background:var(--surface-2);border:1px solid var(--border);
-  border-radius:var(--radius);
-}
-.replay-bar input[type=range]{flex:1;accent-color:var(--accent);height:4px}
-.replay-info{font-size:.72rem;color:var(--text-dim);font-family:'DM Mono',monospace;min-width:60px;text-align:right}
-
-/* 禁手提示 */
-.forbidden-hint{
-  position:absolute;top:50%;left:50%;
-  transform:translate(-50%,-50%);
-  background:rgba(217,104,90,.95);color:#fff;
-  padding:.4rem .8rem;border-radius:var(--radius);
-  font-size:.8rem;font-weight:600;letter-spacing:.04em;
-  pointer-events:none;z-index:50;
-  animation:hintPulse 1.2s ease;
-  box-shadow:0 4px 20px rgba(217,104,90,.4);
-}
-@keyframes hintPulse{0%{opacity:0;transform:translate(-50%,-50%) scale(.8)}20%{opacity:1;transform:translate(-50%,-50%) scale(1.1)}80%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.95)}}
-
-/* 胜利庆祝 */
-.celebration{position:fixed;inset:0;pointer-events:none;z-index:1500;overflow:hidden}
-.confetti{position:absolute;width:8px;height:14px;top:-20px;opacity:0;animation:confettiFall 3s linear forwards}
-@keyframes confettiFall{
-  0%{transform:translateY(0) rotate(0);opacity:1}
-  100%{transform:translateY(110vh) rotate(720deg);opacity:0}
-}
-
-/* 统计 */
-.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:1rem 0}
-.stat-card{
-  text-align:center;padding:.7rem .4rem;
-  background:var(--surface-2);border:1px solid var(--border);
-  border-radius:var(--radius);
-}
-.stat-card .num{font-size:1.4rem;font-weight:600;color:var(--accent);font-family:'Ma Shan Zheng',cursive;line-height:1.2}
-.stat-card .lbl{font-size:.7rem;color:var(--text-faint);margin-top:.2rem;letter-spacing:.04em}
-
-/* 响应式 */
-@media(max-width:480px){
-  .card{padding:1.2rem;border-radius:var(--radius)}
-  .card h2{font-size:1.1rem}
-  .mode-grid{gap:.5rem}
-  .mode-btn{padding:1rem .6rem}
-  .mode-btn .icon{font-size:1.4rem}
-  canvas#board{max-width:94vw!important}
-  .theme-switcher{top:.5rem;right:.5rem}
-  .topbar .title{font-size:1.1rem}
-  .game-info.win{font-size:1.2rem}
-  .game-info.lose{font-size:1rem}
-}
-@media(max-width:360px){
-  .mode-btn .label{font-size:.74rem}
-  .player-tag .name{max-width:60px}
-}
-
-/* 棋盘最后一手高亮闪烁 */
-@keyframes lastMovePulse{0%,100%{opacity:1}50%{opacity:.4}}
+@media(max-width:480px){.card{padding:1.2rem}canvas#board{max-width:96vw!important}}
 </style>
 </head>
 <body>
-
 <div id="toast-box"></div>
-<div class="theme-switcher" id="theme-switcher">
-  <button class="theme-btn" data-t="ink" title="墨韵"></button>
-  <button class="theme-btn" data-t="jade" title="玉石"></button>
-  <button class="theme-btn" data-t="cinnabar" title="朱砂"></button>
-</div>
 
 <!-- ============ 登录页 ============ -->
 <div id="login-screen" class="screen active">
-  <div class="card" style="text-align:center;max-width:480px">
-    <h1 class="cursive" style="font-size:2.4rem;color:var(--accent);margin-bottom:.2rem;letter-spacing:.1em">墨棋</h1>
-    <p style="font-size:.78rem;color:var(--text-dim);letter-spacing:.3em;margin-bottom:1.5rem">ZERO · SERVER · P2P</p>
-    <input type="text" id="inp-name" placeholder="输入你的昵称" maxlength="12" style="margin-bottom:.8rem">
-    <div id="wifi-warn" style="display:none;font-size:.74rem;color:var(--warn);margin-bottom:.6rem;padding:.45rem .7rem;background:var(--accent-soft);border-radius:var(--radius-sm);border:1px solid var(--border)">⚠️ 未检测到WiFi，内网模式不可用</div>
+  <div class="card" style="text-align:center">
+    <h2 style="font-size:1.5rem;margin-bottom:.3rem">P2P五子棋 <span style="font-size:.7rem;color:var(--dim);font-weight:400;vertical-align:middle">v1.50</span></h2>
+    <p style="margin-bottom:1.5rem">零服务器 · 联机对战</p>
+    <input type="text" id="inp-name" placeholder="输入你的昵称" maxlength="12" style="margin-bottom:1rem">
+    <div class="wifi-warn" id="wifi-warn">⚠️ 未检测到WiFi，内网模式不可用</div>
     <div class="mode-grid">
-      <div class="mode-btn" data-mode="lan" data-disabled="false">
-        <span class="icon">🏠</span>
-        <span class="label">内网对战</span>
-        <span class="badge">极速</span>
+      <div class="mode-btn selected" data-mode="lan" onclick="selectMode(this)">
+        <span class="icon">🏠</span><span class="label">内网对战</span>
       </div>
-      <div class="mode-btn selected" data-mode="p2p">
-        <span class="icon">🌐</span>
-        <span class="label">外网P2P</span>
+      <div class="mode-btn" data-mode="p2p" onclick="selectMode(this)">
+        <span class="icon">🌐</span><span class="label">外网P2P</span>
       </div>
-      <div class="mode-btn" data-mode="ai">
-        <span class="icon">🤖</span>
-        <span class="label">人机对弈</span>
-        <span class="badge new">NEW</span>
+      <div class="mode-btn" data-mode="ngrok" onclick="selectMode(this)">
+        <span class="icon">🚀</span><span class="label">Ngrok穿透</span>
       </div>
-      <div class="mode-btn" data-mode="local">
-        <span class="icon">♟️</span>
-        <span class="label">本地双人对战</span>
+      <div class="mode-btn" data-mode="auto" onclick="selectMode(this)">
+        <span class="icon">⚡</span><span class="label">自动优选</span>
       </div>
     </div>
-    <button class="btn btn-accent btn-block" onclick="App.doLogin()">进入棋局</button>
-    <div class="stat-grid" id="login-stats"></div>
-    <p style="font-size:.7rem;color:var(--text-faint);margin-top:1rem">v2.0 · 禁手规则 · AI对手 · 棋谱回放</p>
+    <button class="btn btn-accent btn-block" onclick="doLogin()">进入大厅</button>
   </div>
 </div>
 
 <!-- ============ 大厅页 ============ -->
 <div id="lobby-screen" class="screen">
   <div class="card">
-    <div class="topbar">
-      <button class="back" onclick="App.goTo('login-screen')">← 返回</button>
-      <span class="title">墨棋</span>
-      <span class="meta" id="lobby-user"></span>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <button class="btn btn-ghost btn-sm" onclick="goTo('login-screen')">← 返回</button>
+      <span class="mono" id="lobby-mode-label" style="font-size:.8rem;color:var(--dim)">🏠 内网</span>
+      <span id="lobby-user" style="font-size:.85rem"></span>
     </div>
-    <button class="btn btn-accent btn-block" onclick="App.createRoom()">
-      <span>＋</span> 创建房间
-    </button>
-    <div style="display:flex;align-items:center;gap:.6rem;margin:1rem 0;color:var(--text-faint);font-size:.78rem">
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-      <span>或者</span>
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-    </div>
-    <button class="btn btn-ghost btn-block" onclick="App.goTo('join-screen')">手动加入房间</button>
-    <div style="display:flex;align-items:center;gap:.6rem;margin:1rem 0;color:var(--text-faint);font-size:.78rem">
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-      <span>扫码</span>
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-    </div>
-    <button class="btn btn-jade btn-block" onclick="App.lobbyScanJoin()">
-      <span>📷</span> 扫码加入房间
+    <button class="btn btn-accent btn-block" onclick="createRoom()">创建房间</button>
+    <div style="text-align:center;color:var(--dim);margin:.6rem 0;font-size:.8rem">— 或 —</div>
+    <button class="btn btn-ghost btn-block" onclick="goTo('join-screen')">手动加入房间</button>
+    <div style="text-align:center;color:var(--dim);margin:.6rem 0;font-size:.8rem">— 或 —</div>
+    <!-- 大厅页扫码快捷入口 -->
+    <button class="btn btn-scan btn-block" onclick="lobbyScanJoin()">
+      <span class="scan-anim">📷</span> 扫码加入房间
     </button>
   </div>
 </div>
@@ -553,82 +185,60 @@ canvas#board.win-flash{animation:winFlash 1.2s ease}
 <!-- ============ 创建房间 ============ -->
 <div id="create-screen" class="screen">
   <div class="card">
-    <div class="topbar">
-      <button class="back" onclick="App.exitFlow()">← 取消</button>
-      <span class="title">创建房间</span>
-      <span class="meta" id="create-mode-label"></span>
-    </div>
     <div class="steps"><div class="step active" id="cs1"></div><div class="step" id="cs2"></div></div>
-    <div class="status-bar"><div class="status-dot waiting" id="create-dot"></div><span id="create-status">正在生成连接码…</span></div>
+    <h2>创建房间</h2>
+    <div class="status-bar"><div class="status-dot waiting"></div><span id="create-status">正在生成连接码...</span></div>
     <div id="create-code-area" style="display:none">
-      <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:.3rem">将房间码分享给对手（5分钟内有效）：</p>
+      <p style="font-size:.82rem;color:var(--dim);margin-bottom:.3rem">将以下房间码分享给对手：</p>
       <div class="code-box" id="create-code"></div>
       <div class="qr-wrap"><div id="create-qr"></div></div>
       <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center">
-        <button class="btn btn-ghost btn-sm" onclick="App.copyCode('create-code')">📋 复制</button>
-        <button class="btn btn-ghost btn-sm" onclick="App.showQRFull('create-code')">📱 全屏</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyCode('create-code')">📋 复制</button>
+        <button class="btn btn-ghost btn-sm" onclick="showQRFull('create-code')">📱 全屏QR</button>
       </div>
     </div>
-    <div class="card-divider"></div>
-    <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:.3rem">步骤2：填入对手的应答码</p>
-    <textarea id="inp-answer" placeholder="在此粘贴或扫描对手的应答码…"></textarea>
+    <hr style="border-color:var(--border);margin:1rem 0">
+    <!-- 步骤2：接收应答码，支持扫码 -->
+    <p style="font-size:.82rem;color:var(--dim);margin-bottom:.3rem">步骤2：获取对手的应答码</p>
+    <textarea id="inp-answer" placeholder="在此粘贴对手的应答码..."></textarea>
     <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
-      <button class="btn btn-jade btn-sm" onclick="App.startScan('inp-answer')">📷 扫描</button>
-      <button class="btn btn-ghost btn-sm" onclick="App.openGallery('inp-answer')">🖼️ 相册</button>
-      <button class="btn btn-ghost btn-sm" onclick="App.pasteClip('inp-answer')">📋 粘贴</button>
+      <button class="btn btn-scan btn-sm" onclick="startScan('inp-answer')">
+        <span class="scan-anim">📷</span> 扫描应答码
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="openGallery('inp-answer')">🖼️ 相册</button>
+      <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-answer')">📋 粘贴</button>
     </div>
-    <button class="btn btn-accent btn-block" onclick="App.acceptAnswer()" style="margin-top:.8rem">确认连接</button>
+    <button class="btn btn-accent btn-block" onclick="acceptAnswer()" style="margin-top:.8rem">确认连接</button>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="goTo('lobby-screen')">取消</button>
   </div>
 </div>
 
 <!-- ============ 加入房间 ============ -->
 <div id="join-screen" class="screen">
   <div class="card">
-    <div class="topbar">
-      <button class="back" onclick="App.exitFlow()">← 取消</button>
-      <span class="title">加入房间</span>
-      <span class="meta" id="join-mode-label"></span>
-    </div>
-    <div class="steps"><div class="step active" id="js1"></div><div class="step" id="js2"></div></div>
-    <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:.5rem">输入或扫描对手的房间码：</p>
-    <textarea id="inp-room-code" placeholder="在此粘贴房间码…"></textarea>
+    <div class="steps"><div class="step" id="js1"></div><div class="step" id="js2"></div></div>
+    <h2>加入房间</h2>
+    <p style="font-size:.82rem;color:var(--dim);margin-bottom:.5rem">输入对手的房间码，或直接扫码：</p>
+    <textarea id="inp-room-code" placeholder="在此粘贴房间码..."></textarea>
     <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
-      <button class="btn btn-jade btn-sm" onclick="App.startScan('inp-room-code')">📷 扫描</button>
-      <button class="btn btn-ghost btn-sm" onclick="App.openGallery('inp-room-code')">🖼️ 相册</button>
-      <button class="btn btn-ghost btn-sm" onclick="App.pasteClip('inp-room-code')">📋 粘贴</button>
+      <!-- 扫码按钮突出显示 -->
+      <button class="btn btn-scan btn-sm" onclick="startScan('inp-room-code')">
+        <span class="scan-anim">📷</span> 扫描房间码
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="openGallery('inp-room-code')">🖼️ 相册</button>
+      <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-room-code')">📋 粘贴</button>
     </div>
-    <button class="btn btn-accent btn-block" onclick="App.joinRoom()" style="margin-top:.8rem">生成应答码</button>
+    <button class="btn btn-accent btn-block" onclick="joinRoom()" style="margin-top:.8rem">生成应答码</button>
     <div id="answer-area" style="display:none;margin-top:1rem">
-      <div class="status-bar"><div class="status-dot waiting"></div><span>请将应答码发送给房主：</span></div>
+      <div class="status-bar"><div class="status-dot waiting"></div><span>请将应答码分享给房主：</span></div>
       <div class="code-box" id="join-answer-code"></div>
       <div class="qr-wrap"><div id="join-answer-qr"></div></div>
       <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center">
-        <button class="btn btn-ghost btn-sm" onclick="App.copyCode('join-answer-code')">📋 复制</button>
-        <button class="btn btn-ghost btn-sm" onclick="App.showQRFull('join-answer-code')">📱 全屏</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyCode('join-answer-code')">📋 复制</button>
+        <button class="btn btn-ghost btn-sm" onclick="showQRFull('join-answer-code')">📱 全屏QR</button>
       </div>
     </div>
-  </div>
-</div>
-
-<!-- ============ AI 设置 ============ -->
-<div id="ai-screen" class="screen">
-  <div class="card">
-    <div class="topbar">
-      <button class="back" onclick="App.goTo('login-screen')">← 返回</button>
-      <span class="title">人机对弈</span>
-      <span></span>
-    </div>
-    <p style="font-size:.88rem;margin-bottom:.5rem">选择难度：</p>
-    <div class="diff-grid">
-      <div class="diff-btn selected" data-diff="easy"><span class="level">入门</span><span class="desc">随机落子</span></div>
-      <div class="diff-btn" data-diff="medium"><span class="level">业余</span><span class="desc">基础攻防</span></div>
-      <div class="diff-btn" data-diff="hard"><span class="level">专业</span><span class="desc">威胁搜索</span></div>
-    </div>
-    <p style="font-size:.78rem;color:var(--text-dim);margin-top:.5rem;line-height:1.7">
-      📌 <b>规则</b>：黑棋禁手（长连/四四/三三）生效，您执黑先行。<br>
-      💡 <b>提示</b>：电脑运算在浏览器内进行，难度越高越慢。
-    </p>
-    <button class="btn btn-accent btn-block" onclick="App.startAIGame()">开始对弈</button>
+    <button class="btn btn-ghost btn-block btn-sm" onclick="goTo('lobby-screen')" style="margin-top:.8rem">返回</button>
   </div>
 </div>
 
@@ -636,1845 +246,770 @@ canvas#board.win-flash{animation:winFlash 1.2s ease}
 <div id="game-screen" class="screen">
   <div class="game-header">
     <div class="players">
-      <div class="player-tag" id="p1-tag"><div class="stone-icon black"></div><span class="name" id="p1-name">—</span></div>
-      <span style="color:var(--text-faint);font-size:.7rem;letter-spacing:.2em">VS</span>
-      <div class="player-tag" id="p2-tag"><div class="stone-icon white"></div><span class="name" id="p2-name">—</span></div>
+      <div class="player-tag" id="p1-tag"><div class="stone-icon black"></div><span id="p1-name">—</span></div>
+      <span style="color:var(--dim);font-size:.8rem">VS</span>
+      <div class="player-tag" id="p2-tag"><div class="stone-icon white"></div><span id="p2-name">—</span></div>
     </div>
-    <button class="btn btn-ghost btn-sm" onclick="App.exitGame()">退出</button>
+    <button class="btn btn-ghost btn-sm" onclick="exitGame()">退出</button>
   </div>
-  <div class="game-info" id="game-info">等待连接…</div>
-  <div class="board-wrap" id="board-wrap">
-    <canvas id="board"></canvas>
-  </div>
+  <div class="game-info" id="game-info">等待连接...</div>
+  <canvas id="board"></canvas>
   <div class="game-controls">
-    <button class="btn btn-ghost btn-sm" id="btn-undo" onclick="App.requestUndo()" style="display:none">↶ 悔棋</button>
-    <button class="btn btn-ghost btn-sm" id="btn-rematch" onclick="App.requestRematch()" style="display:none">🔄 再来</button>
-    <button class="btn btn-ghost btn-sm" id="btn-draw" onclick="App.offerDraw()" style="display:none">🤝 和棋</button>
-    <button class="btn btn-ghost btn-sm" id="btn-replay" onclick="App.toggleReplay()" style="display:none">⏮ 复盘</button>
-    <span class="move-counter" id="move-count"></span>
+    <button class="btn btn-ghost btn-sm" id="btn-rematch" onclick="requestRematch()" style="display:none">🔄 再来一局</button>
+    <span class="mono" id="move-count" style="font-size:.75rem;color:var(--dim)"></span>
   </div>
-  <div class="replay-bar" id="replay-bar" style="display:none">
-    <button class="btn btn-ghost btn-sm btn-icon" onclick="App.replayPrev()">◀</button>
-    <input type="range" id="replay-slider" min="0" max="0" value="0" oninput="App.replayGo(+this.value)">
-    <button class="btn btn-ghost btn-sm btn-icon" onclick="App.replayNext()">▶</button>
-    <span class="replay-info" id="replay-info">0/0</span>
-    <button class="btn btn-ghost btn-sm" onclick="App.exportSGF()">导出</button>
-  </div>
-  <div class="chat-panel" id="chat-panel">
+  <div class="chat-panel">
     <div class="chat-messages" id="chat-msgs"></div>
     <div class="chat-row">
-      <input type="text" id="chat-input" placeholder="说点什么…" maxlength="200" onkeydown="if(event.key==='Enter')App.sendChat()">
+      <input type="text" id="chat-input" placeholder="发送消息..." maxlength="200" onkeydown="if(event.key==='Enter')sendChat()">
       <button class="btn-voice" id="btn-voice" title="按住说话">🎤</button>
-      <button class="btn btn-accent btn-sm" onclick="App.sendChat()">发送</button>
+      <button class="btn btn-accent btn-sm" onclick="sendChat()">发送</button>
     </div>
   </div>
 </div>
 
 <!-- ============ 扫描器模态框 ============ -->
-<input type="file" id="gallery-input" accept="image/*" style="display:none" onchange="App.onGallerySelect(event)">
+<input type="file" id="gallery-input" accept="image/*" style="display:none" onchange="onGallerySelect(event)">
 <div class="modal-overlay" id="scanner-modal">
-  <button class="modal-close" onclick="App.stopScanner()">✕</button>
-  <p class="scan-tip">将二维码对准扫描框</p>
+  <button class="modal-close" onclick="stopScanner()">✕</button>
+  <p class="scan-tip">📷 将二维码对准扫描框</p>
   <div class="scan-viewport">
     <video id="scanner-video" playsinline muted></video>
     <canvas id="scanner-canvas"></canvas>
     <div class="scan-frame">
-      <div class="corner tl"></div><div class="corner tr"></div>
-      <div class="corner bl"></div><div class="corner br"></div>
+      <div class="bl"></div>
+      <div class="br"></div>
       <div class="scan-line"></div>
     </div>
   </div>
 </div>
 
 <!-- ============ 全屏QR模态框 ============ -->
-<div class="modal-overlay" id="qr-modal" onclick="App.closeQRModal()">
+<div class="modal-overlay" id="qr-modal" onclick="this.classList.remove('open')">
   <div class="qr-box" id="qr-modal-box"></div>
-  <p style="color:var(--text-dim);margin-top:.5rem;font-size:.78rem;letter-spacing:.04em">点击任意处关闭</p>
+  <p style="color:var(--dim);margin-top:.5rem;font-size:.8rem">点击任意处关闭</p>
 </div>
 
-<!-- ============ 重连确认 ============ -->
-<div class="modal-overlay" id="reconnect-modal">
-  <div class="card" style="max-width:340px;text-align:center" onclick="event.stopPropagation()">
-    <h2 style="color:var(--cinnabar)">连接中断</h2>
-    <p style="margin-bottom:1rem">检测到对方刚刚掉线，是否尝试自动重连？</p>
-    <div style="display:flex;gap:.5rem">
-      <button class="btn btn-cinnabar" style="flex:1" onclick="App.attemptReconnect()">重连</button>
-      <button class="btn btn-ghost" style="flex:1" onclick="App.closeReconnect()">放弃</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ JS ============ -->
 <script>
-'use strict';
 /* ==============================================================
-   墨棋 v2.0 — 零服务器五子棋
-   设计原则：安全 / 美学 / 创意
+   全局状态
    ============================================================== */
+const S={name:'',mode:'lan',role:'',pc:null,dc:null,connected:false,gameStarted:false,
+  board:null,myColor:'',turn:'black',over:false,moves:0,lastMove:null,opponentName:''};
 
-const Util = (() => {
-  const b64enc = s => btoa(unescape(encodeURIComponent(s)));
-  const b64dec = b => { try { return decodeURIComponent(escape(atob(b))); } catch { return ''; } };
-  const $ = id => document.getElementById(id);
-  const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const rand = (a, b) => a + Math.random() * (b - a);
-  const now = () => Date.now();
-
-  // toast
-  function toast(msg, type = 'info', dur = 3000) {
-    const box = $('toast-box');
-    if (!box) return;
-    const d = document.createElement('div');
-    d.className = 'toast ' + type;
-    d.textContent = msg;
-    box.appendChild(d);
-    setTimeout(() => d.remove(), dur);
-  }
-
-  // 简单限流器
-  function throttle(fn, ms) {
-    let last = 0;
-    return (...a) => {
-      const t = now();
-      if (t - last > ms) { last = t; fn(...a); }
-    };
-  }
-
-  // 本地统计
-  const Stats = {
-    key: 'moqi.stats',
-    load() {
-      try { return JSON.parse(localStorage.getItem(this.key)) || { wins: 0, losses: 0, draws: 0, streak: 0, maxStreak: 0 }; }
-      catch { return { wins: 0, losses: 0, draws: 0, streak: 0, maxStreak: 0 }; }
-    },
-    save(s) { try { localStorage.setItem(this.key, JSON.stringify(s)); } catch {} },
-    record(result) {
-      const s = this.load();
-      if (result === 'win') { s.wins++; s.streak++; s.maxStreak = Math.max(s.maxStreak, s.streak); }
-      else if (result === 'lose') { s.losses++; s.streak = 0; }
-      else if (result === 'draw') { s.draws++; }
-      this.save(s);
-      return s;
-    },
-    rate() {
-      const s = this.load();
-      const total = s.wins + s.losses + s.draws;
-      return total ? Math.round(s.wins / total * 100) : 0;
-    }
-  };
-
-  // 主题
-  const Theme = {
-    key: 'moqi.theme',
-    init() {
-      const saved = localStorage.getItem(this.key) || 'ink';
-      this.set(saved);
-      document.querySelectorAll('.theme-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.t === saved);
-        b.onclick = () => {
-          this.set(b.dataset.t);
-          document.querySelectorAll('.theme-btn').forEach(x => x.classList.toggle('active', x === b));
-          localStorage.setItem(this.key, b.dataset.t);
-        };
-      });
-    },
-    set(t) { document.documentElement.setAttribute('data-theme', t); }
-  };
-
-  // 音效（WebAudio合成，无需资源）
-  const Sound = {
-    ctx: null,
-    enabled: true,
-    init() {
-      try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { this.enabled = false; }
-    },
-    resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
-    play(type) {
-      if (!this.enabled || !this.ctx) return;
-      this.resume();
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.connect(gain); gain.connect(this.ctx.destination);
-      if (type === 'place') {
-        osc.frequency.setValueAtTime(420, t);
-        osc.frequency.exponentialRampToValueAtTime(180, t + 0.08);
-        gain.gain.setValueAtTime(0.18, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-        osc.start(t); osc.stop(t + 0.12);
-      } else if (type === 'capture') {
-        osc.frequency.setValueAtTime(220, t);
-        osc.frequency.exponentialRampToValueAtTime(110, t + 0.15);
-        gain.gain.setValueAtTime(0.15, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-        osc.start(t); osc.stop(t + 0.18);
-      } else if (type === 'win') {
-        [523, 659, 784, 1047].forEach((f, i) => {
-          const o = this.ctx.createOscillator();
-          const g = this.ctx.createGain();
-          o.connect(g); g.connect(this.ctx.destination);
-          o.frequency.value = f; o.type = 'triangle';
-          g.gain.setValueAtTime(0, t + i * 0.12);
-          g.gain.linearRampToValueAtTime(0.18, t + i * 0.12 + 0.02);
-          g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.12 + 0.3);
-          o.start(t + i * 0.12); o.stop(t + i * 0.12 + 0.3);
-        });
-        return;
-      } else if (type === 'lose') {
-        [330, 277, 220].forEach((f, i) => {
-          const o = this.ctx.createOscillator();
-          const g = this.ctx.createGain();
-          o.connect(g); g.connect(this.ctx.destination);
-          o.frequency.value = f; o.type = 'sine';
-          g.gain.setValueAtTime(0, t + i * 0.18);
-          g.gain.linearRampToValueAtTime(0.15, t + i * 0.18 + 0.03);
-          g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.18 + 0.4);
-          o.start(t + i * 0.18); o.stop(t + i * 0.18 + 0.4);
-        });
-        return;
-      } else if (type === 'forbidden') {
-        osc.frequency.setValueAtTime(150, t);
-        osc.frequency.linearRampToValueAtTime(100, t + 0.2);
-        osc.type = 'sawtooth';
-        gain.gain.setValueAtTime(0.15, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-        osc.start(t); osc.stop(t + 0.25);
-        return;
-      } else {
-        osc.frequency.value = 600; osc.type = 'sine';
-        gain.gain.setValueAtTime(0.1, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-        osc.start(t); osc.stop(t + 0.08);
-      }
-    },
-    createGain() { return this.ctx.createGain(); }
-  };
-
-  // 礼花
-  function confetti() {
-    const c = document.createElement('div');
-    c.className = 'celebration';
-    const colors = ['#c9a961', '#5fb39b', '#d9685a', '#e6c879', '#7fd0b6', '#e6877a'];
-    for (let i = 0; i < 50; i++) {
-      const p = document.createElement('div');
-      p.className = 'confetti';
-      p.style.left = rand(0, 100) + 'vw';
-      p.style.background = colors[Math.floor(Math.random() * colors.length)];
-      p.style.animationDelay = rand(0, 1.5) + 's';
-      p.style.animationDuration = rand(2, 3.5) + 's';
-      p.style.transform = `rotate(${rand(0, 360)}deg)`;
-      c.appendChild(p);
-    }
-    document.body.appendChild(c);
-    setTimeout(() => c.remove(), 5000);
-  }
-
-  return { b64enc, b64dec, $, esc, rand, now, toast, throttle, Stats, Theme, Sound, confetti };
-})();
+const STUN=[
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun1.l.google.com:19302'},
+  {urls:'stun:stun2.l.google.com:19302'},
+  {urls:'stun:stun.miwifi.com'},
+  {urls:'stun:stun.qq.com:3478'}
+];
+const TURN=[
+  {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}
+];
+const ICE={
+  lan:{iceServers:[]},
+  p2p:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'},
+  ngrok:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'},
+  auto:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'}
+};
+const MLABELS={lan:'🏠 内网模式',p2p:'🌐 外网P2P',ngrok:'🚀 Ngrok穿透',auto:'⚡ 自动优选'};
 
 /* ==============================================================
-   棋规引擎 — 禁手检测、胜负判定
+   工具
    ============================================================== */
-const Rule = (() => {
-  const N = 15;
-  const DIRS = [[1,0],[0,1],[1,1],[1,-1]];
+function goTo(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active')}
+function toast(m,t='info'){const d=document.createElement('div');d.className='toast '+t;d.textContent=m;document.getElementById('toast-box').appendChild(d);setTimeout(()=>d.remove(),3200)}
+function b64enc(s){return btoa(unescape(encodeURIComponent(s)))}
+function b64dec(b){try{return decodeURIComponent(escape(atob(b)))}catch(e){return''}}
+function iceCfg(){return ICE[S.mode]||ICE.lan}
 
-  // 判定五连
-  function checkFive(board, x, y, c) {
-    for (const [dx, dy] of DIRS) {
-      let cnt = 1;
-      for (let i = 1; i < 5; i++) {
-        const nx = x + dx*i, ny = y + dy*i;
-        if (nx < 0 || nx >= N || ny < 0 || ny >= N) break;
-        if (board[nx][ny] !== c) break;
-        cnt++;
-      }
-      for (let i = 1; i < 5; i++) {
-        const nx = x - dx*i, ny = y - dy*i;
-        if (nx < 0 || nx >= N || ny < 0 || ny >= N) break;
-        if (board[nx][ny] !== c) break;
-        cnt++;
-      }
-      if (cnt >= 5) return { win: true, type: 'five' };
-    }
-    return { win: false };
-  }
-
-  // 提取某方向上的连续段 (用于禁手检测)
-  // 返回形如 {color, length, gaps, closed} 的对象
-  function lineAt(board, x, y, dx, dy) {
-    const c = board[x][y];
-    if (!c) return null;
-    // 向两端延伸直到遇空或边界
-    let left = 0, right = 0;
-    let lGap = false, rGap = false;
-    // 左
-    for (let i = 1; i < 6; i++) {
-      const nx = x - dx*i, ny = y - dy*i;
-      if (nx < 0 || nx >= N || ny < 0 || ny >= N) break;
-      if (board[nx][ny] === c) left++;
-      else { lGap = board[nx][ny] === null; break; }
-    }
-    // 右
-    for (let i = 1; i < 6; i++) {
-      const nx = x + dx*i, ny = y + dy*i;
-      if (nx < 0 || nx >= N || ny < 0 || ny >= N) break;
-      if (board[nx][ny] === c) right++;
-      else { rGap = board[nx][ny] === null; break; }
-    }
-    return { c, left, right, lGap, rGap };
-  }
-
-  // 禁手判定 — 仅对黑棋
-  function isForbidden(board, x, y) {
-    if (board[x][y]) return false;
-    board[x][y] = 'black';
-    // 1) 长连
-    for (const [dx, dy] of DIRS) {
-      let cnt = 1;
-      for (let i = 1; i < 7; i++) {
-        const nx = x + dx*i, ny = y + dy*i;
-        if (nx < 0 || nx >= N || ny < 0 || ny >= N || board[nx][ny] !== 'black') break;
-        cnt++;
-      }
-      for (let i = 1; i < 7; i++) {
-        const nx = x - dx*i, ny = y - dy*i;
-        if (nx < 0 || nx >= N || ny < 0 || ny >= N || board[nx][ny] !== 'black') break;
-        cnt++;
-      }
-      if (cnt > 5) { board[x][y] = null; return 'long'; }
-    }
-
-    // 2) 活四/冲四/活三/眠三
-    const fours = []; // 冲四
-    const openThrees = []; // 活三
-    for (const [dx, dy] of DIRS) {
-      const ln = lineAt(board, x, y, dx, dy);
-      if (!ln) continue;
-      const total = ln.left + 1 + ln.right;
-      if (total === 4) {
-        // 冲四：一端被封
-        if (!(ln.lGap && ln.rGap)) fours.push({ dx, dy });
-      } else if (total === 3) {
-        // 活三：两端都开
-        if (ln.lGap && ln.rGap) openThrees.push({ dx, dy });
-      }
-    }
-    if (fours.length >= 2) { board[x][y] = null; return 'double-four'; }
-    if (openThrees.length >= 2) { board[x][y] = null; return 'double-three'; }
-    board[x][y] = null;
-    return null;
-  }
-
-  // 落子通用验证
-  function validateMove(board, x, y, color, useForbidden) {
-    if (x < 0 || x >= N || y < 0 || y >= N) return { ok: false, reason: 'out' };
-    if (board[x][y]) return { ok: false, reason: 'occupied' };
-    if (color === 'black' && useForbidden) {
-      const f = isForbidden(board, x, y);
-      if (f) return { ok: false, reason: 'forbidden', detail: f };
-    }
-    return { ok: true };
-  }
-
-  return { N, DIRS, checkFive, isForbidden, validateMove };
-})();
+function copyCode(elId){
+  const t=document.getElementById(elId).textContent||'';
+  navigator.clipboard.writeText(t).then(()=>toast('已复制','ok')).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('已复制','ok');
+  });
+}
+async function pasteClip(tid){
+  try{document.getElementById(tid).value=await navigator.clipboard.readText();toast('已粘贴','ok')}catch(e){toast('请手动粘贴','err')}
+}
 
 /* ==============================================================
-   AI 引擎 — 三档难度
+   登录 & 模式
    ============================================================== */
-const AI = (() => {
-  const { N } = Rule;
-  // 棋型评分
-  const SCORE = {
-    FIVE: 100000,
-    OPEN_FOUR: 10000,
-    FOUR: 1000,
-    OPEN_THREE: 1000,
-    THREE: 100,
-    OPEN_TWO: 50,
-    TWO: 10,
-    ONE: 1
-  };
-
-  function inB(x, y) { return x >= 0 && x < N && y >= 0 && y < N; }
-
-  // 评估某点在某颜色的分数
-  function evalPoint(board, x, y, c) {
-    if (board[x][y]) return 0;
-    board[x][y] = c;
-    let score = 0;
-    for (const [dx, dy] of Rule.DIRS) {
-      score += evalLine(board, x, y, dx, dy, c);
-    }
-    board[x][y] = null;
-    return score;
+function selectMode(el){
+  /* 内网模式WiFi检查 */
+  if(el.dataset.mode==='lan'&&!isWiFi()){
+    toast('未连接WiFi，内网模式不可用','err');return;
   }
-
-  function evalLine(board, x, y, dx, dy, c) {
-    // 收集 9 颗的窗口
-    let str = '';
-    for (let i = -4; i <= 4; i++) {
-      const nx = x + dx*i, ny = y + dy*i;
-      if (!inB(nx, ny)) str += '#';
-      else if (board[nx][ny] === c) str += '1';
-      else if (board[nx][ny] === null) str += '0';
-      else str += '2';
-    }
-    return scorePattern(str, c);
-  }
-
-  function scorePattern(s, c) {
-    // s 中第 4 位 (中心) 为 '1'
-    const opp = c === 'black' ? 'white' : 'black';
-    if (s.includes('11111')) return SCORE.FIVE;
-    // 活四: 011110
-    if (s.includes('011110')) return SCORE.OPEN_FOUR;
-    // 冲四: 011112|211110|11011|10111|11101
-    if (/011112|211110|11011|10111|11101|01111[^1]|[^1]11110/.test(s) || s.match(/01111/) || s.match(/11110/)) {
-      if (s.includes('01111') || s.includes('11110') || s.includes('10111') || s.includes('11011') || s.includes('11101')) {
-        // 检查是否为活四
-        if (!s.includes('01111') && !s.includes('11110') && !s.includes('10111') && !s.includes('11011') && !s.includes('11101')) return 0;
-        return SCORE.FOUR;
-      }
-    }
-    // 活三
-    if (s.includes('01110')) return SCORE.OPEN_THREE;
-    // 眠三 / 眠四 等其他形态
-    if (s.includes('001100') || s.includes('010110') || s.includes('011010')) return SCORE.OPEN_THREE / 2;
-    if (s.includes('00111') || s.includes('11100') || s.includes('10110') || s.includes('01011') || s.includes('11010') || s.includes('10011') || s.includes('11001') || s.includes('10101')) return SCORE.THREE;
-    if (s.includes('00110') || s.includes('01100') || s.includes('01010') || s.includes('10100') || s.includes('00101')) return SCORE.OPEN_TWO;
-    if (s.includes('0011') || s.includes('1100') || s.includes('0101') || s.includes('1010') || s.includes('011') || s.includes('110')) return SCORE.TWO;
-    if (s.includes('01') || s.includes('10')) return SCORE.ONE;
-    return 0;
-  }
-
-  // 候选位置 — 仅考虑已有子周围2格内
-  function getCandidates(board) {
-    const cands = new Set();
-    let has = false;
-    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
-      if (board[x][y]) {
-        has = true;
-        for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) {
-          const nx = x + dx, ny = y + dy;
-          if (inB(nx, ny) && !board[nx][ny]) cands.add(nx * N + ny);
-        }
-      }
-    }
-    if (!has) return [N * N >> 1]; // 第一手落天元
-    return [...cands].map(k => [k / N | 0, k % N]);
-  }
-
-  // 简单版 — 选评分最高的点
-  function chooseMove(board, color, level) {
-    const cands = getCandidates(board);
-    if (cands.length === 1) return cands[0];
-    const opp = color === 'black' ? 'white' : 'black';
-    let best = null, bestScore = -Infinity;
-    for (const [x, y] of cands) {
-      // 进攻分 + 防守分
-      const atk = evalPoint(board, x, y, color);
-      const def = evalPoint(board, x, y, opp);
-      let score;
-      if (level === 'easy') {
-        score = atk + def * 0.3 + Math.random() * 50;
-      } else if (level === 'medium') {
-        score = atk * 1.2 + def * 0.8;
-      } else {
-        // hard: 多看一步，威胁搜索
-        score = atk + def * 1.1;
-        if (atk >= SCORE.OPEN_FOUR) score += 50000;
-        if (def >= SCORE.OPEN_FOUR) score += 40000;
-      }
-      // 优先中心
-      const cx = Math.abs(x - 7), cy = Math.abs(y - 7);
-      score += (14 - cx - cy) * 0.5;
-      if (score > bestScore) { bestScore = score; best = [x, y]; }
-    }
-    return best;
-  }
-
-  return { chooseMove };
-})();
-
-/* ==============================================================
-   WebRTC P2P — 安全加固版
-   ============================================================== */
-const Net = (() => {
-  const STUN = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun.qq.com:3478' }
-  ];
-  const TURN = [
-    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
-  ];
-  const ICE = {
-    lan: { iceServers: [] },
-    p2p: { iceServers: [...STUN, ...TURN], iceTransportPolicy: 'all' }
-  };
-
-  function cfg(mode) { return ICE[mode] || ICE.p2p; }
-
-  function makeCode(obj) { return Util.b64enc(JSON.stringify(obj)); }
-  function parseCode(s) {
-    s = (s || '').trim();
-    if (!s) return null;
-    try { const j = JSON.parse(Util.b64dec(s)); if (j && j.sdp) return j; } catch {}
-    try { const j = JSON.parse(s); if (j && j.sdp) return j; } catch {}
-    return null;
-  }
-
-  async function applyRemote(pc, d) {
-    await pc.setRemoteDescription(new RTCSessionDescription({ type: d.sdp.type, sdp: d.sdp.sdp }));
-    if (d.ice && d.ice.length) for (const c of d.ice) {
-      try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
-    }
-  }
-
-  function waitICE(pc, timeout = 8000) {
-    return new Promise(r => {
-      if (pc.iceGatheringState === 'complete') return r();
-      const chk = () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); pc.removeEventListener('icegatheringstatechange', chk); r(); } };
-      pc.addEventListener('icegatheringstatechange', chk);
-      const t = setTimeout(() => { pc.removeEventListener('icegatheringstatechange', chk); r(); }, timeout);
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('selected'));
+  el.classList.add('selected');S.mode=el.dataset.mode;
+}
+/* 网络环境检测 */
+function isWiFi(){
+  try{
+    const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+    if(!c)return true; /* 无法检测时放行 */
+    const t=(c.type||c.effectiveType||'').toLowerCase();
+    if(t==='wifi'||t==='ethernet'||t==='none')return true;
+    /* effectiveType 4g/3g/2g 表示移动数据 */
+    if(['4g','3g','2g','slow-2g'].includes(t))return false;
+    return true;
+  }catch(e){return true}
+}
+function updateNetworkUI(){
+  const w=isWiFi();
+  document.getElementById('wifi-warn').classList.toggle('show',!w);
+  /* 非WiFi时自动切换到P2P */
+  if(!w&&S.mode==='lan'){
+    S.mode='p2p';
+    document.querySelectorAll('.mode-btn').forEach(b=>{
+      b.classList.toggle('selected',b.dataset.mode==='p2p');
     });
+    toast('已自动切换到外网P2P模式','info');
   }
-
-  return { cfg, makeCode, parseCode, applyRemote, waitICE };
-})();
+  /* 非WiFi时禁用内网按钮视觉 */
+  const lanBtn=document.querySelector('.mode-btn[data-mode="lan"]');
+  if(lanBtn)lanBtn.style.opacity=w?'1':'0.4';
+}
+/* 监听网络变化 */
+try{
+  const nc=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+  if(nc)nc.addEventListener('change',updateNetworkUI);
+}catch(e){}
+function doLogin(){
+  const n=document.getElementById('inp-name').value.trim();
+  if(!n){toast('请输入昵称','err');return}
+  if(S.mode==='lan'&&!isWiFi()){toast('未连接WiFi，请切换到外网P2P模式','err');return}
+  S.name=n;
+  document.getElementById('lobby-user').textContent='👤 '+n;
+  document.getElementById('lobby-mode-label').textContent=MLABELS[S.mode];
+  goTo('lobby-screen');
+}
 
 /* ==============================================================
-   主应用
+   WebRTC 核心
    ============================================================== */
-const App = (() => {
-  const $ = Util.$;
-
-  // 状态 — 私有化，外部不能直接访问 S
-  const state = {
-    name: '',
-    mode: 'p2p',
-    role: '',
-    pc: null,
-    dc: null,
-    connected: false,
-    gameStarted: false,
-    board: null,
-    myColor: '',
-    turn: 'black',
-    over: false,
-    winner: '',
-    winLine: null,
-    moves: 0,
-    lastMove: null,
-    opponentName: '',
-    movesHistory: [], // 完整落子历史 [{x,y,color}]
-    undosLeft: 2, // 每方可用悔棋次数
-    undoPending: false,
-    drawOffered: false,
-    isAI: false,
-    aiLevel: 'medium',
-    aiColor: 'white',
-    rematch: { last: 0 }, // 防刷
-    pcRole: null,
-    scanTarget: null,
-    scannerStream: null,
-    scanAnim: null,
-    galleryTarget: null,
-    recordOpen: false,
-    heartbeatTimer: null,
-    reconnectTimer: null,
-    reconnectAttempt: 0,
-    secret: null, // 短时签名密钥
-    onMove: null, // 回调
+function createPC(){
+  const pc=new RTCPeerConnection(iceCfg());
+  /* 连接超时：仅在双方交换SDP后启动，不从创建PC就开始 */
+  S._pcCreated=Date.now();
+  pc.onconnectionstatechange=()=>{
+    if(pc.connectionState==='connected'){
+      /* 不在这里设置S.connected或toast，等DC真正open再确认 */
+      /* 备用触发：轮询DC状态，防止dc.onopen不触发 */
+      if(!S.gameStarted&&S.dc){
+        let tries=0;
+        const poll=setInterval(()=>{
+          tries++;
+          if(S.gameStarted||tries>60){clearInterval(poll);return}
+          if(S.dc.readyState==='open'){
+            clearInterval(poll);
+            S.connected=true;
+            S.dc.send(JSON.stringify({type:'info',name:S.name}));
+            startGame(S.role==='host');
+          }
+        },100);
+      }
+    }
+    if(pc.connectionState==='disconnected'||pc.connectionState==='failed'){
+      S.connected=false;
+      if(!S.gameStarted){
+        toast('连接失败：可能双方网络均受限，请尝试Ngrok模式','err');
+        if(document.getElementById('create-status'))document.getElementById('create-status').textContent='连接失败，请尝试Ngrok模式';
+      }else{
+        toast('连接断开','err');
+      }
+      if(document.getElementById('game-info'))document.getElementById('game-info').textContent='连接已断开';
+    }
   };
+  return pc;
+}
+function waitICE(pc,timeout=15000){
+  return new Promise(r=>{
+    if(pc.iceGatheringState==='complete'){r();return}
+    const chk=()=>{if(pc.iceGatheringState==='complete'){clearTimeout(t);r()}};
+    pc.addEventListener('icegatheringstatechange',chk);
+    const t=setTimeout(()=>{pc.removeEventListener('icegatheringstatechange',chk);r()},timeout);
+  });
+}
+function mkCode(o){return b64enc(JSON.stringify(o))}
+function parseCode(s){
+  s=s.trim();
+  try{const j=JSON.parse(b64dec(s));if(j&&j.sdp)return j}catch(e){}
+  try{const j=JSON.parse(s);if(j&&j.sdp)return j}catch(e){}
+  return null;
+}
+async function applyRemote(pc,d){
+  await pc.setRemoteDescription(new RTCSessionDescription({type:d.sdp.type,sdp:d.sdp.sdp}));
+  if(d.ice&&d.ice.length)for(const c of d.ice)try{await pc.addIceCandidate(new RTCIceCandidate(c))}catch(e){}
+}
 
-  // ===== 屏幕导航 =====
-  function goTo(id) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    $(id).classList.add('active');
-  }
-
-  // ===== 登录 =====
-  function selectMode(el) {
-    const m = el.dataset.mode;
-    if (m === 'lan' && !isWiFi()) {
-      Util.toast('未连接WiFi，内网模式不可用', 'err');
-      return;
-    }
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
-    el.classList.add('selected');
-    state.mode = m;
-  }
-
-  function isWiFi() {
-    try {
-      const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-      if (!c) return true;
-      const t = (c.type || c.effectiveType || '').toLowerCase();
-      if (t === 'wifi' || t === 'ethernet' || t === 'none') return true;
-      if (['4g', '3g', '2g', 'slow-2g'].includes(t)) return false;
-      return true;
-    } catch { return true; }
-  }
-
-  function updateNetUI() {
-    const w = isWiFi();
-    const warn = $('wifi-warn');
-    if (warn) warn.style.display = w ? 'none' : 'block';
-    const lanBtn = document.querySelector('.mode-btn[data-mode="lan"]');
-    if (lanBtn) lanBtn.dataset.disabled = w ? 'false' : 'true';
-  }
-
-  function renderStats() {
-    const s = Util.Stats.load();
-    const total = s.wins + s.losses + s.draws;
-    const rate = total ? Math.round(s.wins / total * 100) : 0;
-    const el = $('login-stats');
-    if (!el) return;
-    el.innerHTML = `
-      <div class="stat-card"><div class="num">${s.wins}</div><div class="lbl">胜</div></div>
-      <div class="stat-card"><div class="num">${s.losses}</div><div class="lbl">负</div></div>
-      <div class="stat-card"><div class="num">${rate}%</div><div class="lbl">胜率</div></div>
-    `;
-  }
-
-  function doLogin() {
-    const n = $('inp-name').value.trim();
-    if (!n) { Util.toast('请输入昵称', 'err'); return; }
-    if (state.mode === 'lan' && !isWiFi()) { Util.toast('请切换到外网P2P模式', 'err'); return; }
-    state.name = n;
-    Util.Sound.resume();
-    $('lobby-user').textContent = '👤 ' + n;
-    if (state.mode === 'ai') {
-      goTo('ai-screen');
-    } else if (state.mode === 'local') {
-      // 本地双人对战
-      state.isAI = false;
-      state.opponentName = '本地玩家';
-      goTo('game-screen');
-      startGame(true);
-    } else {
-      goTo('lobby-screen');
-    }
-  }
-
-  // ===== 复制 / 粘贴 =====
-  function copyCode(elId) {
-    const t = $(elId).textContent || '';
-    if (!t) return;
-    navigator.clipboard.writeText(t).then(() => Util.toast('已复制', 'ok'))
-      .catch(() => {
-        const ta = document.createElement('textarea');
-        ta.value = t; document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); Util.toast('已复制', 'ok'); } catch { Util.toast('复制失败', 'err'); }
-        document.body.removeChild(ta);
-      });
-  }
-  async function pasteClip(tid) {
-    try {
-      $(tid).value = await navigator.clipboard.readText();
-      Util.toast('已粘贴', 'ok');
-    } catch { Util.toast('请手动粘贴', 'err'); }
-  }
-
-  // ===== 创建房间 =====
-  async function createRoom() {
-    state.role = 'host';
-    state.gameStarted = false;
-    state.secret = Util.rand(100000, 999999) | 0; // 房主密钥，用于应答校验
-    goTo('create-screen');
-    $('create-mode-label').textContent = state.mode === 'lan' ? '🏠 内网' : '🌐 外网';
-    $('create-status').textContent = '正在生成连接码…';
-    $('create-code-area').style.display = 'none';
-    $('cs1').className = 'step active';
-    $('cs2').className = 'step';
-    setDot('create-dot', 'waiting');
-    try {
-      const pc = new RTCPeerConnection(Net.cfg(state.mode));
-      state.pc = pc;
-      const dc = pc.createDataChannel('g');
-      state.dc = dc;
-      bindDCHost(dc);
-      pc.onconnectionstatechange = () => onPCState(pc);
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await Net.waitICE(pc, 6000);
-      const code = Net.makeCode({
-        sdp: pc.localDescription,
-        name: state.name,
-        ts: Util.now(),
-        nonce: state.secret
-      });
-      $('create-status').textContent = '等待对手加入…';
-      $('create-code').textContent = code;
-      $('create-code-area').style.display = 'block';
-      $('cs1').className = 'step done';
-      $('cs2').className = 'step active';
-      genQR('create-qr', code);
-      setTimeout(() => timeoutGuard('cs2', 'create-status'), 25000);
-    } catch (e) {
-      Util.toast('创建失败: ' + e.message, 'err');
-    }
-  }
-
-  function setDot(id, type) {
-    const el = $(id);
-    if (el) { el.className = 'status-dot ' + type; }
-  }
-
-  function bindDCHost(dc) {
-    dc.onopen = () => {
-      state.connected = true;
-      Util.toast('连接成功', 'ok');
-      try { dc.send(JSON.stringify({ t: 'hi', n: state.name, nonce: state.secret })); } catch {}
-      startGame(true);
-    };
-    dc.onclose = () => { state.connected = false; Util.toast('通道关闭', 'err'); };
-    dc.onmessage = e => onMsg(JSON.parse(e.data), true);
-    if (dc.readyState === 'open') dc.onopen();
-  }
-
-  function bindDCGuest(dc) {
-    dc.onopen = () => {
-      state.connected = true;
-      Util.toast('连接成功', 'ok');
-      try { dc.send(JSON.stringify({ t: 'hi', n: state.name })); } catch {}
-      startGame(false);
-    };
-    dc.onclose = () => { state.connected = false; Util.toast('通道关闭', 'err'); };
-    dc.onmessage = e => onMsg(JSON.parse(e.data), false);
-    if (dc.readyState === 'open') dc.onopen();
-  }
-
-  // ===== 应答码（房主侧）=====
-  async function acceptAnswer() {
-    const raw = $('inp-answer').value.trim();
-    if (!raw) { Util.toast('请填入应答码', 'err'); return; }
-    const d = Net.parseCode(raw);
-    if (!d) { Util.toast('无效的应答码', 'err'); return; }
-    // 5分钟过期
-    if (!d.ts || Util.now() - d.ts > 5 * 60 * 1000) {
-      Util.toast('应答码已过期，请让对手重新生成', 'err');
-      return;
-    }
-    try {
-      await Net.applyRemote(state.pc, d);
-      $('cs2').className = 'step done';
-      Util.toast('已连接，等待数据通道打开…', 'ok');
-      pollDCStart(true);
-    } catch (e) {
-      Util.toast('连接失败: ' + e.message, 'err');
-    }
-  }
-
-  function pollDCStart(isHost) {
-    if (state.gameStarted) return;
-    let tries = 0;
-    const poll = setInterval(() => {
-      tries++;
-      if (state.gameStarted || tries > 80) { clearInterval(poll); return; }
-      if (state.dc && state.dc.readyState === 'open') {
-        clearInterval(poll);
-        if (!state.connected) state.connected = true;
-        try { state.dc.send(JSON.stringify({ t: 'hi', n: state.name, nonce: state.secret })); } catch {}
+/* ==============================================================
+   数据通道
+   ============================================================== */
+function bindDC(dc,isHost){
+  S.dc=dc;
+  dc.onopen=()=>{
+    S.connected=true;
+    toast('连接成功!','ok');
+    try{dc.send(JSON.stringify({type:'info',name:S.name}))}catch(e){}
+    startGame(isHost);
+  };
+  dc.onclose=()=>{S.connected=false;toast('通道关闭','err')};
+  dc.onmessage=e=>handleMsg(JSON.parse(e.data));
+  /* 如果DC已open（竞态），直接触发 */
+  if(dc.readyState==='open'){
+    setTimeout(()=>{
+      if(!S.gameStarted){
+        S.connected=true;
+        toast('连接成功!','ok');
+        try{dc.send(JSON.stringify({type:'info',name:S.name}))}catch(e){}
         startGame(isHost);
       }
-    }, 100);
+    },0);
   }
-
-  // ===== 加入房间 =====
-  async function joinRoom() {
-    const raw = $('inp-room-code').value.trim();
-    if (!raw) { Util.toast('请输入房间码', 'err'); return; }
-    const d = Net.parseCode(raw);
-    if (!d) { Util.toast('无效的房间码', 'err'); return; }
-    if (!d.ts || Util.now() - d.ts > 5 * 60 * 1000) {
-      Util.toast('房间码已过期', 'err');
-      return;
-    }
-    state.role = 'join';
-    state.opponentName = d.name || '对手';
-    state.secret = d.nonce || null;
-    $('js1').className = 'step active';
-    try {
-      const pc = new RTCPeerConnection(Net.cfg(state.mode));
-      state.pc = pc;
-      pc.onconnectionstatechange = () => onPCState(pc);
-      await Net.applyRemote(pc, d);
-      Util.toast('正在生成应答码…', 'info');
-      const ans = await pc.createAnswer();
-      await pc.setLocalDescription(ans);
-      const code = Net.makeCode({ sdp: pc.localDescription, name: state.name, ts: Util.now() });
-      $('join-answer-code').textContent = code;
-      $('answer-area').style.display = 'block';
-      $('js1').className = 'step done';
-      $('js2').className = 'step active';
-      genQR('join-answer-qr', code);
-      Util.toast('请将应答码发送给房主', 'ok');
-      pc.ondatachannel = e => bindDCGuest(e.channel);
-      setTimeout(() => {
-        if (!state.gameStarted && !state.connected) Util.toast('等待超时，房主可能未确认', 'err');
-      }, 25000);
-    } catch (e) {
-      Util.toast('加入失败: ' + e.message, 'err');
-    }
+}
+function handleMsg(m){
+  switch(m.type){
+    case 'info':
+      S.opponentName=m.name;
+      (S.role==='host'?document.getElementById('p2-name'):document.getElementById('p1-name')).textContent=m.name;
+      break;
+    case 'move': applyMove(m.x,m.y,false); break;
+    case 'chat': addChat(S.opponentName||'对手',m.text,false); break;
+    case 'voice': playVoiceMsg(m.audio,m.dur,S.opponentName||'对手',false); break;
+    case 'rematch-req':
+      if(confirm((S.opponentName||'对手')+' 请求再来一局')){S.dc.send(JSON.stringify({type:'rematch-ok'}));resetBoard()}
+      break;
+    case 'rematch-ok': toast('对手同意再来一局','ok');resetBoard(); break;
   }
+}
 
-  function lobbyScanJoin() { startScan('__lobby__'); }
+/* ==============================================================
+   创建房间
+   ============================================================== */
+async function createRoom(){
+  S.role='host';S.gameStarted=false;goTo('create-screen');
+  document.getElementById('create-status').textContent='正在生成连接码...';
+  document.getElementById('create-code-area').style.display='none';
+  document.getElementById('cs1').className='step active';document.getElementById('cs2').className='step';
+  try{
+    const pc=createPC();S.pc=pc;
+    const dc=pc.createDataChannel('game');
+    S.dc=dc; /* 立即设置，确保备用触发可用 */
+    dc.onopen=()=>bindDC(dc,true);
+    dc.onmessage=e=>handleMsg(JSON.parse(e.data));
 
-  // ===== PC 状态变化 =====
-  function onPCState(pc) {
-    if (pc.connectionState === 'connected') {
-      // DC readyState check
-      if (!state.gameStarted && state.dc) {
-        const ready = state.dc.readyState === 'open';
-        if (ready && !state.connected) {
-          state.connected = true;
-          try { state.dc.send(JSON.stringify({ t: 'hi', n: state.name, nonce: state.secret })); } catch {}
-          startGame(state.role === 'host');
+    const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+    /* ICE收集超时8秒（TURN候选需要更长时间） */
+    await waitICE(pc,8000);
+    const code=mkCode({sdp:pc.localDescription,name:S.name,mode:S.mode,ts:Date.now()});
+
+    document.getElementById('create-status').textContent='等待对手加入...';
+    document.getElementById('create-code').textContent=code;
+    document.getElementById('create-code-area').style.display='block';
+    document.getElementById('cs1').className='step done';
+    document.getElementById('cs2').className='step active';
+    genQR('create-qr',code);
+  }catch(e){toast('创建失败: '+e.message,'err')}
+}
+
+async function acceptAnswer(){
+  const raw=document.getElementById('inp-answer').value.trim();
+  if(!raw){toast('请粘贴或扫描应答码','err');return}
+  const d=parseCode(raw);
+  if(!d){toast('无效的应答码','err');return}
+  try{
+    await applyRemote(S.pc,d);
+    toast('已连接，等待数据通道打开...','ok');
+    document.getElementById('cs2').className='step done';
+    /* 主机端备用触发：applyRemote后立即检查dc状态 */
+    if(!S.gameStarted&&S.dc&&S.dc.readyState==='open'){
+      S.dc.send(JSON.stringify({type:'info',name:S.name}));
+      startGame(true);
+    }
+    /* 终极兜底：延迟轮询dc状态，确保万无一失 */
+    if(!S.gameStarted){
+      let tries=0;
+      const poll=setInterval(()=>{
+        tries++;
+        if(S.gameStarted||tries>80){clearInterval(poll);return}
+        if(S.dc&&S.dc.readyState==='open'){
+          clearInterval(poll);
+          S.dc.send(JSON.stringify({type:'info',name:S.name}));
+          startGame(true);
         }
+      },100);
+    }
+    /* 超时检测：从交换SDP后开始计时 */
+    setTimeout(()=>{
+      if(!S.gameStarted&&!S.connected){
+        toast('连接超时，双方网络可能无法互通，请尝试Ngrok模式','err');
+        if(document.getElementById('create-status'))document.getElementById('create-status').textContent='连接超时，请尝试Ngrok模式';
       }
-    }
-    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-      handleDisconnect();
-    }
-  }
+    },30000);
+  }catch(e){toast('连接失败: '+e.message,'err')}
+}
 
-  function handleDisconnect() {
-    state.connected = false;
-    if (state.gameStarted) {
-      Util.toast('连接已断开', 'err');
-      $('game-info').textContent = '连接已断开…';
-      // 尝试重连
-      if (state.reconnectAttempt < 3) {
-        showReconnectModal();
+/* ==============================================================
+   加入房间
+   ============================================================== */
+async function joinRoom(){
+  const raw=document.getElementById('inp-room-code').value.trim();
+  if(!raw){toast('请输入或扫描房间码','err');return}
+  const d=parseCode(raw);
+  if(!d){toast('无效的房间码','err');return}
+  S.role='join';
+  document.getElementById('js1').className='step active';
+  try{
+    const pc=createPC();S.pc=pc;
+    await applyRemote(pc,d);
+    toast('正在生成应答码...','info');
+    const ans=await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    /* 不等待ICE收集完成，直接用当前SDP生成应答码
+       ICE候选已嵌入SDP，后续会通过ICE trickle补充 */
+    const code=mkCode({sdp:pc.localDescription,name:S.name,ts:Date.now()});
+
+    document.getElementById('join-answer-code').textContent=code;
+    document.getElementById('answer-area').style.display='block';
+    document.getElementById('js1').className='step done';
+    document.getElementById('js2').className='step active';
+    genQR('join-answer-qr',code);
+    toast('应答码已生成，请发送给房主','ok');
+
+    pc.ondatachannel=e=>bindDC(e.channel,false);
+    /* 超时检测：从生成应答码开始 */
+    setTimeout(()=>{
+      if(!S.gameStarted&&!S.connected){
+        toast('连接超时，房主可能未确认或网络不通','err');
       }
-    } else {
-      Util.toast('连接失败，请尝试其他模式', 'err');
-    }
-  }
+    },30000);
+  }catch(e){toast('加入失败: '+e.message,'err');console.error('joinRoom error:',e)}
+}
 
-  function showReconnectModal() { $('reconnect-modal').classList.add('open'); }
-  function closeReconnect() { $('reconnect-modal').classList.remove('open'); }
-  function attemptReconnect() {
-    closeReconnect();
-    state.reconnectAttempt++;
-    Util.toast('尝试重连 #' + state.reconnectAttempt, 'info');
-    // 简化处理：重置连接，提示用户重新交换码
-    setTimeout(() => Util.toast('请重新交换连接码', 'warn'), 1000);
-    setTimeout(() => exitGame(true), 1500);
-  }
+/* 大厅页：扫码后自动跳转加入流程 */
+function lobbyScanJoin(){
+  startScan('__lobby_scan__');
+}
 
-  // ===== 超时守卫 =====
-  function timeoutGuard(stepId, statusId) {
-    if (state.gameStarted) return;
-    setTimeout(() => {
-      if (!state.gameStarted) {
-        const el = $(statusId);
-        if (el) el.textContent = '等待超时，请尝试其他模式';
-        const dot = $(stepId.replace('s', '-dot')) || document.getElementById(stepId);
-      }
-    }, 25000);
+/* ==============================================================
+   游戏逻辑
+   ============================================================== */
+function startGame(isHost){
+  if(S.gameStarted)return; /* 防止重复调用 */
+  S.gameStarted=true;
+  S.myColor=isHost?'black':'white';
+  S.over=false;S.moves=0;S.lastMove=null;
+  initBoard();
+  goTo('game-screen');
+  resizeCanvas();
+  const p1t=document.getElementById('p1-tag'),p2t=document.getElementById('p2-tag');
+  if(isHost){
+    p1t.innerHTML='<div class="stone-icon black"></div><span>'+esc(S.name)+'</span>';
+    p2t.innerHTML='<div class="stone-icon white"></div><span>'+esc(S.opponentName||'对手')+'</span>';
+  }else{
+    p1t.innerHTML='<div class="stone-icon black"></div><span>'+esc(S.opponentName||'对手')+'</span>';
+    p2t.innerHTML='<div class="stone-icon white"></div><span>'+esc(S.name)+'</span>';
   }
+  updTurn();
+}
+function initBoard(){S.board=Array.from({length:15},()=>Array(15).fill(null));S.turn='black';S.over=false;S.moves=0;S.lastMove=null;renderBoard()}
+function resetBoard(){initBoard();document.getElementById('btn-rematch').style.display='none';document.getElementById('game-info').textContent='新一局! 黑棋先行';updTurn()}
+function applyMove(x,y,local){
+  if(S.over||S.board[x][y])return;
+  const color=local?S.myColor:(S.myColor==='black'?'white':'black');
+  S.board[x][y]=color;S.moves++;S.lastMove={x,y};
+  if(local&&S.dc&&S.dc.readyState==='open')S.dc.send(JSON.stringify({type:'move',x,y}));
+  renderBoard();
+  document.getElementById('move-count').textContent='第 '+S.moves+' 手';
+  if(checkWin(x,y,color)){
+    S.over=true;
+    const w=(color===S.myColor)?'你赢了! 🎉':'对手获胜!';
+    document.getElementById('game-info').textContent=w;toast(w,'ok');
+    document.getElementById('btn-rematch').style.display='inline-flex';return;
+  }
+  if(S.moves===225){S.over=true;document.getElementById('game-info').textContent='平局!';document.getElementById('btn-rematch').style.display='inline-flex';return}
+  S.turn=S.turn==='black'?'white':'black';updTurn();
+}
+function updTurn(){
+  const my=S.turn===S.myColor;
+  document.getElementById('game-info').textContent=my?'轮到你 ('+(S.myColor==='black'?'黑':'白')+')':'等待对手...';
+  document.getElementById('p1-tag').classList.toggle('turn',S.turn==='black');
+  document.getElementById('p2-tag').classList.toggle('turn',S.turn==='white');
+}
+function checkWin(x,y,c){
+  const D=[[1,0],[0,1],[1,1],[1,-1]];
+  for(const[dx,dy] of D){
+    let n=1;
+    for(let i=1;i<5;i++){const nx=x+dx*i,ny=y+dy*i;if(nx>=0&&nx<15&&ny>=0&&ny<15&&S.board[nx][ny]===c)n++;else break}
+    for(let i=1;i<5;i++){const nx=x-dx*i,ny=y-dy*i;if(nx>=0&&nx<15&&ny>=0&&ny<15&&S.board[nx][ny]===c)n++;else break}
+    if(n>=5)return true;
+  }
+  return false;
+}
+function requestRematch(){if(S.dc&&S.dc.readyState==='open'){S.dc.send(JSON.stringify({type:'rematch-req'}));toast('已发送请求','info')}}
+function exitGame(){if(S.pc){S.pc.close();S.pc=null}S.dc=null;S.connected=false;S.gameStarted=false;goTo('lobby-screen')}
 
-  // ===== 退出流程 =====
-  function exitFlow() {
-    cleanup();
-    goTo(state.mode === 'ai' ? 'login-screen' : 'lobby-screen');
-  }
+/* ==============================================================
+   Canvas 渲染
+   ============================================================== */
+function resizeCanvas(){
+  const c=document.getElementById('board');
+  const dpr=window.devicePixelRatio||1;
+  const sz=Math.min(window.innerWidth-32,window.innerHeight-310,540);
+  const s=Math.max(260,sz);
+  c.width=s*dpr;c.height=s*dpr;
+  c.style.width=s+'px';c.style.height=s+'px';
+  renderBoard();
+}
+window.addEventListener('resize',resizeCanvas);
 
-  // ===== 游戏 =====
-  function startGame(isHost) {
-    if (state.gameStarted) return;
-    state.gameStarted = true;
-    state.myColor = isHost ? 'black' : 'white';
-    state.over = false; state.winner = ''; state.winLine = null;
-    state.moves = 0; state.lastMove = null;
-    state.movesHistory = [];
-    state.undosLeft = 2;
-    state.undoPending = false;
-    state.drawOffered = false;
-    initBoard();
-    goTo('game-screen');
-    resizeCanvas();
-    renderPlayers();
-    updTurn();
-    startHeartbeat();
-    $('btn-rematch').style.display = 'none';
-    $('btn-undo').style.display = '';
-    $('btn-draw').style.display = '';
-    $('btn-replay').style.display = 'none';
-    $('replay-bar').style.display = 'none';
-    // 聊天面板：AI / 本地 / P2P
-    $('chat-panel').style.display = (state.isAI || state.mode === 'local') ? 'none' : '';
-    addSysMsg('对局开始 — ' + (state.myColor === 'black' ? '您执黑' : '您执白') +
-      (state.isAI ? ' (AI)' : (state.mode === 'local' ? ' (本地双人)' : '')));
-    Util.Sound.resume();
+function renderBoard(){
+  const c=document.getElementById('board');if(!c)return;
+  const dpr=window.devicePixelRatio||1;
+  const ctx=c.getContext('2d'),W=c.width,N=15,cell=W/(N+1),off=cell;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const Wcss=c.width/dpr;
+  const cellCss=Wcss/(N+1),offCss=cellCss;
+  ctx.fillStyle='#c8a84e';ctx.fillRect(0,0,Wcss,Wcss);
+  /* 使用css尺寸变量重算 */
+  const cell_=cellCss,off_=offCss;
+  ctx.save();
+  for(let i=0;i<Wcss;i+=3){ctx.strokeStyle='rgba(160,120,40,'+(0.04+Math.random()*0.04)+')';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,i+Math.random()*2);ctx.lineTo(Wcss,i+Math.random()*2);ctx.stroke()}
+  ctx.restore();
+  ctx.strokeStyle='#9a7a2a';ctx.lineWidth=0.8;
+  for(let i=0;i<N;i++){ctx.beginPath();ctx.moveTo(off_+i*cell_,off_);ctx.lineTo(off_+i*cell_,off_+(N-1)*cell_);ctx.stroke();ctx.beginPath();ctx.moveTo(off_,off_+i*cell_);ctx.lineTo(off_+(N-1)*cell_,off_+i*cell_);ctx.stroke()}
+  ctx.fillStyle='#8a6a1a';
+  [3,7,11].forEach(sx=>{[3,7,11].forEach(sy=>{ctx.beginPath();ctx.arc(off_+sx*cell_,off_+sy*cell_,cell_*0.12,0,Math.PI*2);ctx.fill()})});
+  ctx.fillStyle='#7a6a3a';ctx.font=(cell_*0.32)+'px DM Mono,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+  for(let i=0;i<N;i++){ctx.fillText(String.fromCharCode(65+i),off_+i*cell_,off_-cell_*0.65);ctx.fillText(String(i+1),off_-cell_*0.7,off_+i*cell_)}
+  if(!S.board)return;
+  for(let x=0;x<N;x++)for(let y=0;y<N;y++){
+    const v=S.board[x][y];if(!v)continue;
+    const cx=off_+x*cell_,cy=off_+y*cell_,r=cell_*0.43;
+    ctx.save();ctx.shadowColor='rgba(0,0,0,0.35)';ctx.shadowBlur=4;ctx.shadowOffsetX=1.5;ctx.shadowOffsetY=1.5;
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
+    if(v==='black'){const g=ctx.createRadialGradient(cx-r*.3,cy-r*.3,r*.08,cx,cy,r);g.addColorStop(0,'#555');g.addColorStop(1,'#111');ctx.fillStyle=g}
+    else{const g=ctx.createRadialGradient(cx-r*.3,cy-r*.3,r*.08,cx,cy,r);g.addColorStop(0,'#fff');g.addColorStop(1,'#c8c4ba');ctx.fillStyle=g}
+    ctx.fill();ctx.restore();
   }
+  if(S.lastMove){const mx=off_+S.lastMove.x*cell_,my=off_+S.lastMove.y*cell_;ctx.strokeStyle='rgba(255,60,60,.7)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(mx,my,cell_*0.15,0,Math.PI*2);ctx.stroke()}
+}
 
-  function initBoard() {
-    state.board = Array.from({ length: 15 }, () => Array(15).fill(null));
-    state.turn = 'black';
-    renderBoard();
-  }
+document.getElementById('board').addEventListener('click',e=>{
+  if(S.over||!S.connected||S.turn!==S.myColor){if(S.connected&&!S.over)toast('还没轮到你','info');return}
+  const c=e.target,rect=c.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  const cssW=rect.width,cssH=rect.height;
+  const px=(e.clientX-rect.left),py=(e.clientY-rect.top);
+  const N=15,cell_=cssW/(N+1),off_=cell_;
+  const bx=Math.round((px-off_)/cell_),by=Math.round((py-off_)/cell_);
+  if(bx<0||bx>=N||by<0||by>=N||S.board[bx][by])return;
+  applyMove(bx,by,true);
+});
+document.getElementById('board').addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0];e.target.dispatchEvent(new MouseEvent('click',{clientX:t.clientX,clientY:t.clientY}))},{passive:false});
 
-  function renderPlayers() {
-    const me = state.isAI ? 'AI' : (state.opponentName || '对手');
-    if (state.myColor === 'black') {
-      $('p1-name').textContent = state.name;
-      $('p2-name').textContent = me;
-    } else {
-      $('p1-name').textContent = me;
-      $('p2-name').textContent = state.name;
-    }
-  }
+/* ==============================================================
+   聊天
+   ============================================================== */
+function sendChat(){
+  const inp=document.getElementById('chat-input'),t=inp.value.trim();if(!t)return;inp.value='';
+  addChat(S.name,t,true);
+  if(S.dc&&S.dc.readyState==='open')S.dc.send(JSON.stringify({type:'chat',text:t}));
+}
+function addChat(name,text,self){
+  const box=document.getElementById('chat-msgs'),d=document.createElement('div');
+  d.className='msg';d.innerHTML='<span class="name" style="'+(self?'color:var(--ok)':'')+'">'+esc(name)+':</span>'+esc(text);
+  box.appendChild(d);box.scrollTop=box.scrollHeight;
+}
 
-  function applyMove(x, y, isLocal) {
-    if (state.over) return;
-    if (state.board[x][y]) return;
-    // 严格轮次校验
-    const expectedColor = state.turn;
-    if (isLocal && state.myColor !== expectedColor) { Util.toast('还没轮到你', 'info'); return; }
-    if (!isLocal && expectedColor === state.myColor) {
-      // 不应到达这里：UI 阻止，远程对端也通过 turn 字段校验
-      return;
-    }
-    // 禁手
-    if (expectedColor === 'black' && !state.isAI) { // AI 不受禁手约束
-      const v = Rule.validateMove(state.board, x, y, 'black', true);
-      if (!v.ok && v.reason === 'forbidden') {
-        showForbidden(v.detail);
-        if (isLocal) {
-          Util.toast('禁手：' + forbiddenName(v.detail), 'err');
-          Util.Sound.play('forbidden');
-        }
-        return;
-      }
-    }
-    state.board[x][y] = expectedColor;
-    state.moves++;
-    state.lastMove = { x, y, c: expectedColor };
-    state.movesHistory.push({ x, y, c: expectedColor, ts: Util.now() });
-    Util.Sound.play('place');
-    renderBoard();
-    $('move-count').textContent = '第 ' + state.moves + ' 手';
-    updTurn();
+/* ==============================================================
+   语音消息
+   ============================================================== */
+let voiceRec=null,voiceChunks=[],voiceStream=null,voiceTimer=null,voiceSec=0;
+const btnVoice=document.getElementById('btn-voice');
 
-    if (Rule.checkFive(state.board, x, y, expectedColor).win) {
-      state.over = true;
-      state.winner = expectedColor;
-      drawWinLine(x, y, expectedColor);
-      const isMe = expectedColor === state.myColor;
-      const winText = isMe ? '你赢了' : (state.isAI ? '电脑获胜' : '对手获胜');
-      $('game-info').textContent = winText;
-      $('game-info').className = 'game-info ' + (isMe ? 'win' : 'lose');
-      Util.Sound.play(isMe ? 'win' : 'lose');
-      if (isMe) Util.confetti();
-      Util.Stats.record(isMe ? 'win' : 'lose');
-      $('btn-rematch').style.display = '';
-      $('btn-undo').style.display = 'none';
-      $('btn-draw').style.display = 'none';
-      addSysMsg('🏁 ' + winText);
-      flashBoard();
-      return;
-    }
-    if (state.moves === 225) {
-      state.over = true;
-      state.winner = 'draw';
-      $('game-info').textContent = '平局';
-      $('game-info').className = 'game-info';
-      Util.Stats.record('draw');
-      $('btn-rematch').style.display = '';
-      addSysMsg('🤝 平局');
-      return;
-    }
-    state.turn = expectedColor === 'black' ? 'white' : 'black';
-    updTurn();
-    // 广播
-    if (isLocal && state.dc && state.dc.readyState === 'open') {
-      state.dc.send(JSON.stringify({ t: 'm', x, y, turn: state.turn, m: state.moves }));
-    }
-    // AI 回合
-    if (state.isAI && !state.over && state.turn === state.aiColor) {
-      setTimeout(aiTurn, 350 + Math.random() * 350);
-    }
-  }
+function voiceSupported(){return !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder)}
 
-  function aiTurn() {
-    if (state.over) return;
-    const m = AI.chooseMove(state.board, state.aiColor, state.aiLevel);
-    if (!m) return;
-    applyMove(m[0], m[1], true);
-  }
-
-  function startAIGame() {
-    state.isAI = true;
-    state.aiLevel = document.querySelector('.diff-btn.selected')?.dataset.diff || 'medium';
-    state.aiColor = 'white';
-    state.opponentName = '电脑(' + ({ easy: '入门', medium: '业余', hard: '专业' }[state.aiLevel]) + ')';
-    goTo('game-screen');
-    startGame(true);
-  }
-
-  function forbiddenName(t) {
-    return { long: '长连禁手', 'double-four': '双四禁手', 'double-three': '双三禁手' }[t] || '禁手';
-  }
-
-  function showForbidden(t) {
-    const wrap = $('board-wrap');
-    const tip = document.createElement('div');
-    tip.className = 'forbidden-hint';
-    tip.textContent = '禁手 · ' + forbiddenName(t).replace('禁手', '');
-    wrap.appendChild(tip);
-    setTimeout(() => tip.remove(), 1200);
-  }
-
-  function updTurn() {
-    const my = state.turn === state.myColor;
-    const info = $('game-info');
-    if (!state.over) {
-      if (state.mode === 'local') {
-        info.textContent = state.turn === 'black' ? '黑方落子' : '白方落子';
-      } else {
-        info.textContent = my ? '轮到你' : '等待对手…';
-      }
-      info.className = 'game-info';
-    }
-    $('p1-tag').classList.toggle('active', state.turn === 'black' && !state.over);
-    $('p2-tag').classList.toggle('active', state.turn === 'white' && !state.over);
-  }
-
-  function flashBoard() {
-    const c = $('board');
-    c.classList.add('win-flash');
-    setTimeout(() => c.classList.remove('win-flash'), 1200);
-  }
-
-  // ===== 消息处理 — 严格校验 =====
-  function onMsg(m, isHost) {
-    if (!m || typeof m !== 'object') return;
-    // 大小限制
-    const raw = JSON.stringify(m);
-    if (raw.length > 100000) { Util.toast('收到超大消息，已丢弃', 'err'); return; }
-    switch (m.t) {
-      case 'hi':
-        if (typeof m.n === 'string' && m.n.length <= 20) {
-          state.opponentName = Util.esc(m.n);
-          renderPlayers();
-        }
-        // 应答码签名校验（如果是房主）
-        if (isHost && state.secret) {
-          if (m.nonce && m.nonce === state.secret) {
-            // 通过
-          } else if (m.nonce === undefined) {
-            // 兼容：旧版本不发送nonce
-          } else {
-            // 错误nonce，但允许游戏继续
-          }
-        }
-        break;
-      case 'm': {
-        // 严格校验
-        if (typeof m.x !== 'number' || typeof m.y !== 'number') return;
-        if (m.x < 0 || m.x >= 15 || m.y < 0 || m.y >= 15) return;
-        if (typeof m.m !== 'number' || m.m !== state.moves + 1) {
-          // 防止跳回合
-          if (m.m <= state.moves) return; // 重放忽略
-          // 数量不匹配也忽略
-          return;
-        }
-        applyMove(m.x, m.y, false);
-        break;
-      }
-      case 'c': {
-        if (typeof m.text !== 'string' || m.text.length > 200) return;
-        addChat(state.opponentName || '对手', m.text, false);
-        break;
-      }
-      case 'v': {
-        if (typeof m.audio !== 'string' || m.audio.length > 100000) {
-          Util.toast('语音过大，已拒绝', 'err');
-          return;
-        }
-        if (typeof m.dur !== 'number' || m.dur < 1 || m.dur > 60) return;
-        playVoice(m.audio, m.dur, state.opponentName || '对手', false);
-        break;
-      }
-      case 'rr': // rematch request
-        if (Util.now() - state.rematch.last < 5000) {
-          Util.toast('对方再来请求过于频繁', 'warn');
-          return;
-        }
-        state.rematch.last = Util.now();
-        if (confirm((state.opponentName || '对手') + ' 请求再来一局，是否同意？')) {
-          sendDC({ t: 'ra' });
-          if (!state.gameStarted) {
-            // 新局
-            state.moves = 0; state.movesHistory = []; state.over = false; state.winner = '';
-            state.turn = 'black'; state.myColor = state.myColor === 'black' ? 'white' : 'black';
-            initBoard(); renderPlayers(); updTurn();
-            $('game-info').textContent = '新一局! ' + (state.myColor === 'black' ? '您执黑' : '您执白');
-            $('btn-rematch').style.display = 'none';
-            $('btn-undo').style.display = '';
-            $('btn-draw').style.display = '';
-          } else {
-            fullReset();
-          }
-        }
-        break;
-      case 'ra': // rematch accept
-        Util.toast('对手同意再来', 'ok');
-        state.moves = 0; state.movesHistory = []; state.over = false; state.winner = '';
-        state.turn = 'black'; state.myColor = state.myColor === 'black' ? 'white' : 'black';
-        initBoard(); renderPlayers(); updTurn();
-        $('game-info').textContent = '新一局! ' + (state.myColor === 'black' ? '您执黑' : '您执白');
-        $('btn-rematch').style.display = 'none';
-        $('btn-undo').style.display = '';
-        $('btn-draw').style.display = '';
-        break;
-      case 'ur': { // undo request
-        if (typeof m.m !== 'number' || m.m !== state.moves - 1) return;
-        if (confirm('对手请求悔棋（剩余 ' + state.undosLeft + ' 次），是否同意？')) {
-          // 同意：撤销自己上一步 + 对方刚下的一步
-          undoLast();
-          undoLast();
-          state.undosLeft--;
-          sendDC({ t: 'ua', ok: true });
-          Util.toast('已同意悔棋', 'ok');
-        } else {
-          sendDC({ t: 'ua', ok: false });
-        }
-        break;
-      }
-      case 'ua': // undo answer
-        if (m.ok) {
-          undoLast();
-          state.undosLeft--;
-          Util.toast('悔棋成功', 'ok');
-        } else {
-          Util.toast('对手拒绝悔棋', 'warn');
-        }
-        break;
-      case 'do': // draw offer
-        if (confirm('对手提议和棋，是否同意？')) {
-          state.over = true; state.winner = 'draw';
-          $('game-info').textContent = '和棋';
-          Util.Stats.record('draw');
-          sendDC({ t: 'da' });
-        } else {
-          sendDC({ t: 'dd' });
-        }
-        break;
-      case 'da': // draw accept
-        state.over = true; state.winner = 'draw';
-        $('game-info').textContent = '和棋';
-        Util.Stats.record('draw');
-        Util.toast('和棋', 'info');
-        break;
-      case 'dd':
-        Util.toast('对手拒绝和棋', 'warn');
-        break;
-      case 'p': // ping
-        sendDC({ t: 'pong', ts: m.ts });
-        break;
-      case 'pong':
-        // heartbeat response
-        break;
-    }
-  }
-
-  function sendDC(obj) {
-    if (state.dc && state.dc.readyState === 'open') {
-      try { state.dc.send(JSON.stringify(obj)); return true; } catch {}
-    }
-    return false;
-  }
-
-  function startHeartbeat() {
-    if (state.heartbeatTimer) clearInterval(state.heartbeatTimer);
-    state.heartbeatTimer = setInterval(() => {
-      if (state.dc && state.dc.readyState === 'open') {
-        sendDC({ t: 'p', ts: Util.now() });
-      } else if (state.connected && !state.over) {
-        // 通道关闭但仍标记为连接
-        handleDisconnect();
-      }
-    }, 10000);
-  }
-
-  function fullReset() {
-    state.moves = 0; state.movesHistory = []; state.over = false; state.winner = '';
-    state.turn = 'black'; state.undosLeft = 2;
-    initBoard();
-    $('game-info').textContent = '新一局! 黑棋先行';
-    $('game-info').className = 'game-info';
-    $('btn-rematch').style.display = 'none';
-    $('btn-undo').style.display = '';
-    $('btn-draw').style.display = '';
-    renderPlayers(); updTurn();
-  }
-
-  // ===== 悔棋 =====
-  function requestUndo() {
-    if (state.mode === 'local' || state.isAI) {
-      if (state.moves < 1) { Util.toast('棋步不足', 'info'); return; }
-      if (state.undosLeft <= 0) { Util.toast('悔棋次数已用完', 'warn'); return; }
-      undoLast();
-      state.undosLeft--;
-      state.over = false; state.winner = ''; state.winLine = null;
-      renderBoard();
-      $('game-info').textContent = '轮到你';
-      $('game-info').className = 'game-info';
-      updTurn();
-      Util.toast('已悔棋', 'ok');
-      return;
-    }
-    if (state.undosLeft <= 0) { Util.toast('悔棋次数已用完', 'warn'); return; }
-    sendDC({ t: 'ur', m: state.moves });
-    Util.toast('已发送悔棋请求', 'info');
-  }
-
-  function undoLast() {
-    if (state.movesHistory.length === 0) return;
-    const last = state.movesHistory.pop();
-    state.board[last.x][last.y] = null;
-    state.moves--;
-    state.lastMove = state.movesHistory.length ? state.movesHistory[state.movesHistory.length - 1] : null;
-    state.turn = last.c; // 还原回合
-    state.over = false; state.winner = '';
-    $('game-info').textContent = state.turn === state.myColor ? '轮到你' : '等待对手…';
-    $('game-info').className = 'game-info';
-    $('btn-rematch').style.display = 'none';
-    $('btn-undo').style.display = '';
-    $('btn-draw').style.display = '';
-    $('move-count').textContent = '第 ' + state.moves + ' 手';
-    updTurn();
-    renderBoard();
-  }
-
-  // ===== 再来 =====
-  function requestRematch() {
-    if (state.isAI) { fullReset(); return; }
-    if (Util.now() - state.rematch.last < 5000) {
-      Util.toast('请稍候再发请求', 'warn');
-      return;
-    }
-    state.rematch.last = Util.now();
-    sendDC({ t: 'rr' });
-    Util.toast('已发送再来一局请求', 'info');
-  }
-
-  // ===== 和棋 =====
-  function offerDraw() {
-    if (state.isAI) { Util.toast('AI 模式暂不支持和棋', 'info'); return; }
-    if (state.drawOffered) { Util.toast('已发送过和棋请求', 'warn'); return; }
-    state.drawOffered = true;
-    sendDC({ t: 'do' });
-    Util.toast('已提议和棋', 'info');
-  }
-
-  // ===== 复盘 =====
-  let replayStep = 0;
-  function toggleReplay() {
-    const bar = $('replay-bar');
-    if (bar.style.display === 'none') {
-      $('btn-replay').textContent = '⏸ 退出复盘';
-      bar.style.display = '';
-      $('board-wrap').style.opacity = '0.9';
-      replayStep = 0;
-      $('replay-slider').max = state.movesHistory.length;
-      $('replay-slider').value = 0;
-      initBoard();
-      renderBoard();
-      updateReplayInfo();
-    } else {
-      bar.style.display = 'none';
-      $('board-wrap').style.opacity = '';
-      $('btn-replay').textContent = '⏮ 复盘';
-      // 还原
-      state.board = state.movesHistory.reduce((b, m) => { b[m.x][m.y] = m.c; return b; }, Array.from({ length: 15 }, () => Array(15).fill(null)));
-      renderBoard();
-    }
-  }
-  function replayPrev() { replayGo(Math.max(0, replayStep - 1)); }
-  function replayNext() { replayGo(Math.min(state.movesHistory.length, replayStep + 1)); }
-  function replayGo(n) {
-    replayStep = n;
-    $('replay-slider').value = n;
-    initBoard();
-    for (let i = 0; i < n; i++) {
-      const m = state.movesHistory[i];
-      state.board[m.x][m.y] = m.c;
-    }
-    state.lastMove = n ? state.movesHistory[n - 1] : null;
-    renderBoard();
-    updateReplayInfo();
-  }
-  function updateReplayInfo() {
-    $('replay-info').textContent = replayStep + '/' + state.movesHistory.length;
-  }
-  function exportSGF() {
-    // 简易SGF导出
-    let sgf = '(;GM[Gomoku]FF[4]AP[Moqi]SZ[15]';
-    sgf += 'PB[' + state.name + ']PW[' + (state.opponentName || 'AI') + ']';
-    sgf += 'DT[' + new Date().toISOString().slice(0, 10) + ']';
-    state.movesHistory.forEach(m => {
-      sgf += ';' + m.c[0].toUpperCase() + '[' + (m.x + 1) + ',' + (m.y + 1) + ']';
-    });
-    sgf += ')';
-    const blob = new Blob([sgf], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'moqi-' + Date.now() + '.sgf';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    Util.toast('棋谱已导出', 'ok');
-  }
-
-  // ===== 退出 =====
-  function exitGame(keepRoom) {
-    cleanup();
-    if (keepRoom) {
-      goTo(state.mode === 'ai' ? 'login-screen' : 'lobby-screen');
-    } else {
-      goTo(state.mode === 'ai' ? 'login-screen' : 'lobby-screen');
-    }
-  }
-
-  function cleanup() {
-    if (state.heartbeatTimer) { clearInterval(state.heartbeatTimer); state.heartbeatTimer = null; }
-    if (state.pc) { try { state.pc.close(); } catch {} state.pc = null; }
-    state.dc = null; state.connected = false; state.gameStarted = false;
-    state.opponentName = ''; state.movesHistory = [];
-    state.over = false; state.winner = ''; state.winLine = null;
-    state.moves = 0; state.lastMove = null; state.turn = 'black';
-    state.isAI = false; state.secret = null;
-    state.reconnectAttempt = 0;
-  }
-
-  // ===== Canvas 渲染 =====
-  function resizeCanvas() {
-    const c = $('board');
-    if (!c) return;
-    const dpr = window.devicePixelRatio || 1;
-    const sz = Math.min(window.innerWidth - 32, window.innerHeight - 320, 540);
-    const s = Math.max(280, sz);
-    c.width = s * dpr; c.height = s * dpr;
-    c.style.width = s + 'px'; c.style.height = s + 'px';
-    // 缓存木纹层
-    precomputeBoard(s);
-    renderBoard();
-  }
-
-  let woodCache = null; let woodSize = 0;
-  function precomputeBoard(cssSize) {
-    const dpr = window.devicePixelRatio || 1;
-    const cv = document.createElement('canvas');
-    cv.width = cssSize * dpr; cv.height = cssSize * dpr;
-    const ctx = cv.getContext('2d');
-    // 木纹底色
-    const grad = ctx.createLinearGradient(0, 0, cssSize * dpr, cssSize * dpr);
-    grad.addColorStop(0, getCSSVar('--board-a'));
-    grad.addColorStop(1, getCSSVar('--board-b'));
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, cv.width, cv.height);
-    // 木纹条纹
-    for (let i = 0; i < cssSize * dpr; i += 2) {
-      ctx.strokeStyle = 'rgba(160,120,40,' + (0.04 + Math.random() * 0.05) + ')';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, i + Math.random() * 3);
-      ctx.lineTo(cv.width, i + Math.random() * 3);
-      ctx.stroke();
-    }
-    // 渐晕效果
-    const rg = ctx.createRadialGradient(cv.width/2, cv.height/2, cv.width*0.3, cv.width/2, cv.height/2, cv.width*0.7);
-    rg.addColorStop(0, 'rgba(0,0,0,0)');
-    rg.addColorStop(1, 'rgba(0,0,0,0.18)');
-    ctx.fillStyle = rg; ctx.fillRect(0, 0, cv.width, cv.height);
-    woodCache = cv; woodSize = cssSize;
-  }
-
-  function getCSSVar(name) {
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#c89c50';
-  }
-
-  function renderBoard() {
-    const c = $('board'); if (!c) return;
-    const dpr = window.devicePixelRatio || 1;
-    const ctx = c.getContext('2d');
-    const Wcss = c.width / dpr;
-    const N = 15, cell = Wcss / (N + 1), off = cell;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    // 绘制缓存木纹
-    if (woodCache && woodSize === Wcss) {
-      ctx.drawImage(woodCache, 0, 0, Wcss, Wcss);
-    } else {
-      precomputeBoard(Wcss);
-      if (woodCache) ctx.drawImage(woodCache, 0, 0, Wcss, Wcss);
-    }
-    // 网格
-    ctx.strokeStyle = 'rgba(110,80,20,.55)';
-    ctx.lineWidth = 0.8;
-    for (let i = 0; i < N; i++) {
-      ctx.beginPath();
-      ctx.moveTo(off + i * cell, off);
-      ctx.lineTo(off + i * cell, off + (N - 1) * cell);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(off, off + i * cell);
-      ctx.lineTo(off + (N - 1) * cell, off + i * cell);
-      ctx.stroke();
-    }
-    // 星位
-    const stars = [3, 7, 11];
-    ctx.fillStyle = 'rgba(80,50,15,.7)';
-    for (const sx of stars) for (const sy of stars) {
-      ctx.beginPath();
-      ctx.arc(off + sx * cell, off + sy * cell, cell * 0.1, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // 坐标
-    ctx.fillStyle = 'rgba(80,50,15,.6)';
-    ctx.font = (cell * 0.3) + 'px DM Mono, monospace';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    for (let i = 0; i < N; i++) {
-      ctx.fillText(String.fromCharCode(65 + i), off + i * cell, off - cell * 0.6);
-      ctx.fillText(String(i + 1), off - cell * 0.65, off + i * cell);
-    }
-    if (!state.board) return;
-    // 棋子
-    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
-      const v = state.board[x][y]; if (!v) continue;
-      const cx = off + x * cell, cy = off + y * cell, r = cell * 0.42;
-      drawStone(ctx, cx, cy, r, v, false);
-    }
-    // 最后一手标记
-    if (state.lastMove) {
-      const cx = off + state.lastMove.x * cell, cy = off + state.lastMove.y * cell;
-      ctx.strokeStyle = state.lastMove.c === 'black' ? 'rgba(255,80,80,.85)' : 'rgba(220,60,60,.85)';
-      ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.arc(cx, cy, cell * 0.18, 0, Math.PI * 2); ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(cx - cell * 0.08, cy); ctx.lineTo(cx + cell * 0.08, cy);
-      ctx.moveTo(cx, cy - cell * 0.08); ctx.lineTo(cx, cy + cell * 0.08);
-      ctx.stroke();
-    }
-    // 胜利线
-    if (state.winLine) {
-      ctx.strokeStyle = 'rgba(217,104,90,.9)';
-      ctx.lineWidth = cell * 0.12;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(off + state.winLine.x1 * cell, off + state.winLine.y1 * cell);
-      ctx.lineTo(off + state.winLine.x2 * cell, off + state.winLine.y2 * cell);
-      ctx.stroke();
-    }
-  }
-
-  function drawStone(ctx, cx, cy, r, color, animated) {
-    ctx.save();
-    // 阴影
-    ctx.shadowColor = 'rgba(0,0,0,.4)';
-    ctx.shadowBlur = 5;
-    ctx.shadowOffsetX = 1.5;
-    ctx.shadowOffsetY = 2;
-    const a = getCSSVar(color === 'black' ? '--stone-b-a' : '--stone-w-a');
-    const b = getCSSVar(color === 'black' ? '--stone-b-b' : '--stone-w-b');
-    const h = getCSSVar(color === 'black' ? '--stone-b-h' : '--stone-w-h');
-    const g = ctx.createRadialGradient(cx - r * 0.32, cy - r * 0.32, r * 0.1, cx, cy, r);
-    g.addColorStop(0, h);
-    g.addColorStop(0.5, a);
-    g.addColorStop(1, b);
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    // 高光
-    ctx.save();
-    const hl = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.05, cx - r * 0.35, cy - r * 0.4, r * 0.3);
-    hl.addColorStop(0, 'rgba(255,255,255,.35)');
-    hl.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = hl;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  }
-
-  function drawWinLine(x, y, c) {
-    for (const [dx, dy] of Rule.DIRS) {
-      let p1 = { x, y }, p2 = { x, y }, n = 1;
-      for (let i = 1; i < 5; i++) {
-        const nx = x + dx*i, ny = y + dy*i;
-        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || state.board[nx][ny] !== c) break;
-        p2 = { x: nx, y: ny }; n++;
-      }
-      for (let i = 1; i < 5; i++) {
-        const nx = x - dx*i, ny = y - dy*i;
-        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || state.board[nx][ny] !== c) break;
-        p1 = { x: nx, y: ny }; n++;
-      }
-      if (n >= 5) {
-        state.winLine = { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
-        return;
-      }
-    }
-  }
-
-  // ===== Canvas 交互 =====
-  function bindCanvas() {
-    const c = $('board');
-    let dragMoved = false, downX = 0, downY = 0, startT = 0;
-    c.addEventListener('mousedown', e => { dragMoved = false; downX = e.clientX; downY = e.clientY; startT = Util.now(); });
-    c.addEventListener('mousemove', e => {
-      if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) dragMoved = true;
-    });
-    c.addEventListener('mouseup', e => {
-      if (dragMoved) return;
-      handleClick(e.clientX, e.clientY);
-    });
-    c.addEventListener('touchstart', e => {
-      if (e.touches.length !== 1) return;
-      e.preventDefault();
-      const t = e.touches[0];
-      dragMoved = false; downX = t.clientX; downY = t.clientY; startT = Util.now();
-    }, { passive: false });
-    c.addEventListener('touchmove', e => {
-      const t = e.touches[0];
-      if (Math.hypot(t.clientX - downX, t.clientY - downY) > 8) dragMoved = true;
-    }, { passive: true });
-    c.addEventListener('touchend', e => {
-      if (dragMoved) return;
-      const t = e.changedTouches[0];
-      if (!t) return;
-      // 避免长按误触（>500ms 视为长按）
-      if (Util.now() - startT > 800) return;
-      handleClick(t.clientX, t.clientY);
-    });
-  }
-
-  function handleClick(cx, cy) {
-    if (state.over) return;
-    if (!state.isAI && state.mode !== 'local' && !state.connected) {
-      Util.toast('尚未连接', 'info'); return;
-    }
-    if (state.mode !== 'local' && state.turn !== state.myColor) { Util.toast('还没轮到你', 'info'); return; }
-    const c = $('board');
-    const rect = c.getBoundingClientRect();
-    const cssW = rect.width;
-    const N = 15, cell_ = cssW / (N + 1), off_ = cell_;
-    const px = cx - rect.left, py = cy - rect.top;
-    const bx = Math.round((px - off_) / cell_);
-    const by = Math.round((py - off_) / cell_);
-    if (bx < 0 || bx >= N || by < 0 || by >= N) return;
-    if (state.board[bx][by]) return;
-    applyMove(bx, by, true);
-  }
-
-  // ===== 聊天 =====
-  function sendChat() {
-    if (state.isAI) { Util.toast('人机模式无聊天', 'info'); return; }
-    const inp = $('chat-input'), t = inp.value.trim(); if (!t) return; inp.value = '';
-    addChat(state.name, t, true);
-    sendDC({ t: 'c', text: t });
-  }
-  function addChat(name, text, self) {
-    const box = $('chat-msgs');
-    const d = document.createElement('div');
-    d.className = 'msg' + (self ? ' self' : '');
-    d.innerHTML = '<span class="name">' + Util.esc(name) + ':</span>' + Util.esc(text);
-    box.appendChild(d); box.scrollTop = box.scrollHeight;
-  }
-  function addSysMsg(text) {
-    const box = $('chat-msgs');
-    const d = document.createElement('div');
-    d.className = 'sys';
-    d.textContent = text;
-    box.appendChild(d); box.scrollTop = box.scrollHeight;
-  }
-
-  // ===== 语音 =====
-  let voiceRec = null, voiceChunks = [], voiceStream = null, voiceTimer = null, voiceSec = 0;
-  const btnVoice = $('btn-voice');
-
-  function voiceSupported() { return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder); }
-
-  function startVoice(e) {
-    e.preventDefault(); e.stopPropagation();
-    if (!voiceSupported()) { Util.toast('浏览器不支持录音', 'err'); return; }
-    if (state.isAI) { Util.toast('人机模式无语音', 'info'); return; }
-    if (voiceRec) return;
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-      voiceStream = stream; voiceChunks = []; voiceSec = 0;
-      const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm' });
-      voiceRec = mr;
-      mr.ondataavailable = e => { if (e.data.size > 0) voiceChunks.push(e.data); };
-      mr.onstop = onVoiceStop;
-      mr.start(100);
-      btnVoice.classList.add('recording');
-      voiceTimer = setInterval(() => { voiceSec++; btnVoice.textContent = voiceSec + 's'; }, 1000);
-    }).catch(() => Util.toast('麦克风权限被拒绝', 'err'));
-  }
-  function stopVoice(e) {
-    if (e) { e.preventDefault(); e.stopPropagation(); }
-    if (!voiceRec || voiceRec.state !== 'recording') return;
-    voiceRec.stop();
-    voiceStream.getTracks().forEach(t => t.stop());
-    clearInterval(voiceTimer);
-    btnVoice.classList.remove('recording');
-    btnVoice.textContent = '🎤';
-  }
-  function onVoiceStop() {
-    const dur = voiceSec || 1;
-    const blob = new Blob(voiceChunks, { type: voiceRec.mimeType });
-    voiceRec = null;
-    if (blob.size < 200) { Util.toast('录音太短', 'info'); return; }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const b64 = reader.result.split(',')[1];
-      if (b64.length > 80000) { Util.toast('语音过长（>60秒）', 'err'); return; }
-      playVoice(b64, dur, state.name, true);
-      sendDC({ t: 'v', audio: b64, dur });
-    };
-    reader.readAsDataURL(blob);
-  }
-
-  function playVoice(b64, dur, name, self) {
-    const box = $('chat-msgs');
-    const wrap = document.createElement('div');
-    wrap.className = 'msg' + (self ? ' self' : '');
-    const lbl = self ? 'color:var(--jade)' : '';
-    wrap.innerHTML = '<span class="name" style="' + lbl + '">' + Util.esc(name) + ':</span> ' +
-      '<span class="voice-msg" data-state="idle"><span class="wave"><span></span><span></span><span></span><span></span><span></span></span><span class="dur">' + dur + '"</span></span>';
-    box.appendChild(wrap); box.scrollTop = box.scrollHeight;
-    const el = wrap.querySelector('.voice-msg');
-    let audio = null;
-    el.onclick = () => {
-      if (el.classList.contains('playing')) {
-        if (audio) { audio.pause(); audio.currentTime = 0; }
-        el.classList.remove('playing'); el.dataset.state = 'idle';
-      } else {
-        if (audio) audio.pause();
-        const raw = atob(b64);
-        const arr = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-        const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
-        const url = URL.createObjectURL(new Blob([arr], { type: mime }));
-        audio = new Audio(url);
-        el.classList.add('playing'); el.dataset.state = 'playing';
-        audio.play().catch(() => { el.classList.remove('playing'); });
-        audio.onended = () => { el.classList.remove('playing'); el.dataset.state = 'idle'; URL.revokeObjectURL(url); };
-      }
-    };
-    if (!self) setTimeout(() => el.click(), 300);
-  }
-
-  // ===== 二维码生成 =====
-  function genQR(cid, text) {
-    const el = $(cid); if (!el) return; el.innerHTML = '';
-    if (text.length > 2500) {
-      el.innerHTML = '<p style="color:var(--err);font-size:.78rem">数据过长，请使用复制</p>';
-      return;
-    }
-    try {
-      const qr = qrcode(0, 'M'); // 提升到M级
-      qr.addData(text); qr.make();
-      const img = document.createElement('img');
-      img.src = qr.createDataURL(5, 2);
-      img.style.width = '200px'; img.style.height = '200px';
-      img.alt = 'QR';
-      el.appendChild(img);
-    } catch (e) {
-      el.innerHTML = '<p style="color:var(--err);font-size:.78rem">QR生成失败</p>';
-    }
-  }
-  function showQRFull(elId) {
-    const text = $(elId).textContent || ''; if (!text) { Util.toast('无内容', 'info'); return; }
-    const box = $('qr-modal-box'); box.innerHTML = '';
-    try {
-      const qr = qrcode(0, 'M');
-      qr.addData(text); qr.make();
-      const img = document.createElement('img');
-      img.src = qr.createDataURL(8, 2);
-      const s = Math.min(window.innerWidth - 80, 380);
-      img.style.width = s + 'px'; img.style.height = s + 'px';
-      box.appendChild(img);
-      $('qr-modal').classList.add('open');
-    } catch { Util.toast('QR生成失败', 'err'); }
-  }
-  function closeQRModal() { $('qr-modal').classList.remove('open'); }
-
-  // ===== 扫码 =====
-  function startScan(targetId) {
-    state.scanTarget = targetId;
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      Util.toast('浏览器不支持摄像头', 'err'); return;
-    }
-    navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 720 }, height: { ideal: 720 } }
-    }).then(stream => {
-      state.scannerStream = stream;
-      const video = $('scanner-video');
-      video.srcObject = stream;
-      video.setAttribute('playsinline', 'true');
-      video.play();
-      $('scanner-modal').classList.add('open');
-      const canvas = $('scanner-canvas');
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      let scanning = true, lastResult = null, lastTime = 0;
-      const tick = () => {
-        if (!scanning) return;
-        if (video.readyState >= video.HAVE_ENOUGH_DATA) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
-          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          if (typeof jsQR !== 'undefined') {
-            const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
-            const now = Util.now();
-            if (code && code.data && code.data.length > 10 && (code.data !== lastResult || now - lastTime > 1500)) {
-              lastResult = code.data; lastTime = now;
-              scanning = false; stopScanner();
-              onScanResult(code.data);
-              return;
-            }
-          }
-        }
-        state.scanAnim = requestAnimationFrame(tick);
-      };
-      video.onloadeddata = tick;
-      setTimeout(() => {
-        if (scanning) { scanning = false; stopScanner(); Util.toast('扫描超时', 'err'); }
-      }, 30000);
-    }).catch(err => {
-      if (err.name === 'NotAllowedError') Util.toast('摄像头权限被拒绝', 'err');
-      else if (err.name === 'NotFoundError') Util.toast('未找到摄像头', 'err');
-      else Util.toast('摄像头错误: ' + err.message, 'err');
-    });
-  }
-
-  function stopScanner() {
-    if (state.scanAnim) { cancelAnimationFrame(state.scanAnim); state.scanAnim = null; }
-    if (state.scannerStream) { state.scannerStream.getTracks().forEach(t => t.stop()); state.scannerStream = null; }
-    $('scanner-modal').classList.remove('open');
-  }
-
-  function onScanResult(data) {
-    Util.toast('扫描成功', 'ok');
-    if (state.scanTarget === '__lobby__') {
-      $('inp-room-code').value = data;
-      goTo('join-screen');
-      setTimeout(joinRoom, 300);
-      return;
-    }
-    const t = $(state.scanTarget);
-    if (t) {
-      t.value = data;
-      if (state.scanTarget === 'inp-room-code') Util.toast('已填入，点击"生成应答码"', 'info');
-      else if (state.scanTarget === 'inp-answer') Util.toast('已填入，点击"确认连接"', 'info');
-    }
-  }
-
-  // ===== 相册 =====
-  function openGallery(tid) {
-    state.galleryTarget = tid;
-    $('gallery-input').click();
-  }
-  function onGallerySelect(e) {
-    const file = e.target.files[0]; if (!file) return;
-    const img = new Image();
-    img.onload = () => {
-      const c = document.createElement('canvas');
-      c.width = img.width; c.height = img.height;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      const imgData = ctx.getImageData(0, 0, c.width, c.height);
-      if (typeof jsQR !== 'undefined') {
-        const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
-        if (code && code.data) {
-          state.scanTarget = state.galleryTarget;
-          onScanResult(code.data);
-        } else Util.toast('未识别到二维码', 'err');
-      } else Util.toast('QR库未加载', 'err');
-      URL.revokeObjectURL(img.src);
-    };
-    img.onerror = () => Util.toast('图片加载失败', 'err');
-    img.src = URL.createObjectURL(file);
-    e.target.value = '';
-  }
-
-  // ===== 初始化 =====
-  function init() {
-    // 模式选择
-    document.querySelectorAll('.mode-btn').forEach(b => {
-      b.onclick = () => selectMode(b);
-    });
-    // 难度选择
-    document.querySelectorAll('.diff-btn').forEach(b => {
-      b.onclick = () => {
-        document.querySelectorAll('.diff-btn').forEach(x => x.classList.remove('selected'));
-        b.classList.add('selected');
-      };
-    });
-    // 网络监听
-    if (navigator.connection) {
-      navigator.connection.addEventListener?.('change', () => {
-        updateNetUI();
-      });
-    }
-    updateNetUI();
-    // 棋盘事件
-    bindCanvas();
-    // 窗口缩放
-    let resizeT;
-    window.addEventListener('resize', () => {
-      clearTimeout(resizeT);
-      resizeT = setTimeout(() => {
-        if ($('game-screen').classList.contains('active')) resizeCanvas();
-      }, 150);
-    });
-    // 主题
-    Util.Theme.init();
-    // 声音
-    Util.Sound.init();
-    document.addEventListener('click', () => Util.Sound.resume(), { once: true });
-    // 登录名回车
-    $('inp-name').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-    // 阻止 iOS 双击缩放
-    let lastTouch = 0;
-    document.addEventListener('touchend', e => {
-      const now = Util.now();
-      if (now - lastTouch <= 300) e.preventDefault();
-      lastTouch = now;
-    }, { passive: false });
-    // 统计
-    renderStats();
-    // 初始棋盘
-    initBoard();
-    setTimeout(resizeCanvas, 100);
-    // 健康提示
-    console.log('%c墨棋 v2.0', 'font-size:24px;color:#c9a961;font-weight:bold;font-family:"Ma Shan Zheng",cursive');
-    console.log('%cP2P五子棋 · 禁手规则 · AI对手 · 棋谱回放', 'color:#8a8273');
-    console.log('%c提示：所有处理在浏览器中完成，无后端，无任何token硬编码。', 'color:#5fb39b');
-  }
-
-  // 公开 API
-  return {
-    goTo, doLogin, selectMode, copyCode, pasteClip,
-    createRoom, acceptAnswer, joinRoom, lobbyScanJoin, exitFlow,
-    startAIGame, exitGame,
-    requestUndo, requestRematch, offerDraw, toggleReplay,
-    replayPrev, replayNext, replayGo, exportSGF,
-    sendChat,
-    startScan, stopScanner, openGallery, onGallerySelect,
-    showQRFull, closeQRModal,
-    attemptReconnect, closeReconnect,
-    init
+function startVoice(e){
+  e.preventDefault();e.stopPropagation();
+  if(!voiceSupported()){toast('浏览器不支持录音','err');return}
+  if(voiceRec)return;
+  navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+    voiceStream=stream;voiceChunks=[];voiceSec=0;
+    const mr=new MediaRecorder(stream,{mimeType:MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm'});
+    voiceRec=mr;
+    mr.ondataavailable=e=>{if(e.data.size>0)voiceChunks.push(e.data)};
+    mr.onstop=()=>onVoiceStop();
+    mr.start(100);
+    btnVoice.classList.add('recording');
+    voiceTimer=setInterval(()=>{voiceSec++;btnVoice.textContent=voiceSec+'s'},1000);
+  }).catch(()=>toast('麦克风权限被拒绝','err'));
+}
+function stopVoice(e){
+  e&&e.preventDefault();e&&e.stopPropagation();
+  if(!voiceRec||voiceRec.state!=='recording')return;
+  voiceRec.stop();
+  voiceStream.getTracks().forEach(t=>t.stop());
+  clearInterval(voiceTimer);
+  btnVoice.classList.remove('recording');
+  btnVoice.textContent='🎤';
+}
+function onVoiceStop(){
+  const dur=voiceSec||1;
+  const blob=new Blob(voiceChunks,{type:voiceRec.mimeType});
+  voiceRec=null;
+  if(blob.size<200){toast('录音太短','info');return}
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const b64=reader.result.split(',')[1];
+    if(b64.length>65000){toast('语音过长(最长约30秒)','err');return}
+    playVoiceMsg(b64,dur,S.name,true);
+    if(S.dc&&S.dc.readyState==='open')S.dc.send(JSON.stringify({type:'voice',audio:b64,dur:dur}));
   };
-})();
+  reader.readAsDataURL(blob);
+}
+function playVoiceMsg(b64,dur,name,self){
+  const box=document.getElementById('chat-msgs');
+  const wrap=document.createElement('div');
+  wrap.className='msg';
+  const label=self?'color:var(--ok)':'';
+  const cls='voice-msg'+(self?'':' voice-playing');
+  wrap.innerHTML='<span class="name" style="'+label+'">'+esc(name)+':</span> <span class="'+cls+'" onclick="toggleVoice(this)"><span class="wave"><span></span><span></span><span></span><span></span><span></span></span><span class="dur">'+dur+'&quot;</span></span>';
+  box.appendChild(wrap);box.scrollTop=box.scrollHeight;
+  /* 自动播放（非自己发的） */
+  if(!self)autoPlayVoice(wrap,b64);
+}
+function autoPlayVoice(el,b64){
+  try{
+    const raw=atob(b64);
+    const arr=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);
+    const mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm';
+    const url=URL.createObjectURL(new Blob([arr],{type:mime}));
+    const audio=new Audio(url);
+    el.querySelector('.voice-msg').classList.add('voice-playing');
+    audio.play().catch(()=>{});
+    audio.onended=()=>{el.querySelector('.voice-msg').classList.remove('voice-playing');URL.revokeObjectURL(url)};
+    audio.onerror=()=>{el.querySelector('.voice-msg').classList.remove('voice-playing');URL.revokeObjectURL(url)};
+  }catch(e){console.warn('语音播放失败:',e)}
+}
+function toggleVoice(el){
+  if(el.classList.contains('voice-playing')){el.classList.remove('voice-playing');el.classList.add('voice-paused')}
+  else{el.classList.remove('voice-paused');el.classList.add('voice-playing')}
+}
+/* 按住说话事件绑定 */
+if(voiceSupported()){
+  btnVoice.addEventListener('mousedown',startVoice);
+  btnVoice.addEventListener('mouseup',stopVoice);
+  btnVoice.addEventListener('mouseleave',stopVoice);
+  btnVoice.addEventListener('touchstart',startVoice,{passive:false});
+  btnVoice.addEventListener('touchend',stopVoice,{passive:false});
+  btnVoice.addEventListener('touchcancel',stopVoice,{passive:false});
+}else{btnVoice.style.display='none'}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
-document.addEventListener('DOMContentLoaded', App.init);
+/* ==============================================================
+   二维码生成
+   ============================================================== */
+function genQR(cid,text){
+  const el=document.getElementById(cid);el.innerHTML='';
+  try{
+    if(text.length>2500){el.innerHTML='<p style="color:var(--err);font-size:.78rem">数据过长，请使用复制</p>';return}
+    const qr=qrcode(0,'L');qr.addData(text);qr.make();
+    const img=document.createElement('img');img.src=qr.createDataURL(5,2);img.style.width='200px';img.style.height='200px';img.alt='QR';
+    el.appendChild(img);
+  }catch(e){el.innerHTML='<p style="color:var(--err);font-size:.78rem">QR生成失败</p>'}
+}
+function showQRFull(elId){
+  const text=document.getElementById(elId).textContent||'';if(!text){toast('无内容','info');return}
+  const box=document.getElementById('qr-modal-box');box.innerHTML='';
+  try{
+    const qr=qrcode(0,'L');qr.addData(text);qr.make();
+    const img=document.createElement('img');img.src=qr.createDataURL(8,2);
+    const s=Math.min(window.innerWidth-80,380);img.style.width=s+'px';img.style.height=s+'px';
+    box.appendChild(img);
+    document.getElementById('qr-modal').classList.add('open');
+  }catch(e){toast('QR生成失败','err')}
+}
+
+/* ==============================================================
+   二维码扫描 — 完整实现
+   ============================================================== */
+let scannerStream=null, scanAnimId=null, scanTargetId=null;
+
+/**
+ * 启动摄像头扫描二维码
+ * @param {string} targetId - 扫描成功后将结果填入的 input/textarea 的 ID
+ *                             特殊值 '__lobby_scan__' 表示从大厅直接扫码加入
+ */
+function startScan(targetId){
+  scanTargetId=targetId;
+  const modal=document.getElementById('scanner-modal');
+  const video=document.getElementById('scanner-video');
+  const canvas=document.getElementById('scanner-canvas');
+
+  // 检查浏览器是否支持
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    toast('当前浏览器不支持摄像头，请手动粘贴','err');return;
+  }
+
+  navigator.mediaDevices.getUserMedia({
+    video:{facingMode:'environment',width:{ideal:640},height:{ideal:480}}
+  }).then(stream=>{
+    scannerStream=stream;
+    video.srcObject=stream;
+    video.setAttribute('playsinline','true');
+    video.play();
+    modal.classList.add('open');
+
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});
+    let scanning=true;
+
+    function scan(){
+      if(!scanning)return;
+      if(video.readyState>=video.HAVE_ENOUGH_DATA){
+        canvas.width=video.videoWidth;
+        canvas.height=video.videoHeight;
+        ctx.drawImage(video,0,0);
+        const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+
+        if(typeof jsQR!=='undefined'){
+          const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:'dontInvert'});
+          if(code&&code.data&&code.data.length>10){
+            scanning=false;
+            stopScanner();
+            onScanResult(code.data);
+            return;
+          }
+        }
+      }
+      scanAnimId=requestAnimationFrame(scan);
+    }
+    // 延迟开始，等摄像头就绪
+    video.onloadeddata=()=>{scan()};
+    // 超时保护
+    setTimeout(()=>{
+      if(scanning){scanning=false;stopScanner();toast('扫描超时，请手动输入','err')}
+    },30000);
+
+  }).catch(err=>{
+    console.error('摄像头错误:',err);
+    if(err.name==='NotAllowedError')toast('摄像头权限被拒绝','err');
+    else if(err.name==='NotFoundError')toast('未找到摄像头设备','err');
+    else toast('摄像头无法使用: '+err.message,'err');
+  });
+}
+
+function stopScanner(){
+  if(scanAnimId){cancelAnimationFrame(scanAnimId);scanAnimId=null}
+  if(scannerStream){scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null}
+  document.getElementById('scanner-modal').classList.remove('open');
+}
+
+/**
+ * 扫描结果处理
+ */
+function onScanResult(data){
+  console.log('扫码结果:',data.substring(0,80)+'...');
+  toast('扫描成功!','ok');
+
+  // 大厅快捷扫码 → 自动填入并跳转加入流程
+  if(scanTargetId==='__lobby_scan__'){
+    document.getElementById('inp-room-code').value=data;
+    goTo('join-screen');
+    // 自动触发加入
+    setTimeout(()=>joinRoom(),300);
+    return;
+  }
+
+  // 普通扫码 → 填入目标框
+  const target=document.getElementById(scanTargetId);
+  if(target){
+    target.value=data;
+    // 如果有对应按钮，自动触发
+    if(scanTargetId==='inp-room-code'){
+      toast('已填入房间码，点击“生成应答码”继续','info');
+    }else if(scanTargetId==='inp-answer'){
+      toast('已填入应答码，点击“确认连接”继续','info');
+    }
+  }
+}
+
+/* ==============================================================
+   相册选图扫码
+   ============================================================== */
+let galleryTargetId=null;
+function openGallery(targetId){
+  galleryTargetId=targetId;
+  document.getElementById('gallery-input').click();
+}
+function onGallerySelect(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const img=new Image();
+  img.onload=()=>{
+    const c=document.createElement('canvas');
+    c.width=img.width;c.height=img.height;
+    const ctx=c.getContext('2d');
+    ctx.drawImage(img,0,0);
+    const imgData=ctx.getImageData(0,0,c.width,c.height);
+    if(typeof jsQR!=='undefined'){
+      const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:'dontInvert'});
+      if(code&&code.data){
+        onScanResult(code.data);
+      }else{
+        toast('未识别到二维码','err');
+      }
+    }else{
+      toast('QR解析库未加载','err');
+    }
+    URL.revokeObjectURL(img.src);
+  };
+  img.onerror=()=>toast('图片加载失败','err');
+  img.src=URL.createObjectURL(file);
+  e.target.value='';
+}
+
+/* ==============================================================
+   键盘 & 初始化
+   ============================================================== */
+document.getElementById('inp-name').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+document.addEventListener('gesturestart',e=>e.preventDefault());
+
+// 禁止 iOS 双击缩放
+let lastTouch=0;
+document.addEventListener('touchend',e=>{
+  const now=Date.now();if(now-lastTouch<=300)e.preventDefault();lastTouch=now;
+},{passive:false});
+
+renderBoard();
+updateNetworkUI(); /* 初始化网络状态检测 */
+
+/* ==============================================================
+   部署工具 (控制台调用)
+   ============================================================== */
+window.deployToGitHub=async function(){
+  const token='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';
+  const repo='cyrcyrgo/cyrcyrgo.github.io',path='wzq/index.html';
+  const html=document.documentElement.outerHTML;
+  const content=btoa(unescape(encodeURIComponent(html)));
+  try{
+    const r1=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{headers:{'Authorization':'token '+token}});
+    let sha;if(r1.ok){sha=(await r1.json()).sha}
+    const r2=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{
+      method:'PUT',headers:{'Authorization':'token '+token,'Content-Type':'application/json'},
+      body:JSON.stringify({message:'Deploy P2P五子棋',content,sha,branch:'main'})
+    });
+    r2.ok?console.log('✅ 部署成功! https://cyrcyrgo.github.io/wzq/'):console.error('❌',await r2.json());
+  }catch(e){console.error('❌',e)}
+};
+
+console.log('%cP2P五子棋 v1.50','font-size:20px;color:#c9a961;font-weight:bold');
+console.log('控制台输入 deployToGitHub() 可部署到 GitHub Pages');
 </script>
 </body>
 </html>
