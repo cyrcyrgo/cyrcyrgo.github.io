@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>邀请码解析工具</title>
+<title>邀请码解析工具 v1.1.2</title>
 <style>
 :root{--bg:#0b0b10;--surface:#14141c;--surface2:#1c1c28;--border:#2a2a38;--accent:#c9a961;--accent2:#dfc07a;--text:#e8e4dc;--dim:#7a7568;--ok:#5cb85c;--err:#d9534f;--info:#5bc0de}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -65,7 +65,7 @@ input[type=file]{display:none}
 <body>
 <div class="container">
   <h1>🔍 邀请码解析工具</h1>
-  <p class="sub">解析五子棋邀请码/应答码中的连接信息</p>
+  <p class="sub">解析五子棋邀请码/应答码中的连接信息 · 兼容 v1.61 · <span id="ver-tag" style="color:var(--info)">v1.1.2</span></p>
 
   <div class="card">
     <h2>📋 输入邀请码</h2>
@@ -131,25 +131,43 @@ function parseCode(){
 
   if(!json||!json.sdp){toast('无法解析：不是有效的邀请码','err');return}
 
+  // 协议/格式版本检测
+  const ver=json.token?'v1.61+（含Token）':(json.mode?'v1.50+':'旧版');
+
   const rows=[];
   // 基本信息
   const role=json.sdp.type==='offer'?'🏠 创建者(Host)':'🔗 加入者(Join)';
   rows.push(['角色',role]);
   rows.push(['昵称',esc(json.name||'未知')]);
   rows.push(['模式',modeLabel(json.mode)]);
+  rows.push(['格式版本',ver]);
   if(json.ts){
     const d=new Date(json.ts);
     rows.push(['时间',d.toLocaleString('zh-CN')]);
+  }
+
+  /* ===== v1.61 新增：Token 解析 ===== */
+  if(json.token){
+    const t=String(json.token);
+    const is5Digit=/^\d{5}$/.test(t);
+    rows.push(['连接Token','<span class="mono-token" style="font-size:1.1rem;font-weight:700;color:var(--accent);letter-spacing:.2em">'+esc(t)+'</span>'+(is5Digit?' <span class="badge badge-ok">5位有效</span>':' <span class="badge badge-err">格式异常</span>')]);
+  }else{
+    rows.push(['连接Token','<span class="badge badge-info">旧版无Token</span>']);
   }
 
   // SDP信息
   const sdpStr=json.sdp.sdp||'';
   rows.push(['SDP类型',json.sdp.type||'未知']);
 
-  // 提取IP地址
+  // 提取IP地址（区分内网/外网）
   const ips=extractIPs(sdpStr);
   if(ips.length>0){
-    const ipHtml=ips.map(ip=>'<span class="ip-tag">'+esc(ip)+'</span>').join('');
+    const priv=ips.filter(ip=>isPrivateIP(ip));
+    const pub=ips.filter(ip=>!isPrivateIP(ip));
+    let ipHtml='';
+    if(pub.length>0)ipHtml+='<div style="margin-bottom:.3rem"><span class="badge badge-ok">公网</span> '+pub.map(ip=>'<span class="ip-tag">'+esc(ip)+'</span>').join('')+'</div>';
+    if(priv.length>0)ipHtml+='<div style="margin-bottom:.3rem"><span class="badge badge-info">内网</span> '+priv.map(ip=>'<span class="ip-tag">'+esc(ip)+'</span>').join('')+'</div>';
+    if(!ipHtml)ipHtml=ips.map(ip=>'<span class="ip-tag">'+esc(ip)+'</span>').join('');
     rows.push(['IP地址','<div class="ip-list">'+ipHtml+'</div>']);
   }
 
@@ -196,7 +214,7 @@ function parseCode(){
 }
 
 function modeLabel(m){
-  const map={lan:'🏠 内网',p2p:'🌐 外网P2P',ngrok:'🚀 Ngrok',auto:'⚡ 自动'};
+  const map={lan:'🏠 内网对战',p2p:'🌐 外网P2P',ngrok:'🚀 Ngrok穿透',auto:'⚡ 自动优选'};
   return map[m]||m||'未知';
 }
 
