@@ -43,16 +43,25 @@
     let reasoning = '', content = '';
     try {
       let res;
-      try {
-        res = await fetch(s.url, {
+      const doFetch = (withThinking) => {
+        const body = { model: s.model, messages, temperature: 0.2, stream: true };
+        if (withThinking) body.thinking = { type: 'disabled' }; // DeepSeek 关闭思考模式，返回快、无需长思维链
+        return fetch(s.url, {
           method: 'POST',
           signal: ctrl.signal,
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.key },
-          body: JSON.stringify({ model: s.model, messages, temperature: 0.2, stream: true }),
+          body: JSON.stringify(body),
         });
+      };
+      try {
+        res = await doFetch(true);
       } catch (e) {
-        if (ctrl.signal.aborted && elapsing()) throw new Error('AI 响应超时（长时间未返回新内容），已取消');
+        if (ctrl.signal.aborted) throw new Error('AI 响应超时（长时间未返回新内容），已取消');
         throw e;
+      }
+      // 部分 OpenAI 兼容服务不识别 thinking 字段，返回 4xx 时降级重试
+      if (!res.ok && res.status === 400) {
+        res = await doFetch(false);
       }
       if (!res.ok) {
         let detail = '';
@@ -115,8 +124,6 @@
     if (!content.trim() && !reasoning.trim()) throw new Error('接口返回为空或格式异常');
     return { content: String(content).trim(), reasoning: String(reasoning).trim() };
   }
-
-  function elapsing() { return true; }
 
   window.XQSettings = { loadSettings, saveSettings, hasSettings, chat };
 })();
