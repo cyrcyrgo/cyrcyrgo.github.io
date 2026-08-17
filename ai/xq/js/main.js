@@ -46,6 +46,28 @@
   }
   function clearLog() { state.log = []; $('log').innerHTML = ''; }
 
+  /* ---------- AI 输出日志面板（查看实时指令 / 原始输出 / 解析结果） ---------- */
+  let aiTurnSeq = 0;
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function renderAIOut(block) {
+    const el = $('ai-out');
+    if (!el) return;
+    const req = block.req
+      ? '<details class="ai-in"><summary>📤 发送的指令（系统识别使用的棋盘）</summary><pre>' + esc(block.req) + '</pre></details>'
+      : '';
+    const rawAll = (block.reasoning || '') + (block.content || '');
+    const rawTail = rawAll.length > 1600 ? '…' + rawAll.slice(-1600) : rawAll;
+    const raw = '<details class="ai-in" open><summary>📥 AI 原始输出（思维链 ' + (block.reasoning || '').length +
+      ' 字 / 回答 ' + (block.content || '').length + ' 字）</summary><pre class="ai-raw">' + esc(rawTail) + '</pre></details>';
+    el.innerHTML = '<div class="ai-block"><div class="ai-block-title">' + esc(block.title) + '</div>' +
+      req + raw + '<div class="ai-res">' + (block.result || '…') + '</div></div>';
+    el.scrollTop = el.scrollHeight;
+    const b = $('ai-out-badge');
+    if (b) b.textContent = block.title;
+  }
+
   /* ---------- 配置弹窗 ---------- */
   let pendingGame = null;
   function openConfig() {
@@ -266,95 +288,125 @@
     setChip('AI 思考中…', 'turn-ai');
     if (abort) abort.abort();
     abort = new AbortController();
-    const timeout = setTimeout(() => abort && abort.abort(), 90 * 1000);
+
+    // 实时日志块
+    const block = { title: 'AI 第 ' + (++aiTurnSeq) + ' 步', req: '', reasoning: '', content: '', result: '…' };
+    renderAIOut(block);
+    let lastUi = 0;
+    const pump = () => {
+      const now = performance.now();
+      if (now - lastUi > 100) {
+        lastUi = now;
+        renderAIOut(block);
+        setChip('AI 思考中…（已生成 ' + ((block.reasoning || '').length + (block.content || '').length) + ' 字）', 'turn-ai');
+      }
+    };
+    const live = {
+      onReasoning: (t) => { block.reasoning += t; pump(); },
+      onContent: (t) => { block.content += t; pump(); },
+    };
 
     try {
       const m = state.game === 'xiangqi'
-        ? await xiangqiAITurn()
-        : await gomokuAITurn();
-      if (state.over || !m.apply) { state.thinking = false; return; }
+        ? await xiangqiAITurn(live, block)
+        : await gomokuAITurn(live, block);
+      if (state.over || !m || !m.move) { state.thinking = false; return; }
+      block.result = '✔ 解析成功：' + m.describe;
+      renderAIOut(block);
       m.apply();
       state.thinking = false;
     } catch (err) {
       state.thinking = false;
       const msg = 'AI 出错：' + (err && err.message ? err.message : err);
+      block.result = '✖ ' + msg;
+      renderAIOut(block);
       addLog('⚠ ' + msg);
       setChip('AI 出错', '');
       state.retryFn = () => aiMove();
       show('btn-retry-ai');
-    } finally {
-      clearTimeout(timeout);
     }
   }
 
-  function xiangqiAITurn() {
+  function xiangqiAITurn(live, block) {
     const aiRed = state.aiColor === 'red';
     const system =
-      '你是中国象棋 AI，执' + (aiRed ? '红方（大写棋子 K帅 A仕 B相 N马 R车 C炮 P兵）' : '黑方（小写棋子 k将 a士 b象 n马 r车 c炮 p卒）') + '，与人类对弈。\n' +
-      '棋盘为 10 行 × 9 列。坐标用 (row,col)：row 从 0 到 9（0 是最上方一行，9 是最下方一行），col 从 0 到 8（从左到右）。\n' +
-      '系统会以字符串网格给出当前棋盘，每行一个字符串、共 10 行，从上到下对应 row 0 到 9；每个字符代表该交叉点上的棋子，"." 表示空位。\n' +
-      '你只能移动自己颜色（' + (aiRed ? '大写' : '小写') + '）的棋子，并且必须符合中国象棋规则（不能把自己将暴露在将军威胁下）。每回合只走一步。\n' +
-      '请根据棋盘选一步对你有利的合法棋，严格输出且仅输出一个 JSON 对象，不要输出任何其它文字、解释或标点，格式如下：\n' +
-      '{"from":"R,C","to":"R,C"}\n' +
-      '其中 R,C 是整数，例如：{"from":"9,4","to":"8,4"}。';
+      '你是中国象棋 AI，执' + (aiRed ? '红方（大写：K帅 A仕 B相 N马 R车 C炮 P兵）' : '黑方（小写：k将 a士 b象 n马 r车 c炮 p卒）') + '。\n' +
+      '棋盘固定为 10 行 × 9 列，坐标 (row,col)：row=0..9（0 最上、恒为对方底，9 最下、恒为你方底），col=0..8（左到右）。\n' +
+      '棋盘以 10 行字符串给出，每行恰为 9 个字符，从上到下对应 row=0..9，每个字符为该格棋子，"." 为空位。棋盘已合法，勿质疑棋盘格式。\n' +
+      '你只能移动己方棋子（' + (aiRed ? '大写' : '小写') + '），且必须符合中国象棋法则（不能把自己将军置于被将状态）。每回合只走一步。\n' +
+      '任选一步合法走法即可，不必追求最优，不要再做长篇分析。\n' +
+      '严禁输出任何解释、分析、推理、markdown 代码块标记或多余字符；若思考后也要保证最终输出里包含一个合法 JSON。\n' +
+      '只输出一行 JSON，唯一格式：{"from":"R,C","to":"R,C"}，R,C 为整数，例如 {"from":"2,7","to":"2,4"}。';
 
-    const user = Xq.boardText(state.board) + '\n\n轮到你（执' + (aiRed ? '红' : '黑') + '方）走棋。请仅输出一个 JSON：{"from":"R,C","to":"R,C"}。';
+    const user = Xq.boardText(state.board) + '\n\n轮到你（执' + (aiRed ? '红' : '黑') + '方）走棋。只输出一行合法 JSON：{"from":"R,C","to":"R,C"}。';
 
     return askAI(system, user, (text) => {
-      const m = text.match(/"from"\s*:\s*"(\d+),(\d+)"[\s\S]*?"to"\s*:\s*"(\d+),(\d+)"/);
-      if (!m) return null;
-      const [fr, fc, tr, tc] = [+m[1], +m[2], +m[3], +m[4]];
+      const clean = String(text || '').replace(/```[a-z]*/gi, '').replace(/```/g, '');
+      const f = clean.match(/"from"\s*:\s*"?(\d+),(\d+)"?/);
+      const t = clean.match(/"to"\s*:\s*"?(\d+),(\d+)"?/);
+      if (!f || !t) return null;
+      const [fr, fc, tr, tc] = [+f[1], +f[2], +t[1], +t[2]];
       const legal = Xq.legalMoves(state.board, state.aiColor)
         .find(mm => mm[0] === fr && mm[1] === fc && mm[2] === tr && mm[3] === tc);
       return legal ? [fr, fc, tr, tc] : null;
-    }, () => Xq.legalMoves(state.board, state.aiColor));
+    }, () => Xq.legalMoves(state.board, state.aiColor), live, block);
   }
 
-  function gomokuAITurn() {
+  function gomokuAITurn(live, block) {
     const aiBlack = state.aiColor === 1;
     const system =
-      '你是五子棋 AI，执' + (aiBlack ? '黑子（X）' : '白子（O）') + '与人类对弈。\n' +
-      '棋盘 15×15，坐标 (row,col)，0≤row≤14，0≤col≤14，左上角为 (0,0)。\n' +
-      '系统会以网格给出棋盘：每行一个字符串共 15 行，"." 为空位，X 为黑子，O 为白子（棋子颜色固定，不随执子变化）。\n' +
-      '你执' + (aiBlack ? '黑（X）' : '白（O）') + '，只能在空位落子，尽量阻止对方五连并争取己方五连。\n' +
-      '严格输出且仅输出一个 JSON 对象，格式如下，不要输出任何其它文字：\n' +
-      '{"row":R,"col":C}\n' +
-      '例如：{"row":7,"col":7}。';
+      '你是五子棋 AI，执' + (aiBlack ? '黑子（X）' : '白子（O）') + '。\n' +
+      '棋盘固定 15×15，坐标 (row,col)，0≤row≤14，0≤col≤14，左上角 (0,0)。\n' +
+      '棋盘以 15 行字符串给出，每行恰为 15 个字符，"." 空位，X 黑子，O 白子（颜色固定，不随执子变化）。棋盘已合法，勿质疑格式。\n' +
+      '你只能在空位落子，兼顾防守与进攻。任选一步即可，不必做长篇分析。\n' +
+      '严禁输出任何解释、分析、推理、markdown 代码块标记；若思考后也要保证最终输出包含一个合法 JSON。\n' +
+      '只输出一行 JSON，唯一格式：{"row":R,"col":C}，例如 {"row":7,"col":7}。';
 
-    const user = Gomoku.boardText(state.board) + '\n\n轮到你（执' + (aiBlack ? '黑 X' : '白 O') + '）落子。请仅输出一个 JSON：{"row":R,"col":C}。';
+    const user = Gomoku.boardText(state.board) + '\n\n轮到你（执' + (aiBlack ? '黑 X' : '白 O') + '）落子。只输出一行合法 JSON：{"row":R,"col":C}。';
 
     return askAI(system, user, (text) => {
-      const m = text.match(/"row"\s*:\s*(\d+)[\s\S]*?"col"\s*:\s*(\d+)/);
-      if (!m) return null;
-      const [r, c] = [+m[1], +m[2]];
-      if (r < 0 || r > 14 || c < 0 || c > 14 || state.board[r][c] !== 0) return null;
-      return [r, c];
+      const clean = String(text || '').replace(/```[a-z]*/gi, '').replace(/```/g, '');
+      const r = clean.match(/"row"\s*:\s*"?(\d+)"?/);
+      const c = clean.match(/"col"\s*:\s*"?(\d+)"?/);
+      if (!r || !c) return null;
+      const [rr, cc] = [+r[1], +c[1]];
+      if (rr < 0 || rr > 14 || cc < 0 || cc > 14 || state.board[rr][cc] !== 0) return null;
+      return [rr, cc];
     }, () => {
       // 兜底：任意空位
       for (let i = 0; i < 15; i++) for (let j = 0; j < 15; j++) if (state.board[i][j] === 0) return [i, j];
       return null;
-    });
+    }, live, block);
   }
 
-  /* 组装并调用模型；validator 校验坐标，fallback 返回兜底走法 */
-  async function askAI(system, initialUser, validator, fallback) {
-    const messages = [{ role: 'system', content: system }, { role: 'user', content: initialUser }];
-    let text;
-    text = await S().chat(messages, { signal: abort.signal });
-    let move = validator(text);
+  /* 组装并调用模型（流式）；validator 校验坐标，fallback 返回兜底走法 */
+  async function askAI(system, initialUser, validator, fallback, live, block) {
+    block.req = 'system:\n' + system + '\n\nuser:\n' + initialUser;
+    const doChat = (msgs) => S().chat(msgs, {
+      signal: abort.signal,
+      onReasoning: live && live.onReasoning,
+      onContent: live && live.onContent,
+    });
+    let res = await doChat([{ role: 'system', content: system }, { role: 'user', content: initialUser }]);
+    let move = validator(res.content);
+    if (!move && res.reasoning) move = validator(res.reasoning); // 个别情况 content 为空
     if (!move) {
       // 二次纠正
-      text = await S().chat(messages.concat({ role: 'user', content: '你刚才的输出不是合法走法，请重新仅输出一个合法 JSON。' }), { signal: abort.signal });
-      move = validator(text);
+      res = await doChat([{ role: 'system', content: system }, { role: 'user', content: initialUser },
+        { role: 'user', content: '你刚才的输出不是合法走法，请立刻重新仅输出一个合法 JSON，不要任何其它文字。' }]);
+      move = validator(res.content);
+      if (!move && res.reasoning) move = validator(res.reasoning);
     }
     if (!move) {
       addLog('⚠ AI 输出无法解析，采用兜底走法');
+      block.result = '⚠ AI 输出未通过合法性校验，采用兜底走法';
       move = fallback();
       if (!move) throw new Error('无可用走法');
     }
-    return {
-      apply: () => applyAIMove(move),
-    };
+    const describe = state.game === 'xiangqi'
+      ? '(' + move[0] + ',' + move[1] + ')→(' + move[2] + ',' + move[3] + ')'
+      : '落子 (' + move[0] + ',' + move[1] + ')';
+    return { move, describe, apply: () => applyAIMove(move) };
   }
 
   function applyAIMove(move) {
