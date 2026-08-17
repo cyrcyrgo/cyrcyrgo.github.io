@@ -107,6 +107,11 @@ canvas {
   font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: #b8c4d0;
 }
 .ai-raw { color: #9fd0a0; } /* 原始输出用亮色便于阅读 */
+.ai-stat {
+  padding: 6px 8px; border-radius: 8px; background: #0e1116; border: 1px solid var(--line);
+  margin: 4px 0 8px; font-size: 12px; color: var(--muted); line-height: 1.8;
+}
+.ai-stat b { color: var(--accent); font-weight: 600; }
 .ai-res { margin-top: 4px; font-weight: 500; color: var(--accent); }
 
 /* ---------- 弹窗 ---------- */

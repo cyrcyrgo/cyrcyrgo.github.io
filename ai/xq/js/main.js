@@ -46,26 +46,51 @@
   }
   function clearLog() { state.log = []; $('log').innerHTML = ''; }
 
-  /* ---------- AI 输出日志面板（查看实时指令 / 原始输出 / 解析结果） ---------- */
+  /* ---------- AI 输出日志面板（查看实时指令 / 原始输出 / 解析结果 + 思考计时） ---------- */
   let aiTurnSeq = 0;
   function esc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+  function fmtMs(ms) {
+    const t = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    const mm = (m < 10 ? '0' : '') + m, ss = (s < 10 ? '0' : '') + s;
+    return (h > 0 ? h + ':' : '') + mm + ':' + ss;
+  }
   function renderAIOut(block) {
     const el = $('ai-out');
     if (!el) return;
+    const stat = block.stats || {};
+    const thinkingPhase =
+      (block.content && block.content.length > 0)
+        ? '已输出结论（' + block.content.length + ' 字）'
+        : (stat.reasoningChars > 0 ? '思考中…已写 ' + stat.reasoningChars + ' 字' : '等待 AI 首包…');
+    const statLine =
+      '<div class="ai-stat">' +
+      '⏱ <b>' + fmtMs(stat.elapsedMs || 0) + '</b>' +
+      (stat.reasoningChars > 0 ? ' · 🧠 思考量 <b>' + stat.reasoningChars.toLocaleString() + '</b> 字' : '') +
+      (stat.contentChars > 0 ? ' · ✍ 结论字数 <b>' + stat.contentChars.toLocaleString() + '</b>' : '') +
+      ' · 阶段：<b>' + esc(thinkingPhase) + '</b>' +
+      '</div>';
     const req = block.req
       ? '<details class="ai-in"><summary>📤 发送的指令（系统识别使用的棋盘）</summary><pre>' + esc(block.req) + '</pre></details>'
       : '';
-    const rawAll = (block.reasoning || '') + (block.content || '');
-    const rawTail = rawAll.length > 1600 ? '…' + rawAll.slice(-1600) : rawAll;
-    const raw = '<details class="ai-in" open><summary>📥 AI 原始输出（思维链 ' + (block.reasoning || '').length +
-      ' 字 / 回答 ' + (block.content || '').length + ' 字）</summary><pre class="ai-raw">' + esc(rawTail) + '</pre></details>';
+    const reasoningOnly =
+      (block.reasoning && block.reasoning.length)
+        ? '<details class="ai-in"><summary>🧠 思维链（' + block.reasoning.length.toLocaleString() + ' 字，可展开查看）</summary><pre class="ai-raw">' +
+          esc(block.reasoning.length > 2400 ? (block.reasoning.slice(0, 1200) + '\n…(中间已省略)…\n' + block.reasoning.slice(-1200)) : block.reasoning) +
+          '</pre></details>'
+        : '';
+    const rawContent =
+      (block.content && block.content.length)
+        ? '<details class="ai-in" open><summary>🎯 系统抽取的【正式输出】content（用于坐标解析）</summary><pre class="ai-raw">' + esc(block.content) + '</pre></details>'
+        : '';
     el.innerHTML = '<div class="ai-block"><div class="ai-block-title">' + esc(block.title) + '</div>' +
-      req + raw + '<div class="ai-res">' + (block.result || '…') + '</div></div>';
+      statLine + req + reasoningOnly + rawContent +
+      '<div class="ai-res">' + (block.result || '…') + '</div></div>';
     el.scrollTop = el.scrollHeight;
     const b = $('ai-out-badge');
-    if (b) b.textContent = block.title;
+    if (b) b.textContent = '⏱ ' + fmtMs(stat.elapsedMs || 0) + (stat.reasoningChars ? ' · 🧠 ' + stat.reasoningChars : '');
   }
 
   /* ---------- 配置弹窗 ---------- */
@@ -297,43 +322,56 @@
   async function aiMove() {
     if (state.over || state.thinking || state.turn !== 'ai') return;
     state.thinking = true;
-    setChip('AI 思考中…', 'turn-ai');
+    setChip('AI 思考中…（等待响应）', 'turn-ai');
     if (abort) abort.abort();
     abort = new AbortController();
 
     // 实时日志块
-    const block = { title: 'AI 第 ' + (++aiTurnSeq) + ' 步', req: '', reasoning: '', content: '', result: '…' };
-    renderAIOut(block);
-    let lastUi = 0;
-    const pump = () => {
-      const now = performance.now();
-      if (now - lastUi > 100) {
-        lastUi = now;
-        renderAIOut(block);
-        setChip('AI 思考中…（已生成 ' + ((block.reasoning || '').length + (block.content || '').length) + ' 字）', 'turn-ai');
-      }
+    const block = {
+      title: 'AI 第 ' + (++aiTurnSeq) + ' 步', req: '', reasoning: '', content: '', result: '…',
+      stats: { elapsedMs: 0, reasoningChars: 0, reasoningBytes: 0, contentChars: 0 },
     };
+    renderAIOut(block);
+    const startedAt = performance.now();
+    let rafId = 0;
+    const stopRaf = () => { if (rafId) cancelAnimationFrame(rafId); rafId = 0; };
+    const loopTick = () => {
+      // 即便 onProgress 长时间没到，也按 rAF 刷新已流逝时间
+      block.stats.elapsedMs = performance.now() - startedAt;
+      renderAIOut(block);
+      const phase = block.content && block.content.length
+        ? '输出结论中（' + fmtMs(block.stats.elapsedMs) + '）'
+        : (block.stats.reasoningChars > 0 ? '思考中（' + fmtMs(block.stats.elapsedMs) + ' · ' + block.stats.reasoningChars.toLocaleString() + '字）' : '连接中…（' + fmtMs(block.stats.elapsedMs) + '）');
+      setChip('AI ' + phase, 'turn-ai');
+      rafId = requestAnimationFrame(loopTick);
+    };
+    rafId = requestAnimationFrame(loopTick);
     const live = {
-      onReasoning: (t) => { block.reasoning += t; pump(); },
-      onContent: (t) => { block.content += t; pump(); },
+      onReasoning: (t) => { block.reasoning += t; },
+      onContent: (t) => { block.content += t; },
+      onProgress: (p) => { Object.assign(block.stats, p); },
     };
 
     try {
       const m = state.game === 'xiangqi'
         ? await xiangqiAITurn(live, block)
         : await gomokuAITurn(live, block);
+      stopRaf();
+      block.stats.elapsedMs = performance.now() - startedAt;
       if (state.over || !m || !m.move) { state.thinking = false; return; }
-      block.result = '✔ 解析成功：' + m.describe;
+      block.result = '✔ 解析成功（耗时 ' + fmtMs(block.stats.elapsedMs) + ' · 思考量 ' + block.stats.reasoningChars.toLocaleString() + ' 字）：' + m.describe;
       renderAIOut(block);
       m.apply();
       state.thinking = false;
     } catch (err) {
+      stopRaf();
+      block.stats.elapsedMs = performance.now() - startedAt;
       state.thinking = false;
       const msg = 'AI 出错：' + (err && err.message ? err.message : err);
       block.result = '✖ ' + msg;
       renderAIOut(block);
       addLog('⚠ ' + msg);
-      setChip('AI 出错', '');
+      setChip('AI 出错（' + fmtMs(block.stats.elapsedMs) + '）', '');
       state.retryFn = () => aiMove();
       show('btn-retry-ai');
     }
@@ -357,8 +395,11 @@
       '棋盘坐标系：row 行 0..9（0 最上、9 最下），col 列 0..8（0 最左、8 最右），严格从零开始。\n' +
       '红方棋子 = 大写：K帅 A仕 B相 N马 R车 C炮 P兵；黑方棋子 = 小写：k将 a士 b象 n马 r车 c炮 p卒。\n' +
       '你执' + (aiRed ? '红方' : '黑方') + '，你的棋子都是' + aiPieceLetter + '。你只能移动你自己颜色（' + aiPieceLetter + '）的棋子。\n' +
-      '严禁解释、严禁分析、严禁推理、严禁 markdown、严禁代码块。禁止输出 JSON 之外的任何字符。\n' +
-      '只输出一行裸 JSON，格式精确为：{"from":"R,C","to":"R,C"}。例如 {"from":"2,7","to":"2,4"}。';
+      '\n工作流（必须严格遵守）：\n' +
+      '  ① 先进行分析和思考（这些可以放在你自己的思维链里，系统会忽略、不算作你的最终输出）；\n' +
+      '  ② 思考完毕后，把【最终决定】作为正式回答输出，并且必须且只能输出一个裸 JSON；\n' +
+      '  ③ 最终决定 JSON 格式精确为：{"from":"R,C","to":"R,C"}，R、C 为整数，不要再写解释、代码块、标签、多余字符。\n' +
+      '  ⚠ 系统只会提取正式回答里的最后一个 JSON 作为你的最终坐标，草稿和思维链里的任何 JSON 都不会被采信。';
 
     const user =
       '棋盘（4 个边缘都带行号列号，可对照确认坐标）：\n' +
@@ -366,12 +407,15 @@
       '你执' + (aiRed ? '红方（大写）' : '黑方（小写）') + '。下面列出【当前合法走法全集】(from_row,from_col 棋子)→(to_row,to_col)，你必须从下列候选中挑一条（任选其一即可），不要自己编造：\n' +
       legalMsPreview +
       (legalMs.length > legalMsPreview.length ? '\n（只展示前 ' + legalMsPreview.length + '/' + legalMs.length + ' 条，其他同理。）' : '') +
-      '\n\n请在以上候选中任选一条对你相对有利的合法走法，立刻仅输出一行 JSON：{"from":"R,C","to":"R,C"}。';
+      '\n\n步骤：① 先按你自己的方式深入思考；② 思考结束后，把最终决定以且仅以一个 JSON 输出，格式：{"from":"R,C","to":"R,C"}。';
 
     return askAI(system, user, (text) => {
       const clean = String(text || '').replace(/```[a-z]*/gi, '').replace(/```/g, '');
-      const f = clean.match(/"from"\s*:\s*"?(\d+),(\d+)"?/);
-      const t = clean.match(/"to"\s*:\s*"?(\d+),(\d+)"?/);
+      // 取最后一个 JSON 块（防止正式回答里先写一段话再写 JSON，或者在 JSON 后还有文字）
+      const matches = clean.match(/\{[\s\S]*?\}/g);
+      const blockJson = matches && matches.length ? matches[matches.length - 1] : clean;
+      const f = blockJson.match(/"from"\s*:\s*"?(\d+),(\d+)"?/);
+      const t = blockJson.match(/"to"\s*:\s*"?(\d+),(\d+)"?/);
       if (!f || !t) return null;
       const [fr, fc, tr, tc] = [+f[1], +f[2], +t[1], +t[2]];
       const legal = legalMs.find(mm => mm[0] === fr && mm[1] === fc && mm[2] === tr && mm[3] === tc);
@@ -384,7 +428,6 @@
     const aiMark = aiBlack ? 'X（黑，棋子编码 1）' : 'O（白，棋子编码 2）';
     const oppMark = aiBlack ? 'O（白）' : 'X（黑）';
     const N = state.board.length;
-    // 生成带行列号的棋盘 + 候选空位（选攻防价值高的 Top 200，避免过多 token）
     const boardWHeaders = (function () {
       const hdr = '   ' + Array.from({ length: N }, (_, i) => (' ' + (i % 10)).slice(-1)).join('');
       const rows = Gomoku.boardText(state.board).split('\n');
@@ -393,7 +436,6 @@
     const empties = [];
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       if (state.board[i][j] !== 0) continue;
-      // 优先“周围 3 格内有己/对方子”的点（远离战场的点极大概率无价值）
       let near = 0;
       for (let di = -2; di <= 2; di++) for (let dj = -2; dj <= 2; dj++) {
         const ii = i + di, jj = j + dj;
@@ -409,54 +451,65 @@
       '你是五子棋 AI。棋盘固定 15×15，row/col 均为 0..14，左上角 (0,0)，row 从上到下递增，col 从左到右递增，严格从零开始。\n' +
       '棋盘每行 15 个字符："." 空位，X 黑方，O 白方（颜色固定，与执子无关）。\n' +
       '你执' + aiMark + '，只能在空位落子，尽量阻止对方五连并争取己方五连。\n' +
-      '严禁解释、严禁分析、严禁推理、严禁 markdown、严禁代码块。禁止输出 JSON 之外的任何字符。\n' +
-      '只输出一行裸 JSON，格式精确为：{"row":R,"col":C}。例如 {"row":7,"col":7}。';
+      '\n工作流（必须严格遵守）：\n' +
+      '  ① 先进行分析和思考（这些可以放在你自己的思维链里，系统会忽略、不算作你的最终输出）；\n' +
+      '  ② 思考完毕后，把【最终决定】作为正式回答输出，并且必须且只能输出一个裸 JSON；\n' +
+      '  ③ 最终决定 JSON 格式精确为：{"row":R,"col":C}，R、C 为整数，不要再写解释、代码块、标签、多余字符。\n' +
+      '  ⚠ 系统只会提取正式回答里的最后一个 JSON 作为你的最终坐标，草稿和思维链里的任何 JSON 都不会被采信。';
 
     const user =
       '棋盘（4 个边缘都带行号/列号，可对照确认坐标）：\n' +
       boardWHeaders + '\n\n' +
       '你执' + aiMark + '，对方执' + oppMark + '。下面列出【当前推荐候选空位】（已按接近已有棋子密度排序，任选其一即可）：\n' +
       candList +
-      '\n\n请在以上候选中任选一个对你有利的空位落子，立刻仅输出一行 JSON：{"row":R,"col":C}。';
+      '\n\n步骤：① 先按你自己的方式深入思考；② 思考结束后，把最终决定以且仅以一个 JSON 输出，格式：{"row":R,"col":C}。';
 
     return askAI(system, user, (text) => {
       const clean = String(text || '').replace(/```[a-z]*/gi, '').replace(/```/g, '');
-      const r = clean.match(/"row"\s*:\s*"?(\d+)"?/);
-      const c = clean.match(/"col"\s*:\s*"?(\d+)"?/);
+      const matches = clean.match(/\{[\s\S]*?\}/g);
+      const blockJson = matches && matches.length ? matches[matches.length - 1] : clean;
+      const r = blockJson.match(/"row"\s*:\s*"?(\d+)"?/);
+      const c = blockJson.match(/"col"\s*:\s*"?(\d+)"?/);
       if (!r || !c) return null;
       const [rr, cc] = [+r[1], +c[1]];
       if (rr < 0 || rr >= N || cc < 0 || cc >= N) return null;
       if (state.board[rr][cc] !== 0) return null;
       return [rr, cc];
     }, () => {
-      // 兜底：选第一个候选空位；如果空棋盘就下中心
       if (cand.length) return [cand[0][0], cand[0][1]];
       const m7 = (N >> 1);
       return [m7, m7];
     }, live, block);
   }
 
-  /* 组装并调用模型（流式）；validator 校验坐标，fallback 返回兜底走法 */
+  /* 组装并调用模型（流式）；validator 校验坐标，fallback 返回兜底走法。
+   * ⚠ 系统只解析【正式回答 content】里的最后一个 JSON，绝不采信 reasoning 思维链中的草稿 JSON。 */
   async function askAI(system, initialUser, validator, fallback, live, block) {
     block.req = 'system:\n' + system + '\n\nuser:\n' + initialUser;
     const doChat = (msgs) => S().chat(msgs, {
       signal: abort.signal,
       onReasoning: live && live.onReasoning,
       onContent: live && live.onContent,
+      onProgress: live && live.onProgress,
     });
     let res = await doChat([{ role: 'system', content: system }, { role: 'user', content: initialUser }]);
+    // 只使用 content（正式回答）解析，不采信思维链草稿
     let move = validator(res.content);
-    if (!move && res.reasoning) move = validator(res.reasoning); // 个别情况 content 为空
-    if (!move) {
-      // 二次纠正
-      res = await doChat([{ role: 'system', content: system }, { role: 'user', content: initialUser },
-        { role: 'user', content: '你刚才的输出不是合法走法，请立刻重新仅输出一个合法 JSON，不要任何其它文字。' }]);
-      move = validator(res.content);
-      if (!move && res.reasoning) move = validator(res.reasoning);
+    if (!move && !res.content.trim() && res.reasoning) {
+      // 极少数情况下模型把回答也放在了 reasoning_content（非标准），仅 content 为空时退回尝试
+      move = validator(res.reasoning);
     }
     if (!move) {
-      addLog('⚠ AI 输出无法解析，采用兜底走法');
-      block.result = '⚠ AI 输出未通过合法性校验，采用兜底走法';
+      res = await doChat([
+        { role: 'system', content: system }, { role: 'user', content: initialUser },
+        { role: 'user', content: '⚠ 你刚才的正式回答里没有包含一个合法可解析的最终 JSON。请重新完整输出最终决定，正式回答必须包含且只包含一个裸 JSON：' + (state.game === 'xiangqi' ? '{"from":"R,C","to":"R,C"}' : '{"row":R,"col":C}') + '。思维链仍然可以写，但最终坐标必须出现在正式回答中。' },
+      ]);
+      move = validator(res.content);
+      if (!move && !res.content.trim() && res.reasoning) move = validator(res.reasoning);
+    }
+    if (!move) {
+      addLog('⚠ AI 正式回答中未找到合法坐标，采用兜底走法');
+      block.result = '⚠ AI 正式回答未通过合法性校验，采用兜底走法（思考 ' + block.stats.reasoningChars.toLocaleString() + ' 字）';
       move = fallback();
       if (!move) throw new Error('无可用走法');
     }

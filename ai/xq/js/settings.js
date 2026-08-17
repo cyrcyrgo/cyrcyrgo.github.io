@@ -17,12 +17,14 @@
 
   /* 调用模型（流式），返回最后回答 content 与思维链 reasoning。
    * opts:
-   *   signal         外部取消信号（重试/返回大厅）
-   *   onReasoning    流式回调：每段思维链文本
-   *   onContent      流式回调：每段回答文本
-   * 超时策略：用“空闲 X 秒无新数据”判定（适配推理模型长思维链），配一个总时长兜底。 */
+   *   signal          外部取消信号（重试/返回大厅）
+   *   onReasoning     流式回调：每段思维链文本
+   *   onContent       流式回调：每段回答文本
+   *   onProgress({ elapsedMs, reasoningChars, reasoningBytes, contentChars })
+   *                   持续回调（每收到一个 chunk 至少一次），供 UI 显示思考中计时/字数
+   * 超时策略：空闲超时 + 长总时长兜底（思考模式下默认更宽松）。 */
   async function chat(messages, opts = {}) {
-    const { signal, onReasoning, onContent } = opts;
+    const { signal, onReasoning, onContent, onProgress } = opts;
     const s = loadSettings();
     if (!s.key || !s.url || !s.model) throw new Error('请先在“接口设置”中填写 API Key / URL / Model');
 
@@ -33,35 +35,41 @@
       else signal.addEventListener('abort', localAbort, { once: true });
     }
 
-    const IDLE_MS = 150000;   // 空闲超时：连续 150s 无新 token 判定超时
-    const TOTAL_MS = 600000;  // 总时长兜底：10 分钟
+    const IDLE_MS = 300000;       // 空闲超时：连续 5 分钟无新 token
+    const TOTAL_MS = 30 * 60 * 1000; // 总时长兜底：30 分钟（长思考模式）
     let idleTimer = null, totalTimer = null;
     const resetIdle = () => { if (idleTimer) clearTimeout(idleTimer); idleTimer = setTimeout(localAbort, IDLE_MS); };
     resetIdle();
     totalTimer = setTimeout(localAbort, TOTAL_MS);
 
+    const startedAt = performance.now();
     let reasoning = '', content = '';
+    let reasoningBytes = 0; // UTF-16 字符数近似
+    const emit = () => {
+      if (!onProgress) return;
+      try { onProgress({
+        elapsedMs: performance.now() - startedAt,
+        reasoningChars: reasoning.length,
+        reasoningBytes,
+        contentChars: content.length,
+      }); } catch (e) {}
+    };
+    emit();
+
     try {
       let res;
-      const doFetch = (withThinking) => {
-        const body = { model: s.model, messages, temperature: 0.2, stream: true };
-        if (withThinking) body.thinking = { type: 'disabled' }; // DeepSeek 关闭思考模式，返回快、无需长思维链
-        return fetch(s.url, {
+      // 显式不写 thinking.type:disabled -> DeepSeek 启用思考模式
+      const body = { model: s.model, messages, temperature: 0.2, stream: true };
+      try {
+        res = await fetch(s.url, {
           method: 'POST',
           signal: ctrl.signal,
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.key },
           body: JSON.stringify(body),
         });
-      };
-      try {
-        res = await doFetch(true);
       } catch (e) {
         if (ctrl.signal.aborted) throw new Error('AI 响应超时（长时间未返回新内容），已取消');
         throw e;
-      }
-      // 部分 OpenAI 兼容服务不识别 thinking 字段，返回 4xx 时降级重试
-      if (!res.ok && res.status === 400) {
-        res = await doFetch(false);
       }
       if (!res.ok) {
         let detail = '';
@@ -74,6 +82,8 @@
         const msg = data?.choices?.[0]?.message || {};
         reasoning = (msg.reasoning_content || '');
         content = (msg.content || '');
+        reasoningBytes = [...reasoning].length;
+        emit();
         return { content: String(content).trim(), reasoning: String(reasoning).trim() };
       }
       const reader = res.body.getReader();
@@ -95,13 +105,21 @@
           try {
             const j = JSON.parse(payload);
             const delta = (j.choices && j.choices[0] && j.choices[0].delta) || {};
-            if (delta.reasoning_content) { reasoning += delta.reasoning_content; if (onReasoning) onReasoning(delta.reasoning_content); }
-            if (delta.content) { content += delta.content; if (onContent) onContent(delta.content); }
+            if (delta.reasoning_content) {
+              reasoning += delta.reasoning_content;
+              reasoningBytes += [...delta.reasoning_content].length;
+              if (onReasoning) onReasoning(delta.reasoning_content);
+              emit();
+            }
+            if (delta.content) {
+              content += delta.content;
+              if (onContent) onContent(delta.content);
+              emit();
+            }
           } catch (e3) {}
         }
       }
-      // 兜底：无换行分隔的 [DONE]
-      if (buf.trim() === '[DONE]') { buf = ''; }
+      // 兜底：末尾无换行分隔的 [DONE] / 尾行
       if (buf.trim()) {
         const line = buf.trim();
         if (line.startsWith('data:')) {
@@ -110,12 +128,17 @@
             try {
               const j = JSON.parse(payload);
               const delta = (j.choices && j.choices[0] && j.choices[0].delta) || {};
-              if (delta.reasoning_content) { reasoning += delta.reasoning_content; if (onReasoning) onReasoning(delta.reasoning_content); }
+              if (delta.reasoning_content) {
+                reasoning += delta.reasoning_content;
+                reasoningBytes += [...delta.reasoning_content].length;
+                if (onReasoning) onReasoning(delta.reasoning_content);
+              }
               if (delta.content) { content += delta.content; if (onContent) onContent(delta.content); }
             } catch (e4) {}
           }
         }
       }
+      emit();
     } finally {
       if (idleTimer) clearTimeout(idleTimer);
       if (totalTimer) clearTimeout(totalTimer);
