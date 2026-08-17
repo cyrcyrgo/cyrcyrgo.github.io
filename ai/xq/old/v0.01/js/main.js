@@ -158,38 +158,12 @@
     return canvasDisp.mirror ? [9 - hit.r, 8 - hit.c] : [hit.r, hit.c];
   }
 
-  /* ---------- 玩家走子输入（PointerEvent + 触屏/鼠标兜底，滑动忽略） ---------- */
-  let tapStart = null;
-  function tapAt(x, y) {
+  /* ---------- 玩家点击 ---------- */
+  canvas.addEventListener('click', (evt) => {
     if (state.over || state.thinking || state.turn !== 'player') return;
-    if (state.game === 'xiangqi') onPlayerXiangqi({ clientX: x, clientY: y });
-    else onPlayerGomoku({ clientX: x, clientY: y });
-  }
-  function beginTap(x, y) { tapStart = { x, y }; }
-  function endTap(x, y) {
-    if (!tapStart) return;
-    const dx = x - tapStart.x, dy = y - tapStart.y;
-    tapStart = null;
-    if (Math.hypot(dx, dy) > 12) return; // 滑动/滚动手势，忽略
-    tapAt(x, y);
-  }
-
-  if (window.PointerEvent) {
-    canvas.addEventListener('pointerdown', (ev) => {
-      if (ev.pointerType === 'mouse' && ev.button > 0) return;
-      beginTap(ev.clientX, ev.clientY);
-      try { if (canvas.setPointerCapture) canvas.setPointerCapture(ev.pointerId); } catch (e) {}
-    });
-    canvas.addEventListener('pointerup', (ev) => endTap(ev.clientX, ev.clientY));
-    canvas.addEventListener('pointercancel', () => { tapStart = null; });
-  } else {
-    // 老浏览器兜底：触屏 + 鼠标
-    canvas.addEventListener('touchstart', (ev) => { const t = ev.changedTouches[0]; if (t) beginTap(t.clientX, t.clientY); }, { passive: true });
-    canvas.addEventListener('touchend', (ev) => { const t = ev.changedTouches[0]; if (t) endTap(t.clientX, t.clientY); }, { passive: true });
-    canvas.addEventListener('mousedown', (ev) => { if (ev.button > 0) return; beginTap(ev.clientX, ev.clientY); });
-    canvas.addEventListener('mouseup', (ev) => endTap(ev.clientX, ev.clientY));
-  }
-  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    if (state.game === 'xiangqi') onPlayerXiangqi(evt);
+    else onPlayerGomoku(evt);
+  });
 
   function onPlayerGomoku(evt) {
     const hit = XqRender.gomokuHit(canvas, evt);
@@ -198,14 +172,11 @@
     state.board[hit.r][hit.c] = state.playerColor;
     state.moves++;
     addLog('你 落子 (' + hit.r + ',' + hit.c + ')');
-    state.thinking = true;
-    XqRender.animateGomokuStone(canvas, state.board, hit.r, hit.c, state.playerColor, () => {
-      state.thinking = false;
-      if (Gomoku.winsAt(state.board, hit.r, hit.c, state.playerColor)) return endGame('你', '五连');
-      if (Gomoku.isFull(state.board)) return endGame(null, '和棋（棋盘已满）');
-      state.turn = 'ai'; updateTurnUI();
-      setTimeout(aiMove, 350);
-    });
+    render();
+    if (Gomoku.winsAt(state.board, hit.r, hit.c, state.playerColor)) return endGame('你', '五连');
+    if (Gomoku.isFull(state.board)) return endGame(null, '和棋（棋盘已满）');
+    state.turn = 'ai'; updateTurnUI();
+    setTimeout(aiMove, 350);
   }
 
   function onPlayerXiangqi(evt) {
@@ -242,20 +213,16 @@
 
   function execXiangqiMove(from, to) {
     const [fr, fc] = from, [tr, tc] = to;
-    const captured = state.board[tr][tc] !== '.' && Xq.colorOf(state.board[tr][tc]) !== state.playerColor;
     state.board = Xq.applyMove(state.board, fr, fc, tr, tc);
     state.moves++;
     addLog('你 走子 (' + fr + ',' + fc + ')→(' + tr + ',' + tc + ')');
     state.sel = null; state.opts = [];
-    state.thinking = true;
-    XqRender.animateXiangqiMove(canvas, state.board, from, to, state.playerColor, { captured }, () => {
-      state.thinking = false;
-      const w = Xq.judgeAfterMove(state.board, state.playerColor);
-      if (w === state.playerColor) return endGame('你', '将军将死');
-      if (w === 'draw') return endGame(null, '和棋');
-      state.turn = 'ai'; updateTurnUI();
-      setTimeout(aiMove, 350);
-    });
+    render();
+    const w = Xq.judgeAfterMove(state.board, state.playerColor);
+    if (w === state.playerColor) return endGame('你', '将军将死');
+    if (w === 'draw') return endGame(null, '和棋');
+    state.turn = 'ai'; updateTurnUI();
+    setTimeout(aiMove, 350);
   }
 
   /* ---------- AI 走棋 ---------- */
@@ -360,30 +327,23 @@
   function applyAIMove(move) {
     if (state.game === 'xiangqi') {
       const [fr, fc, tr, tc] = move;
-      const captured = state.board[tr][tc] !== '.' && Xq.colorOf(state.board[tr][tc]) !== state.aiColor;
       state.board = Xq.applyMove(state.board, fr, fc, tr, tc);
       state.moves++;
       addLog('AI 走子 (' + fr + ',' + fc + ')→(' + tr + ',' + tc + ')');
-      state.thinking = true;
-      XqRender.animateXiangqiMove(canvas, state.board, [fr, fc], [tr, tc], state.aiColor, { captured }, () => {
-        state.thinking = false;
-        const w = Xq.judgeAfterMove(state.board, state.aiColor);
-        if (w === state.aiColor) return endGame('AI', '将军将死');
-        if (w === 'draw') return endGame(null, '和棋');
-        state.turn = 'player'; updateTurnUI();
-      });
+      render();
+      const w = Xq.judgeAfterMove(state.board, state.aiColor);
+      if (w === state.aiColor) return endGame('AI', '将军将死');
+      if (w === 'draw') return endGame(null, '和棋');
+      state.turn = 'player'; updateTurnUI();
     } else {
       const [r, c] = move;
       state.board[r][c] = state.aiColor;
       state.moves++;
       addLog('AI 落子 (' + r + ',' + c + ')');
-      state.thinking = true;
-      XqRender.animateGomokuStone(canvas, state.board, r, c, state.aiColor, () => {
-        state.thinking = false;
-        if (Gomoku.winsAt(state.board, r, c, state.aiColor)) return endGame('AI', '五连');
-        if (Gomoku.isFull(state.board)) return endGame(null, '和棋（棋盘已满）');
-        state.turn = 'player'; updateTurnUI();
-      });
+      render();
+      if (Gomoku.winsAt(state.board, r, c, state.aiColor)) return endGame('AI', '五连');
+      if (Gomoku.isFull(state.board)) return endGame(null, '和棋（棋盘已满）');
+      state.turn = 'player'; updateTurnUI();
     }
   }
 
