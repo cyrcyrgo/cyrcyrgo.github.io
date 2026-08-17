@@ -23,34 +23,42 @@
 
   const canvasDisp = { mirror: false };
 
-  /* ---------- 棋局打包：生成结构化棋子坐标清单（供 AI 交叉核对） ---------- */
-  const XQ_NAMES_RED = { K:'帅', A:'仕', B:'相', N:'马', R:'车', C:'炮', P:'兵' };
-  const XQ_NAMES_BLK = { k:'将', a:'士', b:'象', n:'马', r:'车', c:'炮', p:'卒' };
-  function xiangqiPieceList(board) {
-    const red = [], black = [];
-    for (let r = 0; r < board.length; r++) {
-      for (let c = 0; c < board[r].length; c++) {
-        const p = board[r][c];
-        if (p === '.') continue;
-        const isRed = p === p.toUpperCase();
-        const name = isRed ? (XQ_NAMES_RED[p] || p) : (XQ_NAMES_BLK[p] || p);
-        const item = name + '(' + p + ')@(row=' + r + ',col=' + c + ')';
-        (isRed ? red : black).push(item);
-      }
+  /* ---------- 棋局打包：生成紧凑的棋子坐标表（按类型分组，省 token 且易读） ---------- */
+  const XQ_PIECE_KEY = {
+    K:{label:'帅(红K)',side:'red'}, A:{label:'仕(红A)',side:'red'}, B:{label:'相(红B)',side:'red'},
+    N:{label:'马(红N)',side:'red'}, R:{label:'车(红R)',side:'red'}, C:{label:'炮(红C)',side:'red'}, P:{label:'兵(红P)',side:'red'},
+    k:{label:'将(黑k)',side:'blk'}, a:{label:'士(黑a)',side:'blk'}, b:{label:'象(黑b)',side:'blk'},
+    n:{label:'马(黑n)',side:'blk'}, r:{label:'车(黑r)',side:'blk'}, c:{label:'炮(黑c)',side:'blk'}, p:{label:'卒(黑p)',side:'blk'},
+  };
+  function xiangqiPieceTable(board) {
+    // 按棋子类型聚合坐标，输出紧凑表："帅(红K): (9,4)"
+    const map = {};
+    for (let r = 0; r < board.length; r++) for (let c = 0; c < board[r].length; c++) {
+      const p = board[r][c]; if (p === '.') continue;
+      if (!map[p]) map[p] = [];
+      map[p].push('(' + r + ',' + c + ')');
     }
-    return { red, black };
+    const ORDER = ['K','A','B','N','R','C','P','k','a','b','n','r','c','p'];
+    const rows = [];
+    for (const key of ORDER) {
+      if (!map[key] || !map[key].length) continue;
+      const info = XQ_PIECE_KEY[key];
+      rows.push((info ? info.label : key) + ': ' + map[key].join(' '));
+    }
+    return rows.join('\n');
   }
-  function gomokuStonesList(board) {
+  function gomokuStonesTable(board) {
     const black = [], white = [];
-    for (let r = 0; r < board.length; r++) {
-      for (let c = 0; c < board[r].length; c++) {
-        const v = board[r][c];
-        if (v === 0) continue;
-        const item = '(row=' + r + ',col=' + c + ')';
-        (v === 1 ? black : white).push(item);
-      }
+    for (let r = 0; r < board.length; r++) for (let c = 0; c < board[r].length; c++) {
+      const v = board[r][c]; if (v === 0) continue;
+      (v === 1 ? black : white).push('(' + r + ',' + c + ')');
     }
-    return { black, white };
+    return {
+      black: black.length ? black.join(' ') : '（空）',
+      white: white.length ? white.join(' ') : '（空）',
+      blackCount: black.length,
+      whiteCount: white.length,
+    };
   }
 
   function colorName(color, game) {
@@ -422,15 +430,10 @@
       const rows = Xq.boardText(state.board).split('\n');
       return [colHeader].concat(rows.map((r, i) => (' ' + i).slice(-2) + ' ' + r + ' ' + (' ' + i).slice(-2))).concat([colHeader]).join('\n');
     })();
-    // 结构化棋子坐标清单（与网格等价，便于 AI 交叉核对，避免读取网格时列错位）
-    const pieces = xiangqiPieceList(state.board);
-    const pieceListText =
-      '【你方（' + (aiRed ? '红方' : '黑方') + '，' + aiPieceLetter + '）共 ' + (aiRed ? pieces.red.length : pieces.black.length) + ' 子】\n' +
-      (aiRed ? pieces.red : pieces.black).map(x => '  ' + x).join('\n') + '\n' +
-      '【对方（' + (aiRed ? '黑方' : '红方') + '，' + (aiRed ? '小写' : '大写') + '）共 ' + (aiRed ? pieces.black.length : pieces.red.length) + ' 子】\n' +
-      (aiRed ? pieces.black : pieces.red).map(x => '  ' + x).join('\n');
+    // 结构化棋子坐标表（与网格等价：按棋子类型聚合坐标，省 token 且易读，避免逐列扫网格错位）
+    const pieceTable = xiangqiPieceTable(state.board);
     const lastMoveLine = state.lastMove
-      ? '\n📋 最近一步：' + state.lastMove.desc + '\n（现在轮到你走棋，以上是最新局面）\n'
+      ? '\n📋 最近一步：' + state.lastMove.desc + '（现在轮到你走棋，以上为最新局面）\n'
       : '\n（开局第一步，现在轮到你走棋）\n';
 
     const system =
@@ -438,6 +441,10 @@
       '棋盘坐标系：row 行 0..9（0 最上、9 最下），col 列 0..8（0 最左、8 最右），严格从零开始。\n' +
       '红方棋子 = 大写：K帅 A仕 B相 N马 R车 C炮 P兵；黑方棋子 = 小写：k将 a士 b象 n马 r车 c炮 p卒。\n' +
       '你执' + (aiRed ? '红方' : '黑方') + '，你的棋子都是' + aiPieceLetter + '。你只能移动你自己颜色（' + aiPieceLetter + '）的棋子。\n' +
+      '\n思考长度 & 响应时间限制（必须遵守）：\n' +
+      '  · 思维链（思考内容）总字数控制在 **3000 token 以内（约 4500 汉字）**，不要无限扩展；\n' +
+      '  · 整体思考尽量在 **30 秒内** 结束，并输出最终决定；\n' +
+      '  · 若分析路径过长，请提前收敛、挑选一条你判断最佳的候选走法即可，不要穷尽推演。\n' +
       '\n工作流（必须严格遵守）：\n' +
       '  ① 先进行分析和思考（这些可以放在你自己的思维链里，系统会忽略、不算作你的最终输出）；\n' +
       '  ② 思考完毕后，把【最终决定】作为正式回答输出，并且必须且只能输出一个裸 JSON；\n' +
@@ -445,16 +452,16 @@
       '  ⚠ 系统只会提取正式回答里的最后一个 JSON 作为你的最终坐标，草稿和思维链里的任何 JSON 都不会被采信。';
 
     const user =
-      '===== 当前棋局现状（每次都重新打包发送，以下为最新局面）=====\n' +
-      '\n【A. 棋盘网格（带行列号，行号=row，列号=col）】\n' +
+      '===== 当前棋局现状（每次你走棋前都重新打包发送，以下为最新局面）=====\n' +
+      '\n【A. 棋盘网格（四边行列号：行号=row / 列号=col，可用来与 B 表交叉核对坐标）】\n' +
       boardWHeaders + '\n' +
-      '\n【B. 棋子坐标清单（与网格等价，按方分组，每子标注 row/col，便于交叉核对）】\n' +
-      pieceListText + '\n' +
+      '\n【B. 棋子坐标总表（按棋子类型聚合坐标，是系统给你的权威棋局表示）】\n' +
+      pieceTable + '\n' +
       lastMoveLine +
       '\n你执' + (aiRed ? '红方（大写）' : '黑方（小写）') + '。下面列出【当前合法走法全集】(from_row,from_col 棋子)→(to_row,to_col)，你必须从下列候选中挑一条（任选其一即可），不要自己编造：\n' +
       legalMsPreview +
       (legalMs.length > legalMsPreview.length ? '\n（只展示前 ' + legalMsPreview.length + '/' + legalMs.length + ' 条，其他同理。）' : '') +
-      '\n\n步骤：① 先按你自己的方式深入思考；② 思考结束后，把最终决定以且仅以一个 JSON 输出，格式：{"from":"R,C","to":"R,C"}。';
+      '\n\n步骤：① 先思考（控制 3000 token / 30s 内）；② 思考结束后，把最终决定以且仅以一个 JSON 输出：{"from":"R,C","to":"R,C"}。';
 
     return askAI(system, user, (text) => {
       const clean = String(text || '').replace(/```[a-z]*/gi, '').replace(/```/g, '');
@@ -480,15 +487,13 @@
       const rows = Gomoku.boardText(state.board).split('\n');
       return [hdr].concat(rows.map((r, i) => ('  ' + i).slice(-3) + r + ('  ' + i).slice(-3))).concat([hdr]).join('\n');
     })();
-    // 结构化已落子坐标清单（按颜色分组）
-    const stones = gomokuStonesList(state.board);
-    const stonesListText =
-      '【黑方 X（棋子编码 1）共 ' + stones.black.length + ' 子】\n' +
-      (stones.black.length ? stones.black.map(x => '  ' + x).join('\n') : '  （无）') + '\n' +
-      '【白方 O（棋子编码 2）共 ' + stones.white.length + ' 子】\n' +
-      (stones.white.length ? stones.white.map(x => '  ' + x).join('\n') : '  （无）');
+    // 结构化已落子坐标表（按颜色聚合为一行，省 token 且易读）
+    const stones = gomokuStonesTable(state.board);
+    const stonesTableText =
+      '黑方 X（编码 1）合计 ' + stones.blackCount + ' 子: ' + stones.black + '\n' +
+      '白方 O（编码 2）合计 ' + stones.whiteCount + ' 子: ' + stones.white;
     const lastMoveLine = state.lastMove
-      ? '\n📋 最近一步：' + state.lastMove.desc + '\n（现在轮到你落子，以上是最新局面）\n'
+      ? '\n📋 最近一步：' + state.lastMove.desc + '（现在轮到你落子，以上为最新局面）\n'
       : '\n（开局第一步，现在轮到你落子）\n';
     const empties = [];
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
@@ -508,6 +513,10 @@
       '你是五子棋 AI。棋盘固定 15×15，row/col 均为 0..14，左上角 (0,0)，row 从上到下递增，col 从左到右递增，严格从零开始。\n' +
       '棋盘每行 15 个字符："." 空位，X 黑方，O 白方（颜色固定，与执子无关）。\n' +
       '你执' + aiMark + '，只能在空位落子，尽量阻止对方五连并争取己方五连。\n' +
+      '\n思考长度 & 响应时间限制（必须遵守）：\n' +
+      '  · 思维链（思考内容）总字数控制在 **3000 token 以内（约 4500 汉字）**，不要无限扩展；\n' +
+      '  · 整体思考尽量在 **30 秒内** 结束，并输出最终决定；\n' +
+      '  · 若分析路径过长，请提前收敛、挑选一条你判断最佳的候选落子即可，不要穷尽推演。\n' +
       '\n工作流（必须严格遵守）：\n' +
       '  ① 先进行分析和思考（这些可以放在你自己的思维链里，系统会忽略、不算作你的最终输出）；\n' +
       '  ② 思考完毕后，把【最终决定】作为正式回答输出，并且必须且只能输出一个裸 JSON；\n' +
@@ -515,15 +524,15 @@
       '  ⚠ 系统只会提取正式回答里的最后一个 JSON 作为你的最终坐标，草稿和思维链里的任何 JSON 都不会被采信。';
 
     const user =
-      '===== 当前棋局现状（每次都重新打包发送，以下为最新局面）=====\n' +
-      '\n【A. 棋盘网格（带行列号，行号=row，列号=col）】\n' +
+      '===== 当前棋局现状（每次你落子前都重新打包发送，以下为最新局面）=====\n' +
+      '\n【A. 棋盘网格（四边行列号：行号=row / 列号=col，可用来与 B 表交叉核对坐标）】\n' +
       boardWHeaders + '\n' +
-      '\n【B. 已落子坐标清单（与网格等价，按颜色分组，每子标注 row/col，便于交叉核对）】\n' +
-      stonesListText + '\n' +
+      '\n【B. 已落子坐标总表（按颜色聚合坐标，是系统给你的权威棋局表示）】\n' +
+      stonesTableText + '\n' +
       lastMoveLine +
       '\n你执' + aiMark + '，对方执' + oppMark + '。下面列出【当前推荐候选空位】（已按接近已有棋子密度排序，任选其一即可）：\n' +
       candList +
-      '\n\n步骤：① 先按你自己的方式深入思考；② 思考结束后，把最终决定以且仅以一个 JSON 输出，格式：{"row":R,"col":C}。';
+      '\n\n步骤：① 先思考（控制 3000 token / 30s 内）；② 思考结束后，把最终决定以且仅以一个 JSON 输出：{"row":R,"col":C}。';
 
     return askAI(system, user, (text) => {
       const clean = String(text || '').replace(/```[a-z]*/gi, '').replace(/```/g, '');
