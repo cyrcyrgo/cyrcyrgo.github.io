@@ -18,9 +18,40 @@
     moves: 0,
     log: [],
     retryFn: null,
+    lastMove: null,    // 最近一步走法 { who, desc } —— 每次走子后更新，打包给 AI
   };
 
   const canvasDisp = { mirror: false };
+
+  /* ---------- 棋局打包：生成结构化棋子坐标清单（供 AI 交叉核对） ---------- */
+  const XQ_NAMES_RED = { K:'帅', A:'仕', B:'相', N:'马', R:'车', C:'炮', P:'兵' };
+  const XQ_NAMES_BLK = { k:'将', a:'士', b:'象', n:'马', r:'车', c:'炮', p:'卒' };
+  function xiangqiPieceList(board) {
+    const red = [], black = [];
+    for (let r = 0; r < board.length; r++) {
+      for (let c = 0; c < board[r].length; c++) {
+        const p = board[r][c];
+        if (p === '.') continue;
+        const isRed = p === p.toUpperCase();
+        const name = isRed ? (XQ_NAMES_RED[p] || p) : (XQ_NAMES_BLK[p] || p);
+        const item = name + '(' + p + ')@(row=' + r + ',col=' + c + ')';
+        (isRed ? red : black).push(item);
+      }
+    }
+    return { red, black };
+  }
+  function gomokuStonesList(board) {
+    const black = [], white = [];
+    for (let r = 0; r < board.length; r++) {
+      for (let c = 0; c < board[r].length; c++) {
+        const v = board[r][c];
+        if (v === 0) continue;
+        const item = '(row=' + r + ',col=' + c + ')';
+        (v === 1 ? black : white).push(item);
+      }
+    }
+    return { black, white };
+  }
 
   function colorName(color, game) {
     if (game === 'gomoku') return color === 1 ? '黑' : '白';
@@ -150,7 +181,7 @@
     state.over = false;
     state.thinking = false;
     state.sel = null; state.opts = [];
-    state.moves = 0; state.retryFn = null;
+    state.moves = 0; state.retryFn = null; state.lastMove = null;
     clearLog();
 
     if (game === 'xiangqi') {
@@ -257,6 +288,7 @@
     state.board[hit.r][hit.c] = state.playerColor;
     state.moves++;
     addLog('你 落子 (' + hit.r + ',' + hit.c + ')');
+    state.lastMove = { who: 'player', desc: '玩家(' + colorName(state.playerColor, 'gomoku') + ') 落子(' + hit.r + ',' + hit.c + ')' };
     state.thinking = true;
     XqRender.animateGomokuStone(canvas, state.board, hit.r, hit.c, state.playerColor, () => {
       state.thinking = false;
@@ -305,6 +337,7 @@
     state.board = Xq.applyMove(state.board, fr, fc, tr, tc);
     state.moves++;
     addLog('你 走子 (' + fr + ',' + fc + ')→(' + tr + ',' + tc + ')');
+    state.lastMove = { who: 'player', desc: '玩家(' + colorName(state.playerColor, 'xiangqi') + ') (' + fr + ',' + fc + ')→(' + tr + ',' + tc + ') 棋子' + state.board[tr][tc] };
     state.sel = null; state.opts = [];
     state.thinking = true;
     XqRender.animateXiangqiMove(canvas, state.board, from, to, state.playerColor, { captured }, () => {
@@ -389,6 +422,16 @@
       const rows = Xq.boardText(state.board).split('\n');
       return [colHeader].concat(rows.map((r, i) => (' ' + i).slice(-2) + ' ' + r + ' ' + (' ' + i).slice(-2))).concat([colHeader]).join('\n');
     })();
+    // 结构化棋子坐标清单（与网格等价，便于 AI 交叉核对，避免读取网格时列错位）
+    const pieces = xiangqiPieceList(state.board);
+    const pieceListText =
+      '【你方（' + (aiRed ? '红方' : '黑方') + '，' + aiPieceLetter + '）共 ' + (aiRed ? pieces.red.length : pieces.black.length) + ' 子】\n' +
+      (aiRed ? pieces.red : pieces.black).map(x => '  ' + x).join('\n') + '\n' +
+      '【对方（' + (aiRed ? '黑方' : '红方') + '，' + (aiRed ? '小写' : '大写') + '）共 ' + (aiRed ? pieces.black.length : pieces.red.length) + ' 子】\n' +
+      (aiRed ? pieces.black : pieces.red).map(x => '  ' + x).join('\n');
+    const lastMoveLine = state.lastMove
+      ? '\n📋 最近一步：' + state.lastMove.desc + '\n（现在轮到你走棋，以上是最新局面）\n'
+      : '\n（开局第一步，现在轮到你走棋）\n';
 
     const system =
       '你是中国象棋 AI。\n' +
@@ -402,9 +445,13 @@
       '  ⚠ 系统只会提取正式回答里的最后一个 JSON 作为你的最终坐标，草稿和思维链里的任何 JSON 都不会被采信。';
 
     const user =
-      '棋盘（4 个边缘都带行号列号，可对照确认坐标）：\n' +
-      boardWHeaders + '\n\n' +
-      '你执' + (aiRed ? '红方（大写）' : '黑方（小写）') + '。下面列出【当前合法走法全集】(from_row,from_col 棋子)→(to_row,to_col)，你必须从下列候选中挑一条（任选其一即可），不要自己编造：\n' +
+      '===== 当前棋局现状（每次都重新打包发送，以下为最新局面）=====\n' +
+      '\n【A. 棋盘网格（带行列号，行号=row，列号=col）】\n' +
+      boardWHeaders + '\n' +
+      '\n【B. 棋子坐标清单（与网格等价，按方分组，每子标注 row/col，便于交叉核对）】\n' +
+      pieceListText + '\n' +
+      lastMoveLine +
+      '\n你执' + (aiRed ? '红方（大写）' : '黑方（小写）') + '。下面列出【当前合法走法全集】(from_row,from_col 棋子)→(to_row,to_col)，你必须从下列候选中挑一条（任选其一即可），不要自己编造：\n' +
       legalMsPreview +
       (legalMs.length > legalMsPreview.length ? '\n（只展示前 ' + legalMsPreview.length + '/' + legalMs.length + ' 条，其他同理。）' : '') +
       '\n\n步骤：① 先按你自己的方式深入思考；② 思考结束后，把最终决定以且仅以一个 JSON 输出，格式：{"from":"R,C","to":"R,C"}。';
@@ -433,6 +480,16 @@
       const rows = Gomoku.boardText(state.board).split('\n');
       return [hdr].concat(rows.map((r, i) => ('  ' + i).slice(-3) + r + ('  ' + i).slice(-3))).concat([hdr]).join('\n');
     })();
+    // 结构化已落子坐标清单（按颜色分组）
+    const stones = gomokuStonesList(state.board);
+    const stonesListText =
+      '【黑方 X（棋子编码 1）共 ' + stones.black.length + ' 子】\n' +
+      (stones.black.length ? stones.black.map(x => '  ' + x).join('\n') : '  （无）') + '\n' +
+      '【白方 O（棋子编码 2）共 ' + stones.white.length + ' 子】\n' +
+      (stones.white.length ? stones.white.map(x => '  ' + x).join('\n') : '  （无）');
+    const lastMoveLine = state.lastMove
+      ? '\n📋 最近一步：' + state.lastMove.desc + '\n（现在轮到你落子，以上是最新局面）\n'
+      : '\n（开局第一步，现在轮到你落子）\n';
     const empties = [];
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       if (state.board[i][j] !== 0) continue;
@@ -458,9 +515,13 @@
       '  ⚠ 系统只会提取正式回答里的最后一个 JSON 作为你的最终坐标，草稿和思维链里的任何 JSON 都不会被采信。';
 
     const user =
-      '棋盘（4 个边缘都带行号/列号，可对照确认坐标）：\n' +
-      boardWHeaders + '\n\n' +
-      '你执' + aiMark + '，对方执' + oppMark + '。下面列出【当前推荐候选空位】（已按接近已有棋子密度排序，任选其一即可）：\n' +
+      '===== 当前棋局现状（每次都重新打包发送，以下为最新局面）=====\n' +
+      '\n【A. 棋盘网格（带行列号，行号=row，列号=col）】\n' +
+      boardWHeaders + '\n' +
+      '\n【B. 已落子坐标清单（与网格等价，按颜色分组，每子标注 row/col，便于交叉核对）】\n' +
+      stonesListText + '\n' +
+      lastMoveLine +
+      '\n你执' + aiMark + '，对方执' + oppMark + '。下面列出【当前推荐候选空位】（已按接近已有棋子密度排序，任选其一即可）：\n' +
       candList +
       '\n\n步骤：① 先按你自己的方式深入思考；② 思考结束后，把最终决定以且仅以一个 JSON 输出，格式：{"row":R,"col":C}。';
 
@@ -526,6 +587,7 @@
       state.board = Xq.applyMove(state.board, fr, fc, tr, tc);
       state.moves++;
       addLog('AI 走子 (' + fr + ',' + fc + ')→(' + tr + ',' + tc + ')');
+      state.lastMove = { who: 'ai', desc: 'AI(' + colorName(state.aiColor, 'xiangqi') + ') (' + fr + ',' + fc + ')→(' + tr + ',' + tc + ')' };
       state.thinking = true;
       const displayMirror = (state.game === 'xiangqi' && state.playerColor === 'black');
       XqRender.animateXiangqiMove(canvas, state.board, [fr, fc], [tr, tc], displayMirror ? 'black' : 'red', { captured }, () => {
@@ -540,6 +602,7 @@
       state.board[r][c] = state.aiColor;
       state.moves++;
       addLog('AI 落子 (' + r + ',' + c + ')');
+      state.lastMove = { who: 'ai', desc: 'AI(' + colorName(state.aiColor, 'gomoku') + ') 落子(' + r + ',' + c + ')' };
       state.thinking = true;
       XqRender.animateGomokuStone(canvas, state.board, r, c, state.aiColor, () => {
         state.thinking = false;
