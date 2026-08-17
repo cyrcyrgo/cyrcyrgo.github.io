@@ -122,14 +122,19 @@
     }
   }
 
-  /* 把画布上的像素点转为网格索引（显示空间） */
+  /* 把画布上的像素点转为网格索引（显示空间）。
+   * 完全采用 CSS 尺寸比例换算（与 wzq 一致，不依赖 dpr 与 canvas.width）：
+   * 先把事件坐标归一化到 [0,1] 的相对位置，再乘回逻辑画布尺寸；
+   * 这样移动端 CSS 宽高变化、浏览器 URL bar 抖动、DPR 变化都不会导致点击错位。 */
   function toIndex(evt, canvas, margin, cell) {
     const rect = canvas.getBoundingClientRect();
-    // 用逻辑尺寸换算：物理像素 = 逻辑 * dpr，若直接用 canvas.width(已乘 dpr) 会导致高 DPR 屏幕(手机)坐标偏移
-    const lgW = canvas.__lgW || (canvas.width / (window.devicePixelRatio || 1));
-    const lgH = canvas.__lgH || (canvas.height / (window.devicePixelRatio || 1));
-    const x = (evt.clientX - rect.left) * (lgW / rect.width);
-    const y = (evt.clientY - rect.top) * (lgH / rect.height);
+    const lgW = canvas.__lgW;
+    const lgH = canvas.__lgH;
+    if (!lgW || !lgH || rect.width <= 0 || rect.height <= 0) return null;
+    const rx = (evt.clientX - rect.left) / rect.width;  // 0 (左) ~ 1 (右)
+    const ry = (evt.clientY - rect.top) / rect.height;  // 0 (上) ~ 1 (下)
+    const x = Math.max(0, Math.min(lgW, rx * lgW));
+    const y = Math.max(0, Math.min(lgH, ry * lgH));
     const c = Math.round((x - margin) / cell);
     const r = Math.round((y - margin) / cell);
     return { r, c };
