@@ -152,6 +152,7 @@
     render();
     addLog('对局开始 · ' + (first === 'player' ? '你先手' : 'AI 先手'));
     updateTurnUI();
+    if (first === 'ai') { setTimeout(aiMove, 180); } // AI 先手：直接发起走棋
   }
 
   function updateTurnUI() {
@@ -199,15 +200,26 @@
   if (window.PointerEvent) {
     canvas.addEventListener('pointerdown', (ev) => {
       if (ev.pointerType === 'mouse' && ev.button > 0) return;
+      if (ev.cancelable) try { ev.preventDefault(); } catch (e) {} // 抑制移动端滚动/缩放/悬停菜单
       beginTap(ev.clientX, ev.clientY);
       try { if (canvas.setPointerCapture) canvas.setPointerCapture(ev.pointerId); } catch (e) {}
     });
     canvas.addEventListener('pointerup', (ev) => endTap(ev.clientX, ev.clientY));
     canvas.addEventListener('pointercancel', () => { tapStart = null; });
   } else {
-    // 老浏览器兜底：触屏 + 鼠标
-    canvas.addEventListener('touchstart', (ev) => { const t = ev.changedTouches[0]; if (t) beginTap(t.clientX, t.clientY); }, { passive: true });
-    canvas.addEventListener('touchend', (ev) => { const t = ev.changedTouches[0]; if (t) endTap(t.clientX, t.clientY); }, { passive: true });
+    // 老浏览器兜底：触屏 + 鼠标（wzq 风格：把 touchstart 映射为 click）
+    canvas.addEventListener('touchstart', (ev) => {
+      const t = ev.changedTouches[0];
+      if (!t) return;
+      if (ev.cancelable) try { ev.preventDefault(); } catch (e) {}
+      beginTap(t.clientX, t.clientY);
+    }, { passive: false });
+    canvas.addEventListener('touchend', (ev) => {
+      const t = ev.changedTouches[0];
+      if (!t) return;
+      if (ev.cancelable) try { ev.preventDefault(); } catch (e) {}
+      endTap(t.clientX, t.clientY);
+    }, { passive: false });
     canvas.addEventListener('mousedown', (ev) => { if (ev.button > 0) return; beginTap(ev.clientX, ev.clientY); });
     canvas.addEventListener('mouseup', (ev) => endTap(ev.clientX, ev.clientY));
   }
@@ -329,16 +341,32 @@
 
   function xiangqiAITurn(live, block) {
     const aiRed = state.aiColor === 'red';
-    const system = aiRed
-      ? ('你是红方，你的所有棋子都是大写字符：K帅 A仕 B相 N马 R车 C炮 P兵；红方棋子都在棋盘下半部（row 6..9）。对方黑方棋子是小写字符（k a b n r c p），你不要去动它们。\n' +
-         '"from" 必须指向一个大写红子，"to" 必须是该子的一次合法走法。')
-      : ('你是黑方，你的所有棋子都是小写字符：k将 a士 b象 n马 r车 c炮 p卒；黑方棋子都在棋盘上半部（row 0..3）。对方红方棋子是大写字符（K A B N R C P），你不要去动它们。\n' +
-         '"from" 必须指向一个小写黑子，"to" 必须是该子的一次合法走法。') +
-      '\n棋盘固定 10 行 × 9 列，row=0..9 自上而下（0 最上、9 最下），col=0..8 自左而右；下面每行字符串恰为 9 个字符，从上到下逐行对应 row=0..9，字符为该格棋子，"." 为空位。棋盘已合法，勿质疑格式。\n' +
-      '\n任选一步合法走法即可，不要再分析、不要长篇思考。严禁输出任何解释、推理、markdown 代码块标记或多余字符；只输出一行 JSON，格式精确为：{"from":"R,C","to":"R,C"}。\n' +
-      '例如黑方可出马：{"from":"0,7","to":"2,6"}。';
+    const aiPieceLetter = aiRed ? '大写' : '小写';
+    const legalMs = Xq.legalMoves(state.board, state.aiColor);
+    const legalMsPreview = legalMs.slice(0, 180).map(m =>
+      '  (' + m[0] + ',' + m[1] + ' ' + (state.board[m[0]][m[1]] || '.') + ')→(' + m[2] + ',' + m[3] + ')'
+    ).join('\n');
+    const boardWHeaders = (function () {
+      const colHeader = '   ' + '012345678';
+      const rows = Xq.boardText(state.board).split('\n');
+      return [colHeader].concat(rows.map((r, i) => (' ' + i).slice(-2) + ' ' + r + ' ' + (' ' + i).slice(-2))).concat([colHeader]).join('\n');
+    })();
 
-    const user = Xq.boardText(state.board) + '\n\n轮到你（执' + (aiRed ? '红' : '黑') + '方）走棋。只输出一行合法 JSON，格式：{"from":"R,C","to":"R,C"}。';
+    const system =
+      '你是中国象棋 AI。\n' +
+      '棋盘坐标系：row 行 0..9（0 最上、9 最下），col 列 0..8（0 最左、8 最右），严格从零开始。\n' +
+      '红方棋子 = 大写：K帅 A仕 B相 N马 R车 C炮 P兵；黑方棋子 = 小写：k将 a士 b象 n马 r车 c炮 p卒。\n' +
+      '你执' + (aiRed ? '红方' : '黑方') + '，你的棋子都是' + aiPieceLetter + '。你只能移动你自己颜色（' + aiPieceLetter + '）的棋子。\n' +
+      '严禁解释、严禁分析、严禁推理、严禁 markdown、严禁代码块。禁止输出 JSON 之外的任何字符。\n' +
+      '只输出一行裸 JSON，格式精确为：{"from":"R,C","to":"R,C"}。例如 {"from":"2,7","to":"2,4"}。';
+
+    const user =
+      '棋盘（4 个边缘都带行号列号，可对照确认坐标）：\n' +
+      boardWHeaders + '\n\n' +
+      '你执' + (aiRed ? '红方（大写）' : '黑方（小写）') + '。下面列出【当前合法走法全集】(from_row,from_col 棋子)→(to_row,to_col)，你必须从下列候选中挑一条（任选其一即可），不要自己编造：\n' +
+      legalMsPreview +
+      (legalMs.length > legalMsPreview.length ? '\n（只展示前 ' + legalMsPreview.length + '/' + legalMs.length + ' 条，其他同理。）' : '') +
+      '\n\n请在以上候选中任选一条对你相对有利的合法走法，立刻仅输出一行 JSON：{"from":"R,C","to":"R,C"}。';
 
     return askAI(system, user, (text) => {
       const clean = String(text || '').replace(/```[a-z]*/gi, '').replace(/```/g, '');
@@ -346,23 +374,50 @@
       const t = clean.match(/"to"\s*:\s*"?(\d+),(\d+)"?/);
       if (!f || !t) return null;
       const [fr, fc, tr, tc] = [+f[1], +f[2], +t[1], +t[2]];
-      const legal = Xq.legalMoves(state.board, state.aiColor)
-        .find(mm => mm[0] === fr && mm[1] === fc && mm[2] === tr && mm[3] === tc);
+      const legal = legalMs.find(mm => mm[0] === fr && mm[1] === fc && mm[2] === tr && mm[3] === tc);
       return legal ? [fr, fc, tr, tc] : null;
-    }, () => Xq.legalMoves(state.board, state.aiColor), live, block);
+    }, () => legalMs, live, block);
   }
 
   function gomokuAITurn(live, block) {
     const aiBlack = state.aiColor === 1;
-    const system =
-      '你是五子棋 AI，执' + (aiBlack ? '黑子（X）' : '白子（O）') + '。\n' +
-      '棋盘固定 15×15，坐标 (row,col)，0≤row≤14，0≤col≤14，左上角 (0,0)。\n' +
-      '棋盘以 15 行字符串给出，每行恰为 15 个字符，"." 空位，X 黑子，O 白子（颜色固定，不随执子变化）。棋盘已合法，勿质疑格式。\n' +
-      '你只能在空位落子，兼顾防守与进攻。任选一步即可，不必做长篇分析。\n' +
-      '严禁输出任何解释、分析、推理、markdown 代码块标记；若思考后也要保证最终输出包含一个合法 JSON。\n' +
-      '只输出一行 JSON，唯一格式：{"row":R,"col":C}，例如 {"row":7,"col":7}。';
+    const aiMark = aiBlack ? 'X（黑，棋子编码 1）' : 'O（白，棋子编码 2）';
+    const oppMark = aiBlack ? 'O（白）' : 'X（黑）';
+    const N = state.board.length;
+    // 生成带行列号的棋盘 + 候选空位（选攻防价值高的 Top 200，避免过多 token）
+    const boardWHeaders = (function () {
+      const hdr = '   ' + Array.from({ length: N }, (_, i) => (' ' + (i % 10)).slice(-1)).join('');
+      const rows = Gomoku.boardText(state.board).split('\n');
+      return [hdr].concat(rows.map((r, i) => ('  ' + i).slice(-3) + r + ('  ' + i).slice(-3))).concat([hdr]).join('\n');
+    })();
+    const empties = [];
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      if (state.board[i][j] !== 0) continue;
+      // 优先“周围 3 格内有己/对方子”的点（远离战场的点极大概率无价值）
+      let near = 0;
+      for (let di = -2; di <= 2; di++) for (let dj = -2; dj <= 2; dj++) {
+        const ii = i + di, jj = j + dj;
+        if (ii >= 0 && ii < N && jj >= 0 && jj < N && state.board[ii][jj] !== 0) near++;
+      }
+      empties.push([i, j, near]);
+    }
+    const hasStone = empties.filter(x => x[2] > 0).sort((a, b) => b[2] - a[2]).slice(0, 200);
+    const cand = hasStone.length ? hasStone : empties.slice(0, 200);
+    const candList = cand.map(x => '  (' + x[0] + ',' + x[1] + ')').join('\n');
 
-    const user = Gomoku.boardText(state.board) + '\n\n轮到你（执' + (aiBlack ? '黑 X' : '白 O') + '）落子。只输出一行合法 JSON：{"row":R,"col":C}。';
+    const system =
+      '你是五子棋 AI。棋盘固定 15×15，row/col 均为 0..14，左上角 (0,0)，row 从上到下递增，col 从左到右递增，严格从零开始。\n' +
+      '棋盘每行 15 个字符："." 空位，X 黑方，O 白方（颜色固定，与执子无关）。\n' +
+      '你执' + aiMark + '，只能在空位落子，尽量阻止对方五连并争取己方五连。\n' +
+      '严禁解释、严禁分析、严禁推理、严禁 markdown、严禁代码块。禁止输出 JSON 之外的任何字符。\n' +
+      '只输出一行裸 JSON，格式精确为：{"row":R,"col":C}。例如 {"row":7,"col":7}。';
+
+    const user =
+      '棋盘（4 个边缘都带行号/列号，可对照确认坐标）：\n' +
+      boardWHeaders + '\n\n' +
+      '你执' + aiMark + '，对方执' + oppMark + '。下面列出【当前推荐候选空位】（已按接近已有棋子密度排序，任选其一即可）：\n' +
+      candList +
+      '\n\n请在以上候选中任选一个对你有利的空位落子，立刻仅输出一行 JSON：{"row":R,"col":C}。';
 
     return askAI(system, user, (text) => {
       const clean = String(text || '').replace(/```[a-z]*/gi, '').replace(/```/g, '');
@@ -370,12 +425,14 @@
       const c = clean.match(/"col"\s*:\s*"?(\d+)"?/);
       if (!r || !c) return null;
       const [rr, cc] = [+r[1], +c[1]];
-      if (rr < 0 || rr > 14 || cc < 0 || cc > 14 || state.board[rr][cc] !== 0) return null;
+      if (rr < 0 || rr >= N || cc < 0 || cc >= N) return null;
+      if (state.board[rr][cc] !== 0) return null;
       return [rr, cc];
     }, () => {
-      // 兜底：任意空位
-      for (let i = 0; i < 15; i++) for (let j = 0; j < 15; j++) if (state.board[i][j] === 0) return [i, j];
-      return null;
+      // 兜底：选第一个候选空位；如果空棋盘就下中心
+      if (cand.length) return [cand[0][0], cand[0][1]];
+      const m7 = (N >> 1);
+      return [m7, m7];
     }, live, block);
   }
 
@@ -417,7 +474,8 @@
       state.moves++;
       addLog('AI 走子 (' + fr + ',' + fc + ')→(' + tr + ',' + tc + ')');
       state.thinking = true;
-      XqRender.animateXiangqiMove(canvas, state.board, [fr, fc], [tr, tc], state.aiColor, { captured }, () => {
+      const displayMirror = (state.game === 'xiangqi' && state.playerColor === 'black');
+      XqRender.animateXiangqiMove(canvas, state.board, [fr, fc], [tr, tc], displayMirror ? 'black' : 'red', { captured }, () => {
         state.thinking = false;
         const w = Xq.judgeAfterMove(state.board, state.aiColor);
         if (w === state.aiColor) return endGame('AI', '将军将死');
