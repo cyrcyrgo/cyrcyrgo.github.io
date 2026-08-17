@@ -418,38 +418,75 @@
     }
   }
 
+  /* ---------- 象棋合法走法价值排序 & 渲染（吃子优先，鼓励AI吃子） ---------- */
+  const XQ_PIECE_VALUE = { K:10000, k:10000, R:900, r:900, N:400, n:400, C:450, c:450,
+    B:200, b:200, A:200, a:200, P:100, p:100, '.':0 };
+  const XQ_CN_SHORT = {
+    K:'帅',A:'仕',B:'相',N:'马',R:'车',C:'炮',P:'兵',
+    k:'将',a:'士',b:'象',n:'马',r:'车',c:'炮',p:'卒',
+  };
+  function sortXiangqiMovesWithValue(board, moves) {
+    // 每条返回 [fr, fc, tr, tc, score, capturedLabel, capturedPiece]
+    const scored = moves.map(m => {
+      const [fr, fc, tr, tc] = m;
+      const target = board[tr] && board[tr][tc] || '.';
+      const isCapture = target !== '.';
+      const capVal = isCapture ? (XQ_PIECE_VALUE[target] || 0) : 0;
+      // 优先吃高价值对方棋子；其次，炮/马/车的"潜在出击"位置稍微给点分让开局别太静
+      const mover = board[fr][fc];
+      let base = capVal * 100;
+      if (!isCapture) {
+        // 非吃子：靠近中线/对方阵营的步子略加分（保证开局不至于全是兵/瞎动）
+        const forwardness = (mover === mover.toUpperCase()) ? (fr - tr) : (tr - fr);
+        base += Math.max(0, forwardness) * 2;
+      }
+      const capturedLabel = isCapture ? ('  [×' + (XQ_CN_SHORT[target]||target) + '对方棋子 价值' + capVal + '分]') : '';
+      return { m, score: base, capturedLabel, capturedPiece: target, isCapture };
+    });
+    scored.sort((a, b) => b.score - a.score || (a.isCapture === b.isCapture ? 0 : (a.isCapture ? -1 : 1)));
+    return scored;
+  }
+
   function xiangqiAITurn(live, block) {
     const aiRed = state.aiColor === 'red';
     const aiPieceLetter = aiRed ? '大写' : '小写';
     const legalMs = Xq.legalMoves(state.board, state.aiColor);
-    const legalMsPreview = legalMs.slice(0, 180).map(m =>
-      '  (' + m[0] + ',' + m[1] + ' ' + (state.board[m[0]][m[1]] || '.') + ')→(' + m[2] + ',' + m[3] + ')'
-    ).join('\n');
+    // 按"吃子价值从高到低"排序，前 N 条带吃子信息，AI 最容易选中吃子
+    const ranked = sortXiangqiMovesWithValue(state.board, legalMs);
+    const previewLines = ranked.slice(0, 220).map(x => {
+      const [fr, fc, tr, tc] = x.m;
+      return '  (' + fr + ',' + fc + ' ' + (state.board[fr][fc] || '.') + ')→(' + tr + ',' + tc + ')' +
+        (x.capturedLabel || '');
+    });
+    const legalMsPreview = previewLines.join('\n');
+    const captureCount = ranked.filter(x => x.isCapture).length;
+    const topCapture = ranked.find(x => x.isCapture);
     const boardWHeaders = (function () {
       const colHeader = '   ' + '012345678';
       const rows = Xq.boardText(state.board).split('\n');
       return [colHeader].concat(rows.map((r, i) => (' ' + i).slice(-2) + ' ' + r + ' ' + (' ' + i).slice(-2))).concat([colHeader]).join('\n');
     })();
-    // 结构化棋子坐标表（与网格等价：按棋子类型聚合坐标，省 token 且易读，避免逐列扫网格错位）
     const pieceTable = xiangqiPieceTable(state.board);
     const lastMoveLine = state.lastMove
       ? '\n📋 最近一步：' + state.lastMove.desc + '（现在轮到你走棋，以上为最新局面）\n'
       : '\n（开局第一步，现在轮到你走棋）\n';
 
     const system =
-      '你是中国象棋 AI。\n' +
+      '你是中国象棋 AI，行动目标：争取吃掉对方高价值棋子，最终将军获胜。\n' +
       '棋盘坐标系：row 行 0..9（0 最上、9 最下），col 列 0..8（0 最左、8 最右），严格从零开始。\n' +
-      '红方棋子 = 大写：K帅 A仕 B相 N马 R车 C炮 P兵；黑方棋子 = 小写：k将 a士 b象 n马 r车 c炮 p卒。\n' +
+      '红方棋子 = 大写：K帅(将,10000) A仕(200) B相(200) N马(400) R车(900) C炮(450) P兵(100)；' +
+      '黑方棋子 = 小写：k将(10000) a士(200) b象(200) n马(400) r车(900) c炮(450) p卒(100)。括号数字是棋子价值分。\n' +
       '你执' + (aiRed ? '红方' : '黑方') + '，你的棋子都是' + aiPieceLetter + '。你只能移动你自己颜色（' + aiPieceLetter + '）的棋子。\n' +
-      '\n思考长度 & 响应时间限制（必须遵守）：\n' +
-      '  · 思维链（思考内容）总字数控制在 **3000 token 以内（约 4500 汉字）**，不要无限扩展；\n' +
-      '  · 整体思考尽量在 **30 秒内** 结束，并输出最终决定；\n' +
-      '  · 若分析路径过长，请提前收敛、挑选一条你判断最佳的候选走法即可，不要穷尽推演。\n' +
+      '严禁动对方棋子；严禁走非法步；走法必须 100% 从候选列表选。\n' +
+      '\n决策优先级（必须严格遵守）：\n' +
+      '  ① 候选中若有【[×对方棋子]】标注的走法（即能吃子），优先选择能吃掉价值最高的对方棋子的走法；' +
+      '  ② 若能吃掉价值 9000+ 的帅/将（立即获胜），必须选择这条走法；' +
+      '  ③ 若能吃掉车(900) / 炮马(400~450)等高价值子，也强烈优先；\n' +
+      '  ④ 无吃子时，选择能向对方阵营推进、或能让自己的车/炮/马处于更有利进攻位置的走法。\n' +
       '\n工作流（必须严格遵守）：\n' +
-      '  ① 先进行分析和思考（这些可以放在你自己的思维链里，系统会忽略、不算作你的最终输出）；\n' +
-      '  ② 思考完毕后，把【最终决定】作为正式回答输出，并且必须且只能输出一个裸 JSON；\n' +
-      '  ③ 最终决定 JSON 格式精确为：{"from":"R,C","to":"R,C"}，R、C 为整数，不要再写解释、代码块、标签、多余字符。\n' +
-      '  ⚠ 系统只会提取正式回答里的最后一个 JSON 作为你的最终坐标，草稿和思维链里的任何 JSON 都不会被采信。';
+      '  · 正式回答必须且只能输出一个裸 JSON，不要解释、不要代码块、不要多余字符；\n' +
+      '  · 最终决定 JSON 格式精确为：{"from":"R,C","to":"R,C"}，R、C 为整数；\n' +
+      '  · 系统只会提取正式回答里的最后一个 JSON 作为你的最终坐标，其他任何 JSON 都不会被采信。';
 
     const user =
       '===== 当前棋局现状（每次你走棋前都重新打包发送，以下为最新局面）=====\n' +
@@ -458,10 +495,13 @@
       '\n【B. 棋子坐标总表（按棋子类型聚合坐标，是系统给你的权威棋局表示）】\n' +
       pieceTable + '\n' +
       lastMoveLine +
-      '\n你执' + (aiRed ? '红方（大写）' : '黑方（小写）') + '。下面列出【当前合法走法全集】(from_row,from_col 棋子)→(to_row,to_col)，你必须从下列候选中挑一条（任选其一即可），不要自己编造：\n' +
+      '\n你执' + (aiRed ? '红方（大写）' : '黑方（小写）') + '。' +
+      '当前共有 ' + legalMs.length + ' 种合法走法，其中能吃子的走法有 ' + captureCount + ' 种' +
+      (topCapture ? '（当前吃子收益最高：' + topCapture.capturedLabel + '，from=' + topCapture.m[0] + ',' + topCapture.m[1] + ' → to=' + topCapture.m[2] + ',' + topCapture.m[3] + '）' : '') +
+      '。\n\n【候选走法列表（已按"吃子价值从高到低"排序，你必须从下列候选中挑一条，不要自己编造）】：\n' +
       legalMsPreview +
-      (legalMs.length > legalMsPreview.length ? '\n（只展示前 ' + legalMsPreview.length + '/' + legalMs.length + ' 条，其他同理。）' : '') +
-      '\n\n步骤：① 先思考（控制 3000 token / 30s 内）；② 思考结束后，把最终决定以且仅以一个 JSON 输出：{"from":"R,C","to":"R,C"}。';
+      (legalMs.length > previewLines.length ? '\n（只展示前 ' + previewLines.length + '/' + legalMs.length + ' 条，其它候选排序同理。）' : '') +
+      '\n\n请立刻选择一条候选走法，并以且仅以一个 JSON 输出：{"from":"R,C","to":"R,C"}。若有可吃子的候选，请优先选择吃子收益最高的那条。';
 
     return askAI(system, user, (text) => {
       const clean = String(text || '').replace(/```[a-z]*/gi, '').replace(/```/g, '');
@@ -474,7 +514,7 @@
       const [fr, fc, tr, tc] = [+f[1], +f[2], +t[1], +t[2]];
       const legal = legalMs.find(mm => mm[0] === fr && mm[1] === fc && mm[2] === tr && mm[3] === tc);
       return legal ? [fr, fc, tr, tc] : null;
-    }, () => legalMs, live, block);
+    }, () => ranked.length ? ranked[0].m : legalMs, live, block);
   }
 
   function gomokuAITurn(live, block) {
@@ -592,11 +632,14 @@
   function applyAIMove(move) {
     if (state.game === 'xiangqi') {
       const [fr, fc, tr, tc] = move;
-      const captured = state.board[tr][tc] !== '.' && Xq.colorOf(state.board[tr][tc]) !== state.aiColor;
+      const targetPiece = state.board[tr][tc];
+      const captured = targetPiece !== '.' && Xq.colorOf(targetPiece) !== state.aiColor;
       state.board = Xq.applyMove(state.board, fr, fc, tr, tc);
       state.moves++;
-      addLog('AI 走子 (' + fr + ',' + fc + ')→(' + tr + ',' + tc + ')');
-      state.lastMove = { who: 'ai', desc: 'AI(' + colorName(state.aiColor, 'xiangqi') + ') (' + fr + ',' + fc + ')→(' + tr + ',' + tc + ')' };
+      const pieceName = XQ_CN_SHORT && XQ_CN_SHORT[targetPiece];
+      const extra = captured ? (' 吃掉了对方' + (pieceName || targetPiece) + '!') : '';
+      addLog('AI 走子 (' + fr + ',' + fc + ')→(' + tr + ',' + tc + ')' + extra);
+      state.lastMove = { who: 'ai', desc: 'AI(' + colorName(state.aiColor, 'xiangqi') + ') (' + fr + ',' + fc + ')→(' + tr + ',' + tc + ')' + extra };
       state.thinking = true;
       const displayMirror = (state.game === 'xiangqi' && state.playerColor === 'black');
       XqRender.animateXiangqiMove(canvas, state.board, [fr, fc], [tr, tc], displayMirror ? 'black' : 'red', { captured }, () => {
