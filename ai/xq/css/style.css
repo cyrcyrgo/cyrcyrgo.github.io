@@ -83,6 +83,32 @@ canvas {
 .log .entry { padding: 4px 0; border-bottom: 1px dashed var(--line); }
 .log .entry:last-child { border-bottom: none; }
 
+/* ---------- AI 输出日志面板 ---------- */
+.ai-out {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  font-size: 13px; color: var(--muted); max-height: 320px; overflow-y: auto;
+}
+.ai-out > summary {
+  padding: 10px 14px; cursor: pointer; user-select: none; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.ai-out > summary { list-style: none; }
+.ai-out > summary::-webkit-details-marker { display: none; }
+.ai-out-badge { margin-left: auto; font-weight: 400; color: var(--accent); font-size: 12px; }
+.ai-out-body { padding: 0 12px 12px; }
+.ai-block { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--panel2); }
+.ai-block + .ai-block { margin-top: 10px; }
+.ai-block-title { font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.ai-in { margin-bottom: 6px; }
+.ai-in summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.ai-in pre {
+  margin-top: 6px; background: #0e1116; border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px; overflow: auto; max-height: 180px; white-space: pre-wrap; word-break: break-word;
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: #b8c4d0;
+}
+.ai-raw { color: #9fd0a0; } /* 原始输出用亮色便于阅读 */
+.ai-res { margin-top: 4px; font-weight: 500; color: var(--accent); }
+
 /* ---------- 弹窗 ---------- */
 .modal { position: fixed; inset: 0; background: rgba(6,8,11,.72); display: flex; align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(4px); }
 .modal-box { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 26px 28px; width: min(420px, 92vw); }
