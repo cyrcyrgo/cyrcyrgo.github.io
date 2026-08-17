@@ -58,18 +58,26 @@
 
     try {
       let res;
-      // 显式不写 thinking.type:disabled -> DeepSeek 启用思考模式
-      const body = { model: s.model, messages, temperature: 0.2, stream: true };
-      try {
-        res = await fetch(s.url, {
+      // 显式开启 DeepSeek 思考模式：thinking.type = "enabled"
+      const doFetch = (withThinking) => {
+        const body = { model: s.model, messages, temperature: 0.2, stream: true };
+        if (withThinking) body.thinking = { type: 'enabled' }; // DeepSeek：显式启用思考模式，返回 reasoning_content 思维链
+        return fetch(s.url, {
           method: 'POST',
           signal: ctrl.signal,
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.key },
           body: JSON.stringify(body),
         });
+      };
+      try {
+        res = await doFetch(true);
       } catch (e) {
         if (ctrl.signal.aborted) throw new Error('AI 响应超时（长时间未返回新内容），已取消');
         throw e;
+      }
+      // 部分 OpenAI 兼容服务不识别 thinking 字段，返回 4xx 时降级重试（不带 thinking）
+      if (!res.ok && (res.status === 400 || res.status === 422)) {
+        res = await doFetch(false);
       }
       if (!res.ok) {
         let detail = '';
