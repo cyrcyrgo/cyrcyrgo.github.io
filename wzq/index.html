@@ -184,18 +184,18 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
           <span id="conn-token" style="font-family:'DM Mono',monospace;font-size:1rem;font-weight:700;color:var(--accent)">—</span>
         </div>
       </div>
-      <p style="font-size:.65rem;color:var(--dim);margin-top:.5rem;line-height:1.5">🔑 Token为5位随机码，每次进入页面自动刷新。内网模式下连接方需输入该Token进行校验。</p>
+      <p style="font-size:.65rem;color:var(--dim);margin-top:.5rem;line-height:1.5">🔑 Token为5位随机码，每次进入页面自动刷新。内网模式下输入对方Token即可极速配对，无需扫码。</p>
     </div>
-    <!-- Token 配对面板（仅 Token配对 模式显示） -->
+    <!-- Token 极速配对面板（内网/Token配对模式显示） -->
     <div id="token-panel" style="margin:1rem 0;padding:1rem;background:var(--surface2);border-radius:8px;border:1px solid var(--accent);display:none">
-      <div style="font-size:.78rem;color:var(--accent);margin-bottom:.5rem;font-weight:600">🔑 Token 跨网配对</div>
-      <p style="font-size:.7rem;color:var(--dim);margin-bottom:.5rem;line-height:1.5">将你的5位Token发给对方，对方在任意网络输入此Token即可配对，无需交换房间码。</p>
+      <div id="tok-panel-title" style="font-size:.78rem;color:var(--accent);margin-bottom:.5rem;font-weight:600">⚡ 内网极速配对（Token直连）</div>
+      <p id="tok-panel-desc" style="font-size:.7rem;color:var(--dim);margin-bottom:.5rem;line-height:1.5">同WiFi/内网下：把Token发给对方，输入对方Token即可极速直连，无需扫码、无需房间码。</p>
       <p style="font-size:.7rem;color:var(--dim);margin-bottom:.5rem">我的配对Token：<span id="tok-my" style="font-family:'DM Mono',monospace;font-size:1.1rem;font-weight:700;color:var(--accent);letter-spacing:.15em">—</span></p>
       <div style="display:flex;gap:.4rem;align-items:center;margin-top:.4rem">
         <input type="text" id="tok-input" placeholder="输入对方5位Token" maxlength="5" style="flex:1;font-family:'DM Mono',monospace;letter-spacing:.2em;text-align:center">
       </div>
-      <p style="font-size:.65rem;color:var(--dim);margin:.3rem 0 .5rem">注意：双方需在同一时间在线。对方Token过期/占位会提示。</p>
-      <button class="btn btn-accent btn-block" onclick="tokenConnect()" id="tok-connect-btn">🔗 连接对方</button>
+      <p style="font-size:.65rem;color:var(--dim);margin:.3rem 0 .5rem">注意：双方需在同一时间在线，且都处于当前模式。</p>
+      <button class="btn btn-accent btn-block" onclick="tokenConnect()" id="tok-connect-btn">⚡ 输入Token极速配对</button>
       <div class="status-bar" id="tok-status" style="display:none"><div class="status-dot waiting"></div><span id="tok-status-text">等待配对...</span></div>
     </div>
     <button class="btn btn-accent btn-block" onclick="doLogin()">进入大厅</button>
@@ -218,6 +218,9 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
     <button class="btn btn-scan btn-block" onclick="lobbyScanJoin()">
       <span class="scan-anim">📷</span> 扫码加入房间
     </button>
+    <!-- Token 极速配对入口（内网/Token模式下可用） -->
+    <div style="text-align:center;color:var(--dim);margin:.6rem 0;font-size:.8rem">— 或 —</div>
+    <button class="btn btn-accent btn-block" onclick="goToTokenPair()" id="lobby-tok-btn" style="display:none">⚡ Token 极速配对</button>
   </div>
 </div>
 
@@ -267,10 +270,11 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
       <button class="btn btn-ghost btn-sm" onclick="openGallery('inp-room-code')">🖼️ 相册</button>
       <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-room-code')">📋 粘贴</button>
     </div>
-    <!-- Token校验输入（内网模式连接时必填） -->
+    <!-- Token校验输入（可选，推荐用Token极速配对更快） -->
     <div style="margin-top:.8rem">
-      <p style="font-size:.78rem;color:var(--dim);margin-bottom:.3rem">🔑 连接Token <span style="color:var(--err)">(内网模式必填)</span>：</p>
-      <input type="text" id="inp-token" placeholder="输入5位连接Token" maxlength="5" style="font-family:'DM Mono',monospace;letter-spacing:.3em;text-align:center">
+      <p style="font-size:.78rem;color:var(--dim);margin-bottom:.3rem">🔑 连接Token <span style="color:var(--info)">(可选)</span>：</p>
+      <input type="text" id="inp-token" placeholder="输入5位连接Token（可选）" maxlength="5" style="font-family:'DM Mono',monospace;letter-spacing:.3em;text-align:center">
+      <p style="font-size:.65rem;color:var(--dim);margin-top:.3rem">💡 提示：内网对战建议直接使用「Token极速配对」，无需填写房间码。</p>
     </div>
     <button class="btn btn-accent btn-block" onclick="joinRoom()" style="margin-top:.8rem">生成应答码</button>
     <div id="answer-area" style="display:none;margin-top:1rem">
@@ -521,9 +525,20 @@ function selectMode(el){
   }
   document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('selected'));
   el.classList.add('selected');S.mode=el.dataset.mode;
-  /* 切换 Token配对 面板显示 */
+  /* 切换 Token 极速配对 面板显示（内网/Token配对模式均可用） */
   const panel=document.getElementById('token-panel');
-  if(panel)panel.style.display=(S.mode==='tok')?'block':'none';
+  const showPanel=(S.mode==='lan'||S.mode==='tok');
+  if(panel)panel.style.display=showPanel?'block':'none';
+  /* 根据模式切换面板文案 */
+  const pTitle=document.getElementById('tok-panel-title');
+  const pDesc=document.getElementById('tok-panel-desc');
+  if(showPanel){
+    const isLan=S.mode==='lan';
+    if(pTitle)pTitle.innerHTML=isLan?'⚡ 内网极速配对（Token直连）':'🔑 Token 跨网配对';
+    if(pDesc)pDesc.textContent=isLan
+      ?'同WiFi/内网下：把Token发给对方，输入对方Token即可极速直连，无需扫码、无需房间码。'
+      :'任意网络：把Token发给对方，输入对方Token即可配对连接，无需交换房间码。';
+  }
 }
 /* 网络环境检测 */
 function isWiFi(){
@@ -564,7 +579,16 @@ function doLogin(){
   S.name=n;
   document.getElementById('lobby-user').textContent='👤 '+n;
   document.getElementById('lobby-mode-label').textContent=MLABELS[S.mode];
-  /* Token配对模式：登录后不进入大厅，直接在此面板配对 */
+  /* 大厅页 Token 极速配对入口：内网/Token配对模式可见 */
+  const lobBtn=document.getElementById('lobby-tok-btn');
+  if(lobBtn)lobBtn.style.display=(S.mode==='lan'||S.mode==='tok')?'inline-flex':'none';
+  /* 内网模式：进入大厅（可用 Token 极速配对 / 传统房间码 / 扫码） */
+  if(S.mode==='lan'){
+    setTimeout(()=>tokStartListen(),300); /* 提前启动监听，确保能收到配对请求 */
+    goTo('lobby-screen');
+    return;
+  }
+  /* Token配对模式：登录后停留在登录页，直接在此面板配对 */
   if(S.mode==='tok'){
     const panel=document.getElementById('token-panel');
     if(panel)panel.style.display='block';
@@ -578,21 +602,15 @@ function doLogin(){
   goTo('lobby-screen');
 }
 
-/* ==============================================================
-   Token 配对 (PeerJS 公共信令中继)
-   ============================================================== */
-/* Token 配对网关：用 token 作为 PeerJS 房间名，双方加入同一 peer 广播，
-   从而在任意网络环境下仅凭 token 建立连接。 */
-function tokSetStatus(txt){
-  const st=document.getElementById('tok-status');
-  const stt=document.getElementById('tok-status-text');
-  if(st)st.style.display=txt?'flex':'none';
-  if(stt)stt.textContent=txt||'';
+/* 大厅页 → Token 极速配对面板 */
+function goToTokenPair(){
+  const panel=document.getElementById('token-panel');
+  if(panel)panel.style.display='block';
+  if(!tokES)tokStartListen();
+  goTo('login-screen');
+  tokSetStatus('配对通道已就绪，等待对方连接...');
 }
-function tokBtnDisable(disable){
-  const b=document.getElementById('tok-connect-btn');
-  if(b)b.disabled=disable;
-}
+
 /* ==============================================================
    Token 配对 (ntfy.sh 公共信令中继)
    用 token 作为 ntfy topic，双方通过 HTTP 发布/订阅交换
@@ -629,7 +647,7 @@ function tokStartListen(){
   try{
     tokES=new EventSource(NTFY+tokTopic(S.token)+'/json');
     tokES.onopen=()=>{
-      if(S.mode==='tok')tokSetStatus('配对通道已就绪，等待对方连接...');
+      if(S.mode==='lan'||S.mode==='tok')tokSetStatus('配对通道已就绪，等待对方连接...');
     };
     tokES.onmessage=e=>{
       try{
@@ -652,6 +670,10 @@ function tokHandleMsg(msg){
   else if(msg.type==='answer')tokOnAnswer(msg);
   else if(msg.type==='ice')tokOnIce(msg);
 }
+/* 根据模式选择 ICE 配置：内网(lan)纯直连极速，Token(tok)带STUN/TURN跨网 */
+function tokIceCfg(){
+  return (S.mode==='lan')?ICE.lan:ICE.tok;
+}
 /* 加入方收到 offer：创建PC、应答 */
 async function tokOnOffer(msg){
   if(S.connected||S.gameStarted||S.role==='host')return;
@@ -660,7 +682,7 @@ async function tokOnOffer(msg){
   tokBtnDisable(true);
   tokSetStatus('收到 '+msg.name+' 的配对请求，正在应答...');
   try{
-    const pc=new RTCPeerConnection(ICE.tok);
+    const pc=new RTCPeerConnection(tokIceCfg());
     tokPC=pc;S.pc=pc;
     pc.onicecandidate=e=>{if(e.candidate)tokPublish(msg.from,{type:'ice',candidate:e.candidate.toJSON()})};
     pc.ondatachannel=e=>{
@@ -692,6 +714,13 @@ async function tokOnIce(msg){
 }
 /* 用户点击"连接对方"：作为发起方(Host)创建PC并发offer */
 async function tokenConnect(){
+  /* 未登录时自动读取昵称 */
+  if(!S.name){
+    const n=document.getElementById('inp-name').value.trim();
+    if(!n){toast('请先输入昵称','err');return}
+    S.name=n;
+    document.getElementById('lobby-user').textContent='👤 '+n;
+  }
   const input=document.getElementById('tok-input').value.trim();
   if(!input){toast('请输入对方5位Token','err');return}
   if(!/^\d{5}$/.test(input)){toast('Token必须为5位数字','err');return}
@@ -704,7 +733,7 @@ async function tokenConnect(){
   tokBtnDisable(true);
   tokSetStatus('正在连接对方Token: '+input+' ...');
   try{
-    const pc=new RTCPeerConnection(ICE.tok);
+    const pc=new RTCPeerConnection(tokIceCfg());
     tokPC=pc;S.pc=pc;
     /* 发起方创建数据通道 */
     const dc=pc.createDataChannel('game');
@@ -908,12 +937,11 @@ async function joinRoom(){
   if(!raw){toast('请输入或扫描房间码','err');return}
   const d=parseCode(raw);
   if(!d){toast('无效的房间码','err');return}
-  /* Token校验：内网/自动模式必须提供Token */
+  /* Token校验：可选（填了才校验，不填放行） */
   const hostToken=d.token||'';
   let inputToken=document.getElementById('inp-token').value.trim();
-  if(!inputToken&&hostToken){toast('请输入连接Token','err');return}
   if(inputToken&&hostToken&&inputToken!==hostToken){toast('Token校验失败，请检查后重试','err');return}
-  if(inputToken&&!hostToken&&S.mode==='lan'){toast('房间码不含Token，无需校验','info')}
+  if(inputToken&&!hostToken){toast('该房间码不含Token，无需校验','info')}
   S.role='join';
   document.getElementById('js1').className='step active';
   try{
