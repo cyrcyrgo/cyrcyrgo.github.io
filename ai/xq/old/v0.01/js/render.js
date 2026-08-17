@@ -141,86 +141,6 @@
     if (idx.r < 0 || idx.r >= GK.size || idx.c < 0 || idx.c >= GK.size) return null;
     return idx;
   }
-  /* 象棋棋子行走过渡动画：从源格平滑滑到目标格。
-   * board 为走子后的最终棋盘，from/to 为逻辑坐标。 */
-  function animateXiangqiMove(canvas, board, from, to, playerColor, opts, onDone) {
-    const opts_ = opts || {};
-    const mirror = playerColor === 'black';
-    const disp = (r, c) => mirror ? [9 - r, 8 - c] : [r, c];
-    const [fr, fc] = from, [tr, tc] = to;
-    const p0 = r2d.apply(null, disp(fr, fc));
-    const p1 = r2d.apply(null, disp(tr, tc));
-    const mover = board[tr][tc];
-    const ch = XQ_CHAR[mover] || mover;
-    const colr = mover.toUpperCase() === mover ? '#c33a2f' : '#2a2e33';
-    // 动画期间目标格隐藏，走子作悬浮棋子绘制
-    const animBoard = board.map(row => row.slice());
-    animBoard[tr][tc] = '.';
-
-    const ctx = canvas.getContext('2d');
-    const dur = opts_.fast ? 160 : 300;
-    const start = performance.now();
-    function frame(now) {
-      const t = Math.min(1, (now - start) / dur);
-      const ease = 1 - Math.pow(1 - t, 3);
-      const x = p0[0] + (p1[0] - p0[0]) * ease;
-      const y = p0[1] + (p1[1] - p0[1]) * ease;
-      drawXiangqi(canvas, animBoard, playerColor);
-      ctx.save();
-      // 吃子冲击波
-      if (opts_.captured && t < 0.4) {
-        const a = 0.85 * (1 - t / 0.4);
-        ctx.strokeStyle = 'rgba(226,82,48,' + a + ')';
-        ctx.lineWidth = 6;
-        ctx.beginPath();
-        ctx.arc(p1[0], p1[1], XC.cell * (0.25 + 1.1 * (t / 0.4)), 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      // 走子本体的柔和拖尾
-      ctx.restore();
-      drawPiece(ctx, x, y, XC.cell * 0.44, colr, ch);
-      if (t < 1) { requestAnimationFrame(frame); }
-      else { drawXiangqi(canvas, board, playerColor); if (onDone) onDone(); }
-    }
-    requestAnimationFrame(frame);
-  }
-
-  /* 五子棋落子过渡动画：棋子弹出 + 水波涟漪 */
-  function animateGomokuStone(canvas, board, r, c, player, onDone) {
-    const animBoard = board.map(row => row.slice());
-    animBoard[r][c] = 0;
-    const [x, y] = [GK.margin + c * GK.cell, GK.margin + r * GK.cell];
-    const ctx = canvas.getContext('2d');
-    const dur = 260;
-    const start = performance.now();
-    function frame(now) {
-      const t = Math.min(1, (now - start) / dur);
-      drawGomoku(canvas, animBoard);
-      ctx.save();
-      // 涟漪
-      const ripple = Math.min(1, t * 2.2);
-      if (ripple < 1) {
-        ctx.strokeStyle = 'rgba(0,0,0,' + (0.28 * (1 - ripple)) + ')';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(x, y, GK.cell * 0.4 + GK.cell * 2.0 * ripple, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      // 弹出下落
-      const s = t < 0.25 ? (0.4 + 2.2 * t) : Math.max(1, 1.25 - 0.6 * (t - 0.25) / 0.75);
-      ctx.globalAlpha = Math.min(1, t / 0.25);
-      ctx.beginPath();
-      ctx.arc(x, y, GK.cell * 0.42 * s, 0, Math.PI * 2);
-      ctx.fillStyle = player === 1 ? '#1b1d20' : '#f5f2ea';
-      ctx.fill();
-      ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.stroke();
-      ctx.restore();
-      if (t < 1) { requestAnimationFrame(frame); }
-      else { drawGomoku(canvas, board); if (onDone) onDone(); }
-    }
-    requestAnimationFrame(frame);
-  }
-
   /* 在象棋棋盘上叠加标记。cells 为显示空间 [dr,dc]；kind: 'from' | 'to' */
   function markXiangqi(canvas, cells, kind) {
     const ctx = canvas.getContext('2d');
@@ -247,5 +167,5 @@
     ctx.restore();
   }
 
-  window.XqRender = { drawXiangqi, drawGomoku, xiangqiHit, gomokuHit, markXiangqi, markGomoku, animateXiangqiMove, animateGomokuStone };
+  window.XqRender = { drawXiangqi, drawGomoku, xiangqiHit, gomokuHit, markXiangqi, markGomoku };
 })();
