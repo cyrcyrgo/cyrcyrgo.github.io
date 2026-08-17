@@ -16,6 +16,9 @@
     const d = dpr || Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = w * d;
     canvas.height = h * d;
+    // 记录逻辑尺寸，供命中检测还原坐标（物理像素 = 逻辑 * dpr）
+    canvas.__lgW = w;
+    canvas.__lgH = h;
     canvas.getContext('2d').setTransform(d, 0, 0, d, 0, 0);
     return canvas.getContext('2d');
   }
@@ -122,10 +125,11 @@
   /* 把画布上的像素点转为网格索引（显示空间） */
   function toIndex(evt, canvas, margin, cell) {
     const rect = canvas.getBoundingClientRect();
-    const scaleW = canvas.width / rect.width;
-    const scaleH = canvas.height / rect.height;
-    const x = (evt.clientX - rect.left) * scaleW;
-    const y = (evt.clientY - rect.top) * scaleH;
+    // 用逻辑尺寸换算：物理像素 = 逻辑 * dpr，若直接用 canvas.width(已乘 dpr) 会导致高 DPR 屏幕(手机)坐标偏移
+    const lgW = canvas.__lgW || (canvas.width / (window.devicePixelRatio || 1));
+    const lgH = canvas.__lgH || (canvas.height / (window.devicePixelRatio || 1));
+    const x = (evt.clientX - rect.left) * (lgW / rect.width);
+    const y = (evt.clientY - rect.top) * (lgH / rect.height);
     const c = Math.round((x - margin) / cell);
     const r = Math.round((y - margin) / cell);
     return { r, c };

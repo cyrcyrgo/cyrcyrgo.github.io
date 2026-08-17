@@ -158,12 +158,38 @@
     return canvasDisp.mirror ? [9 - hit.r, 8 - hit.c] : [hit.r, hit.c];
   }
 
-  /* ---------- 玩家点击 ---------- */
-  canvas.addEventListener('click', (evt) => {
+  /* ---------- 玩家走子输入（PointerEvent + 触屏/鼠标兜底，滑动忽略） ---------- */
+  let tapStart = null;
+  function tapAt(x, y) {
     if (state.over || state.thinking || state.turn !== 'player') return;
-    if (state.game === 'xiangqi') onPlayerXiangqi(evt);
-    else onPlayerGomoku(evt);
-  });
+    if (state.game === 'xiangqi') onPlayerXiangqi({ clientX: x, clientY: y });
+    else onPlayerGomoku({ clientX: x, clientY: y });
+  }
+  function beginTap(x, y) { tapStart = { x, y }; }
+  function endTap(x, y) {
+    if (!tapStart) return;
+    const dx = x - tapStart.x, dy = y - tapStart.y;
+    tapStart = null;
+    if (Math.hypot(dx, dy) > 12) return; // 滑动/滚动手势，忽略
+    tapAt(x, y);
+  }
+
+  if (window.PointerEvent) {
+    canvas.addEventListener('pointerdown', (ev) => {
+      if (ev.pointerType === 'mouse' && ev.button > 0) return;
+      beginTap(ev.clientX, ev.clientY);
+      try { if (canvas.setPointerCapture) canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+    });
+    canvas.addEventListener('pointerup', (ev) => endTap(ev.clientX, ev.clientY));
+    canvas.addEventListener('pointercancel', () => { tapStart = null; });
+  } else {
+    // 老浏览器兜底：触屏 + 鼠标
+    canvas.addEventListener('touchstart', (ev) => { const t = ev.changedTouches[0]; if (t) beginTap(t.clientX, t.clientY); }, { passive: true });
+    canvas.addEventListener('touchend', (ev) => { const t = ev.changedTouches[0]; if (t) endTap(t.clientX, t.clientY); }, { passive: true });
+    canvas.addEventListener('mousedown', (ev) => { if (ev.button > 0) return; beginTap(ev.clientX, ev.clientY); });
+    canvas.addEventListener('mouseup', (ev) => endTap(ev.clientX, ev.clientY));
+  }
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
   function onPlayerGomoku(evt) {
     const hit = XqRender.gomokuHit(canvas, evt);
