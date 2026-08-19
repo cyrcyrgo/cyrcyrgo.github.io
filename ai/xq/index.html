@@ -3,86 +3,103 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI 象棋 · 五子棋对决</title>
+  <title>中国象棋 AI 对战平台</title>
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/board.css">
+  <link rel="stylesheet" href="css/responsive.css">
 </head>
 <body>
-  <!-- 首页 / 游戏选择 -->
+
+  <!-- ============ 首页 ============ -->
   <div id="screen-home" class="screen">
-    <div class="hero">
-      <span class="ver">v1.00</span>
-      <h1>AI 棋局对决</h1>
-      <p class="sub">AI 实时读取棋盘执黑或执红，与你在象棋 / 五子棋中一较高下。</p>
-      <button id="btn-settings" class="btn ghost">⚙ 接口设置</button>
-    </div>
-    <div class="cards">
-      <div class="card" id="card-xiangqi">
-        <div class="card-icon">♞</div>
-        <h2>中国象棋</h2>
-        <p>9 路 × 10 行 · 全规则引擎 · 将死判负</p>
-        <button class="btn primary">开始对局</button>
+    <div class="home-box">
+      <div class="logo">♞</div>
+      <h1 class="title">中国象棋 AI 对战平台</h1>
+      <p class="sub">碾压你的象棋大师 AI · 每一步都附带嘲讽</p>
+
+      <div class="choose">
+        <h2>选择你的阵营</h2>
+        <div class="choose-row">
+          <button id="choose-red" class="btn choice red">执红（先手）</button>
+          <button id="choose-black" class="btn choice black">执黑（后手）</button>
+        </div>
+        <p class="tip">选择后立即对局。可先在 <b>接口设置</b> 中填入 OpenAI API Key 以启用真正的 AI；否则使用本地兜底引擎。</p>
       </div>
-      <div class="card" id="card-gomoku">
-        <div class="card-icon">◉</div>
-        <h2>五子棋</h2>
-        <p>15 × 15 · 五连即胜 · 先手随机</p>
-        <button class="btn primary">开始对局</button>
-      </div>
+
+      <button id="btn-config" class="btn ghost wide">⚙ 接口设置</button>
     </div>
   </div>
 
-  <!-- 棋局画面 -->
+  <!-- ============ 对局画面 ============ -->
   <div id="screen-game" class="screen hidden">
     <header class="gamebar">
       <button id="btn-back" class="btn ghost">‹ 返回</button>
-      <div id="game-title" class="title"></div>
-      <div id="status-chip" class="chip">准备中…</div>
+      <div class="title">中国象棋 AI 对战</div>
+      <span id="status" class="status">准备中…</span>
     </header>
-    <div id="game-wrap" class="game-wrap">
-      <div id="board-box">
-        <canvas id="board"></canvas>
-      </div>
-      <div class="side">
-        <div id="side-info" class="side-info"></div>
-        <div id="log" class="log"></div>
-        <details id="ai-out-box" class="ai-out">
-          <summary>🔍 AI 输出日志 <span id="ai-out-badge" class="ai-out-badge"></span></summary>
-          <div id="ai-out" class="ai-out-body"></div>
-        </details>
-        <div class="actions">
-          <button id="btn-retry-ai" class="btn hidden" style="margin-bottom:8px;color:#e8eef7;background:#4a5a70;border-color:transparent;width:100%">↻ AI 出错 —— 点击重试</button>
+
+    <div class="game-wrap">
+      <div class="board-col">
+        <div id="board-box">
+          <canvas id="board"></canvas>
+        </div>
+        <div class="controls">
           <button id="btn-restart" class="btn">重新开局</button>
+          <button id="btn-resign" class="btn danger">认输</button>
+          <button id="btn-configg" class="btn ghost">API 设置</button>
         </div>
       </div>
+
+      <aside class="side">
+        <div class="ai-card">
+          <div class="ai-head">
+            <span class="ai-avatar">♞</span>
+            <span id="ai-name" class="ai-name">AI 大师</span>
+            <span id="turn-chip" class="turn-chip">—</span>
+          </div>
+          <div id="ai-bubble" class="ai-bubble hidden">哼。</div>
+        </div>
+
+        <div class="panel">
+          <h3>局势评估</h3>
+          <div id="eval-box" class="eval-box">—</div>
+        </div>
+
+        <div class="panel grow">
+          <h3>对局历史</h3>
+          <div id="history" class="history"></div>
+        </div>
+      </aside>
     </div>
   </div>
 
-  <!-- 配置弹窗 -->
+  <!-- ============ 接口设置弹窗 ============ -->
   <div id="modal-config" class="modal hidden">
     <div class="modal-box">
-      <h2>接口设置</h2>
-      <p class="hint">配置用于对弈的模型接口。信息仅保存在本地浏览器。</p>
+      <h2>OpenAI 接口设置</h2>
+      <p class="hint">配置用于下棋的模型接口。信息仅保存在本地浏览器（localStorage），不会上传。</p>
       <label>API Key</label>
       <input id="cfg-key" type="password" placeholder="sk-xxxx" autocomplete="off">
       <label>API URL（完整 chat/completions 地址）</label>
-      <input id="cfg-url" type="text" placeholder="https://api.example.com/v1/chat/completions">
+      <input id="cfg-url" type="text" placeholder="https://api.openai.com/v1/chat/completions">
       <label>Model</label>
-      <input id="cfg-model" type="text" placeholder="model-name">
-      <label style="margin-top:6px;font-weight:400;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input id="cfg-model" type="text" placeholder="gpt-4-turbo">
+      <label class="row-label">
         <input type="checkbox" id="cfg-show"> 显示我的 Key
       </label>
+      <p class="warn">纯前端调用存在 Key 暴露风险，请使用你自己的 Key，勿在生产环境直接暴露。</p>
       <div class="modal-actions">
         <button id="cfg-cancel" class="btn ghost">取消</button>
-        <button id="cfg-save" class="btn primary">保存并进入</button>
+        <button id="cfg-save" class="btn primary">保存</button>
       </div>
     </div>
   </div>
 
-  <!-- 结果弹窗 -->
+  <!-- ============ 结果弹窗 ============ -->
   <div id="modal-result" class="modal hidden">
     <div class="modal-box center">
       <h2 id="result-title"></h2>
-      <p id="result-text"></p>
+      <p id="result-text" class="result-text"></p>
       <div class="modal-actions center">
         <button id="res-again" class="btn primary">再来一局</button>
         <button id="res-back" class="btn ghost">返回大厅</button>
@@ -90,10 +107,12 @@
     </div>
   </div>
 
-  <script src="js/settings.js"></script>
-  <script src="js/xiangqi.js"></script>
-  <script src="js/gomoku.js"></script>
-  <script src="js/render.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/notation.js"></script>
+  <script src="js/prompt.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/board.js"></script>
+  <script src="js/ui.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
