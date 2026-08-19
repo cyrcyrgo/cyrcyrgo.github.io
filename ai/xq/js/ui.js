@@ -19,9 +19,13 @@
       cfgKey: $('#cfg-key'),
       cfgUrl: $('#cfg-url'),
       cfgModel: $('#cfg-model'),
+      cfgThinking: $('#cfg-thinking'),
+      cfgJsonMode: $('#cfg-jsonmode'),
       cfgShow: $('#cfg-show'),
       cfgSave: $('#cfg-save'),
       cfgCancel: $('#cfg-cancel'),
+      presetDeepSeek: $('#preset-deepseek'),
+      presetOpenAI: $('#preset-openai'),
       // 结果
       resModal: $('#modal-result'),
       resTitle: $('#result-title'),
@@ -94,17 +98,28 @@
     els.aiName && (els.aiName.textContent = show ? 'AI 思考中…' : 'AI 大师');
   }
 
-  /* ---------- 对局历史 ---------- */
+  /* ---------- 对局历史（按回合成对展示：红在前，黑在后） ---------- */
   function renderHistory(records) {
     els.history.innerHTML = '';
-    records.forEach((rec, idx) => {
+    if (!records.length) {
+      els.history.innerHTML = '<div class="h-empty">尚无走法，请走出你的第一步。</div>';
+      return;
+    }
+    const rows = document.createElement('div');
+    rows.className = 'hrows';
+    for (let i = 0; i < records.length; i += 2) {
+      const r = records[i], b = records[i + 1];
       const row = document.createElement('div');
-      row.className = 'hrow' + (rec.type === 'ai' ? ' ai' : '');
+      row.className = 'hrow';
+      const redText = r && r.color === 'red' ? esc(r.text) : (b && b.color === 'red' ? esc(b.text) : '—');
+      const blackText = b && b.color === 'black' ? esc(b.text) : (r && r.color === 'black' ? esc(r.text) : '—');
       row.innerHTML =
-        '<span class="hnum">' + (idx + 1) + '</span>' +
-        '<span class="htext">' + esc(rec.text) + '</span>';
-      els.history.appendChild(row);
-    });
+        '<span class="hnum">' + (i / 2 + 1) + '</span>' +
+        '<span class="hmove red">' + redText + '</span>' +
+        '<span class="hmove black">' + blackText + '</span>';
+      rows.appendChild(row);
+    }
+    els.history.appendChild(rows);
     els.history.scrollTop = els.history.scrollHeight;
   }
 
@@ -128,6 +143,8 @@
     els.cfgKey.value = values.apiKey || '';
     els.cfgUrl.value = values.apiUrl || '';
     els.cfgModel.value = values.model || '';
+    if (els.cfgThinking) els.cfgThinking.checked = values.disableThinking !== false;
+    if (els.cfgJsonMode) els.cfgJsonMode.checked = !!values.responseFormat;
     openModal('#modal-config');
   }
 
