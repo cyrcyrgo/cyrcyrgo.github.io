@@ -278,7 +278,7 @@
     UI.els.btnConfig.addEventListener('click', () => UI.showConfig(loadConfig()));
     UI.els.btnConfigg.addEventListener('click', () => UI.showConfig(loadConfig()));
     UI.els.presetDeepSeek.addEventListener('click', () => {
-      UI.els.cfgUrl.value = 'https://api.deepseek.com/chat/completions';
+      UI.els.cfgUrl.value = 'https://api.deepseek.com/v1/chat/completions';
       UI.els.cfgModel.value = 'deepseek-v4-flash';
       UI.els.cfgThinking.checked = true;
       UI.els.cfgJsonMode.checked = false;
