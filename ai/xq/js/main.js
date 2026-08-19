@@ -277,12 +277,27 @@
     // 设置
     UI.els.btnConfig.addEventListener('click', () => UI.showConfig(loadConfig()));
     UI.els.btnConfigg.addEventListener('click', () => UI.showConfig(loadConfig()));
+    UI.els.presetDeepSeek.addEventListener('click', () => {
+      UI.els.cfgUrl.value = 'https://api.deepseek.com/chat/completions';
+      UI.els.cfgModel.value = 'deepseek-v4-flash';
+      UI.els.cfgThinking.checked = true;
+      UI.els.cfgJsonMode.checked = false;
+    });
+    UI.els.presetOpenAI.addEventListener('click', () => {
+      UI.els.cfgUrl.value = 'https://api.openai.com/v1/chat/completions';
+      UI.els.cfgModel.value = 'gpt-4-turbo';
+      UI.els.cfgThinking.checked = false;
+      UI.els.cfgJsonMode.checked = true;
+    });
     UI.els.cfgCancel.addEventListener('click', () => UI.closeModal('#modal-config'));
     UI.els.cfgSave.addEventListener('click', () => {
       const cfg = {
         apiKey: UI.els.cfgKey.value.trim(),
         apiUrl: UI.els.cfgUrl.value.trim(),
         model: UI.els.cfgModel.value.trim(),
+        provider: /deepseek/i.test(UI.els.cfgUrl.value) ? 'deepseek' : 'openai',
+        disableThinking: UI.els.cfgThinking.checked,
+        responseFormat: UI.els.cfgJsonMode.checked,
       };
       if (!cfg.apiKey) { alert('请填写 API Key，否则将使用本地兜底引擎。'); }
       saveConfig(cfg);

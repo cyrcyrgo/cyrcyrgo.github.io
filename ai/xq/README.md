@@ -33,12 +33,33 @@ npx serve .
 
 ## 使用说明
 
-1. 打开页面后，可先点击右上/左下「接口设置」，填入 OpenAPI API Key（可选填自定义 API URL 与模型名）。
+1. 打开页面后，可先点击「接口设置」：
+   - 点击 **DeepSeek** 快速填充：`https://api.deepseek.com/chat/completions` + `deepseek-v4-flash`，并默认勾选「关闭思考模式」。
+   - 或点击 **OpenAI** 快速填充：`https://api.openai.com/v1/chat/completions` + `gpt-4-turbo`，默认开启 `response_format=json`。
+   - 填入你的 API Key（仅保存在本地 localStorage）。
 2. 选择「执红（先手）」或「执黑（后手）」开始对局。
 3. 点击己方棋子选中，再点击目标位置走棋；合法走位会以圆点提示。
 4. AI 走棋时会有“思考中”状态，走完后以气泡输出嘲讽。
 
 若未填写有效的 API Key，或 AI 网络请求失败，系统会自动切换为内置引擎兜底，仍可正常对弈。
+
+### DeepSeek 思考模式
+
+DeepSeek 兼容 OpenAI 接口，但默认会开启思考（reasoning）。本平台在请求体中附带 `thinking: {"type": "disabled"}`（对应官方 SDK 的 `extra_body={"thinking": {"type": "disabled"}}`）以关闭思考、降低延迟与成本，并让输出更稳定地收敛为纯 JSON 下棋指令。可在设置中勾选/取消。
+
+> 注意：`response_format` 目前 DeepSeek 不支持，本平台已对 DeepSeek 自动跳过该参数，仅靠系统提示词强制 JSON 输出并以前端规则引擎兜底校验。
+
+### AI 下棋指令协议（AI 如何发送 / 系统如何接收）
+
+AI 每走一步，其**整个回复就是一条“下棋指令”**，必须是一个纯 JSON 对象，例如：
+
+```json
+{"move": "炮二平五", "comment": "就这？我闭着眼都能赢你。", "evaluation": "红方先手略优", "strategy": "炮镇中路，控制局面"}
+```
+
+- **AI 如何发送**：只输出该 JSON，禁止额外文字、代码块或解释；`move` 为标准记谱法。
+- **系统如何接收**：[ai.js](js/ai.js) 的 `extractJSON` 提取最外层 `{}` → 读取 `move` → [notation.js](js/notation.js) 解析成坐标 → [rules.js](js/rules.js) 的 `legalMoves` 校验合法性。
+- **非法重试**：若 `move` 缺失/非法，不采纳并追加提醒，最多重试 3 次；仍失败则切换本地兜底引擎。
 
 ## 目录结构
 

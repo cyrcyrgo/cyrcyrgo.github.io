@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  /* 调用 OpenAI Chat Completions 接口 */
+  /* 调用 OpenAI / DeepSeek 兼容的 Chat Completions 接口 */
   async function callAI(messages, cfg) {
     const url = cfg.apiUrl || 'https://api.openai.com/v1/chat/completions';
     const headers = { 'Content-Type': 'application/json' };
@@ -12,17 +12,25 @@
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), (cfg.timeout || 60000));
     try {
+      const body = {
+        model: cfg.model || 'gpt-4-turbo',
+        messages,
+        temperature: cfg.temperature != null ? cfg.temperature : 0.3,
+        max_tokens: cfg.maxTokens || 200,
+      };
+      // 强制 JSON 输出（DeepSeek 不支持时请关闭 responseFormat）
+      if (cfg.responseFormat && cfg.provider !== 'deepseek') {
+        body.response_format = { type: 'json_object' };
+      }
+      // 关闭思考模式（DeepSeek 的 thinking.type=disabled）
+      if (cfg.disableThinking) {
+        body.thinking = { type: 'disabled' };
+      }
       const resp = await fetch(url, {
         method: 'POST',
         headers,
         signal: controller.signal,
-        body: JSON.stringify({
-          model: cfg.model || 'gpt-4-turbo',
-          messages,
-          temperature: cfg.temperature != null ? cfg.temperature : 0.3,
-          max_tokens: cfg.maxTokens || 200,
-          response_format: cfg.responseFormat ? { type: 'json_object' } : undefined,
-        }),
+        body: JSON.stringify(body),
       });
       if (!resp.ok) {
         const t = await resp.text();

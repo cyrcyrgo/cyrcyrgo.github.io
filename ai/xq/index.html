@@ -43,6 +43,7 @@
         <div id="board-box">
           <canvas id="board"></canvas>
         </div>
+        <div class="hint-bar">① 点击己方棋子选中 → ② 点击高亮格走棋；AI 走棋时会显示嘲讽与评估。</div>
         <div class="controls">
           <button id="btn-restart" class="btn">重新开局</button>
           <button id="btn-resign" class="btn danger">认输</button>
@@ -76,14 +77,28 @@
   <!-- ============ 接口设置弹窗 ============ -->
   <div id="modal-config" class="modal hidden">
     <div class="modal-box">
-      <h2>OpenAI 接口设置</h2>
+      <h2>AI 接口设置</h2>
       <p class="hint">配置用于下棋的模型接口。信息仅保存在本地浏览器（localStorage），不会上传。</p>
+
+      <label>快速选择服务商</label>
+      <div class="preset-row">
+        <button id="preset-deepseek" class="btn preset">DeepSeek</button>
+        <button id="preset-openai" class="btn preset">OpenAI</button>
+      </div>
+
       <label>API Key</label>
       <input id="cfg-key" type="password" placeholder="sk-xxxx" autocomplete="off">
       <label>API URL（完整 chat/completions 地址）</label>
-      <input id="cfg-url" type="text" placeholder="https://api.openai.com/v1/chat/completions">
+      <input id="cfg-url" type="text" placeholder="https://api.deepseek.com/chat/completions">
       <label>Model</label>
-      <input id="cfg-model" type="text" placeholder="gpt-4-turbo">
+      <input id="cfg-model" type="text" placeholder="deepseek-v4-flash">
+
+      <label class="row-label">
+        <input type="checkbox" id="cfg-thinking" checked> 关闭思考模式（thinking.disabled，DeepSeek 建议开启）
+      </label>
+      <label class="row-label">
+        <input type="checkbox" id="cfg-jsonmode"> 请求开启 response_format=json（OpenAI 可用，DeepSeek 关闭）
+      </label>
       <label class="row-label">
         <input type="checkbox" id="cfg-show"> 显示我的 Key
       </label>
