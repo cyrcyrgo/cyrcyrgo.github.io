@@ -16,7 +16,7 @@
         model: cfg.model || 'gpt-4-turbo',
         messages,
         temperature: cfg.temperature != null ? cfg.temperature : 0.3,
-        max_tokens: cfg.maxTokens || 200,
+        max_tokens: cfg.maxTokens || 150,
       };
       // 强制 JSON 输出（DeepSeek 不支持时请关闭 responseFormat）
       if (cfg.responseFormat && cfg.provider !== 'deepseek') {
@@ -115,7 +115,7 @@
       }
       lastErr = '非法或无法解析的走法: ' + (moveStr || '(空)');
       user = userMessage() + window.PromptTemplates.INVALID_MOVE_HINT;
-      await delay(cfg.delayMs ?? 600);
+      await delay(cfg.delayMs ?? 300);
     }
     // 兜底引擎
     const fb = fallbackMove(board, color);
