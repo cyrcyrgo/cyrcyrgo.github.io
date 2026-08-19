@@ -27,9 +27,12 @@
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); } catch (_) { /* ignore */ }
   }
 
-  /* ---------- 历史构造：供 AI 提示使用 ---------- */
+  /* ---------- 历史构造：供 AI 提示使用（仅保留最近若干步以控制请求体积、降低延迟） ---------- */
   function simpleHistory() {
-    return state.history.map((h, i) => (i + 1) + '. ' + h.text).join('\n');
+    const MAX = 8; // 最近 8 步（4 个回合），足够 AI 理解局面走向，且避免历史无限增长拖慢响应
+    const recent = state.history.slice(-MAX);
+    const start = state.history.length - recent.length + 1;
+    return recent.map((h, i) => (start + i) + '. ' + h.text).join('\n');
   }
 
   /* ---------- 人类走棋 ---------- */
