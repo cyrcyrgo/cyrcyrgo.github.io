@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MiniLLM · 从零训练的精简大语言模型</title>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#121828; --panel2:#0f1420; --line:#222c44;
+    --fg:#e6ecff; --muted:#8b9ac4; --accent:#5b8cff; --accent2:#8b5cf6;
+    --ok:#22c55e; --warn:#f59e0b; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:radial-gradient(1200px 600px at 20% -10%,#1a2340 0%,var(--bg) 55%) no-repeat,var(--bg);
+    color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;min-height:100vh;
+  }
+  a{color:var(--accent);text-decoration:none}
+  .wrap{max-width:1000px;margin:0 auto;padding:32px 20px 80px}
+  .nav{display:flex;align-items:center;gap:12px;margin-bottom:28px;font-size:14px;color:var(--muted)}
+  .nav b{color:var(--fg);font-size:16px}
+
+  h1{font-size:34px;line-height:1.25;margin:0 0 12px;
+     background:linear-gradient(92deg,#fff, #a9c0ff 45%, #c4b5fd);
+     -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:15px;line-height:1.7;margin:0 0 24px;max-width:760px}
+
+  .pipe{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 28px}
+  .pipe span{font-size:12.5px;padding:7px 12px;border-radius:999px;background:var(--panel);
+    border:1px solid var(--line);color:#b9c6ea}
+  .pipe i{color:var(--muted);align-self:center;font-style:normal}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:28px}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:var(--radius);padding:14px 16px}
+  .card .k{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .card .v{font-size:20px;font-weight:600;letter-spacing:.3px}
+  .card .v small{font-size:12px;color:var(--muted);font-weight:400;margin-left:4px}
+
+  .start{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:30px 0 8px}
+  button{font-family:inherit}
+  .btn{border:none;cursor:pointer;color:#fff;font-size:15px;font-weight:600;padding:13px 26px;border-radius:12px;
+    background:linear-gradient(92deg,var(--accent),var(--accent2));box-shadow:0 10px 30px -12px #5b8cffcc;transition:.18s}
+  .btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
+  .btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+  .btn.ghost{background:transparent;border:1px solid var(--line);box-shadow:none;color:#c8d3f0;font-weight:500;padding:9px 16px;font-size:13px}
+  .note{color:var(--muted);font-size:12.5px}
+
+  /* 初始化遮罩 */
+  .overlay{position:fixed;inset:0;background:#070a11ee;backdrop-filter:blur(6px);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:20px}
+  .overlay.show{display:flex}
+  .boot{width:min(520px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px}
+  .boot h3{margin:0 0 18px;font-size:17px}
+  .step{display:flex;align-items:center;gap:12px;padding:9px 0;font-size:14px;color:var(--muted)}
+  .step .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;font-size:11px}
+  .step.active{color:var(--fg)} .step.active .dot{border-color:var(--accent);animation:pulse 1s infinite}
+  .step.done{color:#9fe6bb} .step.done .dot{border-color:var(--ok);background:var(--ok);color:#04210f}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #5b8cff66}50%{box-shadow:0 0 0 6px #5b8cff00}}
+  .bar{height:6px;border-radius:99px;background:#1b2338;overflow:hidden;margin-top:16px}
+  .bar>div{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .25s}
+
+  /* 对话区 */
+  .chat{display:none;margin-top:34px;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--panel2)}
+  .chat.show{display:block}
+  .chat .head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;
+    border-bottom:1px solid var(--line);background:#0e1524;flex-wrap:wrap}
+  .chat .head .title{font-size:14px;font-weight:600}
+  .badge{font-size:11px;color:#9fe6bb;background:#12291c;border:1px solid #1e4630;padding:3px 9px;border-radius:99px}
+  .msgs{height:52vh;min-height:320px;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+  .msg{max-width:84%;line-height:1.75;font-size:14.5px;padding:11px 15px;border-radius:14px;white-space:pre-wrap;word-break:break-word}
+  .msg.user{align-self:flex-end;background:linear-gradient(92deg,#2b4fd0,#5b3fd0);border-bottom-right-radius:4px}
+  .msg.bot{align-self:flex-start;background:#161d2e;border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msg.sys{align-self:center;background:transparent;color:var(--muted);font-size:12.5px;border:1px dashed var(--line)}
+  .cursor:after{content:"▍";color:var(--accent);animation:blink 1s step-end infinite}
+  @keyframes blink{50%{opacity:0}}
+  .composer{display:flex;gap:10px;padding:14px 16px;border-top:1px solid var(--line);background:#0e1524}
+  .composer input{flex:1;background:#0b1220;border:1px solid var(--line);border-radius:12px;color:var(--fg);
+    padding:12px 14px;font-size:14px;font-family:inherit;outline:none}
+  .composer input:focus{border-color:var(--accent)}
+  .seeds{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px 0}
+  .chip{font-size:12px;color:#b9c6ea;background:#141b2b;border:1px solid var(--line);border-radius:99px;padding:6px 12px;cursor:pointer}
+  .chip:hover{border-color:var(--accent);color:#fff}
+
+  .params{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;padding:16px;border-top:1px solid var(--line);background:#0e1524}
+  .param{font-size:12.5px;color:var(--muted)}
+  .param .row{display:flex;justify-content:space-between;margin-bottom:6px}
+  .param input[type=range]{width:100%;accent-color:var(--accent)}
+
+  .panelbox{margin-top:26px;border:1px solid var(--line);border-radius:16px;background:var(--panel2);padding:18px}
+  .panelbox h3{margin:0 0 4px;font-size:15px}
+  .panelbox p{margin:0 0 14px;color:var(--muted);font-size:12.5px}
+  #lossChart{width:100%;height:190px;display:block}
+  .foot{margin-top:36px;color:var(--muted);font-size:12.5px;line-height:1.9;border-top:1px solid var(--line);padding-top:18px}
+  code{background:#141b2b;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12px;color:#c4d0ee}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <b>MiniLLM</b><span>·</span><span>从零实现并训练的精简大语言模型</span>
+    <span style="margin-left:auto"><a href="../index.html">← 返回首页</a></span>
+  </div>
+
+  <h1>一个真正从零训练的精简 LLM</h1>
+  <p class="sub">
+    完整复刻主流大模型的全部核心部件——分词器、嵌入层与 RoPE 位置编码、N 层 Transformer 解码器
+    （分组查询注意力 GQA + SwiGLU 前馈 + RMSNorm + 残差）、权重共享输出头，以及带 KV Cache 的采样生成逻辑。
+    模型完全在本地用 PyTorch 从随机初始化开始训练，权重导出后在<strong>浏览器内实时推理</strong>，无需任何后端服务。
+  </p>
+
+  <div class="pipe" id="pipe">
+    <span>① 分词 BPE</span><i>→</i>
+    <span>② 嵌入 + RoPE</span><i>→</i>
+    <span>③ N× 解码器块</span><i>→</i>
+    <span>④ 输出头（权重共享）</span><i>→</i>
+    <span>⑤ 采样 + KV Cache</span>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="start">
+    <button class="btn" id="startBtn">开始使用</button>
+    <span class="note" id="startNote">点击后将在浏览器内初始化模型（下载权重并构建计算图）</span>
+  </div>
+
+  <div class="panelbox" id="lossPanel" style="display:none">
+    <h3>训练曲线</h3>
+    <p id="lossDesc">交叉熵损失随训练步数下降</p>
+    <canvas id="lossChart"></canvas>
+  </div>
+
+  <div class="chat" id="chat">
+    <div class="head">
+      <div class="title">MiniLLM 对话</div>
+      <div class="badge" id="chatBadge">已就绪</div>
+    </div>
+    <div class="seeds" id="seeds"></div>
+    <div class="msgs" id="msgs"></div>
+    <div class="params">
+      <label class="param"><span class="row"><span>温度 temperature</span><span id="vTemp">0.85</span></span>
+        <input type="range" id="temp" min="0" max="1.5" step="0.05" value="0.85"></label>
+      <label class="param"><span class="row"><span>top-k</span><span id="vTopk">40</span></span>
+        <input type="range" id="topk" min="0" max="200" step="1" value="40"></label>
+      <label class="param"><span class="row"><span>top-p</span><span id="vTopp">0.92</span></span>
+        <input type="range" id="topp" min="0.1" max="1" step="0.01" value="0.92"></label>
+      <label class="param"><span class="row"><span>生成长度</span><span id="vMax">120</span></span>
+        <input type="range" id="maxn" min="20" max="400" step="10" value="120"></label>
+    </div>
+    <div class="composer">
+      <input id="input" placeholder="输入一段开头，模型将续写……" autocomplete="off">
+      <button class="btn" id="sendBtn">发送</button>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div>本演示模型为<strong>中文基础语言模型（续写式）</strong>，并非经过指令微调的对齐对话模型；它只学会了「预测下一个 token」，
+      因此回复表现为顺着你的输入继续写作。这正是完整 LLM 预训练阶段的能力形态。</div>
+    <div>架构同源模块：<code>RMSNorm</code> <code>RoPE</code> <code>GQA</code> <code>SwiGLU</code> <code>tie_word_embeddings</code> <code>KV Cache</code>。
+      另有 1B 参数规模配置 <code>configs/base_1b.json</code>（995,973,120 参数）在此项目中给出并已校验。</div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="boot">
+    <h3>正在初始化模型</h3>
+    <div id="steps"></div>
+    <div class="bar"><div id="bar"></div></div>
+    <div class="note" id="bootNote" style="margin-top:12px">首次加载需下载约 24 MB 权重，之后将被浏览器缓存</div>
+  </div>
+</div>
+
+<script src="tokenizer.js"></script>
+<script src="llm.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
