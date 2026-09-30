@@ -28,6 +28,8 @@ def main():
     ap.add_argument("--ckpt", default="checkpoints/mini_zh")
     ap.add_argument("--tokenizer", default="tokenizer")
     ap.add_argument("--out", default="web/model")
+    # 浏览器端按 manifest.dtype 解析 weights.bin；fp16 体积减半（35M 参数约 66MB）
+    ap.add_argument("--dtype", choices=["float32", "float16"], default="float32")
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
@@ -52,12 +54,17 @@ def main():
         chunks.append(flat)
         offset += flat.size
 
-    all_w = np.concatenate(chunks).astype("<f4")
+    all_w = np.concatenate(chunks)
+    if args.dtype == "float16":
+        all_w = all_w.astype("<f2")
+    else:
+        all_w = all_w.astype("<f4")
     with open(os.path.join(args.out, "weights.bin"), "wb") as f:
         f.write(all_w.tobytes())
 
     manifest = {
         "config": cfg.__dict__,
+        "dtype": args.dtype,
         "num_parameters": int(sum(t["count"] for t in tensors)),
         "tensors": tensors,
         "total_floats": int(offset),

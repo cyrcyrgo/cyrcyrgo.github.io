@@ -1,0 +1,13 @@
+{
+  "params": 35692544,
+  "size_mb": 68.08,
+  "tensors": 110,
+  "architecture": {
+    "layers": 12,
+    "hidden": 512,
+    "heads": 8,
+    "kv_heads": 2,
+    "intermediate": 1408,
+    "vocab": 3639
+  }
+}

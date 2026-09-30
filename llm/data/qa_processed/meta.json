@@ -1,0 +1,8 @@
+{
+  "vocab_size": 8192,
+  "eos_token_id": 0,
+  "train_tokens": 54307,
+  "val_tokens": 292,
+  "total_chars": 211820,
+  "compression": 3.88
+}

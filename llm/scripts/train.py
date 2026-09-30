@@ -94,6 +94,10 @@ def main():
     train_data = np.memmap(os.path.join(args.data_dir, "train.bin"), dtype=np.uint16, mode="r")
     val_data = np.memmap(os.path.join(args.data_dir, "val.bin"), dtype=np.uint16, mode="r")
     print(f"训练 tokens: {len(train_data):,} | 验证 tokens: {len(val_data):,}")
+    # 验证集过小时无法切出完整 block，跳过验证而不是崩溃
+    can_eval = len(val_data) > args.block_size + 1
+    if not can_eval:
+        print(f"  验证集仅 {len(val_data):,} tokens（<= block {args.block_size}），跳过验证")
 
     decay, no_decay = [], []
     for n, p in model.named_parameters():
@@ -149,17 +153,20 @@ def main():
                   f"{dt:.0f}s | {done/max(dt,1e-6):.0f} tok/s", flush=True)
 
         if step > 0 and step % args.eval_interval == 0:
-            val_loss = evaluate(model, val_data, args.block_size, args.batch_size, device)
+            val_loss = evaluate(model, val_data, args.block_size, args.batch_size, device) if can_eval else None
             entry = {
                 "step": step,
                 "loss": round(running, 4),
-                "val_loss": round(val_loss, 4),
+                "val_loss": round(val_loss, 4) if val_loss is not None else None,
                 "lr": lr,
                 "elapsed_s": round(time.time() - t0, 1),
                 "tokens": (step - start_step + 1) * tokens_per_step,
             }
             metrics.append(entry)
-            print(f"  >> eval step {step}: val_loss {val_loss:.4f} | ppl {math.exp(min(val_loss,20)):.1f}", flush=True)
+            if val_loss is not None:
+                print(f"  >> eval step {step}: val_loss {val_loss:.4f} | ppl {math.exp(min(val_loss,20)):.1f}", flush=True)
+            else:
+                print(f"  >> eval step {step}: train_loss {running:.4f}（无验证集）", flush=True)
             json.dump(metrics, open(metrics_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
         if step > 0 and step % args.save_interval == 0:
