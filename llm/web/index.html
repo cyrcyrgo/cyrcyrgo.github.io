@@ -122,8 +122,15 @@
   <div class="cards" id="cards"></div>
 
   <div class="start">
+    <label class="note" style="display:flex;align-items:center;gap:10px;margin:0 8px 0 0">
+      选择模型：
+      <select id="modelPick" style="padding:8px 12px;border-radius:10px;border:1px solid #222c44;background:#121828;color:#fff;font-size:14px">
+        <option value="dialog">基础对话（中文）</option>
+        <option value="html">HTML 代码生成（可预览）</option>
+      </select>
+    </label>
     <button class="btn" id="startBtn">开始使用</button>
-    <span class="note" id="startNote">点击后将在浏览器内初始化模型（下载权重并构建计算图）</span>
+    <span class="note" id="startNote">选择模型后点击，浏览器内下载权重并启动</span>
   </div>
 
   <div class="panelbox" id="lossPanel" style="display:none">
@@ -154,6 +161,16 @@
       <button class="btn" id="sendBtn">发送</button>
     </div>
   </div>
+
+  <div class="panelbox" id="htmlPanel" style="display:none;margin-top:18px">
+    <h3 style="display:flex;gap:10px;align-items:center">
+      <span id="htmlPanelTitle">网页预览</span>
+      <button class="btn ghost" id="htmlOpenNew" style="margin-left:auto">新标签页打开</button>
+      <button class="btn ghost" id="htmlReRun">重新运行</button>
+    </h3>
+    <iframe id="htmlFrame" sandbox="allow-scripts allow-same-origin" style="width:100%;height:480px;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe>
+  </div>
+</div>
 
   <div class="foot">
     <div>本演示模型为<strong>中文基础语言模型（续写式）</strong>，并非经过指令微调的对齐对话模型；它只学会了「预测下一个 token」，

@@ -2,28 +2,25 @@
 (function () {
   "use strict";
 
-  // 多镜像下载链：按顺序尝试，哪个先成功用哪个（自动回退）
-  //  - gh-proxy.com：国内常用 GitHub 代理，代理解包 raw.githubusercontent.com，实测 25MB ~ 4.4s
-  //  - jsdelivr：纯 CDN，对 <20MB 的 JSON 小文件速度极快；对 >20MB 权重被 403 拒绝，需后续回退
-  //  - raw.githubusercontent.com：GitHub 官方源，海外可用、国内慢
-  //  - GitHub Pages 自身：部署后在 cyrcyrgo.github.io 直接可用（同源，通常最快）
+  // 多镜像下载链：path 形如 "dialog/manifest.json"、"html/weights.bin"
   const REPO = "cyrcyrgo/cyrcyrgo.github.io";
   const BRANCH = "main";
-  const LOCAL_ROOT = (location.protocol === "file:" ? "" : location.origin) +
+  const PREFIX_GH_RAW = "https://raw.githubusercontent.com/" + REPO + "/" + BRANCH + "/llm/web/model/";
+  const PREFIX_GHPAGES = (location.protocol === "file:" ? "" : location.origin) +
     location.pathname.replace(/[^/]*$/, "") + "model/";
   const MIRRORS = [
-    // gh-proxy 代理 raw 源
-    (p) => "https://gh-proxy.com/https://raw.githubusercontent.com/" + REPO + "/" + BRANCH + "/llm/web/model/" + p,
-    // jsdelivr CDN（仅 JSON 等小文件能过）
+    // gh-proxy 代理 raw 源（实测 25MB 权重 ~ 4.4s）
+    (p) => "https://gh-proxy.com/https://" + PREFIX_GH_RAW + p,
+    // jsDelivr（对小文件快，大文件 403）
     (p) => "https://cdn.jsdelivr.net/gh/" + REPO + "@" + BRANCH + "/llm/web/model/" + p,
     (p) => "https://fastly.jsdelivr.net/gh/" + REPO + "@" + BRANCH + "/llm/web/model/" + p,
     // GitHub 官方 raw
-    (p) => "https://raw.githubusercontent.com/" + REPO + "/" + BRANCH + "/llm/web/model/" + p,
+    (p) => PREFIX_GH_RAW + p,
     // GitHub Pages / 本地同源兜底
-    (p) => LOCAL_ROOT + p,
+    (p) => PREFIX_GHPAGES + p,
   ];
-  const MODEL_DIR = "model/";
   const state = {
+    modelKey: "dialog",
     tok: null, model: null, cfg: null, eosId: null, ready: false, busy: false, info: null,
   };
 
@@ -37,13 +34,28 @@
     el.querySelector(".dot").textContent = status === "done" ? "✓" : idx + 1;
   }
 
+  // ---- 模型配置：两套权重分别在 model/dialog/ 和 model/html/ 下 ----
+  const MODELS = {
+    dialog: {
+      label: "基础对话（中文）",
+      infoUrl: "model/dialog/train_info.json",
+      seeds: ["你好，介绍一下你自己", "Python 是什么？", "帮我写一首春天的小诗", "1 公斤等于多少克？", "如何保持健康？"],
+    },
+    html: {
+      label: "HTML 代码生成（可预览）",
+      infoUrl: "model/html/train_info.json",
+      seeds: ["写一个会让按钮悬停发光的网页", "网页版的加一减一计数器", "做一个网页版计算器", "写一个打砖块小游戏", "网页上的颜色调色盘"],
+    },
+  };
+
   // ---- 多镜像下载辅助 ----
+  // path 已经是相对 model/<key>/ 的（如 dialog/manifest.json），底层 MIRRORS 会拼接好完整远端地址
   async function mirrorFetch(path) {
     let lastErr = null;
     for (let i = 0; i < MIRRORS.length; i++) {
       const url = MIRRORS[i](path);
       try {
-        const res = await fetch(url, { cache: path === "weights.bin" ? "force-cache" : "default" });
+        const res = await fetch(url, { cache: path.includes("weights.bin") ? "force-cache" : "default" });
         if (res.ok) return res;
         lastErr = new Error(url + " -> " + res.status);
       } catch (e) { lastErr = e; }
@@ -105,8 +117,8 @@
     setStep(stepsBox, 0, "active");
     bar.style.width = "4%";
     const [vocab, merges] = await Promise.all([
-      mirrorFetchJson("vocab.json"),
-      mirrorFetchText("merges.txt"),
+      mirrorFetchJson(state.modelKey + "/vocab.json"),
+      mirrorFetchText(state.modelKey + "/merges.txt"),
     ]);
     const mergesArr = merges.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
     state.tok = new window.BPETokenizer(vocab, mergesArr, {});
@@ -114,8 +126,8 @@
     setStep(stepsBox, 0, "done");
 
     setStep(stepsBox, 1, "active");
-    const manifest = await mirrorFetchJson("manifest.json");
-    const buf = await mirrorFetchWithProgress("weights.bin", (p) => {
+    const manifest = await mirrorFetchJson(state.modelKey + "/manifest.json");
+    const buf = await mirrorFetchWithProgress(state.modelKey + "/weights.bin", (p) => {
       bar.style.width = (8 + p * 82).toFixed(1) + "%";
     });
     setStep(stepsBox, 1, "done");
@@ -204,6 +216,14 @@
     const tps = outIds.length > 1 ? (outIds.length / Math.max(dt, 1e-3)).toFixed(1) : "-";
     $("chatBadge").textContent = `已就绪 · 本次生成 ${outIds.length} token · ${tps} tok/s`;
 
+    // HTML 模型：自动把输出代码放进 iframe 预览
+    if (state.modelKey === "html") {
+      const html = extractHtml(bot.textContent);
+      if (html) runHtmlInIframe(html);
+    } else {
+      $("htmlPanel").style.display = "none";
+    }
+
     state.busy = false;
     $("sendBtn").disabled = false;
     $("input").focus();
@@ -274,44 +294,90 @@
     ctx.fillStyle = "#8b9ac4"; ctx.fillText("val loss", pad.l + 108, h - 12);
   }
 
+  // ---------------------------------------------------------------- HTML 预览
+  let lastHtmlCode = "";
+  function extractHtml(text) {
+    const m = text.match(/```(?:html)?\s*([\s\S]*?)```/i);
+    if (m) return m[1].trim();
+    if (/<!doctype|<html|<head|<body|<script|<style|</html>/i.test(text)) return text.trim();
+    return "";
+  }
+  function runHtmlInIframe(html) {
+    lastHtmlCode = html;
+    const frame = $("htmlFrame");
+    frame.srcdoc = html;
+    $("htmlPanel").style.display = "block";
+    $("htmlPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   // ---------------------------------------------------------------- 启动
+  function renderSeedsForModel() {
+    const seeds = MODELS[state.modelKey].seeds;
+    $("seeds").innerHTML = seeds.map((s) => `<span class="chip">${s}</span>`).join("");
+  }
+
   async function boot() {
-    let manifest = null;
+    state.modelKey = $("modelPick").value;
+    const showCards = async () => {
+      let manifest = null;
+      try { manifest = await mirrorFetchJson(state.modelKey + "/manifest.json"); } catch (e) {}
+      try {
+        const info = await mirrorFetchJson(state.modelKey + "/train_info.json");
+        state.info = info;
+        renderCards({ params: info.params }, manifest ? manifest.config : info.architecture);
+      } catch (e) {
+        $("cards").innerHTML = '<div class="card"><div class="k">状态</div><div class="v">权重未就绪</div></div>';
+      }
+    };
+    showCards();
+
     try {
-      manifest = await mirrorFetchJson("manifest.json");
-    } catch (e) { /* 权重未就绪 */ }
-    try {
-      const info = await mirrorFetchJson("train_info.json");
-      state.info = info;
-      renderCards({ params: info.params }, manifest ? manifest.config : info.architecture);
-    } catch (e) {
-      $("cards").innerHTML = '<div class="card"><div class="k">状态</div><div class="v">权重未就绪</div></div>';
-    }
-    try {
-      const metrics = await mirrorFetchJson("metrics.json");
+      const metrics = await mirrorFetchJson(state.modelKey + "/metrics.json");
       if (Array.isArray(metrics) && metrics.length > 1) {
         $("lossPanel").style.display = "block";
         const last = metrics[metrics.length - 1];
         $("lossDesc").textContent =
           `已训练 ${last.step} 步 / ${(last.tokens / 1e6).toFixed(1)}M tokens · 训练损失 ${last.loss} · 验证损失 ${last.val_loss}`;
         drawLoss(metrics);
+        window.removeEventListener("resize", drawLoss);
         window.addEventListener("resize", () => drawLoss(metrics));
       }
     } catch (e) { /* 无指标文件则忽略 */ }
 
-    const seeds = ["话说天下大势", "玄德曰", "那大圣", "却说曹操", "明月几时有"];
-    $("seeds").innerHTML = seeds.map((s) => `<span class="chip">${s}</span>`).join("");
+    renderSeedsForModel();
     $("seeds").addEventListener("click", (e) => {
       if (e.target.classList.contains("chip")) { $("input").value = e.target.textContent; respond(e.target.textContent); }
     });
 
+    $("modelPick").addEventListener("change", () => {
+      state.modelKey = $("modelPick").value;
+      state.ready = false;
+      $("startBtn").disabled = false;
+      $("startBtn").textContent = "开始使用";
+      $("chat").classList.remove("show");
+      $("chatBadge").textContent = "未加载";
+      $("htmlPanel").style.display = "none";
+      showCards();
+      renderSeedsForModel();
+    });
+
     $("startBtn").addEventListener("click", () => {
+      state.modelKey = $("modelPick").value;
       $("overlay").classList.add("show");
+      $("startNote").textContent = "下载 " + MODELS[state.modelKey].label + " 的权重并初始化...";
       initialize().catch((err) => {
         $("bootNote").textContent = "初始化失败：" + err.message;
         $("bootNote").style.color = "#f87171";
       });
     });
+
+    $("htmlOpenNew").addEventListener("click", () => {
+      if (!lastHtmlCode) return;
+      const blob = new Blob([lastHtmlCode], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    });
+    $("htmlReRun").addEventListener("click", () => { if (lastHtmlCode) runHtmlInIframe(lastHtmlCode); });
 
     const bind = (id, out, fmt) => {
       const el = $(id);
