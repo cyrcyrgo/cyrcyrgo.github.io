@@ -1,0 +1,986 @@
+{
+  "config": {
+    "vocab_size": 1423,
+    "hidden_size": 512,
+    "num_hidden_layers": 12,
+    "num_attention_heads": 8,
+    "num_key_value_heads": 2,
+    "intermediate_size": 1408,
+    "max_position_embeddings": 512,
+    "rope_theta": 10000.0,
+    "rms_norm_eps": 1e-05,
+    "tie_word_embeddings": true,
+    "initializer_range": 0.02,
+    "name": "minillm-greet-demo"
+  },
+  "dtype": "float16",
+  "num_parameters": 34557952,
+  "tensors": [
+    {
+      "name": "embed_tokens.weight",
+      "shape": [
+        1423,
+        512
+      ],
+      "offset": 0,
+      "count": 728576
+    },
+    {
+      "name": "layers.0.input_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 728576,
+      "count": 512
+    },
+    {
+      "name": "layers.0.self_attn.q_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 729088,
+      "count": 262144
+    },
+    {
+      "name": "layers.0.self_attn.k_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 991232,
+      "count": 65536
+    },
+    {
+      "name": "layers.0.self_attn.v_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 1056768,
+      "count": 65536
+    },
+    {
+      "name": "layers.0.self_attn.o_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 1122304,
+      "count": 262144
+    },
+    {
+      "name": "layers.0.post_attention_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 1384448,
+      "count": 512
+    },
+    {
+      "name": "layers.0.mlp.gate_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 1384960,
+      "count": 720896
+    },
+    {
+      "name": "layers.0.mlp.up_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 2105856,
+      "count": 720896
+    },
+    {
+      "name": "layers.0.mlp.down_proj.weight",
+      "shape": [
+        512,
+        1408
+      ],
+      "offset": 2826752,
+      "count": 720896
+    },
+    {
+      "name": "layers.1.input_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 3547648,
+      "count": 512
+    },
+    {
+      "name": "layers.1.self_attn.q_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 3548160,
+      "count": 262144
+    },
+    {
+      "name": "layers.1.self_attn.k_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 3810304,
+      "count": 65536
+    },
+    {
+      "name": "layers.1.self_attn.v_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 3875840,
+      "count": 65536
+    },
+    {
+      "name": "layers.1.self_attn.o_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 3941376,
+      "count": 262144
+    },
+    {
+      "name": "layers.1.post_attention_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 4203520,
+      "count": 512
+    },
+    {
+      "name": "layers.1.mlp.gate_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 4204032,
+      "count": 720896
+    },
+    {
+      "name": "layers.1.mlp.up_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 4924928,
+      "count": 720896
+    },
+    {
+      "name": "layers.1.mlp.down_proj.weight",
+      "shape": [
+        512,
+        1408
+      ],
+      "offset": 5645824,
+      "count": 720896
+    },
+    {
+      "name": "layers.2.input_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 6366720,
+      "count": 512
+    },
+    {
+      "name": "layers.2.self_attn.q_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 6367232,
+      "count": 262144
+    },
+    {
+      "name": "layers.2.self_attn.k_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 6629376,
+      "count": 65536
+    },
+    {
+      "name": "layers.2.self_attn.v_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 6694912,
+      "count": 65536
+    },
+    {
+      "name": "layers.2.self_attn.o_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 6760448,
+      "count": 262144
+    },
+    {
+      "name": "layers.2.post_attention_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 7022592,
+      "count": 512
+    },
+    {
+      "name": "layers.2.mlp.gate_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 7023104,
+      "count": 720896
+    },
+    {
+      "name": "layers.2.mlp.up_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 7744000,
+      "count": 720896
+    },
+    {
+      "name": "layers.2.mlp.down_proj.weight",
+      "shape": [
+        512,
+        1408
+      ],
+      "offset": 8464896,
+      "count": 720896
+    },
+    {
+      "name": "layers.3.input_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 9185792,
+      "count": 512
+    },
+    {
+      "name": "layers.3.self_attn.q_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 9186304,
+      "count": 262144
+    },
+    {
+      "name": "layers.3.self_attn.k_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 9448448,
+      "count": 65536
+    },
+    {
+      "name": "layers.3.self_attn.v_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 9513984,
+      "count": 65536
+    },
+    {
+      "name": "layers.3.self_attn.o_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 9579520,
+      "count": 262144
+    },
+    {
+      "name": "layers.3.post_attention_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 9841664,
+      "count": 512
+    },
+    {
+      "name": "layers.3.mlp.gate_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 9842176,
+      "count": 720896
+    },
+    {
+      "name": "layers.3.mlp.up_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 10563072,
+      "count": 720896
+    },
+    {
+      "name": "layers.3.mlp.down_proj.weight",
+      "shape": [
+        512,
+        1408
+      ],
+      "offset": 11283968,
+      "count": 720896
+    },
+    {
+      "name": "layers.4.input_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 12004864,
+      "count": 512
+    },
+    {
+      "name": "layers.4.self_attn.q_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 12005376,
+      "count": 262144
+    },
+    {
+      "name": "layers.4.self_attn.k_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 12267520,
+      "count": 65536
+    },
+    {
+      "name": "layers.4.self_attn.v_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 12333056,
+      "count": 65536
+    },
+    {
+      "name": "layers.4.self_attn.o_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 12398592,
+      "count": 262144
+    },
+    {
+      "name": "layers.4.post_attention_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 12660736,
+      "count": 512
+    },
+    {
+      "name": "layers.4.mlp.gate_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 12661248,
+      "count": 720896
+    },
+    {
+      "name": "layers.4.mlp.up_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 13382144,
+      "count": 720896
+    },
+    {
+      "name": "layers.4.mlp.down_proj.weight",
+      "shape": [
+        512,
+        1408
+      ],
+      "offset": 14103040,
+      "count": 720896
+    },
+    {
+      "name": "layers.5.input_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 14823936,
+      "count": 512
+    },
+    {
+      "name": "layers.5.self_attn.q_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 14824448,
+      "count": 262144
+    },
+    {
+      "name": "layers.5.self_attn.k_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 15086592,
+      "count": 65536
+    },
+    {
+      "name": "layers.5.self_attn.v_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 15152128,
+      "count": 65536
+    },
+    {
+      "name": "layers.5.self_attn.o_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 15217664,
+      "count": 262144
+    },
+    {
+      "name": "layers.5.post_attention_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 15479808,
+      "count": 512
+    },
+    {
+      "name": "layers.5.mlp.gate_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 15480320,
+      "count": 720896
+    },
+    {
+      "name": "layers.5.mlp.up_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 16201216,
+      "count": 720896
+    },
+    {
+      "name": "layers.5.mlp.down_proj.weight",
+      "shape": [
+        512,
+        1408
+      ],
+      "offset": 16922112,
+      "count": 720896
+    },
+    {
+      "name": "layers.6.input_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 17643008,
+      "count": 512
+    },
+    {
+      "name": "layers.6.self_attn.q_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 17643520,
+      "count": 262144
+    },
+    {
+      "name": "layers.6.self_attn.k_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 17905664,
+      "count": 65536
+    },
+    {
+      "name": "layers.6.self_attn.v_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 17971200,
+      "count": 65536
+    },
+    {
+      "name": "layers.6.self_attn.o_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 18036736,
+      "count": 262144
+    },
+    {
+      "name": "layers.6.post_attention_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 18298880,
+      "count": 512
+    },
+    {
+      "name": "layers.6.mlp.gate_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 18299392,
+      "count": 720896
+    },
+    {
+      "name": "layers.6.mlp.up_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 19020288,
+      "count": 720896
+    },
+    {
+      "name": "layers.6.mlp.down_proj.weight",
+      "shape": [
+        512,
+        1408
+      ],
+      "offset": 19741184,
+      "count": 720896
+    },
+    {
+      "name": "layers.7.input_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 20462080,
+      "count": 512
+    },
+    {
+      "name": "layers.7.self_attn.q_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 20462592,
+      "count": 262144
+    },
+    {
+      "name": "layers.7.self_attn.k_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 20724736,
+      "count": 65536
+    },
+    {
+      "name": "layers.7.self_attn.v_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 20790272,
+      "count": 65536
+    },
+    {
+      "name": "layers.7.self_attn.o_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 20855808,
+      "count": 262144
+    },
+    {
+      "name": "layers.7.post_attention_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 21117952,
+      "count": 512
+    },
+    {
+      "name": "layers.7.mlp.gate_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 21118464,
+      "count": 720896
+    },
+    {
+      "name": "layers.7.mlp.up_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 21839360,
+      "count": 720896
+    },
+    {
+      "name": "layers.7.mlp.down_proj.weight",
+      "shape": [
+        512,
+        1408
+      ],
+      "offset": 22560256,
+      "count": 720896
+    },
+    {
+      "name": "layers.8.input_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 23281152,
+      "count": 512
+    },
+    {
+      "name": "layers.8.self_attn.q_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 23281664,
+      "count": 262144
+    },
+    {
+      "name": "layers.8.self_attn.k_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 23543808,
+      "count": 65536
+    },
+    {
+      "name": "layers.8.self_attn.v_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 23609344,
+      "count": 65536
+    },
+    {
+      "name": "layers.8.self_attn.o_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 23674880,
+      "count": 262144
+    },
+    {
+      "name": "layers.8.post_attention_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 23937024,
+      "count": 512
+    },
+    {
+      "name": "layers.8.mlp.gate_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 23937536,
+      "count": 720896
+    },
+    {
+      "name": "layers.8.mlp.up_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 24658432,
+      "count": 720896
+    },
+    {
+      "name": "layers.8.mlp.down_proj.weight",
+      "shape": [
+        512,
+        1408
+      ],
+      "offset": 25379328,
+      "count": 720896
+    },
+    {
+      "name": "layers.9.input_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 26100224,
+      "count": 512
+    },
+    {
+      "name": "layers.9.self_attn.q_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 26100736,
+      "count": 262144
+    },
+    {
+      "name": "layers.9.self_attn.k_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 26362880,
+      "count": 65536
+    },
+    {
+      "name": "layers.9.self_attn.v_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 26428416,
+      "count": 65536
+    },
+    {
+      "name": "layers.9.self_attn.o_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 26493952,
+      "count": 262144
+    },
+    {
+      "name": "layers.9.post_attention_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 26756096,
+      "count": 512
+    },
+    {
+      "name": "layers.9.mlp.gate_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 26756608,
+      "count": 720896
+    },
+    {
+      "name": "layers.9.mlp.up_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 27477504,
+      "count": 720896
+    },
+    {
+      "name": "layers.9.mlp.down_proj.weight",
+      "shape": [
+        512,
+        1408
+      ],
+      "offset": 28198400,
+      "count": 720896
+    },
+    {
+      "name": "layers.10.input_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 28919296,
+      "count": 512
+    },
+    {
+      "name": "layers.10.self_attn.q_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 28919808,
+      "count": 262144
+    },
+    {
+      "name": "layers.10.self_attn.k_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 29181952,
+      "count": 65536
+    },
+    {
+      "name": "layers.10.self_attn.v_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 29247488,
+      "count": 65536
+    },
+    {
+      "name": "layers.10.self_attn.o_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 29313024,
+      "count": 262144
+    },
+    {
+      "name": "layers.10.post_attention_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 29575168,
+      "count": 512
+    },
+    {
+      "name": "layers.10.mlp.gate_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 29575680,
+      "count": 720896
+    },
+    {
+      "name": "layers.10.mlp.up_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 30296576,
+      "count": 720896
+    },
+    {
+      "name": "layers.10.mlp.down_proj.weight",
+      "shape": [
+        512,
+        1408
+      ],
+      "offset": 31017472,
+      "count": 720896
+    },
+    {
+      "name": "layers.11.input_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 31738368,
+      "count": 512
+    },
+    {
+      "name": "layers.11.self_attn.q_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 31738880,
+      "count": 262144
+    },
+    {
+      "name": "layers.11.self_attn.k_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 32001024,
+      "count": 65536
+    },
+    {
+      "name": "layers.11.self_attn.v_proj.weight",
+      "shape": [
+        128,
+        512
+      ],
+      "offset": 32066560,
+      "count": 65536
+    },
+    {
+      "name": "layers.11.self_attn.o_proj.weight",
+      "shape": [
+        512,
+        512
+      ],
+      "offset": 32132096,
+      "count": 262144
+    },
+    {
+      "name": "layers.11.post_attention_layernorm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 32394240,
+      "count": 512
+    },
+    {
+      "name": "layers.11.mlp.gate_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 32394752,
+      "count": 720896
+    },
+    {
+      "name": "layers.11.mlp.up_proj.weight",
+      "shape": [
+        1408,
+        512
+      ],
+      "offset": 33115648,
+      "count": 720896
+    },
+    {
+      "name": "layers.11.mlp.down_proj.weight",
+      "shape": [
+        512,
+        1408
+      ],
+      "offset": 33836544,
+      "count": 720896
+    },
+    {
+      "name": "norm.weight",
+      "shape": [
+        512
+      ],
+      "offset": 34557440,
+      "count": 512
+    }
+  ],
+  "total_floats": 34557952
+}

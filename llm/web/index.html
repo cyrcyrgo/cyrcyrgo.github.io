@@ -84,6 +84,17 @@
   .chip{font-size:12px;color:#b9c6ea;background:#141b2b;border:1px solid var(--line);border-radius:99px;padding:6px 12px;cursor:pointer}
   .chip:hover{border-color:var(--accent);color:#fff}
 
+  /* 代码块（可一键运行） */
+  .msg .seg-text{margin-bottom:8px}
+  .codebox{margin:8px 0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0b1220;max-width:100%}
+  .codehead{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#101a2e;border-bottom:1px solid var(--line)}
+  .codehead .lang{font-size:11px;color:#9fb0d4;text-transform:lowercase;font-family:ui-monospace,monospace}
+  .btn.ghost.mini{padding:4px 10px;font-size:12px}
+  .codehead .btn.ghost.mini:first-of-type{margin-left:auto}
+  .codebox pre{margin:0;padding:12px;overflow:auto;max-height:340px}
+  .codebox code{background:none;border:none;padding:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:12.5px;line-height:1.65;color:#c8d6f5;white-space:pre;display:block}
+
   .params{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;padding:16px;border-top:1px solid var(--line);background:#0e1524}
   .param{font-size:12.5px;color:var(--muted)}
   .param .row{display:flex;justify-content:space-between;margin-bottom:6px}
@@ -126,7 +137,12 @@
       选择模型：
       <select id="modelPick" style="padding:8px 12px;border-radius:10px;border:1px solid #222c44;background:#121828;color:#fff;font-size:14px">
         <option value="dialog">基础对话（中文）</option>
-        <option value="html">HTML 代码生成（可预览）</option>
+        <option value="greet">基础问候闲聊</option>
+        <option value="qa">中文知识问答</option>
+        <option value="enqa">English Q&amp;A（英文问答）</option>
+        <option value="math">数学计算 / 应用题</option>
+        <option value="html">HTML 组件 / 小游戏</option>
+        <option value="web">网页创作（HTML+CSS+JS）</option>
       </select>
     </label>
     <button class="btn" id="startBtn">开始使用</button>
@@ -170,13 +186,12 @@
     </h3>
     <iframe id="htmlFrame" sandbox="allow-scripts allow-same-origin" style="width:100%;height:480px;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe>
   </div>
-</div>
 
   <div class="foot">
-    <div>本演示模型为<strong>中文基础语言模型（续写式）</strong>，并非经过指令微调的对齐对话模型；它只学会了「预测下一个 token」，
-      因此回复表现为顺着你的输入继续写作。这正是完整 LLM 预训练阶段的能力形态。</div>
+    <div>共 <strong>7 个</strong>从零训练的精简 LLM：基础对话、问候闲聊、中文问答、英文问答、数学计算、HTML 组件与网页创作，
+      每个模型都在浏览器内本地推理。权重以 <code>fp16</code> 导出，体积减半、加载更快。</div>
     <div>架构同源模块：<code>RMSNorm</code> <code>RoPE</code> <code>GQA</code> <code>SwiGLU</code> <code>tie_word_embeddings</code> <code>KV Cache</code>。
-      另有 1B 参数规模配置 <code>configs/base_1b.json</code>（995,973,120 参数）在此项目中给出并已校验。</div>
+      另给出 1B–2.5B 参数规模配置 <code>configs/base_1b.json</code> / <code>base_1_5b.json</code> / <code>base_2b.json</code> / <code>base_2_5b.json</code>（参数量均已校验）。</div>
   </div>
 </div>
 
@@ -185,7 +200,7 @@
     <h3>正在初始化模型</h3>
     <div id="steps"></div>
     <div class="bar"><div id="bar"></div></div>
-    <div class="note" id="bootNote" style="margin-top:12px">首次加载需下载约 24 MB 权重，之后将被浏览器缓存</div>
+    <div class="note" id="bootNote" style="margin-top:12px">首次加载需下载模型权重（约 20–70 MB，视所选模型而定），之后将被浏览器缓存</div>
   </div>
 </div>
 
