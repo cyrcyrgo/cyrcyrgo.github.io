@@ -6,23 +6,47 @@
   const REPO = "cyrcyrgo/cyrcyrgo.github.io";
   const BRANCH = "main";
   const PREFIX_GH_RAW = "https://raw.githubusercontent.com/" + REPO + "/" + BRANCH + "/llm/web/model/";
+  const PREFIX_JSDELIVR = "https://cdn.jsdelivr.net/gh/" + REPO + "@" + BRANCH + "/llm/web/model/";
   const PREFIX_GHPAGES = (location.protocol === "file:" ? "" : location.origin) +
     location.pathname.replace(/[^/]*$/, "") + "model/";
+  // 镜像按「国内可达性 + 是否支持大文件」挑选；下载时按实测速度排序，不按列表顺序
   const MIRRORS = [
-    // gh-proxy 代理 raw 源（实测 25MB 权重 ~ 4.4s）
-    (p) => "https://gh-proxy.com/https://" + PREFIX_GH_RAW + p,
-    // jsDelivr（对小文件快，大文件 403）
-    (p) => "https://cdn.jsdelivr.net/gh/" + REPO + "@" + BRANCH + "/llm/web/model/" + p,
+    // GitHub Pages 同源 CDN：无跨域、支持 Range，速度快时最佳
+    (p) => PREFIX_GHPAGES + p,
+    // 公共 GitHub 代理（支持大文件 + Range，均已实测可用）
+    (p) => "https://gh-proxy.com/" + PREFIX_GH_RAW + p,
+    (p) => "https://ghfast.top/" + PREFIX_GH_RAW + p,
+    (p) => "https://ghproxy.net/" + PREFIX_GH_RAW + p,
+    // jsDelivr（小文件极快，>20MB 会被拒）
+    (p) => PREFIX_JSDELIVR + p,
     (p) => "https://fastly.jsdelivr.net/gh/" + REPO + "@" + BRANCH + "/llm/web/model/" + p,
     // GitHub 官方 raw
     (p) => PREFIX_GH_RAW + p,
-    // GitHub Pages / 本地同源兜底
-    (p) => PREFIX_GHPAGES + p,
   ];
+
+  const PROBE_BYTES = 256 * 1024;            // 测速读取的字节数
+  const CHUNK_MIN_BYTES = 2 * 1024 * 1024;   // 超过该大小启用分块并行
+  const CHUNK_CONCURRENCY = 6;               // 分块并发数
+
   const state = {
     modelKey: "dialog",
     tok: null, model: null, cfg: null, eosId: null, ready: false, busy: false, info: null,
+    mirrorInfo: "",
   };
+
+  const hostOf = (u) => { try { return new URL(u).host; } catch (e) { return u; } };
+
+  // 带超时的 fetch：避免某个镜像卡死拖垮整个测速/竞速流程
+  function fetchTimeout(url, opts, ms) {
+    const ctrl = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, ms);
+    const outer = (opts && opts.signal) || null;
+    if (outer) outer.addEventListener("abort", () => ctrl.abort(), { once: true });
+    return fetch(url, Object.assign({}, opts, { signal: ctrl.signal }))
+      .catch((e) => { if (timedOut) throw new Error("镜像超时：" + url); throw e; })
+      .finally(() => clearTimeout(timer));
+  }
 
   const $ = (id) => document.getElementById(id);
 
@@ -50,60 +74,195 @@
 
   // ---- 多镜像下载辅助 ----
   // path 已经是相对 model/<key>/ 的（如 dialog/manifest.json），底层 MIRRORS 会拼接好完整远端地址
-  async function mirrorFetch(path) {
-    let lastErr = null;
-    for (let i = 0; i < MIRRORS.length; i++) {
-      const url = MIRRORS[i](path);
-      try {
-        const res = await fetch(url, { cache: path.includes("weights.bin") ? "force-cache" : "default" });
-        if (res.ok) return res;
-        lastErr = new Error(url + " -> " + res.status);
-      } catch (e) { lastErr = e; }
-    }
-    throw lastErr || new Error("所有镜像均下载失败：" + path);
+
+  // 小文件：并发竞速，最先成功的镜像立即返回，其余请求全部中止
+  function mirrorFetch(path) {
+    return new Promise((resolve, reject) => {
+      const ctrls = MIRRORS.map(() => new AbortController());
+      let pending = MIRRORS.length;
+      let lastErr = null;
+      let settled = false;
+      const finish = (fn, arg, keep) => {
+        if (settled) return;
+        settled = true;
+        ctrls.forEach((c, i) => { if (i !== keep) { try { c.abort(); } catch (e) { /* ignore */ } } });
+        fn(arg);
+      };
+      const fail = (e) => {
+        if (settled) return;
+        lastErr = e;
+        if (--pending <= 0) finish(reject, lastErr || new Error("所有镜像均下载失败：" + path));
+      };
+      MIRRORS.forEach((mk, i) => {
+        const url = mk(path);
+        fetchTimeout(url, { cache: "default", signal: ctrls[i].signal }, 15000)
+          .then((res) => { if (res.ok) finish(resolve, res, i); else fail(new Error(url + " -> " + res.status)); })
+          .catch((e) => { if (!e || e.name !== "AbortError") fail(e); });
+      });
+    });
   }
 
   async function mirrorFetchJson(path) { return (await mirrorFetch(path)).json(); }
   async function mirrorFetchText(path) { return (await mirrorFetch(path)).text(); }
 
-  async function mirrorFetchWithProgress(path, onProgress) {
-    // 对二进制权重：先测最快镜像，再流式下载
-    let lastErr = null, bestLen = 0, bestBuf = null;
-    for (let i = 0; i < MIRRORS.length; i++) {
-      const url = MIRRORS[i](path);
-      try {
-        const res = await fetch(url, { cache: "force-cache" });
-        if (!res.ok) { lastErr = new Error(url + " -> " + res.status); continue; }
-        const total = Number(res.headers.get("content-length")) || 0;
-        if (!res.body || !total) {
-          const arr = new Uint8Array(await res.arrayBuffer());
-          if (arr.length > bestLen) { bestLen = arr.length; bestBuf = arr; }
-          continue;
-        }
+  // 探测单个镜像：读取少量字节估算真实吞吐（不发送 Range，避免触发跨域预检）
+  async function probeMirror(path, idx) {
+    const url = MIRRORS[idx](path);
+    const t0 = performance.now();
+    try {
+      const res = await fetchTimeout(url, { cache: "no-store" }, 8000);
+      if (!res.ok) return null;
+      const cr = res.headers.get("content-range") || "";
+      const total = Number(res.headers.get("content-length")) ||
+        (cr.includes("/") ? Number(cr.split("/")[1]) : 0) || 0;
+      let got = 0;
+      if (res.body) {
         const reader = res.body.getReader();
-        const chunks = [];
-        let received = 0;
-        for (;;) {
+        while (got < PROBE_BYTES) {
           const { done, value } = await reader.read();
           if (done) break;
-          chunks.push(value);
-          received += value.length;
-          onProgress(received / total);
+          got += value.length;
         }
-        const out = new Uint8Array(received);
-        let off = 0;
-        for (const c of chunks) { out.set(c, off); off += c.length; }
-        if (out.length === total) return out; // 完整下载即返回
-        if (out.length > bestLen) { bestLen = out.length; bestBuf = out; }
+        try { await reader.cancel(); } catch (e) { /* ignore */ }
+      } else {
+        got = total;
+      }
+      const dt = Math.max(performance.now() - t0, 1);
+      return { idx, url, total, got, bps: got > 0 ? got / (dt / 1000) : 0 };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // 并发探测全部镜像，按实测吞吐从快到慢排序
+  async function rankMirrors(path) {
+    const results = await Promise.all(MIRRORS.map((_, i) => probeMirror(path, i)));
+    return results.filter(Boolean).sort((a, b) => b.bps - a.bps);
+  }
+
+  // 检测镜像是否支持跨域 Range 请求（分块下载的前提）
+  async function canRange(mirror) {
+    try {
+      const res = await fetchTimeout(mirror.url, { headers: { Range: "bytes=0-0" }, cache: "no-store" }, 8000);
+      const ok = res.status === 206;
+      try { if (res.body) await res.body.cancel(); } catch (e) { /* ignore */ }
+      return ok;
+    } catch (e) { return false; }
+  }
+
+  // 分块并行下载：把文件切成 N 段，用多个 Range 请求同时拉取
+  async function downloadChunked(mirror, total, onProgress) {
+    const parts = Math.max(1, Math.min(CHUNK_CONCURRENCY, Math.ceil(total / (1024 * 1024))));
+    const chunk = Math.ceil(total / parts);
+    const out = new Uint8Array(total);
+    const loaded = new Array(parts).fill(0);
+    let reported = -1;
+    const tick = () => {
+      let sum = 0;
+      for (let i = 0; i < loaded.length; i++) sum += loaded[i];
+      if (sum !== reported) { reported = sum; onProgress(sum / total); }
+    };
+    const fetchPart = async (slot, start, end) => {
+      let lastErr = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch(mirror.url, {
+            headers: { Range: "bytes=" + start + "-" + end },
+            cache: "force-cache",
+          });
+          if (res.status !== 206 || !res.body) throw new Error(mirror.url + " -> " + res.status);
+          const reader = res.body.getReader();
+          let off = start;
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (off + value.length > end + 1) throw new Error("分块越界");
+            out.set(value, off);
+            off += value.length;
+            loaded[slot] = off - start;
+            tick();
+          }
+          if (off === end + 1) return;
+          throw new Error("分块不完整");
+        } catch (e) {
+          lastErr = e;
+          loaded[slot] = 0;
+          tick();
+        }
+      }
+      throw lastErr || new Error("分块下载失败");
+    };
+    const jobs = [];
+    for (let i = 0; i < parts; i++) {
+      const start = i * chunk;
+      const end = Math.min(start + chunk, total) - 1;
+      if (start > end) break;
+      jobs.push(fetchPart(i, start, end));
+    }
+    await Promise.all(jobs);
+    return out;
+  }
+
+  // 单流下载：按顺序流式读取，作为分块不可用时的兜底
+  async function downloadStream(mirror, total, onProgress) {
+    const res = await fetch(mirror.url, { cache: "force-cache" });
+    if (!res.ok) throw new Error(mirror.url + " -> " + res.status);
+    const len = Number(res.headers.get("content-length")) || total || 0;
+    if (!res.body) {
+      const buf = new Uint8Array(await res.arrayBuffer());
+      onProgress(1);
+      return buf;
+    }
+    const reader = res.body.getReader();
+    const chunks = [];
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      if (len) onProgress(received / len);
+    }
+    const out = new Uint8Array(received);
+    let off = 0;
+    for (const c of chunks) { out.set(c, off); off += c.length; }
+    onProgress(1);
+    return out;
+  }
+
+  // 大文件下载主流程：并发测速 → 最快的镜像上分块并行 → 失败降级单流
+  async function mirrorFetchWithProgress(path, onProgress, expectedSize) {
+    const ranked = await rankMirrors(path);
+    if (!ranked.length) throw new Error("所有镜像均下载失败：" + path);
+    const total = expectedSize || ranked[0].total || 0;
+
+    if (total > CHUNK_MIN_BYTES) {
+      for (const m of ranked.slice(0, 3)) {            // 只在最快的几个镜像里找支持 Range 的
+        if (await canRange(m)) {
+          try {
+            const buf = await downloadChunked(m, total, onProgress);
+            state.mirrorInfo = `分块并行 ×${CHUNK_CONCURRENCY} · ${hostOf(m.url)}`;
+            return buf;
+          } catch (e) { /* 分块失败 → 继续找 / 降级单流 */ }
+        }
+      }
+    }
+
+    let lastErr = null;
+    for (const m of ranked) {                           // 单流：按测速顺序依次尝试
+      try {
+        const buf = await downloadStream(m, total, onProgress);
+        state.mirrorInfo = `单流 · ${hostOf(m.url)}`;
+        return buf;
       } catch (e) { lastErr = e; }
     }
-    if (bestBuf && bestBuf.length > 0) return bestBuf;
     throw lastErr || new Error("所有镜像均下载失败：" + path);
   }
 
   async function initialize() {
     const stepsBox = $("steps");
     const bar = $("bar");
+    state.mirrorInfo = "";
     const labels = [
       "加载分词器（vocab.json + merges.txt）",
       "下载模型权重（weights.bin）",
@@ -127,9 +286,20 @@
 
     setStep(stepsBox, 1, "active");
     const manifest = await mirrorFetchJson(state.modelKey + "/manifest.json");
+    const expectedBytes = manifest.tensors.reduce((m, t) => Math.max(m, t.offset + t.count), 0) * 4;
+    const t0 = performance.now();
+    const totalMb = (expectedBytes / 1048576).toFixed(1);
     const buf = await mirrorFetchWithProgress(state.modelKey + "/weights.bin", (p) => {
       bar.style.width = (8 + p * 82).toFixed(1) + "%";
-    });
+      const sec = (performance.now() - t0) / 1000;
+      const mb = (p * expectedBytes) / 1048576;
+      const speed = sec > 0.4 ? (mb / sec).toFixed(1) + " MB/s" : "测速中…";
+      $("bootNote").textContent = `权重下载 ${(p * 100).toFixed(0)}% · ${mb.toFixed(1)}MB / ${totalMb}MB · ${speed}`;
+    }, expectedBytes);
+    const sec = (performance.now() - t0) / 1000;
+    $("bootNote").textContent =
+      `权重下载 100% · ${totalMb}MB / ${totalMb}MB · ${(Number(totalMb) / Math.max(sec, 1e-3)).toFixed(1)} MB/s` +
+      (state.mirrorInfo ? " · " + state.mirrorInfo : "");
     setStep(stepsBox, 1, "done");
 
     setStep(stepsBox, 2, "active");
@@ -155,7 +325,8 @@
     $("startBtn").disabled = true;
     $("startBtn").textContent = "已启动";
     $("startNote").textContent = "模型已在本地浏览器中运行，可直接对话";
-    addMsg("sys", `模型加载完成：${state.info.params.toLocaleString()} 参数 · ${state.cfg.num_hidden_layers} 层 · 词表 ${state.cfg.vocab_size}。输入文字即可让模型续写。`);
+    const params = state.info && state.info.params ? state.info.params.toLocaleString() : "-";
+    addMsg("sys", `模型加载完成：${params} 参数 · ${state.cfg.num_hidden_layers} 层 · 词表 ${state.cfg.vocab_size}。输入文字即可让模型续写。`);
     $("input").focus();
     $("chat").scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -299,7 +470,7 @@
   function extractHtml(text) {
     const m = text.match(/```(?:html)?\s*([\s\S]*?)```/i);
     if (m) return m[1].trim();
-    if (/<!doctype|<html|<head|<body|<script|<style|</html>/i.test(text)) return text.trim();
+    if (/<!doctype|<html|<head|<body|<script|<style|<\/html>/i.test(text)) return text.trim();
     return "";
   }
   function runHtmlInIframe(html) {
