@@ -1,6 +1,6 @@
 {
-  "params": 6253824,
-  "size_mb": 23.86,
+  "params": 8350976,
+  "size_mb": 31.86,
   "tensors": 56,
   "architecture": {
     "layers": 6,
@@ -8,6 +8,6 @@
     "heads": 8,
     "kv_heads": 2,
     "intermediate": 688,
-    "vocab": 8192
+    "vocab": 16384
   }
 }

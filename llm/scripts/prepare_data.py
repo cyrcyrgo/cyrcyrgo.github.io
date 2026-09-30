@@ -77,9 +77,15 @@ def main():
             ids.append(eos_id)
         return np.asarray(ids, dtype=np.uint16)
 
-    # 一篇文档做验证集（红楼梦），其余做训练集
-    val_doc = docs[-1]
-    train_docs = docs[:-1]
+    # 至少保留 80% 做训练；当只有单文件时直接按比例切
+    if len(docs) >= 2:
+        val_doc = docs[-1]
+        train_docs = docs[:-1]
+    else:
+        val_ratio = args.val_ratio
+        n = len(docs[0])
+        train_docs = [docs[0][: int(n * (1 - val_ratio))]]
+        val_doc = docs[0][int(n * (1 - val_ratio)):]
     train_ids = encode_all(train_docs)
     val_ids = encode_all([val_doc])
 

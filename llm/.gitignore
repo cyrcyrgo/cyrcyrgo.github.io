@@ -2,6 +2,8 @@
 checkpoints/
 data/raw/
 data/processed/
+data/*/train.bin
+data/*/val.bin
 
 # Python
 __pycache__/
