@@ -2,6 +2,26 @@
 (function () {
   "use strict";
 
+  // 多镜像下载链：按顺序尝试，哪个先成功用哪个（自动回退）
+  //  - gh-proxy.com：国内常用 GitHub 代理，代理解包 raw.githubusercontent.com，实测 25MB ~ 4.4s
+  //  - jsdelivr：纯 CDN，对 <20MB 的 JSON 小文件速度极快；对 >20MB 权重被 403 拒绝，需后续回退
+  //  - raw.githubusercontent.com：GitHub 官方源，海外可用、国内慢
+  //  - GitHub Pages 自身：部署后在 cyrcyrgo.github.io 直接可用（同源，通常最快）
+  const REPO = "cyrcyrgo/cyrcyrgo.github.io";
+  const BRANCH = "main";
+  const LOCAL_ROOT = (location.protocol === "file:" ? "" : location.origin) +
+    location.pathname.replace(/[^/]*$/, "") + "model/";
+  const MIRRORS = [
+    // gh-proxy 代理 raw 源
+    (p) => "https://gh-proxy.com/https://raw.githubusercontent.com/" + REPO + "/" + BRANCH + "/llm/web/model/" + p,
+    // jsdelivr CDN（仅 JSON 等小文件能过）
+    (p) => "https://cdn.jsdelivr.net/gh/" + REPO + "@" + BRANCH + "/llm/web/model/" + p,
+    (p) => "https://fastly.jsdelivr.net/gh/" + REPO + "@" + BRANCH + "/llm/web/model/" + p,
+    // GitHub 官方 raw
+    (p) => "https://raw.githubusercontent.com/" + REPO + "/" + BRANCH + "/llm/web/model/" + p,
+    // GitHub Pages / 本地同源兜底
+    (p) => LOCAL_ROOT + p,
+  ];
   const MODEL_DIR = "model/";
   const state = {
     tok: null, model: null, cfg: null, eosId: null, ready: false, busy: false, info: null,
@@ -17,25 +37,56 @@
     el.querySelector(".dot").textContent = status === "done" ? "✓" : idx + 1;
   }
 
-  async function fetchWithProgress(url, onProgress) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("下载失败: " + url);
-    const total = Number(res.headers.get("content-length")) || 0;
-    if (!res.body || !total) return new Uint8Array(await res.arrayBuffer());
-    const reader = res.body.getReader();
-    const chunks = [];
-    let received = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      received += value.length;
-      onProgress(received / total);
+  // ---- 多镜像下载辅助 ----
+  async function mirrorFetch(path) {
+    let lastErr = null;
+    for (let i = 0; i < MIRRORS.length; i++) {
+      const url = MIRRORS[i](path);
+      try {
+        const res = await fetch(url, { cache: path === "weights.bin" ? "force-cache" : "default" });
+        if (res.ok) return res;
+        lastErr = new Error(url + " -> " + res.status);
+      } catch (e) { lastErr = e; }
     }
-    const out = new Uint8Array(received);
-    let off = 0;
-    for (const c of chunks) { out.set(c, off); off += c.length; }
-    return out;
+    throw lastErr || new Error("所有镜像均下载失败：" + path);
+  }
+
+  async function mirrorFetchJson(path) { return (await mirrorFetch(path)).json(); }
+  async function mirrorFetchText(path) { return (await mirrorFetch(path)).text(); }
+
+  async function mirrorFetchWithProgress(path, onProgress) {
+    // 对二进制权重：先测最快镜像，再流式下载
+    let lastErr = null, bestLen = 0, bestBuf = null;
+    for (let i = 0; i < MIRRORS.length; i++) {
+      const url = MIRRORS[i](path);
+      try {
+        const res = await fetch(url, { cache: "force-cache" });
+        if (!res.ok) { lastErr = new Error(url + " -> " + res.status); continue; }
+        const total = Number(res.headers.get("content-length")) || 0;
+        if (!res.body || !total) {
+          const arr = new Uint8Array(await res.arrayBuffer());
+          if (arr.length > bestLen) { bestLen = arr.length; bestBuf = arr; }
+          continue;
+        }
+        const reader = res.body.getReader();
+        const chunks = [];
+        let received = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+          onProgress(received / total);
+        }
+        const out = new Uint8Array(received);
+        let off = 0;
+        for (const c of chunks) { out.set(c, off); off += c.length; }
+        if (out.length === total) return out; // 完整下载即返回
+        if (out.length > bestLen) { bestLen = out.length; bestBuf = out; }
+      } catch (e) { lastErr = e; }
+    }
+    if (bestBuf && bestBuf.length > 0) return bestBuf;
+    throw lastErr || new Error("所有镜像均下载失败：" + path);
   }
 
   async function initialize() {
@@ -54,8 +105,8 @@
     setStep(stepsBox, 0, "active");
     bar.style.width = "4%";
     const [vocab, merges] = await Promise.all([
-      fetch(MODEL_DIR + "vocab.json").then((r) => r.json()),
-      fetch(MODEL_DIR + "merges.txt").then((r) => r.text()),
+      mirrorFetchJson("vocab.json"),
+      mirrorFetchText("merges.txt"),
     ]);
     const mergesArr = merges.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
     state.tok = new window.BPETokenizer(vocab, mergesArr, {});
@@ -63,8 +114,8 @@
     setStep(stepsBox, 0, "done");
 
     setStep(stepsBox, 1, "active");
-    const manifest = await fetch(MODEL_DIR + "manifest.json").then((r) => r.json());
-    const buf = await fetchWithProgress(MODEL_DIR + "weights.bin", (p) => {
+    const manifest = await mirrorFetchJson("manifest.json");
+    const buf = await mirrorFetchWithProgress("weights.bin", (p) => {
       bar.style.width = (8 + p * 82).toFixed(1) + "%";
     });
     setStep(stepsBox, 1, "done");
@@ -227,17 +278,17 @@
   async function boot() {
     let manifest = null;
     try {
-      manifest = await fetch(MODEL_DIR + "manifest.json").then((r) => r.json());
+      manifest = await mirrorFetchJson("manifest.json");
     } catch (e) { /* 权重未就绪 */ }
     try {
-      const info = await fetch(MODEL_DIR + "train_info.json").then((r) => r.json());
+      const info = await mirrorFetchJson("train_info.json");
       state.info = info;
       renderCards({ params: info.params }, manifest ? manifest.config : info.architecture);
     } catch (e) {
       $("cards").innerHTML = '<div class="card"><div class="k">状态</div><div class="v">权重未就绪</div></div>';
     }
     try {
-      const metrics = await fetch(MODEL_DIR + "metrics.json").then((r) => r.json());
+      const metrics = await mirrorFetchJson("metrics.json");
       if (Array.isArray(metrics) && metrics.length > 1) {
         $("lossPanel").style.display = "block";
         const last = metrics[metrics.length - 1];
