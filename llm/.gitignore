@@ -1,0 +1,10 @@
+# 训练产物（体积大且可复现，不纳入版本库；网页运行所需的模型权重在 web/model/ 下）
+checkpoints/
+data/raw/
+data/processed/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
