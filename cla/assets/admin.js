@@ -10,13 +10,18 @@
   let drawerUid = null;
 
   /* The dashboard is opened both as http://host/admin and as
-     https://<user>.github.io/<prefix>/admin.html, so every self-link must be
-     derived from where this script actually lives instead of hardcoding "/". */
+     https://<user>.github.io/<prefix>/admin.html, so every self-link must point
+     at the app folder of the *current* page instead of the site root.
+     Pathname-based derivation needs no DOM lookup, so it also works when the
+     page shell is an older cached copy. */
   const APP_ROOT = (function () {
-    const s = document.querySelector('script[src$=".js"]');
-    const base = s ? new URL(s.getAttribute("src"), location.href).href : location.href;
-    return base.replace(/[^/]+$/, "").replace(/assets\/$/, "");
+    const dir = location.pathname.replace(/[^/]*$/, "");   // /admin -> "", /cla/admin.html -> /cla/
+    return dir || "/";
   })();
+
+  const hide = (id) => { const el = $(id); if (el) el.classList.add("hidden"); };
+  const on = (id, evt, fn) => { const el = $(id); if (el) el.addEventListener(evt, fn); };
+  const setHref = (id, href) => { const el = $(id); if (el) el.href = href; };
 
   /* ---------------------------------------------------------------- utils */
   const escapeHtml = (s) => (s || "").replace(/[&<>"]/g, (c) =>
@@ -100,41 +105,57 @@
   /* ------------------------------------------------- lock screen (password) */
   function showLock() {
     clearInterval(timer); timer = null;
-    $("main").classList.add("hidden");
-    $("deny").classList.add("hidden");
-    $("lock").classList.remove("hidden");
-    $("lock-msg").textContent = "";
-    setTimeout(() => $("lock-pw").focus(), 40);
+    hide("main"); hide("deny");
+    const lock = $("lock");
+    if (!lock) {
+      // The page shell is a stale cached copy without the lock markup.
+      // Explain it instead of throwing and leaving a dead page.
+      document.body.insertAdjacentHTML("beforeend",
+        '<div class="deny">管理后台已加密，但当前页面是旧版缓存。' +
+        '请按 Ctrl+F5 强制刷新后重试。</div>');
+      return;
+    }
+    lock.classList.remove("hidden");
+    const msg = $("lock-msg"); if (msg) msg.textContent = "";
+    const pw = $("lock-pw"); if (pw) setTimeout(() => pw.focus(), 40);
   }
   function showDeny(msg) {
     clearInterval(timer); timer = null;
-    $("main").classList.add("hidden");
-    $("lock").classList.add("hidden");
-    $("deny").classList.remove("hidden");
-    if (msg) $("deny-msg").textContent = msg;
+    hide("main"); hide("lock");
+    const deny = $("deny");
+    if (!deny) {
+      document.body.insertAdjacentHTML("beforeend",
+        '<div class="deny">' + escapeHtml(msg || "需要管理员权限") + "</div>");
+      return;
+    }
+    deny.classList.remove("hidden");
+    const el = $("deny-msg"); if (el && msg) el.textContent = msg;
   }
   async function unlock() {
-    const pw = $("lock-pw").value;
+    const pwEl = $("lock-pw");
+    const pw = pwEl ? pwEl.value : "";
     if (!pw) return;
-    $("lock-msg").textContent = "验证中…";
+    const msg = $("lock-msg");
+    if (msg) msg.textContent = "验证中…";
     try {
       const d = await api("/api/admin/unlock", {
         method: "POST", body: JSON.stringify({ password: pw }),
       });
       ADMIN_TOKEN = d.admin_token;
       sessionStorage.setItem("yjs_admin_token", ADMIN_TOKEN);
-      $("lock-pw").value = "";
-      $("lock").classList.add("hidden");
+      if (pwEl) pwEl.value = "";
+      hide("lock");
       await start();
     } catch (e) {
-      $("lock-msg").textContent = e.status === 401 ? "密码错误" : (e.message || "解锁失败");
+      if (msg) msg.textContent = e.status === 401 ? "密码错误" : (e.message || "解锁失败");
     }
   }
-  $("lock-ok").onclick = unlock;
-  $("lock-pw").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
-  $("lock-back").onclick = () => { location.href = APP_ROOT; };
-  $("btn-back").href = APP_ROOT;
-  $("deny-back").href = APP_ROOT;
+  // Bound defensively: a missing node must never abort the rest of the script.
+  on("lock-ok", "click", unlock);
+  on("lock-pw", "keydown", (e) => { if (e.key === "Enter") unlock(); });
+  on("lock-back", "click", () => { location.href = APP_ROOT; });
+  setHref("btn-back", APP_ROOT);
+  setHref("deny-back", APP_ROOT);
 
   /* ---------------------------------------------------------------- modal */
   let modalCb = null;
@@ -405,8 +426,8 @@
   /* ---------------------------------------------------------------- boot */
   async function start() {
     clearInterval(timer);
-    $("who").textContent = ME.email + "（管理员）";
-    $("main").classList.remove("hidden");
+    const who = $("who"); if (who) who.textContent = ME.email + "（管理员）";
+    const main = $("main"); if (main) main.classList.remove("hidden");
     await refresh();
     timer = setInterval(refresh, 2000);
   }
