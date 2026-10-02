@@ -201,6 +201,12 @@ async def _run_agent_inner(uid: str, cid: str, emit: Emit,
         tool_calls = msg.get("tool_calls") or []
         content = msg.get("content") or ""
 
+        # External OpenAI-compatible providers require every tool call to carry
+        # an id so the matching tool message can reference it on the next turn.
+        for i, call in enumerate(tool_calls):
+            if not call.get("id"):
+                call["id"] = f"call_{step}_{i}"
+
         if content.strip():
             await emit({"type": "assistant", "content": content})
             store.append_message(uid, cid, {
@@ -241,11 +247,10 @@ async def _run_agent_inner(uid: str, cid: str, emit: Emit,
                 "ok": result.get("ok", True),
                 "summary": _fmt_result(result)[:800],
             })
-            messages.append({
-                "role": "tool",
-                "content": _fmt_result(result),
-                "name": name,
-            })
+            tool_msg = {"role": "tool", "content": _fmt_result(result), "name": name}
+            if call.get("id"):
+                tool_msg["tool_call_id"] = call["id"]
+            messages.append(tool_msg)
             store.append_message(uid, cid, {
                 "role": "tool", "name": name, "content": _fmt_result(result), "ts": time.time(),
             })
