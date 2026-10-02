@@ -1,6 +1,9 @@
 """Email OTP authentication (QQ SMTP) + JWT sessions."""
 from __future__ import annotations
 
+import hashlib
+import hmac
+import os
 import random
 import smtplib
 import time
@@ -100,3 +103,39 @@ def decode_token(token: str) -> dict | None:
         return jwt.decode(token, cfg.CONFIG["session_secret"], algorithms=[ALGO])
     except Exception:
         return None
+
+
+# --------------------------------------------------------------------------- #
+# passwords (optional second login method; admins can reset these)
+# --------------------------------------------------------------------------- #
+PBKDF2_ITERATIONS = 200_000
+
+
+def hash_password(password: str) -> str:
+    """Return ``pbkdf2_sha256$iterations$salt$hash`` — stdlib only, no deps."""
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
+    return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt.hex()}${dk.hex()}"
+
+
+def check_password(password: str, stored: str | None) -> bool:
+    if not stored or not password:
+        return False
+    try:
+        algo, iters, salt_hex, hash_hex = stored.split("$")
+        if algo != "pbkdf2_sha256":
+            return False
+        dk = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), int(iters)
+        )
+        return hmac.compare_digest(dk.hex(), hash_hex)
+    except Exception:
+        return False
+
+
+def valid_password(password: str) -> tuple[bool, str]:
+    if not password or len(password) < 6:
+        return False, "密码至少 6 位"
+    if len(password) > 128:
+        return False, "密码过长（最多 128 位）"
+    return True, ""
