@@ -41,7 +41,9 @@ async def get_sha(path_in_repo: str) -> str | None:
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.get(url, headers=_headers())
         if r.status_code == 200:
-            return r.json().get("sha")
+            data = r.json()
+            if isinstance(data, dict):
+                return data.get("sha")
         return None
 
 
@@ -63,6 +65,38 @@ async def put_file(rel_or_repo_path: str, content: bytes, message: str,
         if r.status_code not in (200, 201):
             raise RuntimeError(f"GitHub 上传失败 {r.status_code}: {r.text[:300]}")
         return r.json()
+
+
+async def delete_prefix(rel_prefix: str) -> int:
+    """Delete every repo file under ``rel_prefix``. Returns the count removed."""
+    g = _gh()
+    full = repo_path(rel_prefix).rstrip("/")
+    async with httpx.AsyncClient(timeout=60) as c:
+        r = await c.get(
+            f"{API}/repos/{g['repo']}/git/trees/{g['branch']}?recursive=1",
+            headers=_headers(),
+        )
+        tree = r.json().get("tree", [])
+    targets = [
+        x["path"] for x in tree
+        if x.get("type") == "blob"
+        and (x["path"] == full or x["path"].startswith(full + "/"))
+    ]
+    removed = 0
+    for p in targets:
+        sha = await get_sha(p)
+        if not sha:
+            continue
+        async with httpx.AsyncClient(timeout=60) as c:
+            r = await c.request(
+                "DELETE",
+                f"{API}/repos/{g['repo']}/contents/{p}",
+                headers=_headers(),
+                json={"message": f"chore: remove {p}", "sha": sha, "branch": g["branch"]},
+            )
+            if r.status_code in (200, 201):
+                removed += 1
+    return removed
 
 
 async def publish_tree(root: Path, excludes: tuple[str, ...] = ()) -> list[str]:
