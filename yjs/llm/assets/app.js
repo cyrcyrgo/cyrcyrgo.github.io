@@ -12,6 +12,9 @@ async function resolveApi() {
   const override = localStorage.getItem("yjs_api_override");
   if (override) {
     API = override.replace(/\/$/, "");
+  } else if (location.hostname === "127.0.0.1" || location.hostname === "localhost") {
+    // served by the local backend -> talk to it directly (no tunnel dependency)
+    API = location.origin;
   } else {
     try {
       const r = await fetch("config.json?t=" + Date.now(), { cache: "no-store" });
