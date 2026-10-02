@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 from . import config as cfg
-from . import llm, store, tools
+from . import llm, metrics, store, tools
 
 Emit = Callable[[dict], Awaitable[None]]
 
@@ -101,7 +101,22 @@ def _record_file(name: str, result: dict, produced: list[dict],
         })
 
 
-async def run_agent(uid: str, cid: str, emit: Emit, model: str | None = None, mode: str = "work") -> None:
+async def run_agent(uid: str, cid: str, emit: Emit,
+                    model: str | None = None, mode: str = "work") -> None:
+    """Public entry point: wraps the loop with live-call bookkeeping."""
+    user = store.get_user(uid) or {}
+    call_id = metrics.start_live(
+        uid, user.get("email", ""), model or cfg.CONFIG["model"], (mode or "work").lower()
+    )
+    try:
+        await _run_agent_inner(uid, cid, emit, model=model, mode=mode, call_id=call_id)
+    finally:
+        metrics.end_live(call_id)
+
+
+async def _run_agent_inner(uid: str, cid: str, emit: Emit,
+                           model: str | None = None, mode: str = "work",
+                           call_id: str = "") -> None:
     conv = store.get_conversation(uid, cid)
     if not conv:
         await emit({"type": "error", "error": "对话不存在"})
@@ -171,7 +186,17 @@ async def run_agent(uid: str, cid: str, emit: Emit, model: str | None = None, mo
             )
         except Exception as exc:  # noqa: BLE001
             await emit({"type": "error", "error": f"模型调用失败：{exc}"})
+            metrics.update_live(call_id, phase=f"出错：{exc}"[:80])
             return
+
+        _u = msg.get("usage") or {}
+        metrics.record_call(
+            uid, (store.get_user(uid) or {}).get("email", ""),
+            model or cfg.CONFIG["model"], mode,
+            _u.get("prompt_tokens", 0), _u.get("completion_tokens", 0),
+            _u.get("seconds", 0.0),
+        )
+        metrics.update_live(call_id, step=step + 1, phase="生成回答")
 
         tool_calls = msg.get("tool_calls") or []
         content = msg.get("content") or ""
@@ -206,6 +231,7 @@ async def run_agent(uid: str, cid: str, emit: Emit, model: str | None = None, mo
                 except json.JSONDecodeError:
                     raw_args = {}
             await emit({"type": "tool_call", "name": name, "args": raw_args})
+            metrics.update_live(call_id, phase=f"执行 {name}")
 
             result = await tools.execute(name, raw_args, ctx)
 
