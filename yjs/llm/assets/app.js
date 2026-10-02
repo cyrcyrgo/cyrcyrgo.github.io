@@ -13,7 +13,6 @@ async function resolveApi() {
   if (override) {
     API = override.replace(/\/$/, "");
   } else if (location.hostname === "127.0.0.1" || location.hostname === "localhost") {
-    // served by the local backend -> talk to it directly (no tunnel dependency)
     API = location.origin;
   } else {
     try {
@@ -63,6 +62,11 @@ function renderUsage(u) {
   const bar = $("quota-bar");
   bar.querySelector("i").style.width = Math.min(u.percent, 100) + "%";
   bar.classList.toggle("full", !!u.full);
+}
+function downloadUrl(path) {
+  // Uses query-param token — backend already supports it. Simpler than
+  // fetch+blob and lets the browser handle large files natively.
+  return `${API}/api/files/download?path=${encodeURIComponent(path)}&token=${encodeURIComponent(TOKEN)}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -187,7 +191,7 @@ async function openConversation(cid) {
   box.innerHTML = "";
   d.conversation.messages.forEach((m) => {
     if (m.role === "user") addBubble("user", m.content);
-    else if (m.role === "assistant") addBubble("assistant", m.content);
+    else if (m.role === "assistant") addBubble("assistant", m.content, m.files);
     else if (m.role === "tool") addStep("tool", `⚙ ${m.name} → ${shorten(m.content, 300)}`);
   });
   loadConversations();
@@ -203,7 +207,34 @@ function escapeHtml(s) {
 }
 function shorten(s, n) { s = s || ""; return s.length > n ? s.slice(0, n) + "…" : s; }
 
-function addBubble(role, text) {
+/* Render a list of produced files as inline chips inside/under an assistant bubble. */
+function renderFilesChips(files, container) {
+  if (!files || !files.length) return;
+  const wrap = document.createElement("div");
+  wrap.className = "files-chips";
+  files.forEach((f) => {
+    const rel = f.path;
+    const chip = document.createElement("div");
+    chip.className = "file-chip";
+    chip.innerHTML =
+      `<span class="icon">📄</span>` +
+      `<a class="fc-name" href="${escapeHtml(downloadUrl(rel))}" download="${escapeHtml(f.name || rel.split('/').pop())}" target="_blank" rel="noopener">${escapeHtml(f.name || rel.split('/').pop())}</a>` +
+      `<span class="fc-size">${fmtSize(f.size || 0)}</span>` +
+      `<button class="fc-del" title="删除文件">✕</button>`;
+    chip.querySelector(".fc-del").onclick = async () => {
+      if (!confirm("删除 " + rel + " ?")) return;
+      try {
+        await api("/api/files?path=" + encodeURIComponent(rel), { method: "DELETE" });
+        chip.remove();
+        refreshMe();
+      } catch (e) { alert(e.message); }
+    };
+    wrap.appendChild(chip);
+  });
+  container.appendChild(wrap);
+}
+
+function addBubble(role, text, files) {
   const box = $("messages");
   const empty = box.querySelector(".empty");
   if (empty) empty.remove();
@@ -211,8 +242,9 @@ function addBubble(role, text) {
   div.className = "bubble " + role;
   div.innerHTML =
     `<div class="who">${role === "user" ? "你" : "Agent"}</div>` +
-    `<span class="txt">${escapeHtml(text)}</span>`;
+    `<span class="txt">${escapeHtml(text || "")}</span>`;
   box.appendChild(div);
+  if (role === "assistant") renderFilesChips(files, div);
   box.scrollTop = box.scrollHeight;
   return div;
 }
@@ -276,6 +308,10 @@ async function sendMessage() {
   addBubble("user", text);
 
   let live = addStep("tool", "⏳ 正在思考…");
+  // The "files" chip strip is attached to whichever assistant bubble we end up
+  // with (streamed or static) — keep a reference to the strip container so we
+  // can add chips incrementally as the agent produces them.
+  let filesStrip = null;
 
   const ensureLive = () => { if (!live.parentNode) live = addStep("tool", "⏳ 正在思考…"); };
 
@@ -308,6 +344,20 @@ async function sendMessage() {
       addStep(ev.ok ? "result-ok" : "result-err",
         `${ev.ok ? "✓" : "✗"} ${ev.name}: ${ev.summary}`);
       ensureLive();
+    } else if (ev.type === "files") {
+      // Attach to the current assistant bubble (streamed one if typing, else
+      // the most recent static one).
+      let target = streamEl;
+      if (!target) {
+        const boxes = $("messages").querySelectorAll(".bubble.assistant");
+        target = boxes[boxes.length - 1] || null;
+      }
+      if (!target) {
+        target = addBubble("assistant", "");
+      }
+      // Idempotent: clear then re-render so partial reruns don't duplicate.
+      target.querySelectorAll(".files-chips").forEach((e) => e.remove());
+      renderFilesChips(ev.files || [], target);
     } else if (ev.type === "done") {
       endStream();
       if (live.parentNode) live.remove();
@@ -357,7 +407,6 @@ async function sendMessage() {
     addStep("result-err",
       "⚠ 连接中断（" + (e.message || "network error") + "）。" +
       "后端很可能仍在继续执行，稍后重新打开本对话即可看到结果。");
-    // pull whatever the backend already saved so completed work stays visible
     if (currentConv) { try { await openConversation(currentConv); } catch (_) {} }
   } finally {
     endStream();
@@ -398,21 +447,31 @@ async function loadFiles() {
       `${d.files.length} 个文件 · 已用 ${fmtSize(d.usage.used)} / ${fmtSize(d.usage.quota)}`;
     const box = $("files-list");
     box.innerHTML = "";
-    if (!d.files.length) box.innerHTML = `<div style="color:#8b98b4">暂无文件</div>`;
+    if (!d.files.length) {
+      box.innerHTML = `<div style="color:#8b98b4;padding:20px;text-align:center">暂无文件 —— 让 Agent 写点什么吧</div>`;
+      return;
+    }
     d.files.forEach((f) => {
-      const div = document.createElement("div");
-      div.className = "file";
-      div.innerHTML =
-        `<a href="javascript:void(0)" class="dl">${escapeHtml(f.path)}</a>` +
-        `<span style="color:#8b98b4">${fmtSize(f.size)}</span>` +
-        `<span class="del" style="color:#ef4444;cursor:pointer">✕</span>`;
-      div.querySelector(".dl").onclick = () => downloadFile(f.path);
-      div.querySelector(".del").onclick = async () => {
+      const row = document.createElement("div");
+      row.className = "file-row";
+      const url = downloadUrl(f.path);
+      const filename = f.path.split("/").pop();
+      row.innerHTML =
+        `<div class="fr-main">` +
+        `<div class="fr-name" title="${escapeHtml(f.path)}">📄 ${escapeHtml(f.path)}</div>` +
+        `<div class="fr-meta">${fmtSize(f.size)} · ${new Date(f.modified * 1000).toLocaleString()}</div>` +
+        `</div>` +
+        `<div class="fr-actions">` +
+        `<a class="btn btn-dl" href="${escapeHtml(url)}" download="${escapeHtml(filename)}" target="_blank" rel="noopener">下载</a>` +
+        `<button class="btn btn-del">删除</button>` +
+        `</div>`;
+      row.querySelector(".btn-del").onclick = async () => {
         if (!confirm("删除 " + f.path + " ?")) return;
         await api("/api/files?path=" + encodeURIComponent(f.path), { method: "DELETE" });
+        await refreshMe();
         loadFiles();
       };
-      box.appendChild(div);
+      box.appendChild(row);
     });
   } catch (e) { alert(e.message); }
 }
@@ -420,26 +479,9 @@ async function loadFiles() {
 $("btn-clear-files").onclick = async () => {
   if (!confirm("确定清空全部工作区文件？此操作不可恢复。")) return;
   await api("/api/files/clear", { method: "POST" });
+  await refreshMe();
   await loadFiles();
 };
-
-async function downloadFile(path) {
-  try {
-    const res = await fetch(
-      `${API}/api/files/download?path=${encodeURIComponent(path)}`,
-      { headers: { "Authorization": "Bearer " + TOKEN, "ngrok-skip-browser-warning": "true" } }
-    );
-    if (!res.ok) throw new Error("下载失败 " + res.status);
-    const blob = await res.blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = path.split("/").pop();
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(a.href);
-  } catch (e) { alert(e.message); }
-}
 
 /* ------------------------------------------------------------------ */
 /* boot                                                                */
