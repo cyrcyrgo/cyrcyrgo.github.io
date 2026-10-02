@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS 管理后台</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%99%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/admin.css" />
 </head>
 <body>
@@ -48,18 +49,45 @@
     <div class="stat"><div class="k">Ollama</div><div class="v" id="s-ollama">—</div><div class="s" id="s-vram">显存占用 —</div></div>
   </section>
 
+  <!-- 系统权限 -->
+  <section class="panel">
+    <h3>系统权限设置 <span class="hint">· 全局开关 / 注册 / 模型新增 / 默认模型 / 公告</span></h3>
+    <div class="settings-grid">
+      <label class="switch-row"><input type="checkbox" id="set-ai" />
+        <span class="sw-label">全局 AI 调用</span>
+        <span class="hint">关闭后所有账号暂停模型调用</span></label>
+      <label class="switch-row"><input type="checkbox" id="set-register" />
+        <span class="sw-label">开放新用户注册</span>
+        <span class="hint">关闭后新邮箱无法注册</span></label>
+      <label class="switch-row"><input type="checkbox" id="set-addmodel" />
+        <span class="sw-label">允许新增模型</span>
+        <span class="hint">关闭后无法添加 API 模型</span></label>
+      <div class="set-field">
+        <span class="sw-label">默认模型</span>
+        <select id="set-default"></select>
+      </div>
+      <div class="set-field wide">
+        <span class="sw-label">站点公告（显示在对话页顶部，留空隐藏）</span>
+        <input id="set-announce" placeholder="例如：系统将于今晚 23:00 维护，请提前保存文件" />
+      </div>
+    </div>
+    <div class="set-actions"><button class="btn" id="btn-save-settings">保存设置</button></div>
+  </section>
+
   <div class="grid2">
     <!-- 模型 -->
     <section class="panel">
-      <h3>模型实时状态 <span class="hint">· 每 2 秒刷新</span></h3>
+      <h3>模型实时状态 <span class="hint">· 每 2 秒刷新</span>
+        <button class="btn" id="btn-add-model" style="float:right;padding:4px 14px">+ 新增 API 模型</button>
+      </h3>
       <div class="table-wrap">
         <table class="tbl" id="tbl-models">
           <thead>
             <tr>
-              <th>模型</th><th>档位</th><th>状态</th>
+              <th>模型</th><th>档位</th><th>启用</th><th>状态</th>
               <th class="num">调用</th><th class="num">输入 tok</th>
               <th class="num">输出 tok</th><th class="num">总 tok</th>
-              <th>最近使用</th>
+              <th>最近使用</th><th>操作</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -92,13 +120,14 @@
 
   <!-- 用户管理 -->
   <section class="panel">
-    <h3>用户管理 <span class="hint">· 查看对话 / 修改密码 / 限制云空间 / 删除</span></h3>
+    <h3>用户管理 <span class="hint">· 对话 / 密码 / 配额 / 模型权限 / 删除</span></h3>
     <div class="table-wrap">
       <table class="tbl" id="tbl-users">
         <thead><tr>
           <th>邮箱</th><th>注册时间</th><th>最近登录</th>
           <th class="num">对话</th><th class="num">Token</th>
-          <th>云空间</th><th>密码</th><th>角色</th><th>操作</th>
+          <th>云空间</th><th>密码</th><th>角色</th>
+          <th>模型权限</th><th>操作</th>
         </tr></thead>
         <tbody></tbody>
       </table>
