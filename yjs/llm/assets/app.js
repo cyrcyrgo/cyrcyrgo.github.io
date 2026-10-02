@@ -290,6 +290,15 @@ async function sendMessage() {
       if (live.parentNode) live.remove();
       if (streamEl) endStream(ev.content);
       else if (ev.content) addBubble("assistant", ev.content);
+    } else if (ev.type === "progress") {
+      ensureLive();
+      live.textContent = "⏳ " + (ev.text || "生成中…");
+    } else if (ev.type === "heartbeat") {
+      ensureLive();
+      if (!streamEl && !typing) {
+        live.textContent = "⏳ 运行中…已 " + (ev.elapsed || 0) +
+          " 秒（本机模型较慢，大文件请耐心等待）";
+      }
     } else if (ev.type === "tool_call") {
       endStream();
       if (live.parentNode) live.remove();
@@ -344,7 +353,12 @@ async function sendMessage() {
       }
     }
   } catch (e) {
-    addStep("result-err", "⚠ " + e.message);
+    if (live.parentNode) live.remove();
+    addStep("result-err",
+      "⚠ 连接中断（" + (e.message || "network error") + "）。" +
+      "后端很可能仍在继续执行，稍后重新打开本对话即可看到结果。");
+    // pull whatever the backend already saved so completed work stays visible
+    if (currentConv) { try { await openConversation(currentConv); } catch (_) {} }
   } finally {
     endStream();
     if (live.parentNode) live.remove();
