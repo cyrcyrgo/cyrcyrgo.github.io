@@ -62,10 +62,11 @@ def _tool_call_size(tool_calls: list[dict]) -> tuple[str, int]:
     return name, chars
 
 
-async def chat_stream(messages: list[dict], tools: list[dict] | None = None) -> AsyncIterator[dict]:
+async def chat_stream(messages: list[dict], tools: list[dict] | None = None,
+                     model: str | None = None) -> AsyncIterator[dict]:
     """Yield raw Ollama streaming chunks (each has .message / .done)."""
     payload = {
-        "model": cfg.CONFIG["model"],
+        "model": model or cfg.CONFIG["model"],
         "messages": messages,
         "stream": True,
         "keep_alive": KEEP_ALIVE,
@@ -98,6 +99,7 @@ async def chat_once(
     tools: list[dict] | None = None,
     on_delta=None,
     on_tool_progress=None,
+    model: str | None = None,
 ) -> dict:
     """One full turn, assembled from the streaming endpoint.
 
@@ -112,7 +114,7 @@ async def chat_once(
     content_parts: list[str] = []
     tool_calls: list[dict] = []
     last_reported = 0
-    async for chunk in chat_stream(messages, tools=tools):
+    async for chunk in chat_stream(messages, tools=tools, model=model):
         msg = chunk.get("message") or {}
         text = msg.get("content") or ""
         if text:
