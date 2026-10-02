@@ -40,6 +40,8 @@ def send_code(email: str) -> None:
     email = email.lower()
     s = _smtp()
     code = f"{random.randint(0, 999999):06d}"
+    if cfg.CONFIG.get("debug_codes"):
+        print(f"[auth] code for {email} = {code}", flush=True)
     _CODES[email] = {
         "code": code,
         "expires": time.time() + cfg.CONFIG["code_ttl_seconds"],
