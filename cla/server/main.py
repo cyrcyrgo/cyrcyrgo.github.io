@@ -196,6 +196,9 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
     uid = user["uid"]
     if not store.get_conversation(uid, cid):
         raise HTTPException(404, "对话不存在")
+    # Global master switch: an admin can suspend every model call at once.
+    if not cfg.CONFIG.get("ai_enabled", True):
+        raise HTTPException(403, "管理员已暂停全部模型调用，请稍后再试")
     text = (body.content or "").strip()
     if not text:
         raise HTTPException(400, "内容为空")
@@ -207,11 +210,17 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
     if not resolved_model:
         resolved_model = user.get("model_preference")
     if not resolved_model:
-        resolved_model = cfg.CONFIG["model"]
-    # Validate against configured models (fall back to default if unknown).
-    known = {m["name"] for m in cfg.CONFIG.get("models", [])}
+        resolved_model = cfg.CONFIG.get("default_model") or cfg.CONFIG["model"]
+    # Validate — intersect the globally-enabled set with the user's allow-list.
+    known = {m["name"] for m in cfg.CONFIG.get("models", []) if m.get("enabled", True)}
+    profile = store.get_user(uid) or {}
+    allow_list = profile.get("model_allowed")
+    if allow_list is not None:
+        known &= set(allow_list)
+        if not known:
+            raise HTTPException(403, "你的账户已被暂停所有模型调用，请联系管理员")
     if known and resolved_model not in known:
-        resolved_model = cfg.CONFIG["model"]
+        resolved_model = next(iter(known), cfg.CONFIG.get("default_model") or cfg.CONFIG["model"])
     # Emit a model event so the UI updates the active tag.
     _active_model[uid] = resolved_model
 
@@ -368,26 +377,60 @@ async def health():
     }
 
 
+@app.get("/api/settings")
+async def public_settings():
+    """Runtime switches the chat page reads before/after login (no auth)."""
+    return {
+        "ok": True,
+        "ai_enabled": bool(cfg.CONFIG.get("ai_enabled", True)),
+        "allow_register": bool(cfg.CONFIG.get("allow_register", True)),
+        "announcement": cfg.CONFIG.get("announcement", "") or "",
+    }
+
+
 # --------------------------------------------------------------------------- #
 # model selection
 # --------------------------------------------------------------------------- #
+def _user_visible_models(user: dict) -> tuple[list[dict], set[str]]:
+    """Return (models, names) visible to *user*.
+
+    Admins see every configured model (enabled or disabled) so they can toggle
+    them; ordinary users only see models that are both globally enabled AND in
+    their per-user allow-list (if they have one).
+    """
+    all_models = cfg.CONFIG.get("models", [])
+    if store.is_admin(user):
+        visible = list(all_models)
+    else:
+        visible = [m for m in all_models if m.get("enabled", True)]
+        profile = store.get_user(user["uid"]) or {}
+        allow_list = profile.get("model_allowed")
+        if allow_list is not None:
+            visible = [m for m in visible if m["name"] in allow_list]
+    return visible, {m["name"] for m in visible}
+
+
 @app.get("/api/models")
 async def list_models(user: dict = Depends(current_user)):
-    """Return available models + the requesting user's saved preference."""
-    models = cfg.CONFIG.get("models", [])
-    # If Ollama has models that aren't listed in config, surface them too
-    # (so newly-pulled models show up without restarting).
-    ollama = await llm.health()
-    known_names = {m["name"] for m in models}
-    for m in ollama.get("models", []):
-        if m not in known_names:
-            models.append({"name": m, "display": m, "desc": "(未在配置中登记)"})
-    return {
-        "ok": True,
-        "models": models,
-        "default": cfg.CONFIG["model"],
-        "preference": user.get("model_preference"),
-    }
+    """Return models the current user may use + their saved preference."""
+    models, known_names = _user_visible_models(user)
+    try:
+        ollama = await llm.health()
+        known_cfg = {m["name"]: m for m in cfg.CONFIG.get("models", [])}
+        is_admin = store.is_admin(user)
+        for m in ollama.get("models", []):
+            if m not in known_cfg:
+                models.append({"name": m, "display": m, "provider": "ollama",
+                               "enabled": True, "desc": "(未在配置中登记)"})
+            elif not is_admin and not known_cfg[m].get("enabled", True):
+                pass   # non-admin: don't re-surface disabled via Ollama
+    except Exception:
+        pass
+    default = cfg.CONFIG["model"]
+    if known_names and default not in known_names:
+        default = models[0]["name"] if models else default
+    return {"ok": True, "models": models, "default": default,
+            "preference": user.get("model_preference")}
 
 
 class SetModelIn(BaseModel):
@@ -398,7 +441,8 @@ class SetModelIn(BaseModel):
 async def set_model(body: SetModelIn, user: dict = Depends(current_user)):
     model = body.model
     if model is not None:
-        known = {m["name"] for m in cfg.CONFIG.get("models", [])}
+        known_all, _ = _user_visible_models(user)
+        known = {m["name"] for m in known_all}
         if known and model not in known:
             raise HTTPException(400, f"未知模型: {model}")
     ok = store.set_model_preference(user["uid"], model)
@@ -474,9 +518,16 @@ async def admin_overview(user: dict = Depends(require_admin_gate)):
     for m in cfg.CONFIG.get("models", []):
         catalog[m["name"]] = {
             "name": m["name"], "display": m.get("display"), "tier": m.get("tier"),
+            "enabled": m.get("enabled", True), "provider": m.get("provider", "ollama"),
+            "is_builtin": m["name"] in cfg.DEFAULT_MODELS_NAMES,
+            "base_url": m.get("base_url", ""), "context_len": m.get("context_len", 8192),
+            "desc": m.get("desc", ""), "has_key": bool(m.get("api_key_ref")),
         }
     for name in installed:
-        catalog.setdefault(name, {"name": name, "display": name, "tier": "未登记"})
+        catalog.setdefault(name, {"name": name, "display": name, "tier": "未登记",
+                                    "enabled": False, "is_builtin": False,
+                                    "base_url": "", "context_len": 8192,
+                                    "desc": "", "has_key": False})
 
     rows = []
     for name, meta in catalog.items():
@@ -571,6 +622,178 @@ async def admin_set_quota(uid: str, body: AdminQuotaIn,
         raise HTTPException(404, "用户不存在")
     store.set_quota(uid, body.quota_bytes)
     return {"ok": True, "usage": store.usage(uid)}
+
+
+class AdminModelToggleIn(BaseModel):
+    enabled: bool
+
+
+@app.post("/api/admin/models/toggle")
+async def admin_toggle_model(body: AdminModelToggleIn, name: str = Query(...),
+                             user: dict = Depends(require_admin_gate)):
+    models = list(cfg.CONFIG.get("models", []))
+    for m in models:
+        if m.get("name") == name:
+            m["enabled"] = body.enabled
+            break
+    else:
+        raise HTTPException(404, f"model {name} not found")
+    cfg.CONFIG["models"] = models
+    cfg.save(cfg.CONFIG)
+    return {"ok": True, "name": name, "enabled": body.enabled}
+
+
+class AdminSettingsIn(BaseModel):
+    ai_enabled: bool | None = None
+    allow_register: bool | None = None
+    allow_model_add: bool | None = None
+    announcement: str | None = None
+    default_model: str | None = None
+
+
+@app.get("/api/admin/settings")
+async def admin_get_settings(user: dict = Depends(require_admin_gate)):
+    models = cfg.CONFIG.get("models", [])
+    return {
+        "ok": True,
+        "ai_enabled": bool(cfg.CONFIG.get("ai_enabled", True)),
+        "allow_register": bool(cfg.CONFIG.get("allow_register", True)),
+        "allow_model_add": bool(cfg.CONFIG.get("allow_model_add", True)),
+        "announcement": cfg.CONFIG.get("announcement", "") or "",
+        "default_model": cfg.CONFIG.get("default_model") or cfg.CONFIG.get("model"),
+        "models": [
+            {"name": m["name"], "display": m.get("display") or m["name"],
+             "enabled": m.get("enabled", True)}
+            for m in models
+        ],
+    }
+
+
+@app.post("/api/admin/settings")
+async def admin_set_settings(body: AdminSettingsIn,
+                             user: dict = Depends(require_admin_gate)):
+    if body.ai_enabled is not None:
+        cfg.CONFIG["ai_enabled"] = bool(body.ai_enabled)
+    if body.allow_register is not None:
+        cfg.CONFIG["allow_register"] = bool(body.allow_register)
+    if body.allow_model_add is not None:
+        cfg.CONFIG["allow_model_add"] = bool(body.allow_model_add)
+    if body.announcement is not None:
+        cfg.CONFIG["announcement"] = body.announcement.strip()[:500]
+    if body.default_model is not None:
+        names = {m["name"] for m in cfg.CONFIG.get("models", [])}
+        if body.default_model and body.default_model not in names:
+            raise HTTPException(400, f"未知模型: {body.default_model}")
+        cfg.CONFIG["default_model"] = body.default_model
+    cfg.save(cfg.CONFIG)
+    return {"ok": True}
+
+
+class AdminModelEditIn(BaseModel):
+    name: str
+    display: str | None = None
+    tier: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    context_len: int | None = None
+    desc: str | None = None
+    enabled: bool | None = None
+
+
+@app.post("/api/admin/models/edit")
+async def admin_edit_model(body: AdminModelEditIn,
+                           user: dict = Depends(require_admin_gate)):
+    """Edit an existing model (built-in or API). Empty api_key keeps the old one."""
+    import secrets as _sec
+    models = list(cfg.CONFIG.get("models", []))
+    target = next((m for m in models if m.get("name") == body.name), None)
+    if target is None:
+        raise HTTPException(404, f"model {body.name} not found")
+    if body.display is not None:
+        target["display"] = body.display
+    if body.tier is not None:
+        target["tier"] = body.tier
+    if body.base_url is not None:
+        target["base_url"] = body.base_url
+    if body.context_len is not None:
+        target["context_len"] = int(body.context_len)
+    if body.desc is not None:
+        target["desc"] = body.desc
+    if body.enabled is not None:
+        target["enabled"] = bool(body.enabled)
+    if body.api_key:
+        ref = target.get("api_key_ref") or f"sk__{_sec.token_hex(6)}"
+        cfg.CONFIG.setdefault("api_keys", {})[ref] = body.api_key
+        target["api_key_ref"] = ref
+    cfg.CONFIG["models"] = models
+    cfg.save(cfg.CONFIG)
+    return {"ok": True, "model": target}
+
+
+class AdminModelAddIn(BaseModel):
+    name: str
+    display: str = ""
+    tier: str = "自定义"
+    provider: str = "openai"
+    base_url: str = ""
+    api_key: str = ""
+    context_len: int = 8192
+    size_mb: int = 0
+    desc: str = ""
+
+
+@app.post("/api/admin/models")
+async def admin_add_model(body: AdminModelAddIn,
+                          user: dict = Depends(require_admin_gate)):
+    import secrets as _sec
+    if not cfg.CONFIG.get("allow_model_add", True):
+        raise HTTPException(403, "已暂停新增模型，请先在系统权限中开启")
+    models = list(cfg.CONFIG.get("models", []))
+    if any(m.get("name") == body.name for m in models):
+        raise HTTPException(400, f"model {body.name} already exists")
+    api_keys = cfg.CONFIG.setdefault("api_keys", {})
+    key_ref = f"sk__{_sec.token_hex(6)}"
+    api_keys[key_ref] = body.api_key
+    entry = {
+        "name": body.name, "display": body.display or body.name,
+        "tier": body.tier, "size_mb": body.size_mb, "enabled": True,
+        "provider": body.provider, "base_url": body.base_url,
+        "api_key_ref": key_ref, "context_len": body.context_len, "desc": body.desc,
+    }
+    models.append(entry)
+    cfg.CONFIG["models"] = models
+    cfg.save(cfg.CONFIG)
+    return {"ok": True, "model": entry}
+
+
+@app.delete("/api/admin/models/delete")
+async def admin_delete_model(name: str = Query(...),
+                             user: dict = Depends(require_admin_gate)):
+    from server import config as _cfg_mod
+    defaults = {m["name"] for m in _cfg_mod.DEFAULT_MODELS}
+    if name in defaults:
+        raise HTTPException(400, "默认内置模型不能删除（可以暂停）")
+    models = [m for m in cfg.CONFIG.get("models", []) if m.get("name") != name]
+    for m in cfg.CONFIG.get("models", []):
+        if m.get("name") == name and m.get("api_key_ref"):
+            cfg.CONFIG.setdefault("api_keys", {}).pop(m["api_key_ref"], None)
+    cfg.CONFIG["models"] = models
+    cfg.save(cfg.CONFIG)
+    return {"ok": True}
+
+
+class AdminUserModelsIn(BaseModel):
+    model_allowed: list[str] | None = None
+
+
+@app.post("/api/admin/users/{uid}/models")
+async def admin_set_user_models(uid: str, body: AdminUserModelsIn,
+                                user: dict = Depends(require_admin_gate)):
+    try:
+        store.set_user_model_allowed(uid, body.model_allowed)
+    except KeyError:
+        raise HTTPException(404, "用户不存在")
+    return {"ok": True, "model_allowed": body.model_allowed}
 
 
 @app.delete("/api/admin/users/{uid}")
