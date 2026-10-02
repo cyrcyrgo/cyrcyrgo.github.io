@@ -11,6 +11,25 @@ from . import llm, store, tools
 
 Emit = Callable[[dict], Awaitable[None]]
 
+SYSTEM_PROMPT_BASE = """你是「YJS Cloud LLM Agent」，运行在用户本机的智能体。
+你可以使用工具读写文件、执行 Python/Node.js、运行 PowerShell、
+发 HTTP 请求、控制无头浏览器、调用 MCP 服务器。
+
+工作区目录：{workspace} （相对路径以此为基准）
+
+工作原则：
+1. 先理解任务，拆解为步骤。
+2. 主动用工具获取信息、编写运行代码、验证结果，直到完成。
+3. 产出的成果文件放入工作区，用 report_file 登记让用户下载。
+4. 完成后调用 finish 提交汇报：做了什么、产出哪些文件、结论是什么。
+5. 汇报用简体中文，简洁清晰。不编造未执行的结果。"""
+
+SYSTEM_PROMPT_FAST = """你是一个快速回答助手。用户提问，直接给出简明答案，
+不要调用任何工具，不要执行任何操作。回答要快、要准、要短。"""
+
+SYSTEM_PROMPT_THINK = """你是一个深度思考助手。先仔细分析问题（可以写在回答里），
+再给出高质量答案。可以调用工具查证，但重点是思考深度，而非执行复杂任务。"""
+
 SYSTEM_PROMPT = """你是「YJS LLM Agent」，一个运行在用户本机上的自主智能体。
 你可以使用工具直接操作这台电脑：读写/删除文件、执行 Python 与 Node.js 代码、
 运行 PowerShell 命令、发送 HTTP 请求、控制无头浏览器、以及调用 MCP 服务器。
@@ -82,7 +101,7 @@ def _record_file(name: str, result: dict, produced: list[dict],
         })
 
 
-async def run_agent(uid: str, cid: str, emit: Emit, model: str | None = None) -> None:
+async def run_agent(uid: str, cid: str, emit: Emit, model: str | None = None, mode: str = "work") -> None:
     conv = store.get_conversation(uid, cid)
     if not conv:
         await emit({"type": "error", "error": "对话不存在"})
@@ -98,9 +117,28 @@ async def run_agent(uid: str, cid: str, emit: Emit, model: str | None = None) ->
 
     ctx = tools.ToolContext(uid=uid, cid=cid, workspace=store.workspace(uid))
 
+    # Pick system prompt and tool policy based on mode.
+    mode = (mode or "work").lower()
+    if mode == "fast":
+        system_prompt = SYSTEM_PROMPT_FAST
+        use_tools = False
+        max_steps = 1
+    elif mode == "think":
+        system_prompt = SYSTEM_PROMPT_THINK
+        use_tools = True
+        max_steps = min(2, cfg.CONFIG["max_agent_steps"])
+    elif mode == "expert":
+        system_prompt = SYSTEM_PROMPT_BASE.format(workspace=str(ctx.workspace))
+        use_tools = True
+        max_steps = cfg.CONFIG["max_agent_steps"]
+    else:  # work
+        system_prompt = SYSTEM_PROMPT_BASE.format(workspace=str(ctx.workspace))
+        use_tools = True
+        max_steps = cfg.CONFIG["max_agent_steps"]
+
     # rebuild model history from stored messages
     messages: list[dict] = [
-        {"role": "system", "content": SYSTEM_PROMPT.format(workspace=str(ctx.workspace))}
+        {"role": "system", "content": system_prompt}
     ]
     for m in conv["messages"]:
         if m["role"] in ("user", "assistant") and m.get("content"):
@@ -111,7 +149,7 @@ async def run_agent(uid: str, cid: str, emit: Emit, model: str | None = None) ->
     produced_files: list[dict] = []
     seen_paths: set[str] = set()
 
-    for step in range(cfg.CONFIG["max_agent_steps"]):
+    for step in range(max_steps):
         await emit({"type": "status", "text": f"思考中…（第 {step + 1} 步）"})
 
         async def on_delta(piece: str, _cid: str = cid) -> None:
@@ -148,6 +186,11 @@ async def run_agent(uid: str, cid: str, emit: Emit, model: str | None = None) ->
         if tool_calls:
             assistant_msg["tool_calls"] = tool_calls
         messages.append(assistant_msg)
+
+        # fast mode: ignore tool calls, just answer
+        if not use_tools and tool_calls:
+            await emit({"type": "status", "text": "快速模式忽略工具调用，直接回答"})
+            break
 
         if not tool_calls:
             final_summary = final_summary or content or "任务结束。"
