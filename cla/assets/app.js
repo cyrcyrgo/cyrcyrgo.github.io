@@ -75,11 +75,10 @@
 
   /* The app is served both from the backend root (http://host/) and from a
      GitHub Pages sub-path (https://<user>.github.io/<prefix>/), so self-links
-     must be derived from where this script actually lives. */
+     must point at the app folder of the current page, not at the site root. */
   const APP_ROOT = (function () {
-    const s = document.querySelector('script[src$=".js"]');
-    const base = s ? new URL(s.getAttribute("src"), location.href).href : location.href;
-    return base.replace(/[^/]+$/, "").replace(/assets\/$/, "");
+    const dir = location.pathname.replace(/[^/]*$/, "");   // / -> /, /cla/ -> /cla/
+    return dir || "/";
   })();
 
   /* ------------------------------------------------------------------ */
