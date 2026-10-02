@@ -8,6 +8,7 @@
   let sending = false;
   let MODELS = [];
   let currentMode = "work";
+  let uiWired = false;
 
   /* ------------------------------------------------------------------ */
   /* API resolution + auth                                                */
@@ -73,6 +74,22 @@
     `${API}/api/files/download?path=${encodeURIComponent(path)}&token=${encodeURIComponent(TOKEN)}`;
 
   /* ------------------------------------------------------------------ */
+  /* sidebar collapse — CSS pins the floating button to the sidebar edge  */
+  /* via the #app.sb-collapsed class, so both classes must move together. */
+  /* ------------------------------------------------------------------ */
+  function setSidebar(collapsed) {
+    const sb = $("sidebar"), app = $("app");
+    sb.classList.toggle("collapsed", collapsed);
+    app.classList.toggle("sb-collapsed", collapsed);
+    localStorage.setItem("yjs_sidebar_collapsed", collapsed ? "1" : "0");
+  }
+  function applySidebarState() {
+    setSidebar(localStorage.getItem("yjs_sidebar_collapsed") === "1");
+  }
+  $("sidebar-toggle").onclick = () =>
+    setSidebar(!$("sidebar").classList.contains("collapsed"));
+
+  /* ------------------------------------------------------------------ */
   /* model + mode loaders                                                */
   /* ------------------------------------------------------------------ */
   async function loadModels() {
@@ -92,13 +109,25 @@
       });
       const chosen = d.preference || d.default || (MODELS[0]?.name || "");
       sel.value = chosen;
-      sel.style.color = "#fff";
     } catch (e) { console.warn("loadModels failed:", e); }
   }
 
   /* ------------------------------------------------------------------ */
-  /* auth                                                                */
+  /* login: verification-code tab / password tab                         */
   /* ------------------------------------------------------------------ */
+  function selectLoginTab(which) {
+    const code = which === "code";
+    $("tab-code").classList.toggle("on", code);
+    $("tab-pwd").classList.toggle("on", !code);
+    $("pane-code").classList.toggle("hidden", !code);
+    $("pane-pwd").classList.toggle("hidden", code);
+    localStorage.setItem("yjs_login_tab", which);
+    setMsg("");
+  }
+  $("tab-code").onclick = () => selectLoginTab("code");
+  $("tab-pwd").onclick = () => selectLoginTab("pwd");
+  selectLoginTab(localStorage.getItem("yjs_login_tab") === "pwd" ? "pwd" : "code");
+
   $("btn-send").onclick = async () => {
     const email = $("login-email").value.trim();
     if (!email) return setMsg("请填写邮箱", "err");
@@ -112,6 +141,7 @@
       }, 1000);
     } catch (e) { setMsg(e.message, "err"); btn.disabled = false; }
   };
+
   async function doVerify() {
     const email = $("login-email").value.trim();
     const code = $("login-code").value.trim();
@@ -125,6 +155,20 @@
   }
   $("btn-verify").onclick = doVerify;
   $("login-code").addEventListener("keydown", (e) => { if (e.key === "Enter") doVerify(); });
+
+  async function doPasswordLogin() {
+    const email = $("login-email").value.trim();
+    const password = $("login-password").value;
+    if (!email || !password) return setMsg("请填写邮箱和密码", "err");
+    setMsg("登录中…");
+    try {
+      const d = await api("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+      TOKEN = d.token; localStorage.setItem("yjs_token", TOKEN);
+      enterApp(d.user);
+    } catch (e) { setMsg(e.message, "err"); }
+  }
+  $("btn-pwd-login").onclick = doPasswordLogin;
+  $("login-password").addEventListener("keydown", (e) => { if (e.key === "Enter") doPasswordLogin(); });
 
   function logout() {
     TOKEN = ""; localStorage.removeItem("yjs_token");
@@ -140,22 +184,29 @@
   });
 
   /* ------------------------------------------------------------------ */
+  /* set / change own password                                           */
+  /* ------------------------------------------------------------------ */
+  function openPwModal() { $("pw-modal").classList.remove("hidden"); $("pw-input").focus(); }
+  function closePwModal() { $("pw-modal").classList.add("hidden"); $("pw-input").value = ""; }
+  $("btn-setpw").onclick = openPwModal;
+  $("pw-cancel").onclick = closePwModal;
+  $("pw-modal").addEventListener("click", (e) => { if (e.target === $("pw-modal")) closePwModal(); });
+  $("pw-ok").onclick = async () => {
+    const pw = $("pw-input").value;
+    if (pw.length < 6) return alert("密码至少 6 位");
+    try {
+      await api("/api/auth/password", { method: "POST", body: JSON.stringify({ password: pw }) });
+      closePwModal();
+      alert("密码已保存，下次可用「密码登录」进入");
+    } catch (e) { alert(e.message); }
+  };
+
+  /* ------------------------------------------------------------------ */
   /* bootstrap                                                           */
   /* ------------------------------------------------------------------ */
-  async function enterApp(user) {
-    $("login").classList.add("hidden"); $("app").classList.remove("hidden");
-    $("user-email").textContent = user.email;
-    renderUsage(user.usage);
-    await loadModels();
-
-    // Sidebar toggle
-    $("sidebar-toggle").addEventListener("click", () => {
-      $("sidebar").classList.toggle("collapsed");
-      localStorage.setItem("yjs_sidebar_collapsed",
-        $("sidebar").classList.contains("collapsed") ? "1" : "0");
-    });
-    if (localStorage.getItem("yjs_sidebar_collapsed") === "1")
-      $("sidebar").classList.add("collapsed");
+  function wireUi() {
+    if (uiWired) return;
+    uiWired = true;
 
     // Model selector change → persist preference
     $("model-select").addEventListener("change", async () => {
@@ -177,13 +228,22 @@
 
     // Preview drawer
     $("btn-preview-close").onclick = () => $("preview-panel").classList.add("hidden");
+  }
 
+  async function enterApp(user) {
+    $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+    $("user-email").textContent = user.email;
+    renderUsage(user.usage);
+    applySidebarState();
+    $("btn-admin").classList.toggle("hidden", !user.is_admin);
+    $("btn-admin").onclick = () => { location.href = "/admin"; };
+    wireUi();
+    await loadModels();
     await loadConversations();
   }
 
   /* ------------------------------------------------------------------ */
-  /* conversations  (FIXED: use event delegation on the container so       */
-  /*                  dynamic DOM still binds properly)                   */
+  /* conversations  (delegated click so rebuilds never lose handlers)     */
   /* ------------------------------------------------------------------ */
   async function loadConversations() {
     try {
@@ -200,7 +260,6 @@
       });
     } catch (e) { console.warn(e); }
   }
-  // Single delegated handler — bulletproof even if list rebuilds
   $("conv-list").addEventListener("click", async (ev) => {
     const target = ev.target;
     const row = target.closest(".conv");
@@ -255,7 +314,6 @@
   /* ------------------------------------------------------------------ */
   function renderFilesChips(files, container) {
     if (!files || !files.length) return;
-    // remove existing so re-runs don't duplicate
     container.querySelectorAll(".files-chips").forEach((e) => e.remove());
     const wrap = document.createElement("div");
     wrap.className = "files-chips";
@@ -280,9 +338,7 @@
         await api("/api/files?path=" + encodeURIComponent(rel), { method: "DELETE" });
         chip.remove(); refreshMe();
       };
-      if (canPreview) {
-        chip.querySelector(".fc-prev").onclick = () => openPreview(rel);
-      }
+      if (canPreview) chip.querySelector(".fc-prev").onclick = () => openPreview(rel);
       wrap.appendChild(chip);
     });
     container.appendChild(wrap);
@@ -402,12 +458,10 @@
         endStream();
         if (live.parentNode) live.remove();
         addStep("done", "✅ 完成：" + ev.summary);
-        const sel = $("model-select"); if (sel) delete sel.dataset.pending;
       } else if (ev.type === "error") {
         endStream();
         if (live.parentNode) live.remove();
         addStep("result-err", "⚠ " + ev.error);
-        const sel = $("model-select"); if (sel) delete sel.dataset.pending;
       }
     };
 
@@ -539,7 +593,6 @@
     await resolveApi();
     if (TOKEN) {
       try {
-        await loadModels();
         const d = await api("/api/me");
         enterApp(d.user);
       } catch (_) {}
