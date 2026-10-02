@@ -59,21 +59,29 @@ def _deep_merge(base: dict, extra: dict) -> dict:
 
 def load() -> dict:
     cfg = json.loads(json.dumps(DEFAULTS))
+    read_ok = False
     if LOCAL_CONFIG.exists():
         try:
-            cfg = _deep_merge(cfg, json.loads(LOCAL_CONFIG.read_text(encoding="utf-8")))
+            # utf-8-sig tolerates a BOM that editors (e.g. PowerShell) may add;
+            # a plain utf-8 read would raise and silently fall back to defaults.
+            raw = LOCAL_CONFIG.read_text(encoding="utf-8-sig")
+            cfg = _deep_merge(cfg, json.loads(raw))
+            read_ok = True
         except Exception as exc:  # pragma: no cover - defensive
             print(f"[config] failed to read {LOCAL_CONFIG}: {exc}")
     if not cfg.get("session_secret"):
         cfg["session_secret"] = secrets.token_urlsafe(48)
-        save(cfg)
+        # Never overwrite an existing (possibly unparsable) file with defaults,
+        # otherwise real secrets would be wiped.
+        if read_ok or not LOCAL_CONFIG.exists():
+            save(cfg)
     for d in (DATA_DIR, USERS_DIR, RUNTIME_DIR, BIN_DIR):
         d.mkdir(parents=True, exist_ok=True)
     return cfg
 
 
 def save(cfg: dict) -> None:
-    """Persist the *secret* portion of the config."""
+    """Persist the *secret* portion of the config (always UTF-8, no BOM)."""
     secret_keys = ("github", "ngrok", "smtp", "session_secret", "mcp_servers")
     payload = {k: cfg[k] for k in secret_keys if k in cfg}
     LOCAL_CONFIG.write_text(
