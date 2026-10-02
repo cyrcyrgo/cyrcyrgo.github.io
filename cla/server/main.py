@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agent, auth, config as cfg, github_sync, llm, store, tools, tunnel
+from . import agent, auth, config as cfg, github_sync, llm, metrics, store, tools, tunnel
 
 app = FastAPI(title="YJS LLM Agent", version="1.0")
 app.add_middleware(
@@ -112,6 +112,9 @@ def _public_user(user: dict) -> dict:
         "name": user.get("name"),
         "created_at": user.get("created_at"),
         "model_preference": user.get("model_preference"),
+        "quota_bytes": int(user.get("quota_bytes") or cfg.CONFIG["quota_bytes"]),
+        "has_password": bool(user.get("password_hash")),
+        "is_admin": store.is_admin(user),
         "usage": store.usage(user["uid"]),
     }
 
@@ -119,6 +122,37 @@ def _public_user(user: dict) -> dict:
 @app.get("/api/me")
 async def me(user: dict = Depends(current_user)):
     return {"ok": True, "user": _public_user(user)}
+
+
+class PasswordLoginIn(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/auth/login")
+async def password_login(body: PasswordLoginIn):
+    """Alternative login: email + password (set by the user or an admin)."""
+    email = body.email.strip().lower()
+    user = store.get_user_by_email(email)
+    if not user or not auth.check_password(body.password, user.get("password_hash")):
+        raise HTTPException(400, "邮箱或密码错误")
+    store.touch_login(user["uid"])
+    token = auth.make_token(user["uid"], email)
+    return {"ok": True, "token": token, "user": _public_user(user)}
+
+
+class SetPasswordIn(BaseModel):
+    password: str
+
+
+@app.post("/api/auth/password")
+async def set_own_password(body: SetPasswordIn, user: dict = Depends(current_user)):
+    """Let a signed-in user set/change their own password."""
+    ok, msg = auth.valid_password(body.password)
+    if not ok:
+        raise HTTPException(400, msg)
+    store.set_password_hash(user["uid"], auth.hash_password(body.password))
+    return {"ok": True}
 
 
 # --------------------------------------------------------------------------- #
@@ -374,6 +408,149 @@ async def set_model(body: SetModelIn, user: dict = Depends(current_user)):
 @app.get("/api/tools")
 async def list_tools():
     return {"ok": True, "tools": tools.openai_schemas()}
+
+
+# --------------------------------------------------------------------------- #
+# admin dashboard
+# --------------------------------------------------------------------------- #
+async def require_admin(user: dict = Depends(current_user)) -> dict:
+    if not store.is_admin(user):
+        raise HTTPException(403, "需要管理员权限")
+    return user
+
+
+@app.get("/api/admin/overview")
+async def admin_overview(user: dict = Depends(require_admin)):
+    """Live dashboard payload: per-model token usage, VRAM residency, calls."""
+    snap = metrics.snapshot()
+    ollama = await llm.health()
+    ps = await llm.ps()
+    installed = set(ollama.get("models") or [])
+    loaded = {m["name"] for m in ps.get("models", [])}
+    live = metrics.live_models()
+
+    catalog: dict[str, dict] = {}
+    for m in cfg.CONFIG.get("models", []):
+        catalog[m["name"]] = {
+            "name": m["name"], "display": m.get("display"), "tier": m.get("tier"),
+        }
+    for name in installed:
+        catalog.setdefault(name, {"name": name, "display": name, "tier": "未登记"})
+
+    rows = []
+    for name, meta in catalog.items():
+        stat = snap["by_model"].get(name, {})
+        rows.append({
+            **meta,
+            "installed": name in installed,
+            "loaded": name in loaded,
+            "active": live.get(name, 0),
+            "calls": stat.get("calls", 0),
+            "prompt_tokens": stat.get("prompt_tokens", 0),
+            "completion_tokens": stat.get("completion_tokens", 0),
+            "total_tokens": stat.get("total_tokens", 0),
+            "seconds": stat.get("seconds", 0),
+            "last_used": stat.get("last_used"),
+        })
+    rows.sort(key=lambda r: (r["total_tokens"], r["calls"]), reverse=True)
+
+    return {
+        "ok": True,
+        "server_time": time.time(),
+        "totals": snap["totals"],
+        "models": rows,
+        "live": snap["live"],
+        "recent": snap["recent"][:40],
+        "by_day": snap["by_day"],
+        "by_mode": snap["by_mode"],
+        "by_user": snap["by_user"],
+        "users_total": store.total_users(),
+        "vram": ps.get("models", []),
+        "ollama_ok": ollama.get("ok", False),
+    }
+
+
+@app.get("/api/admin/users")
+async def admin_users(user: dict = Depends(require_admin)):
+    users = store.list_users()
+    tokens = metrics.snapshot()["by_user"]
+    for u in users:
+        tk = tokens.get(u["uid"], {})
+        u["tokens"] = {
+            "calls": tk.get("calls", 0),
+            "prompt_tokens": tk.get("prompt_tokens", 0),
+            "completion_tokens": tk.get("completion_tokens", 0),
+            "total_tokens": tk.get("total_tokens", 0),
+            "last_used": tk.get("last_used"),
+        }
+    return {"ok": True, "users": users}
+
+
+@app.get("/api/admin/users/{uid}/conversations")
+async def admin_user_conversations(uid: str, user: dict = Depends(require_admin)):
+    if not store.get_user(uid):
+        raise HTTPException(404, "用户不存在")
+    return {"ok": True, "conversations": store.all_conversations(uid)}
+
+
+@app.get("/api/admin/users/{uid}/conversations/{cid}")
+async def admin_user_conversation(uid: str, cid: str, user: dict = Depends(require_admin)):
+    conv = store.get_conversation(uid, cid)
+    if not conv:
+        raise HTTPException(404, "对话不存在")
+    return {"ok": True, "conversation": conv}
+
+
+class AdminPasswordIn(BaseModel):
+    password: str
+
+
+@app.post("/api/admin/users/{uid}/password")
+async def admin_set_password(uid: str, body: AdminPasswordIn,
+                             user: dict = Depends(require_admin)):
+    ok, msg = auth.valid_password(body.password)
+    if not ok:
+        raise HTTPException(400, msg)
+    if not store.get_user(uid):
+        raise HTTPException(404, "用户不存在")
+    store.set_password_hash(uid, auth.hash_password(body.password))
+    return {"ok": True}
+
+
+class AdminQuotaIn(BaseModel):
+    quota_bytes: int
+
+
+@app.post("/api/admin/users/{uid}/quota")
+async def admin_set_quota(uid: str, body: AdminQuotaIn,
+                          user: dict = Depends(require_admin)):
+    if body.quota_bytes < 0:
+        raise HTTPException(400, "配额不能为负")
+    if not store.get_user(uid):
+        raise HTTPException(404, "用户不存在")
+    store.set_quota(uid, body.quota_bytes)
+    return {"ok": True, "usage": store.usage(uid)}
+
+
+@app.delete("/api/admin/users/{uid}")
+async def admin_delete_user(uid: str, user: dict = Depends(require_admin)):
+    if uid == user["uid"]:
+        raise HTTPException(400, "不能删除当前登录的管理员账号")
+    return {"ok": store.delete_user(uid)}
+
+
+@app.post("/api/admin/metrics/reset")
+async def admin_reset_metrics(user: dict = Depends(require_admin)):
+    metrics.reset()
+    return {"ok": True}
+
+
+@app.get("/admin")
+async def admin_page():
+    f = cfg.ROOT / "admin.html"
+    if not f.exists():
+        raise HTTPException(404, "admin.html 缺失")
+    return FileResponse(f)
 
 
 # --------------------------------------------------------------------------- #
