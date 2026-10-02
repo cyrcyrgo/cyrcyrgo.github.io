@@ -35,6 +35,21 @@ def repo_path(rel: str) -> str:
     return f"{prefix}/{rel}" if prefix else rel
 
 
+def _excluded(rel: str, excludes: tuple[str, ...]) -> bool:
+    """True if ``rel`` (posix, relative) is an excluded file or lives under an
+    excluded directory -- matching at ANY depth, e.g. server/__pycache__/x.pyc."""
+    segs = rel.split("/")
+    for e in excludes:
+        e = e.strip("/")
+        if not e:
+            continue
+        if rel == e or rel.startswith(e + "/"):
+            return True
+        if e in segs:
+            return True
+    return False
+
+
 async def get_sha(path_in_repo: str) -> str | None:
     g = _gh()
     url = f"{API}/repos/{g['repo']}/contents/{path_in_repo}?ref={g['branch']}"
@@ -67,32 +82,36 @@ async def put_file(rel_or_repo_path: str, content: bytes, message: str,
         return r.json()
 
 
-async def delete_prefix(rel_prefix: str) -> int:
-    """Delete every repo file under ``rel_prefix``. Returns the count removed."""
+async def list_repo_paths(rel_prefix: str = "") -> list[str]:
+    """List blob paths in the repo, optionally under ``rel_prefix``."""
     g = _gh()
-    full = repo_path(rel_prefix).rstrip("/")
+    full = repo_path(rel_prefix).rstrip("/") if rel_prefix else ""
     async with httpx.AsyncClient(timeout=60) as c:
         r = await c.get(
             f"{API}/repos/{g['repo']}/git/trees/{g['branch']}?recursive=1",
             headers=_headers(),
         )
         tree = r.json().get("tree", [])
-    targets = [
+    return [
         x["path"] for x in tree
         if x.get("type") == "blob"
-        and (x["path"] == full or x["path"].startswith(full + "/"))
+        and (not full or x["path"] == full or x["path"].startswith(full + "/"))
     ]
+
+
+async def delete_prefix(rel_prefix: str) -> int:
+    """Delete every repo file under ``rel_prefix``. Returns the count removed."""
     removed = 0
-    for p in targets:
+    for p in await list_repo_paths(rel_prefix):
         sha = await get_sha(p)
         if not sha:
             continue
         async with httpx.AsyncClient(timeout=60) as c:
             r = await c.request(
                 "DELETE",
-                f"{API}/repos/{g['repo']}/contents/{p}",
+                f"{API}/repos/{_gh()['repo']}/contents/{p}",
                 headers=_headers(),
-                json={"message": f"chore: remove {p}", "sha": sha, "branch": g["branch"]},
+                json={"message": f"chore: remove {p}", "sha": sha, "branch": _gh()["branch"]},
             )
             if r.status_code in (200, 201):
                 removed += 1
@@ -107,7 +126,7 @@ async def publish_tree(root: Path, excludes: tuple[str, ...] = ()) -> list[str]:
         if not p.is_file():
             continue
         rel = p.relative_to(root).as_posix()
-        if any(rel == e or rel.startswith(e.rstrip("/") + "/") for e in excludes):
+        if _excluded(rel, excludes):
             continue
         try:
             await put_file(rel, p.read_bytes(), f"publish: {rel}")
