@@ -235,3 +235,17 @@ def delete_all_files(uid: str) -> None:
             shutil.rmtree(p, ignore_errors=True)
         else:
             p.unlink(missing_ok=True)
+
+
+def set_model_preference(uid: str, model: str | None) -> bool:
+    """Persist the user's preferred model (None = use server default)."""
+    p = user_dir(uid) / "profile.json"
+    profile = _read_json(p, None)
+    if not profile:
+        return False
+    if model is None:
+        profile.pop("model_preference", None)
+    else:
+        profile["model_preference"] = model
+    _write_json(p, profile)
+    return True
