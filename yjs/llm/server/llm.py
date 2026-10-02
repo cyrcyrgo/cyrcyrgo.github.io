@@ -50,6 +50,18 @@ def _merge_tool_calls(acc: list[dict], new: list[dict]) -> None:
             slot["function"]["arguments"] = slot["function"].get("arguments", "") + fn["arguments"]
 
 
+def _tool_call_size(tool_calls: list[dict]) -> tuple[str, int]:
+    """(name, total argument characters) of the tool calls seen so far."""
+    name = ""
+    chars = 0
+    for tc in tool_calls:
+        fn = tc.get("function", {}) or {}
+        if fn.get("name"):
+            name = fn["name"]
+        chars += len(fn.get("arguments") or "")
+    return name, chars
+
+
 async def chat_stream(messages: list[dict], tools: list[dict] | None = None) -> AsyncIterator[dict]:
     """Yield raw Ollama streaming chunks (each has .message / .done)."""
     payload = {
@@ -85,17 +97,21 @@ async def chat_once(
     messages: list[dict],
     tools: list[dict] | None = None,
     on_delta=None,
+    on_tool_progress=None,
 ) -> dict:
     """One full turn, assembled from the streaming endpoint.
 
     ``on_delta(text)`` is awaited for every token chunk so callers can stream
-    the answer to the UI as it is generated.
+    the answer to the UI as it is generated. ``on_tool_progress(name, chars)``
+    fires while a (potentially huge) tool-call argument is being generated,
+    which on a slow local model can take minutes with no other output.
 
     Returns the assistant message dict, e.g.
     {"role": "assistant", "content": "...", "tool_calls": [...]}.
     """
     content_parts: list[str] = []
     tool_calls: list[dict] = []
+    last_reported = 0
     async for chunk in chat_stream(messages, tools=tools):
         msg = chunk.get("message") or {}
         text = msg.get("content") or ""
@@ -105,6 +121,11 @@ async def chat_once(
                 await on_delta(text)
         if msg.get("tool_calls"):
             _merge_tool_calls(tool_calls, msg["tool_calls"])
+            if on_tool_progress is not None:
+                name, chars = _tool_call_size(tool_calls)
+                if chars - last_reported >= 64:
+                    last_reported = chars
+                    await on_tool_progress(name, chars)
         if chunk.get("done"):
             break
 
