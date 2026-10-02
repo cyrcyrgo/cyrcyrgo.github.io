@@ -38,7 +38,7 @@ DEFAULTS: dict = {
     "ngrok": {"token": "", "domain": ""},
     # Admin dashboard access. Leave ``emails`` empty to let the
     # earliest-registered account act as the owner instead.
-    "admin": {"emails": []},
+    "admin": {"emails": [], "password_hash": ""},
     "smtp": {
         "host": "smtp.qq.com",
         "port": 465,
