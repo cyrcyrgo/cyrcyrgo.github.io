@@ -70,8 +70,21 @@ async def run_agent(uid: str, cid: str, emit: Emit) -> None:
             # streamed token -> forwarded to the browser for character-by-character display
             await emit({"type": "assistant_delta", "content": piece})
 
+        async def on_tool_progress(name: str, chars: int) -> None:
+            # A large write_file argument can take minutes to generate on a slow
+            # local model; tell the UI so it never looks frozen.
+            label = f"{name} " if name else ""
+            await emit({
+                "type": "progress",
+                "name": name,
+                "text": f"正在生成 {label}内容…（已 {chars} 字）",
+            })
+
         try:
-            msg = await llm.chat_once(messages, tools=schemas, on_delta=on_delta)
+            msg = await llm.chat_once(
+                messages, tools=schemas,
+                on_delta=on_delta, on_tool_progress=on_tool_progress,
+            )
         except Exception as exc:  # noqa: BLE001
             await emit({"type": "error", "error": f"模型调用失败：{exc}"})
             return
