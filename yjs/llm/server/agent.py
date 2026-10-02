@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import time
+from pathlib import Path
 from typing import Awaitable, Callable
 
 from . import config as cfg
@@ -36,6 +37,51 @@ def _fmt_result(res: dict) -> str:
     return text[:6000]
 
 
+def _record_file(name: str, result: dict, produced: list[dict],
+                 seen: set[str], workspace: Path) -> None:
+    """Inspect a tool result for a produced file and append to *produced*.
+
+    Handles ``write_file`` (resolve to workspace-relative) and ``report_file``
+    (the agent explicitly registered it as a deliverable). Deduplicates by
+    workspace-relative path so retries don't multiply the list.
+    """
+    if not result.get("ok"):
+        return
+    if name == "write_file":
+        path = result.get("path")
+        if not path:
+            return
+        p = Path(path)
+        try:
+            rel = p.resolve().relative_to(workspace.resolve()).as_posix()
+        except ValueError:
+            if not p.is_file():
+                return
+            rel = p.name
+        if rel in seen:
+            return
+        seen.add(rel)
+        try:
+            size = p.stat().st_size
+        except OSError:
+            size = 0
+        produced.append({"path": rel, "size": size, "name": p.name})
+    elif name == "report_file":
+        fname = result.get("file")
+        if not fname:
+            return
+        if fname in seen:
+            return
+        seen.add(fname)
+        produced.append({
+            "path": fname,
+            "size": result.get("size") or 0,
+            "name": fname,
+            "description": result.get("description", ""),
+            "reported": True,
+        })
+
+
 async def run_agent(uid: str, cid: str, emit: Emit) -> None:
     conv = store.get_conversation(uid, cid)
     if not conv:
@@ -62,17 +108,16 @@ async def run_agent(uid: str, cid: str, emit: Emit) -> None:
 
     schemas = tools.openai_schemas()
     final_summary = None
+    produced_files: list[dict] = []
+    seen_paths: set[str] = set()
 
     for step in range(cfg.CONFIG["max_agent_steps"]):
         await emit({"type": "status", "text": f"思考中…（第 {step + 1} 步）"})
 
         async def on_delta(piece: str, _cid: str = cid) -> None:
-            # streamed token -> forwarded to the browser for character-by-character display
             await emit({"type": "assistant_delta", "content": piece})
 
         async def on_tool_progress(name: str, chars: int) -> None:
-            # A large write_file argument can take minutes to generate on a slow
-            # local model; tell the UI so it never looks frozen.
             label = f"{name} " if name else ""
             await emit({
                 "type": "progress",
@@ -135,15 +180,36 @@ async def run_agent(uid: str, cid: str, emit: Emit) -> None:
                 "role": "tool", "name": name, "content": _fmt_result(result), "ts": time.time(),
             })
 
+            _record_file(name, result, produced_files, seen_paths, ctx.workspace)
+
             if name == "finish":
                 final_summary = raw_args.get("summary") or final_summary
+                if produced_files:
+                    await emit({"type": "files", "files": list(produced_files)})
                 await emit({"type": "done", "summary": final_summary})
+                if produced_files:
+                    store.append_message(uid, cid, {
+                        "role": "assistant",
+                        "content": "",
+                        "files": list(produced_files),
+                        "ts": time.time(),
+                    })
                 return
 
+    if produced_files:
+        await emit({"type": "files", "files": list(produced_files)})
     if final_summary:
         await emit({"type": "done", "summary": final_summary})
     else:
         await emit({
             "type": "done",
             "summary": f"已达到最大步数（{cfg.CONFIG['max_agent_steps']}），任务可能未完全结束。",
+        })
+
+    if produced_files:
+        store.append_message(uid, cid, {
+            "role": "assistant",
+            "content": "",
+            "files": list(produced_files),
+            "ts": time.time(),
         })
