@@ -65,6 +65,7 @@ class VerifyIn(BaseModel):
 
 class ChatIn(BaseModel):
     content: str
+    model: str | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -109,6 +110,7 @@ def _public_user(user: dict) -> dict:
         "email": user["email"],
         "name": user.get("name"),
         "created_at": user.get("created_at"),
+        "model_preference": user.get("model_preference"),
         "usage": store.usage(user["uid"]),
     }
 
@@ -150,6 +152,8 @@ async def delete_conversation(cid: str, user: dict = Depends(current_user)):
 
 # Strong refs to in-flight agent tasks so a run survives a client disconnect.
 _RUNNING: set = set()
+# Per-uid active model during a running chat (for SSE model event).
+_active_model: dict[str, str] = {}
 
 
 @app.post("/api/conversations/{cid}/chat")
@@ -162,6 +166,20 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
         raise HTTPException(400, "内容为空")
     store.append_message(uid, cid, {"role": "user", "content": text, "ts": time.time()})
 
+    # Resolve which model to run this conversation with.
+    # Order: request body override -> user profile preference -> server default.
+    resolved_model = body.model
+    if not resolved_model:
+        resolved_model = user.get("model_preference")
+    if not resolved_model:
+        resolved_model = cfg.CONFIG["model"]
+    # Validate against configured models (fall back to default if unknown).
+    known = {m["name"] for m in cfg.CONFIG.get("models", [])}
+    if known and resolved_model not in known:
+        resolved_model = cfg.CONFIG["model"]
+    # Emit a model event so the UI updates the active tag.
+    _active_model[uid] = resolved_model
+
     queue: asyncio.Queue = asyncio.Queue()
     started = time.time()
 
@@ -172,7 +190,9 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
         return f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
 
     async def gen():
-        task = asyncio.create_task(agent.run_agent(uid, cid, emit))
+        # Notify the UI which model is about to run, so it updates the chip.
+        await emit({"type": "model", "model": resolved_model})
+        task = asyncio.create_task(agent.run_agent(uid, cid, emit, model=resolved_model))
         _RUNNING.add(task)
         task.add_done_callback(_RUNNING.discard)
         idle = 0
@@ -252,10 +272,48 @@ async def health():
     return {
         "ok": True,
         "model": cfg.CONFIG["model"],
+        "models": cfg.CONFIG.get("models", []),
         "ollama": await llm.health(),
         "tunnel": tunnel.TUNNEL.url,
         "quota_bytes": cfg.CONFIG["quota_bytes"],
     }
+
+
+# --------------------------------------------------------------------------- #
+# model selection
+# --------------------------------------------------------------------------- #
+@app.get("/api/models")
+async def list_models(user: dict = Depends(current_user)):
+    """Return available models + the requesting user's saved preference."""
+    models = cfg.CONFIG.get("models", [])
+    # If Ollama has models that aren't listed in config, surface them too
+    # (so newly-pulled models show up without restarting).
+    ollama = await llm.health()
+    known_names = {m["name"] for m in models}
+    for m in ollama.get("models", []):
+        if m not in known_names:
+            models.append({"name": m, "display": m, "desc": "(未在配置中登记)"})
+    return {
+        "ok": True,
+        "models": models,
+        "default": cfg.CONFIG["model"],
+        "preference": user.get("model_preference"),
+    }
+
+
+class SetModelIn(BaseModel):
+    model: str | None
+
+
+@app.post("/api/models/set")
+async def set_model(body: SetModelIn, user: dict = Depends(current_user)):
+    model = body.model
+    if model is not None:
+        known = {m["name"] for m in cfg.CONFIG.get("models", [])}
+        if known and model not in known:
+            raise HTTPException(400, f"未知模型: {model}")
+    ok = store.set_model_preference(user["uid"], model)
+    return {"ok": ok, "model_preference": user.get("model_preference") if ok else None}
 
 
 @app.get("/api/tools")
