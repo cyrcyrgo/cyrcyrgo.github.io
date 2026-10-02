@@ -11,15 +11,33 @@
 <div id="login">
   <div class="card">
     <h1>YJS <span style="color:#22d3ee">Cloud LLM Agent</span></h1>
-    <p class="sub">邮箱验证码登录 · 本机 Agent 智能体</p>
+    <p class="sub">邮箱验证码 / 密码登录 · 本机 Agent 智能体</p>
+
+    <div class="tabs">
+      <button id="tab-code" class="on" type="button">验证码登录</button>
+      <button id="tab-pwd" type="button">密码登录</button>
+    </div>
+
     <div class="field">
       <input id="login-email" type="email" placeholder="邮箱地址" autocomplete="email" />
     </div>
-    <div class="field row">
-      <input id="login-code" placeholder="6 位验证码" inputmode="numeric" maxlength="6" />
-      <button id="btn-send" class="ghost" style="flex:0 0 130px">获取验证码</button>
+
+    <div id="pane-code">
+      <div class="field row">
+        <input id="login-code" placeholder="6 位验证码" inputmode="numeric" maxlength="6" />
+        <button id="btn-send" class="ghost" style="flex:0 0 130px">获取验证码</button>
+      </div>
+      <button id="btn-verify" style="width:100%;padding:12px">登录 / 注册</button>
     </div>
-    <button id="btn-verify" style="width:100%;padding:12px">登录 / 注册</button>
+
+    <div id="pane-pwd" class="hidden">
+      <div class="field">
+        <input id="login-password" type="password" placeholder="密码"
+               autocomplete="current-password" />
+      </div>
+      <button id="btn-pwd-login" style="width:100%;padding:12px">登录</button>
+    </div>
+
     <div id="login-msg" class="msg"></div>
     <div class="settings">
       <div>后端地址：<span id="api-label">检测中…</span></div>
@@ -43,6 +61,10 @@
       <button id="btn-files" class="ghost" style="flex:1">我的文件</button>
       <button id="btn-logout" class="ghost">退出</button>
     </div>
+    <div class="sidebar-foot">
+      <button id="btn-setpw" class="ghost" style="flex:1">设置密码</button>
+      <button id="btn-admin" class="ghost hidden">后台管理</button>
+    </div>
   </aside>
 
   <main class="chat">
@@ -54,7 +76,7 @@
     <div class="messages" id="messages">
       <div class="empty">
         在左侧新建一个对话，然后描述你的任务。<br />
-        右下切换模型和工作模式：快速 / 思考 / 工作 / 专家。
+        对话框中可切换模型与工作模式：快速 / 思考 / 工作 / 专家。
       </div>
     </div>
     <div class="composer">
@@ -93,6 +115,18 @@
     <div><button id="btn-preview-close" class="ghost">关闭</button></div>
   </div>
   <div id="preview-body"></div>
+</div>
+
+<div id="pw-modal" class="modal hidden">
+  <div class="modal-box">
+    <h3>设置登录密码</h3>
+    <p class="muted">设置后可用「邮箱 + 密码」登录，至少 6 位。</p>
+    <input id="pw-input" type="password" placeholder="新密码" autocomplete="new-password" />
+    <div class="modal-foot">
+      <button class="ghost" id="pw-cancel">取消</button>
+      <button id="pw-ok">保存</button>
+    </div>
+  </div>
 </div>
 
 <script src="assets/app.js"></script>
