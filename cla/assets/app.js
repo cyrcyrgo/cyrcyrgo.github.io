@@ -73,8 +73,17 @@
   const downloadUrl = (path) =>
     `${API}/api/files/download?path=${encodeURIComponent(path)}&token=${encodeURIComponent(TOKEN)}`;
 
+  /* The app is served both from the backend root (http://host/) and from a
+     GitHub Pages sub-path (https://<user>.github.io/<prefix>/), so self-links
+     must be derived from where this script actually lives. */
+  const APP_ROOT = (function () {
+    const s = document.querySelector('script[src$=".js"]');
+    const base = s ? new URL(s.getAttribute("src"), location.href).href : location.href;
+    return base.replace(/[^/]+$/, "").replace(/assets\/$/, "");
+  })();
+
   /* ------------------------------------------------------------------ */
-  /* sidebar collapse — CSS pins the floating button to the sidebar edge  */
+  /* Sidebar collapse — CSS pins the floating button to the sidebar edge  */
   /* via the #app.sb-collapsed class, so both classes must move together. */
   /* ------------------------------------------------------------------ */
   function setSidebar(collapsed) {
@@ -236,7 +245,7 @@
     renderUsage(user.usage);
     applySidebarState();
     $("btn-admin").classList.toggle("hidden", !user.is_admin);
-    $("btn-admin").onclick = () => { location.href = "/admin"; };
+    $("btn-admin").onclick = () => { location.href = APP_ROOT + "admin.html"; };
     wireUi();
     await loadModels();
     await loadConversations();
