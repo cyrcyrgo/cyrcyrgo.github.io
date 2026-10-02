@@ -87,6 +87,8 @@ def create_user(email: str) -> dict:
         "name": email.split("@")[0],
         "created_at": _now(),
         "last_login": _now(),
+        # Per-user cloud quota; the admin dashboard can raise/lower this.
+        "quota_bytes": int(cfg.CONFIG["quota_bytes"]),
     }
     (user_dir(uid) / "conversations").mkdir(parents=True, exist_ok=True)
     (user_dir(uid) / "workspace").mkdir(parents=True, exist_ok=True)
@@ -108,7 +110,8 @@ def touch_login(uid: str) -> None:
 
 def usage(uid: str) -> dict:
     used = dir_size(user_dir(uid))
-    quota = cfg.CONFIG["quota_bytes"]
+    profile = get_user(uid) or {}
+    quota = int(profile.get("quota_bytes") or cfg.CONFIG["quota_bytes"])
     return {
         "used": used,
         "quota": quota,
@@ -249,3 +252,99 @@ def set_model_preference(uid: str, model: str | None) -> bool:
         profile["model_preference"] = model
     _write_json(p, profile)
     return True
+
+
+# --------------------------------------------------------------------------- #
+# account administration (used by the admin dashboard)
+# --------------------------------------------------------------------------- #
+def is_admin(user: dict | None) -> bool:
+    """Decide whether *user* may open the admin dashboard.
+
+    If ``admin.emails`` is configured it is authoritative. Otherwise the
+    earliest-registered account acts as the owner, so a fresh install always
+    has exactly one administrator instead of nobody.
+    """
+    if not user:
+        return False
+    admin_cfg = cfg.CONFIG.get("admin") or {}
+    emails = [str(e).lower() for e in (admin_cfg.get("emails") or []) if e]
+    if emails:
+        return str(user.get("email", "")).lower() in emails
+    idx = load_index()
+    if not idx:
+        return False
+    oldest = min(idx.values(), key=lambda v: v.get("created_at") or 0)
+    return oldest.get("uid") == user.get("uid")
+
+
+def set_quota(uid: str, quota_bytes: int) -> bool:
+    path = user_dir(uid) / "profile.json"
+    profile = _read_json(path, None)
+    if not profile:
+        return False
+    profile["quota_bytes"] = max(int(quota_bytes), 0)
+    _write_json(path, profile)
+    return True
+
+
+def set_password_hash(uid: str, password_hash: str | None) -> bool:
+    path = user_dir(uid) / "profile.json"
+    profile = _read_json(path, None)
+    if not profile:
+        return False
+    if password_hash:
+        profile["password_hash"] = password_hash
+        profile["password_set_at"] = _now()
+    else:
+        profile.pop("password_hash", None)
+        profile.pop("password_set_at", None)
+    _write_json(path, profile)
+    return True
+
+
+def delete_user(uid: str) -> bool:
+    """Remove a user's profile, conversations and workspaces from disk."""
+    profile = get_user(uid)
+    if not profile:
+        return False
+    idx = load_index()
+    idx.pop(str(profile.get("email", "")).lower(), None)
+    _write_json(USERS_INDEX, idx)
+    shutil.rmtree(user_dir(uid), ignore_errors=True)
+    return True
+
+
+def list_users() -> list[dict]:
+    """Every registered account with its live usage (for the admin table)."""
+    idx = load_index()
+    out: list[dict] = []
+    for _email, entry in idx.items():
+        uid = entry.get("uid")
+        if not uid:
+            continue
+        profile = get_user(uid)
+        if not profile:
+            continue
+        out.append({
+            "uid": uid,
+            "email": profile.get("email"),
+            "name": profile.get("name"),
+            "created_at": profile.get("created_at"),
+            "last_login": profile.get("last_login"),
+            "quota_bytes": int(profile.get("quota_bytes") or cfg.CONFIG["quota_bytes"]),
+            "has_password": bool(profile.get("password_hash")),
+            "is_admin": is_admin(profile),
+            "conversation_count": len(list_conversations(uid)),
+            "usage": usage(uid),
+        })
+    out.sort(key=lambda x: x.get("created_at") or 0)
+    return out
+
+
+def all_conversations(uid: str) -> list[dict]:
+    """Admin view: conversation summaries for an arbitrary user."""
+    return list_conversations(uid)
+
+
+def total_users() -> int:
+    return len(load_index())
