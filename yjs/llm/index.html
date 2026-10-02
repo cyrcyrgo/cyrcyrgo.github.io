@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>YJS LLM Agent</title>
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<!-- ================= 登录 / 注册 ================= -->
+<div id="login">
+  <div class="card">
+    <h1>YJS <span style="color:#22d3ee">LLM Agent</span></h1>
+    <p class="sub">使用邮箱验证码登录，登录后在个人空间中创建对话并下发任务。</p>
+
+    <div class="field">
+      <input id="login-email" type="email" placeholder="邮箱地址" autocomplete="email" />
+    </div>
+    <div class="field row">
+      <input id="login-code" placeholder="6 位验证码" inputmode="numeric" maxlength="6" />
+      <button id="btn-send" class="ghost" style="flex:0 0 130px">获取验证码</button>
+    </div>
+    <button id="btn-verify" style="width:100%;padding:12px">登录 / 注册</button>
+    <div id="login-msg" class="msg"></div>
+    <div class="settings">
+      <div>后端地址：<span id="api-label">检测中…</span></div>
+      <input id="api-input" placeholder="手动填写后端地址（如 https://xxxx.ngrok-free.app）" />
+    </div>
+  </div>
+</div>
+
+<!-- ================= 个人空间 ================= -->
+<div id="app" class="hidden">
+  <aside class="sidebar">
+    <div class="brand">YJS <span>LLM Agent</span></div>
+    <div class="userbox">
+      <div class="email" id="user-email"></div>
+      <div style="margin-top:6px" id="quota-text">空间 --</div>
+      <div class="quota" id="quota-bar"><i style="width:0%"></i></div>
+    </div>
+    <button id="btn-new" style="width:100%">+ 新建对话</button>
+    <div class="conv-list" id="conv-list"></div>
+    <div class="sidebar-foot">
+      <button id="btn-files" class="ghost" style="flex:1">我的文件</button>
+      <button id="btn-logout" class="ghost">退出</button>
+    </div>
+  </aside>
+
+  <main class="chat">
+    <div class="chat-head">
+      <h2 id="chat-title">个人空间</h2>
+      <span id="model-tag" class="tag ok">qwen3.5:9b</span>
+    </div>
+    <div class="messages" id="messages">
+      <div class="empty">
+        在左侧新建一个对话，然后直接描述你的任务。<br />
+        例如：「帮我写一个贪吃蛇网页并保存到文件」<br />
+        Agent 会在本机直接执行，并把文件与结果返回给你。
+      </div>
+    </div>
+    <div class="composer">
+      <textarea id="chat-input" placeholder="描述任务…（Enter 发送，Shift+Enter 换行）"></textarea>
+      <button id="btn-send-msg" class="send">发送</button>
+    </div>
+  </main>
+</div>
+
+<!-- ================= 文件抽屉 ================= -->
+<div id="files-panel" class="drawer hidden">
+  <h3>我的文件</h3>
+  <div id="files-usage" style="color:#8b98b4;font-size:12px;margin-bottom:10px"></div>
+  <div id="files-list"></div>
+  <div class="foot">
+    <button id="btn-clear-files" class="ghost">清空全部</button>
+    <button id="btn-close-files" class="ghost">关闭</button>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>
