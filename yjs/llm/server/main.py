@@ -148,6 +148,10 @@ async def delete_conversation(cid: str, user: dict = Depends(current_user)):
     return {"ok": ok}
 
 
+# Strong refs to in-flight agent tasks so a run survives a client disconnect.
+_RUNNING: set = set()
+
+
 @app.post("/api/conversations/{cid}/chat")
 async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
     uid = user["uid"]
@@ -159,6 +163,7 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
     store.append_message(uid, cid, {"role": "user", "content": text, "ts": time.time()})
 
     queue: asyncio.Queue = asyncio.Queue()
+    started = time.time()
 
     async def emit(ev: dict) -> None:
         await queue.put(ev)
@@ -168,6 +173,9 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
 
     async def gen():
         task = asyncio.create_task(agent.run_agent(uid, cid, emit))
+        _RUNNING.add(task)
+        task.add_done_callback(_RUNNING.discard)
+        idle = 0
         try:
             while True:
                 try:
@@ -175,14 +183,24 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
                 except asyncio.TimeoutError:
                     if task.done():
                         break
+                    idle += 1
+                    # Comment pings keep the TCP stream warm; a real data event
+                    # every ~10s lets the browser show "still running".
+                    if idle % 20 == 0:
+                        yield sse({"type": "heartbeat",
+                                   "elapsed": int(time.time() - started)})
                     yield ": ping\n\n"
                     continue
+                idle = 0
                 yield sse(ev)
                 if ev.get("type") in ("done", "error"):
                     break
         finally:
-            if not task.done():
-                task.cancel()
+            # Do NOT cancel the agent when the browser goes away: the run keeps
+            # going and persists its results, so reopening the conversation shows
+            # the finished work instead of losing it to a dropped connection.
+            if task.done():
+                _RUNNING.discard(task)
         while not queue.empty():
             yield sse(queue.get_nowait())
         yield sse({"type": "end"})
