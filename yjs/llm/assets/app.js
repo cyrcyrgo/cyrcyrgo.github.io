@@ -4,10 +4,37 @@ let API = "";
 let TOKEN = localStorage.getItem("yjs_token") || "";
 let currentConv = null;
 let sending = false;
+let MODELS = [];        // available models from /api/models
+let currentModel = "";  // active model name during a chat (from SSE)
 
 /* ------------------------------------------------------------------ */
 /* api resolution                                                      */
 /* ------------------------------------------------------------------ */
+async function loadModels() {
+  try {
+    const d = await api("/api/models");
+    MODELS = d.models || [];
+    const sel = $("model-select");
+    if (!sel) return;
+    sel.innerHTML = "";
+    MODELS.forEach((m) => {
+      const opt = document.createElement("option");
+      opt.value = m.name;
+      opt.textContent = m.display || m.name;
+      if (m.desc) opt.title = m.desc;
+      if (d.default && m.name === d.default) opt.dataset.isDefault = "1";
+      sel.appendChild(opt);
+    });
+    // Prefer user preference, else default.
+    const chosen = d.preference || d.default || (MODELS[0]?.name || "");
+    sel.value = chosen;
+    sel.style.color = "#fff";
+    sel.dataset.pending = "";
+  } catch (e) {
+    console.warn("loadModels failed:", e);
+  }
+}
+
 async function resolveApi() {
   const override = localStorage.getItem("yjs_api_override");
   if (override) {
@@ -139,6 +166,11 @@ async function enterApp(user) {
   $("app").classList.remove("hidden");
   $("user-email").textContent = user.email;
   renderUsage(user.usage);
+  await loadModels();
+  $("model-select")?.addEventListener("change", async () => {
+    const v = $("model-select").value;
+    try { await api("/api/models/set", { method: "POST", body: JSON.stringify({ model: v || null }) }); } catch (_) {}
+  });
   await loadConversations();
 }
 
@@ -185,8 +217,12 @@ function newChatView() {
 
 async function openConversation(cid) {
   currentConv = cid;
+  currentModel = "";
   const d = await api("/api/conversations/" + cid);
   $("chat-title").textContent = d.conversation.title || "对话";
+  // Restore the selector to default when reopening an old conversation —
+  // we don't know which model it used and the run is already done.
+  if ($("model-select")) $("model-select").dataset.pending = "";
   const box = $("messages");
   box.innerHTML = "";
   d.conversation.messages.forEach((m) => {
@@ -305,6 +341,7 @@ async function sendMessage() {
   sending = true;
   $("btn-send-msg").disabled = true;
   $("chat-input").value = "";
+  const chosenModel = $("model-select")?.value || "";
   addBubble("user", text);
 
   let live = addStep("tool", "⏳ 正在思考…");
@@ -326,6 +363,11 @@ async function sendMessage() {
       if (live.parentNode) live.remove();
       if (streamEl) endStream(ev.content);
       else if (ev.content) addBubble("assistant", ev.content);
+    } else if (ev.type === "model") {
+      currentModel = ev.model;
+      const sel = $("model-select");
+      if (sel && ev.model) sel.value = ev.model;
+      if (sel) sel.dataset.pending = "running";
     } else if (ev.type === "progress") {
       ensureLive();
       live.textContent = "⏳ " + (ev.text || "生成中…");
@@ -360,10 +402,12 @@ async function sendMessage() {
       renderFilesChips(ev.files || [], target);
     } else if (ev.type === "done") {
       endStream();
+      const sel = $("model-select"); if (sel) delete sel.dataset.pending;
       if (live.parentNode) live.remove();
       addStep("done", "✅ 完成：" + ev.summary);
     } else if (ev.type === "error") {
       endStream();
+      const selE = $("model-select"); if (selE) delete selE.dataset.pending;
       if (live.parentNode) live.remove();
       addStep("result-err", "⚠ " + ev.error);
     }
@@ -377,7 +421,7 @@ async function sendMessage() {
         "Authorization": "Bearer " + TOKEN,
         "ngrok-skip-browser-warning": "true",
       },
-      body: JSON.stringify({ content: text }),
+      body: JSON.stringify({ content: text, model: chosenModel || null }),
     });
     if (res.status === 401) { logout(); return; }
     if (!res.ok) {
@@ -490,6 +534,9 @@ $("btn-clear-files").onclick = async () => {
   await resolveApi();
   if (TOKEN) {
     try {
+      // Pre-load model list BEFORE entering the app so the selector renders
+      // even if /api/me takes a moment.
+      await loadModels();
       const d = await api("/api/me");
       enterApp(d.user);
     } catch (e) { /* token invalid */ }
