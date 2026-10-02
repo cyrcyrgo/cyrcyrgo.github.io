@@ -128,6 +128,18 @@ input:focus, textarea:focus { border-color: var(--accent); }
 .tag { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; }
 .tag.ok { background: rgba(34,197,94,.15); color: var(--ok); }
 .tag.err { background: rgba(239,68,68,.15); color: var(--err); }
+
+/* ---------- model selector ---------- */
+.model-select {
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 8px; padding: 5px 10px; font-size: 12.5px;
+  cursor: pointer; outline: none; max-width: 240px;
+}
+.model-select:focus { border-color: var(--accent); }
+.model-select optgroup { color: var(--accent-2); font-weight: 600; }
+.model-select option { padding: 4px 8px; }
+.model-select option .model-desc { color: var(--muted); font-size: 11px; }
+
 /* ---------- files-in-chat chips (under assistant bubbles) ---------- */
 .files-chips {
   margin-top: 10px; display: flex; flex-direction: column; gap: 6px;
