@@ -159,6 +159,29 @@ main { padding: 20px 24px; max-width: 1500px; margin: 0 auto; }
 .modal-box input:focus { border-color: var(--accent); }
 .modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
+/* lock screen (admin password) */
+.lock {
+  position: fixed; inset: 0; background: rgba(5,9,20,.82);
+  display: flex; align-items: center; justify-content: center; z-index: 70;
+}
+.lock-box {
+  width: 340px; text-align: center; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 16px; padding: 28px 24px;
+  box-shadow: 0 30px 70px rgba(0,0,0,.65);
+}
+.lock-icon { font-size: 34px; line-height: 1; margin-bottom: 10px; }
+.lock-box h2 { margin: 0 0 6px; font-size: 17px; }
+.lock-box p { margin: 0 0 16px; font-size: 12.5px; }
+.lock-box input {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+  color: var(--text); border-radius: 8px; padding: 11px 12px;
+  font-size: 15px; letter-spacing: 2px; outline: none; margin-bottom: 12px;
+}
+.lock-box input:focus { border-color: var(--accent); }
+.lock-box .btn { width: 100%; }
+.lock-box #lock-msg { margin: 10px 0 4px; font-size: 12.5px; }
+.lock-box #lock-back { margin-top: 6px; }
+
 /* toast */
 #toast {
   position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%);
