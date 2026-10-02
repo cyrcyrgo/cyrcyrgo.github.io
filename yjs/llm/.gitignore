@@ -1,9 +1,0 @@
-# secrets & runtime -- NEVER commit
-config.local.json
-data/
-.venv/
-bin/*.exe
-bin/*.zip
-__pycache__/
-*.pyc
-*.log
