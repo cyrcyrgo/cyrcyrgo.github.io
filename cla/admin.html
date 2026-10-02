@@ -13,12 +13,28 @@
   <div class="who">
     <span id="who">—</span>
     <span class="pill" id="conn">连接中…</span>
-    <a class="btn ghost" href="/">返回对话</a>
+    <a class="btn ghost" id="btn-back" href="/">返回对话</a>
     <button class="btn ghost" id="btn-logout">退出</button>
   </div>
 </header>
 
-<div id="deny" class="deny hidden">需要管理员权限，请用管理员账号登录。</div>
+<div id="deny" class="deny hidden">
+  <div id="deny-msg">需要管理员权限，请用管理员账号登录。</div>
+  <div style="margin-top:12px"><a class="btn ghost" id="deny-back" href="/">返回对话页</a></div>
+</div>
+
+<!-- 管理密码锁 -->
+<div id="lock" class="lock hidden">
+  <div class="lock-box">
+    <div class="lock-icon">🔒</div>
+    <h2>管理后台已加密</h2>
+    <p class="muted">请输入管理密码后继续</p>
+    <input id="lock-pw" type="password" placeholder="管理密码" autocomplete="current-password" />
+    <button class="btn" id="lock-ok">解锁</button>
+    <div id="lock-msg" class="muted" style="min-height:18px"></div>
+    <button class="btn ghost" id="lock-back">返回对话</button>
+  </div>
+</div>
 
 <main id="main" class="hidden">
 
