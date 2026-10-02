@@ -208,9 +208,23 @@ async def run_agent(uid: str, cid: str, emit: Emit, model: str | None = None) ->
         })
 
     if produced_files:
-        store.append_message(uid, cid, {
-            "role": "assistant",
-            "content": "",
-            "files": list(produced_files),
-            "ts": time.time(),
-        })
+        conv = store.get_conversation(uid, cid)
+        if conv and conv["messages"]:
+            last = conv["messages"][-1]
+            if last.get("role") == "assistant":
+                last["files"] = list(produced_files)
+                store.save_conversation(uid, conv)
+            else:
+                store.append_message(uid, cid, {
+                    "role": "assistant",
+                    "content": "",
+                    "files": list(produced_files),
+                    "ts": time.time(),
+                })
+        else:
+            store.append_message(uid, cid, {
+                "role": "assistant",
+                "content": "",
+                "files": list(produced_files),
+                "ts": time.time(),
+            })
