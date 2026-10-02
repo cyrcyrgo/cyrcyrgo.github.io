@@ -18,6 +18,66 @@ def base_url() -> str:
     return cfg.CONFIG["ollama_url"].rstrip("/")
 
 
+def model_config(name: str | None) -> dict:
+    """Config entry for a model name (``{}`` when the name is unknown)."""
+    for m in cfg.CONFIG.get("models", []):
+        if m.get("name") == name:
+            return m
+    return {}
+
+
+def api_credentials(name: str | None) -> tuple[str, str] | None:
+    """``(base_url, api_key)`` when *name* is an external API model, else ``None``.
+
+    A model is treated as external as soon as it carries its own ``base_url``;
+    local Ollama models leave that field empty.
+    """
+    m = model_config(name)
+    base = (m.get("base_url") or "").strip()
+    if not base:
+        return None
+    ref = m.get("api_key_ref") or ""
+    key = (cfg.CONFIG.get("api_keys") or {}).get(ref, "")
+    return base, key
+
+
+def _completions_url(base: str) -> str:
+    """Normalise a provider base URL to its chat-completions endpoint.
+
+    Accepts ``https://api.deepseek.com``, ``.../v1`` or a full endpoint and
+    always yields one that ends in ``/chat/completions``.
+    """
+    b = base.rstrip("/")
+    if b.endswith("/chat/completions"):
+        return b
+    return b + "/chat/completions"
+
+
+async def probe(base_url: str, api_key: str, model: str) -> str:
+    """Minimal round-trip used by the admin model editor's "test" button.
+
+    Returns the provider's reply text, or raises with the provider's message
+    so the dashboard can show exactly why a key / URL / model is rejected.
+    """
+    url = _completions_url(base_url)
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = "Bearer " + api_key
+    payload = {"model": model, "messages": [{"role": "user", "content": "请只回复两个字：连通"}],
+               "max_tokens": 128, "stream": False}
+    timeout = httpx.Timeout(connect=15, read=60, write=30, pool=None)
+    async with httpx.AsyncClient(timeout=timeout) as c:
+        r = await c.post(url, json=payload, headers=headers)
+        if r.status_code >= 400:
+            raise RuntimeError(f"HTTP {r.status_code}: {r.text[:300]}")
+        data = r.json()
+    try:
+        msg = data["choices"][0]["message"]
+        return (msg.get("content") or msg.get("reasoning_content") or "").strip() or "(空回复)"
+    except (KeyError, IndexError, TypeError):
+        return json.dumps(data, ensure_ascii=False)[:200]
+
+
 async def health() -> dict:
     try:
         async with httpx.AsyncClient(timeout=5) as c:
@@ -121,7 +181,131 @@ async def chat_stream(messages: list[dict], tools: list[dict] | None = None,
                 yield chunk
 
 
+def _for_openai(messages: list[dict]) -> list[dict]:
+    """Normalise the agent history into strict OpenAI chat-completions shape.
+
+    Tool messages must carry ``tool_call_id`` and assistant tool_calls must
+    repeat ``id``/``type`` — providers such as DeepSeek reject anything else.
+    """
+    out: list[dict] = []
+    for m in messages:
+        role = m.get("role")
+        if role == "tool":
+            out.append({"role": "tool", "tool_call_id": m.get("tool_call_id", ""),
+                        "content": m.get("content") or ""})
+        elif role == "assistant" and m.get("tool_calls"):
+            calls = []
+            for i, tc in enumerate(m["tool_calls"]):
+                fn = tc.get("function") or {}
+                args = fn.get("arguments")
+                if not isinstance(args, str):
+                    args = json.dumps(args or {}, ensure_ascii=False)
+                calls.append({"id": tc.get("id") or f"call_{i}", "type": "function",
+                              "function": {"name": fn.get("name", ""), "arguments": args}})
+            out.append({"role": "assistant", "content": m.get("content") or "",
+                        "tool_calls": calls})
+        else:
+            out.append({"role": role, "content": m.get("content") or ""})
+    return out
+
+
+async def _openai_once(
+    messages: list[dict],
+    tools: list[dict] | None,
+    base_url: str,
+    api_key: str,
+    model: str | None,
+    on_delta=None,
+    on_tool_progress=None,
+) -> dict:
+    """One full turn against an external OpenAI-compatible provider.
+
+    Works with DeepSeek / OpenAI / SiliconFlow / Moonshot and similar services
+    that expose ``POST {base}/chat/completions`` with SSE streaming.
+    """
+    url = _completions_url(base_url)
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = "Bearer " + api_key
+    payload: dict = {
+        "model": model or "",
+        "messages": _for_openai(messages),
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+    if tools:
+        payload["tools"] = tools
+
+    content_parts: list[str] = []
+    tool_calls: list[dict] = []
+    last_reported = 0
+    usage = {"prompt_tokens": 0, "completion_tokens": 0,
+             "total_tokens": 0, "seconds": 0.0}
+    timeout = httpx.Timeout(connect=15, read=300, write=60, pool=None)
+    async with httpx.AsyncClient(timeout=timeout) as c:
+        async with c.stream("POST", url, json=payload, headers=headers) as r:
+            if r.status_code >= 400:
+                body = (await r.aread()).decode("utf-8", "replace")
+                raise RuntimeError(f"API HTTP {r.status_code}: {body[:400]}")
+            async for line in r.aiter_lines():
+                line = (line or "").strip()
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                if chunk.get("error"):
+                    err = chunk["error"]
+                    raise RuntimeError(err.get("message") if isinstance(err, dict)
+                                       else str(err))
+                for choice in chunk.get("choices") or []:
+                    delta = choice.get("delta") or {}
+                    text = delta.get("content") or ""
+                    if text:
+                        content_parts.append(text)
+                        if on_delta is not None:
+                            await on_delta(text)
+                    if delta.get("tool_calls"):
+                        _merge_tool_calls(tool_calls, delta["tool_calls"])
+                        if on_tool_progress is not None:
+                            name, chars = _tool_call_size(tool_calls)
+                            if chars - last_reported >= 64:
+                                last_reported = chars
+                                await on_tool_progress(name, chars)
+                u = chunk.get("usage")
+                if u:
+                    usage["prompt_tokens"] += int(u.get("prompt_tokens") or 0)
+                    usage["completion_tokens"] += int(u.get("completion_tokens") or 0)
+
+    usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
+    out: dict = {"role": "assistant", "content": "".join(content_parts)}
+    if tool_calls:
+        out["tool_calls"] = tool_calls
+    out["usage"] = usage
+    return out
+
+
 async def chat_once(
+    messages: list[dict],
+    tools: list[dict] | None = None,
+    on_delta=None,
+    on_tool_progress=None,
+    model: str | None = None,
+) -> dict:
+    """One full turn for the selected model (external API or local Ollama)."""
+    creds = api_credentials(model or cfg.CONFIG["model"])
+    if creds:
+        return await _openai_once(messages, tools, creds[0], creds[1], model,
+                                  on_delta=on_delta, on_tool_progress=on_tool_progress)
+    return await _ollama_once(messages, tools, on_delta=on_delta,
+                              on_tool_progress=on_tool_progress, model=model)
+
+
+async def _ollama_once(
     messages: list[dict],
     tools: list[dict] | None = None,
     on_delta=None,
