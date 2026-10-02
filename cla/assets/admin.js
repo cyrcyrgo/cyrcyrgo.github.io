@@ -561,11 +561,13 @@
     box.innerHTML = `
       <div style="background:var(--panel);border-radius:10px;max-width:520px;width:92%;
           padding:22px;border:1px solid var(--line)">
-        <h3 style="margin:0 0 14px">新增云端 API 模型</h3>
+        <h3 style="margin:0 0 4px">新增云端 API 模型</h3>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+          填写开放平台的 OpenAI 兼容参数，保存后即可在线调用（如 DeepSeek / OpenAI / OpenRouter / 硅基流动）</div>
         <div style="display:grid;gap:10px">
-          <div><label style="font-size:12px;color:var(--muted)">模型名 (如 openrouter/gpt-4o-mini)</label>
+          <div><label style="font-size:12px;color:var(--muted)">模型名（平台要求的模型 ID，将原样发送）</label>
             <input id="am-name" style="width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--line);
-              border-radius:6px;color:var(--text)" placeholder="provider/model-name"></div>
+              border-radius:6px;color:var(--text)" placeholder="deepseek-chat"></div>
           <div><label style="font-size:12px;color:var(--muted)">显示名</label>
             <input id="am-display" style="width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--line);
               border-radius:6px;color:var(--text)" placeholder="GPT-4o Mini via OpenRouter"></div>
@@ -588,13 +590,34 @@
               border-radius:6px;color:var(--text)" placeholder="可选"></div>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+          <button class="btn ghost" id="am-test">测试连通</button>
           <button class="btn ghost" id="am-cancel">取消</button>
           <button class="btn" id="am-save">添加</button>
         </div>
+        <div id="am-test-msg" class="muted" style="font-size:12px;text-align:right;margin-top:8px;word-break:break-all"></div>
       </div>`;
     box.style.display = "flex";
     box.onclick = (e) => { if (e.target === box) box.style.display = "none"; };
     box.querySelector("#am-cancel").onclick = () => box.style.display = "none";
+    box.querySelector("#am-test").onclick = async () => {
+      const msg = box.querySelector("#am-test-msg");
+      const payload = {
+        name: box.querySelector("#am-name").value.trim(),
+        base_url: box.querySelector("#am-base").value.trim(),
+        api_key: box.querySelector("#am-key").value.trim(),
+      };
+      if (!payload.name || !payload.base_url || !payload.api_key) {
+        msg.textContent = "请先填写 模型名 / Base URL / API Key";
+        return;
+      }
+      msg.textContent = "测试中…";
+      const btn = box.querySelector("#am-test"); btn.disabled = true;
+      try {
+        const d = await api("/api/admin/models/test", { method: "POST", body: JSON.stringify(payload) });
+        msg.textContent = "✓ 连接成功，平台返回：" + (d.reply || "OK");
+      } catch (e) { msg.textContent = "✗ " + e.message; }
+      finally { btn.disabled = false; }
+    };
     box.querySelector("#am-save").onclick = async () => {
       const body = {
         name: box.querySelector("#am-name").value.trim(),
@@ -659,13 +682,31 @@
             <input id="em-desc" class="minp" value="${escapeHtml(m.desc || "")}"></div>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+          ${builtin ? "" : `<button class="btn ghost" id="em-test">测试连通</button>`}
           <button class="btn ghost" id="em-cancel">取消</button>
           <button class="btn" id="em-save">保存</button>
         </div>
+        <div id="em-test-msg" class="muted" style="font-size:12px;text-align:right;margin-top:8px;word-break:break-all"></div>
       </div>`;
     box.style.display = "flex";
     box.onclick = (e) => { if (e.target === box) box.style.display = "none"; };
     box.querySelector("#em-cancel").onclick = () => box.style.display = "none";
+    const emTest = box.querySelector("#em-test");
+    if (emTest) emTest.onclick = async () => {
+      const msg = box.querySelector("#em-test-msg");
+      const payload = {
+        name: m.name, model_ref: m.name,
+        base_url: box.querySelector("#em-base").value.trim(),
+        api_key: box.querySelector("#em-key").value.trim(),
+      };
+      msg.textContent = "测试中…";
+      emTest.disabled = true;
+      try {
+        const d = await api("/api/admin/models/test", { method: "POST", body: JSON.stringify(payload) });
+        msg.textContent = "✓ 连接成功，平台返回：" + (d.reply || "OK");
+      } catch (e) { msg.textContent = "✗ " + e.message; }
+      finally { emTest.disabled = false; }
+    };
     box.querySelector("#em-save").onclick = async () => {
       const body = {
         name: m.name,
