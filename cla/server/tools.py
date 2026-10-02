@@ -23,6 +23,38 @@ from . import store
 
 MAX_OUT = 20000          # chars of stdout kept per command
 
+# Child processes inherit this env so their stdout is always UTF-8 even on a
+# GBK (cp936) Windows console. Without it Python/Node emit bytes in the local
+# code page and the UI shows mojibake for any Chinese text.
+_CHILD_ENV = {
+    **os.environ,
+    "PYTHONIOENCODING": "utf-8",
+    "PYTHONUTF8": "1",
+    "PYTHONLEGACYWINDOWSSTDIO": "0",
+}
+
+
+def _decode(raw: bytes) -> str:
+    """Decode subprocess output, tolerating the Windows GBK code page.
+
+    UTF-8 first (modern tools), then GBK/cp936 (legacy Chinese Windows tools),
+    then a lossy UTF-8 pass so this never raises. Line endings and a stray BOM
+    are normalised so every command's output looks the same in the UI.
+    """
+    if not raw:
+        return ""
+    text = None
+    for enc in ("utf-8", "gbk", "cp936"):
+        try:
+            text = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    if text is None:
+        text = raw.decode("utf-8", "replace")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return text.lstrip("\ufeff")
+
 
 @dataclass
 class ToolContext:
@@ -147,11 +179,7 @@ async def read_file(ctx: ToolContext, path: str, max_bytes: int = 200000):
     if not p.is_file():
         return {"ok": False, "error": f"文件不存在: {p}"}
     data = p.read_bytes()[:max_bytes]
-    try:
-        text = data.decode("utf-8")
-    except UnicodeDecodeError:
-        text = data.decode("utf-8", errors="replace")
-    return {"ok": True, "path": str(p), "content": _truncate(text)}
+    return {"ok": True, "path": str(p), "content": _truncate(_decode(data))}
 
 
 @tool(
@@ -226,6 +254,7 @@ async def _run_process(cmd: list[str], cwd: Path, timeout: int) -> dict:
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=str(cwd),
+        env=_CHILD_ENV,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -238,8 +267,8 @@ async def _run_process(cmd: list[str], cwd: Path, timeout: int) -> dict:
     return {
         "ok": proc.returncode == 0,
         "exit_code": proc.returncode,
-        "stdout": _truncate(out.decode("utf-8", "replace")),
-        "stderr": _truncate(err.decode("utf-8", "replace")),
+        "stdout": _truncate(_decode(out)),
+        "stderr": _truncate(_decode(err)),
     }
 
 
@@ -284,8 +313,15 @@ async def run_node(ctx: ToolContext, code: str):
     sensitive=True,
 )
 async def run_shell(ctx: ToolContext, command: str):
+    # Force UTF-8 on PowerShell's own output pipe. Without this PowerShell
+    # writes in the console code page (GBK) and Chinese text becomes mojibake.
+    wrapped = (
+        "$OutputEncoding=[System.Text.Encoding]::UTF8;"
+        "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;"
+        + command
+    )
     return await _run_process(
-        ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", wrapped],
         ctx.workspace,
         cfg.CONFIG["code_timeout"],
     )
