@@ -9,6 +9,7 @@
   let MODELS = [];
   let currentMode = "work";
   let uiWired = false;
+  let SITE = { ai_enabled: true, announcement: "" };
 
   /* ------------------------------------------------------------------ */
   /* API resolution + auth                                                */
@@ -43,6 +44,26 @@
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || data.error || ("HTTP " + res.status));
     return data;
+  }
+
+  async function loadSiteSettings() {
+    try {
+      const r = await fetch(API + "/api/settings?t=" + Date.now(), { cache: "no-store" });
+      if (r.ok) SITE = Object.assign({ ai_enabled: true, announcement: "" }, await r.json());
+    } catch (_) {}
+    applyNotice();
+  }
+
+  function applyNotice() {
+    const el = $("notice");
+    if (!el) return;
+    const parts = [];
+    if (SITE.announcement) parts.push(SITE.announcement);
+    if (SITE.ai_enabled === false) parts.push("⚠ 管理员已全局暂停模型调用，暂时无法执行新任务。");
+    if (!parts.length) { el.textContent = ""; el.classList.add("hidden"); return; }
+    el.textContent = parts.join("　　");
+    el.classList.toggle("warn", SITE.ai_enabled === false);
+    el.classList.remove("hidden");
   }
 
   /* ------------------------------------------------------------------ */
@@ -236,6 +257,69 @@
 
     // Preview drawer
     $("btn-preview-close").onclick = () => $("preview-panel").classList.add("hidden");
+
+    // Quick task templates
+    const TPL = [
+      { icon: "📝", label: "写文章", text: "帮我写一篇关于「主题」的文章，结构清晰、约 800 字，并保存为 Markdown 文件。" },
+      { icon: "🐍", label: "写脚本", text: "用 Python 写一个脚本：读取工作区里的数据文件并统计输出结果，保存为 report.md。" },
+      { icon: "📊", label: "数据分析", text: "对工作区中的数据进行统计分析，生成汇总表格，并说明关键结论。" },
+      { icon: "🔍", label: "网页抓取", text: "抓取以下网页的主要内容并整理成中文摘要：https://" },
+      { icon: "🧹", label: "整理文件", text: "整理工作区文件：按类型归类到子目录，并生成文件清单 index.md。" },
+      { icon: "🌐", label: "做网页", text: "做一个单文件 HTML 网页，主题为「」，要求美观、响应式，保存为 index.html。" },
+    ];
+    const tplBox = $("templates");
+    if (tplBox) {
+      tplBox.innerHTML = TPL.map((t, i) =>
+        `<button type="button" class="tpl" data-i="${i}">${t.icon} ${escapeHtml(t.label)}</button>`).join("");
+      tplBox.querySelectorAll(".tpl").forEach((b) => {
+        b.onclick = () => {
+          const t = TPL[Number(b.dataset.i)];
+          const inp = $("chat-input");
+          inp.value = t.text; inp.focus();
+          inp.dispatchEvent(new Event("input"));
+        };
+      });
+    }
+
+    // Conversation search
+    $("conv-search").addEventListener("input", applyConvFilter);
+
+    // Composer character counter
+    $("chat-input").addEventListener("input", () => {
+      $("char-count").textContent = $("chat-input").value.length + " 字";
+    });
+
+    // Export current conversation
+    $("btn-export").onclick = exportConversation;
+  }
+
+  function applyConvFilter() {
+    const q = ($("conv-search").value || "").trim().toLowerCase();
+    document.querySelectorAll("#conv-list .conv").forEach((el) => {
+      const t = (el.querySelector(".t") ? el.querySelector(".t").textContent : "").toLowerCase();
+      el.style.display = (!q || t.includes(q)) ? "" : "none";
+    });
+  }
+
+  async function exportConversation() {
+    if (!currentConv) return;
+    try {
+      const d = await api("/api/conversations/" + currentConv);
+      const conv = d.conversation;
+      const out = [`# ${conv.title || "对话"}`, "", `> 导出时间：${new Date().toLocaleString()}`, ""];
+      (conv.messages || []).forEach((m) => {
+        if (m.role === "user") out.push("## 用户\n", m.content || "", "");
+        else if (m.role === "assistant") out.push("## Agent\n", m.content || "", "");
+        else if (m.role === "tool")
+          out.push(`<!-- 工具 ${m.name || ""}: ${(m.content || "").slice(0, 200)} -->`, "");
+      });
+      const blob = new Blob([out.join("\n")], { type: "text/markdown;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = (conv.title || "conversation").replace(/[\\/:*?"<>|]/g, "_").slice(0, 40) + ".md";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) { alert(e.message); }
   }
 
   async function enterApp(user) {
@@ -266,6 +350,7 @@
                         `<span class="del" data-act="del">✕</span>`;
         list.appendChild(div);
       });
+      applyConvFilter();
     } catch (e) { console.warn(e); }
   }
   $("conv-list").addEventListener("click", async (ev) => {
@@ -298,6 +383,7 @@
       `<div class="empty">描述你的任务，Agent 会在本机直接执行。</div>`;
     $("model-tag").style.display = "none";
     $("mode-tag").style.display = "none";
+    $("btn-export").classList.add("hidden");
   }
 
   async function openConversation(cidStr) {
@@ -313,6 +399,7 @@
         else if (m.role === "tool") addStep("tool", `⚙ ${m.name} → ${shorten(m.content, 300)}`);
       });
       loadConversations();
+      $("btn-export").classList.remove("hidden");
       box.scrollTop = box.scrollHeight;
     } catch (e) { alert(e.message); }
   }
@@ -360,7 +447,19 @@
     div.innerHTML = `<div class="who">${role === "user" ? "你" : "Agent"}</div>` +
                     `<span class="txt">${escapeHtml(text || "")}</span>`;
     box.appendChild(div);
-    if (role === "assistant") renderFilesChips(files, div);
+    if (role === "assistant") {
+      const copy = document.createElement("button");
+      copy.className = "copy-btn";
+      copy.textContent = "复制";
+      copy.onclick = async () => {
+        const txt = (div.querySelector(".txt") || {}).textContent || "";
+        try { await navigator.clipboard.writeText(txt); copy.textContent = "已复制"; }
+        catch (_) { copy.textContent = "复制失败"; }
+        setTimeout(() => { copy.textContent = "复制"; }, 1500);
+      };
+      div.appendChild(copy);
+      renderFilesChips(files, div);
+    }
     box.scrollTop = box.scrollHeight;
     return div;
   }
@@ -599,6 +698,7 @@
   /* ------------------------------------------------------------------ */
   (async function boot() {
     await resolveApi();
+    loadSiteSettings();
     if (TOKEN) {
       try {
         const d = await api("/api/me");
