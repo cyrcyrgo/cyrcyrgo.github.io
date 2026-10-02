@@ -89,6 +89,7 @@ def create_user(email: str) -> dict:
         "last_login": _now(),
         # Per-user cloud quota; the admin dashboard can raise/lower this.
         "quota_bytes": int(cfg.CONFIG["quota_bytes"]),
+        "model_allowed": None,          # None = all enabled; [] = fully suspended
     }
     (user_dir(uid) / "conversations").mkdir(parents=True, exist_ok=True)
     (user_dir(uid) / "workspace").mkdir(parents=True, exist_ok=True)
@@ -217,27 +218,80 @@ def list_files(uid: str) -> list[dict]:
     return out
 
 
+def _prune_files_from_conversations(uid: str, paths: set[str]) -> None:
+    """After deleting a file/dir, strip matching entries from every conversation.
+
+    Matches both exact paths and anything under a deleted dir.
+    """
+    convs_dir = user_dir(uid) / "conversations"
+    if not convs_dir.is_dir():
+        return
+    for jf in convs_dir.glob("*.json"):
+        try:
+            data = _read_json(jf, {}) or {}
+        except Exception:
+            continue
+        changed = False
+        for msg in data.get("messages", []):
+            files = msg.get("files") or []
+            if not files:
+                continue
+            new_files = []
+            for f in files:
+                fp = f.get("path")
+                ok = fp not in paths and not any(
+                    p and fp.startswith(p + "/") for p in paths
+                )
+                if ok:
+                    new_files.append(f)
+            if len(new_files) != len(files):
+                msg["files"] = new_files
+                changed = True
+        if changed:
+            _write_json(jf, data)
+
+
 def delete_file(uid: str, rel: str) -> bool:
     root = workspace(uid).resolve()
     target = (root / rel).resolve()
     if root not in target.parents and target != root:
         return False
+    if not target.exists():
+        return False
     if target.is_file():
         target.unlink()
+        _prune_files_from_conversations(uid, {rel})
         return True
     if target.is_dir():
+        deleted = set()
+        for f in target.rglob("*"):
+            if f.is_file():
+                try:
+                    deleted.add(f.relative_to(root).as_posix())
+                except ValueError:
+                    pass
         shutil.rmtree(target, ignore_errors=True)
+        deleted.add(rel.rstrip("/"))
+        _prune_files_from_conversations(uid, deleted)
         return True
     return False
 
 
 def delete_all_files(uid: str) -> None:
     root = workspace(uid)
+    deleted = set()
+    for p in root.rglob("*"):
+        if p.is_file():
+            try:
+                deleted.add(p.relative_to(root).as_posix())
+            except ValueError:
+                pass
     for p in root.iterdir():
         if p.is_dir():
             shutil.rmtree(p, ignore_errors=True)
         else:
             p.unlink(missing_ok=True)
+    _prune_files_from_conversations(uid, deleted)
 
 
 def set_model_preference(uid: str, model: str | None) -> bool:
@@ -333,6 +387,7 @@ def list_users() -> list[dict]:
             "last_login": profile.get("last_login"),
             "quota_bytes": int(profile.get("quota_bytes") or cfg.CONFIG["quota_bytes"]),
             "has_password": bool(profile.get("password_hash")),
+            "model_allowed": profile.get("model_allowed"),
             "is_admin": is_admin(profile),
             "conversation_count": len(list_conversations(uid)),
             "usage": usage(uid),
@@ -348,3 +403,26 @@ def all_conversations(uid: str) -> list[dict]:
 
 def total_users() -> int:
     return len(load_index())
+
+
+def set_user_model_allowed(uid: str, allowed: list[str] | None) -> None:
+    """Per-user model allow-list.
+
+    ``None`` = all globally-enabled models; ``[]`` = fully suspended;
+    ``["qwen3.5:0.8b"]`` = only that model. Intersected with the admin's
+    global ``enabled`` flag when a model is chosen at call time.
+    """
+    p_path = user_dir(uid) / "profile.json"
+    profile = _read_json(p_path, None)
+    if profile is None:
+        raise KeyError(uid)
+    profile["model_allowed"] = list(allowed) if allowed is not None else None
+    _write_json(p_path, profile)
+
+
+def user_model_allowed(uid: str, model_name: str) -> bool:
+    profile = get_user(uid) or {}
+    allowed = profile.get("model_allowed")
+    if allowed is None:
+        return True
+    return model_name in allowed
