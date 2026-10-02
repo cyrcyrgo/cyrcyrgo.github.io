@@ -50,7 +50,10 @@
   <main class="chat">
     <div class="chat-head">
       <h2 id="chat-title">个人空间</h2>
-      <span id="model-tag" class="tag ok">qwen3.5:9b</span>
+      <select id="model-select" class="model-select" title="选择模型">
+        <option value="">加载中…</option>
+      </select>
+      <span id="model-tag" class="tag ok" style="display:none"></span>
     </div>
     <div class="messages" id="messages">
       <div class="empty">
