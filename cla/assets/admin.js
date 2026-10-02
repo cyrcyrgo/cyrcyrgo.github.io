@@ -268,17 +268,54 @@
       else if (m.loaded) { status = "显存常驻"; cls = "on"; }
       else if (m.installed) { status = "已安装"; cls = "off"; }
       else { status = "未安装"; cls = "off"; }
-      return `<tr>
-        <td><span class="dot ${cls}"></span>${escapeHtml(m.display || m.name)}</td>
+      const enabledCls = m.enabled ? "yes" : "no";
+      const enabledTxt = m.enabled ? "启用" : "暂停";
+      const builtinBadge = m.is_builtin
+        ? `<span class="badge tier" title="内置模型（不可删除，可暂停）">内置</span>`
+        : `<span class="badge user" title="管理员添加的云端 API 模型">${escapeHtml(m.provider || "API")}</span>`;
+      return `<tr data-name="${escapeHtml(m.name)}">
+        <td>${builtinBadge} ${escapeHtml(m.display || m.name)}</td>
         <td><span class="badge tier">${escapeHtml(m.tier || "—")}</span></td>
-        <td>${escapeHtml(status)}</td>
+        <td><span class="badge ${enabledCls}">${enabledTxt}</span></td>
+        <td><span class="dot ${cls}"></span>${escapeHtml(status)}</td>
         <td class="num">${fmtNum(m.calls)}</td>
         <td class="num">${fmtNum(m.prompt_tokens)}</td>
         <td class="num">${fmtNum(m.completion_tokens)}</td>
         <td class="num"><b>${fmtNum(m.total_tokens)}</b></td>
         <td class="muted">${fmtAgo(m.last_used)}</td>
+        <td style="white-space:nowrap">
+          <button class="btn ghost" data-act="edit">编辑</button>
+          <button class="btn ghost" data-act="tog">${m.enabled ? "暂停" : "恢复"}</button>
+          ${m.is_builtin
+            ? `<button class="btn ghost" disabled title="内置模型不可删除">删除</button>`
+            : `<button class="btn danger" data-act="del">删除</button>`}
+        </td>
       </tr>`;
-    }).join("") || `<tr><td colspan="8" class="muted">无模型</td></tr>`;
+    }).join("") || `<tr><td colspan="10" class="muted">无模型</td></tr>`;
+
+    tb.querySelectorAll("button[data-act]").forEach((btn) => {
+      const tr = btn.closest("tr");
+      const name = tr.dataset.name;
+      const act = btn.dataset.act;
+      const model = (ov.models || []).find((x) => x.name === name);
+      if (act === "edit") btn.onclick = () => openEditModelModal(model || { name });
+      else if (act === "tog") btn.onclick = async () => {
+        const ov2 = await api("/api/admin/overview");
+        const target = (ov2.models || []).find((x) => x.name === name);
+        if (!target) return;
+        await api("/api/admin/models/toggle?name=" + encodeURIComponent(name),
+          { method: "POST", body: JSON.stringify({ enabled: !target.enabled }) });
+        toast(target.enabled ? "已暂停" : "已恢复", "ok");
+        await refresh();
+      };
+      else if (act === "del") btn.onclick = async () => {
+        if (!confirm(`确定删除 API 模型 "${name}"？（内置模型不可删）`)) return;
+        await api("/api/admin/models/delete?name=" + encodeURIComponent(name),
+                  { method: "DELETE" });
+        toast("已删除", "ok");
+        await refresh();
+      };
+    });
   }
 
   function renderLive(ov) {
@@ -329,6 +366,11 @@
     const tb = $("tbl-users").querySelector("tbody");
     tb.innerHTML = users.map((u) => {
       const pct = u.usage ? Math.min(u.usage.percent, 100) : 0;
+      const ma = u.model_allowed;
+      let permLabel = `<span class="badge yes">全部模型</span>`;
+      if (Array.isArray(ma) && ma.length === 0) permLabel = `<span class="badge no">已暂停 AI</span>`;
+      else if (Array.isArray(ma)) permLabel = `<span class="badge tier">限定 ${ma.length} 个</span>`;
+      const suspended = Array.isArray(ma) && ma.length === 0;
       return `<tr>
         <td>${escapeHtml(u.email)}<div class="muted" style="font-size:11px">${escapeHtml(u.uid)}</div></td>
         <td class="muted">${fmtTime(u.created_at)}</td>
@@ -343,13 +385,17 @@
         <td><span class="badge ${u.has_password ? "yes" : "no"}">${u.has_password ? "已设" : "未设"}</span></td>
         <td><span class="badge ${u.is_admin ? "admin" : "user"}">${u.is_admin ? "管理员" : "普通"}</span></td>
         <td style="white-space:nowrap">
+          ${permLabel} <button class="btn ghost" data-act="ai">${suspended ? "恢复AI" : "暂停AI"}</button>
+          <button class="btn ghost" data-act="models">配置</button>
+        </td>
+        <td style="white-space:nowrap">
           <button class="btn ghost" data-act="convs">对话</button>
-          <button class="btn ghost" data-act="pwd">改密码</button>
+          <button class="btn ghost" data-act="pwd">密码</button>
           <button class="btn ghost" data-act="quota">配额</button>
           <button class="btn danger" data-act="del">删除</button>
         </td>
       </tr>`;
-    }).join("") || `<tr><td colspan="9" class="muted">暂无用户</td></tr>`;
+    }).join("") || `<tr><td colspan="10" class="muted">暂无用户</td></tr>`;
 
     tb.querySelectorAll("button[data-act]").forEach((btn) => {
       const tr = btn.closest("tr");
@@ -358,8 +404,20 @@
       if (!u) return;
       const act = btn.dataset.act;
       if (act === "convs") btn.onclick = () => openUserConversations(u.uid, u.email);
+      else if (act === "models") btn.onclick = () => openModelPermModal(u);
+      else if (act === "ai") btn.onclick = async () => {
+        const cur = Array.isArray(u.model_allowed) && u.model_allowed.length === 0;
+        try {
+          await api(`/api/admin/users/${u.uid}/models`, {
+            method: "POST",
+            body: JSON.stringify({ model_allowed: cur ? null : [] }),
+          });
+          toast(cur ? "已恢复该账号 AI 调用" : "已暂停该账号 AI 调用", "ok");
+          await refresh();
+        } catch (e) { toast(e.message, "err"); }
+      };
       else if (act === "pwd") btn.onclick = () => openModal(
-        "修改密码 · " + u.email, "设置后该用户可用「邮箱 + 密码」登录（至少 6 位）", "", "新密码",
+        "修改密码 · " + u.email, "设置后该用户可用邮箱+密码登录（至少 6 位）", "", "新密码",
         async (v) => {
           if (v.length < 6) throw new Error("密码至少 6 位");
           await api(`/api/admin/users/${u.uid}/password`,
@@ -385,6 +443,73 @@
         } catch (e) { toast(e.message, "err"); }
       };
     });
+  }
+
+  /* per-user model-permission modal */
+  function openModelPermModal(user) {
+    api("/api/admin/overview").then((ov) => {
+      const roster = ov.models || [];
+      const currentAllowed = user.model_allowed;
+      const isAll = currentAllowed === null;
+      const isNone = Array.isArray(currentAllowed) && currentAllowed.length === 0;
+
+      let html = `<div style="margin-bottom:10px;line-height:1.7">
+        <label><input type="radio" name="mp" value="all" ${isAll ? "checked" : ""}> 允许使用全部已启用模型</label><br>
+        <label><input type="radio" name="mp" value="none" ${isNone ? "checked" : ""}> 暂停 AI（禁止调用任何模型）</label><br>
+        <label><input type="radio" name="mp" value="list" ${!isAll && !isNone ? "checked" : ""}> 仅允许勾选以下模型：</label>
+      </div><div style="max-height:240px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:10px">`;
+      roster.forEach((m) => {
+        const checked = !isAll && !isNone
+          ? currentAllowed.indexOf(m.name) >= 0
+          : (isAll && m.enabled);
+        html += `<label style="display:block;margin:2px 0">
+          <input type="checkbox" data-m="${escapeHtml(m.name)}" ${checked ? "checked" : ""}>
+          ${escapeHtml(m.display || m.name)}
+          ${m.enabled ? `<span class="badge yes" style="margin-left:6px">启用</span>`
+                      : `<span class="badge no" style="margin-left:6px">已暂停</span>`}
+          ${m.is_builtin ? `` : `<span class="badge tier" style="margin-left:4px">API</span>`}
+        </label>`;
+      });
+      html += `</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+          <button class="btn ghost" id="mp-cancel">取消</button>
+          <button class="btn" id="mp-save">保存</button>
+        </div>`;
+
+      let box = document.getElementById("mp-modal");
+      if (!box) {
+        box = document.createElement("div");
+        box.id = "mp-modal";
+        box.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.5);
+          display:flex;align-items:center;justify-content:center;z-index:9999`;
+        document.body.appendChild(box);
+      }
+      box.innerHTML = `<div style="background:var(--panel);border-radius:10px;max-width:560px;width:92%;
+          padding:22px;border:1px solid var(--line)">
+        <h3 style="margin:0 0 14px">模型权限 · ${escapeHtml(user.email)}</h3>${html}</div>`;
+      box.style.display = "flex";
+      box.onclick = (e) => { if (e.target === box) box.style.display = "none"; };
+      box.querySelector("#mp-cancel").onclick = () => box.style.display = "none";
+      box.querySelector("#mp-save").onclick = async () => {
+        const choice = box.querySelector(`input[name="mp"]:checked`).value;
+        let payload;
+        if (choice === "all") payload = { model_allowed: null };
+        else if (choice === "none") payload = { model_allowed: [] };
+        else {
+          const checked = Array.from(box.querySelectorAll("input[data-m]:checked"))
+            .map((el) => el.dataset.m);
+          if (!checked.length) { toast("请至少勾选一个模型，或选『暂停 AI』", "err"); return; }
+          payload = { model_allowed: checked };
+        }
+        try {
+          await api(`/api/admin/users/${user.uid}/models`,
+            { method: "POST", body: JSON.stringify(payload) });
+          toast("模型权限已更新", "ok");
+          box.style.display = "none";
+          await refresh();
+        } catch (e) { toast(e.message, "err"); }
+      };
+    }).catch((e) => toast("加载模型列表失败: " + e.message, "err"));
   }
 
   /* ---------------------------------------------------------------- loop */
@@ -423,11 +548,182 @@
     location.href = APP_ROOT;
   };
 
+  on("btn-add-model", "click", () => openAddApiModelModal());
+  function openAddApiModelModal() {
+    let box = document.getElementById("am-modal");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "am-modal";
+      box.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.5);
+        display:flex;align-items:center;justify-content:center;z-index:9999`;
+      document.body.appendChild(box);
+    }
+    box.innerHTML = `
+      <div style="background:var(--panel);border-radius:10px;max-width:520px;width:92%;
+          padding:22px;border:1px solid var(--line)">
+        <h3 style="margin:0 0 14px">新增云端 API 模型</h3>
+        <div style="display:grid;gap:10px">
+          <div><label style="font-size:12px;color:var(--muted)">模型名 (如 openrouter/gpt-4o-mini)</label>
+            <input id="am-name" style="width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--line);
+              border-radius:6px;color:var(--text)" placeholder="provider/model-name"></div>
+          <div><label style="font-size:12px;color:var(--muted)">显示名</label>
+            <input id="am-display" style="width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--line);
+              border-radius:6px;color:var(--text)" placeholder="GPT-4o Mini via OpenRouter"></div>
+          <div><label style="font-size:12px;color:var(--muted)">Base URL</label>
+            <input id="am-base" style="width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--line);
+              border-radius:6px;color:var(--text)" placeholder="https://openrouter.ai/api/v1"></div>
+          <div><label style="font-size:12px;color:var(--muted)">API Key (存入 config.local.json)</label>
+            <input id="am-key" type="password" style="width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--line);
+              border-radius:6px;color:var(--text)" placeholder="sk-..."></div>
+          <div style="display:flex;gap:12px">
+            <div style="flex:1"><label style="font-size:12px;color:var(--muted)">上下文长度</label>
+              <input id="am-ctx" type="number" value="8192" style="width:100%;padding:7px 10px;background:var(--bg);
+                border:1px solid var(--line);border-radius:6px;color:var(--text)"></div>
+            <div style="flex:1"><label style="font-size:12px;color:var(--muted)">档位</label>
+              <input id="am-tier" value="云端API" style="width:100%;padding:7px 10px;background:var(--bg);
+                border:1px solid var(--line);border-radius:6px;color:var(--text)"></div>
+          </div>
+          <div><label style="font-size:12px;color:var(--muted)">备注</label>
+            <input id="am-desc" style="width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--line);
+              border-radius:6px;color:var(--text)" placeholder="可选"></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+          <button class="btn ghost" id="am-cancel">取消</button>
+          <button class="btn" id="am-save">添加</button>
+        </div>
+      </div>`;
+    box.style.display = "flex";
+    box.onclick = (e) => { if (e.target === box) box.style.display = "none"; };
+    box.querySelector("#am-cancel").onclick = () => box.style.display = "none";
+    box.querySelector("#am-save").onclick = async () => {
+      const body = {
+        name: box.querySelector("#am-name").value.trim(),
+        display: box.querySelector("#am-display").value.trim(),
+        provider: "openai",
+        base_url: box.querySelector("#am-base").value.trim(),
+        api_key: box.querySelector("#am-key").value.trim(),
+        context_len: parseInt(box.querySelector("#am-ctx").value, 10) || 8192,
+        tier: box.querySelector("#am-tier").value.trim() || "云端API",
+        desc: box.querySelector("#am-desc").value.trim(),
+        size_mb: 0,
+      };
+      if (!body.name || !body.base_url || !body.api_key) {
+        toast("模型名 / Base URL / API Key 必填", "err"); return;
+      }
+      try {
+        await api("/api/admin/models", { method: "POST", body: JSON.stringify(body) });
+        toast("API 模型已添加", "ok");
+        box.style.display = "none";
+        await refresh();
+      } catch (e) { toast(e.message, "err"); }
+    };
+  }
+
+  /* model edit modal (built-in or API) */
+  function openEditModelModal(m) {
+    if (!m || !m.name) return;
+    let box = document.getElementById("em-modal");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "em-modal";
+      box.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.5);
+        display:flex;align-items:center;justify-content:center;z-index:9999`;
+      document.body.appendChild(box);
+    }
+    const builtin = !!m.is_builtin;
+    box.innerHTML = `
+      <div class="mcard">
+        <h3 style="margin:0 0 4px">编辑模型</h3>
+        <div class="muted" style="font-size:12px;margin-bottom:12px">${escapeHtml(m.name)}
+          ${builtin ? "（内置模型：可改显示/档位/上下文，不可删除）" : "（API 模型）"}</div>
+        <div style="display:grid;gap:10px">
+          <div><label class="mlabel">显示名</label>
+            <input id="em-display" class="minp" value="${escapeHtml(m.display || m.name)}"></div>
+          <div><label class="mlabel">档位</label>
+            <input id="em-tier" class="minp" value="${escapeHtml(m.tier || "")}"></div>
+          ${builtin ? "" : `
+          <div><label class="mlabel">Base URL</label>
+            <input id="em-base" class="minp" value="${escapeHtml(m.base_url || "")}"></div>
+          <div><label class="mlabel">API Key（留空保持不变${m.has_key ? "，当前已配置" : ""}）</label>
+            <input id="em-key" class="minp" type="password" placeholder="留空则不修改"></div>`}
+          <div style="display:flex;gap:12px">
+            <div style="flex:1"><label class="mlabel">上下文长度</label>
+              <input id="em-ctx" class="minp" type="number" value="${Number(m.context_len) || 8192}"></div>
+            <div style="flex:1"><label class="mlabel">状态</label>
+              <select id="em-enabled" class="minp">
+                <option value="1" ${m.enabled ? "selected" : ""}>启用</option>
+                <option value="0" ${m.enabled ? "" : "selected"}>暂停</option>
+              </select></div>
+          </div>
+          <div><label class="mlabel">备注</label>
+            <input id="em-desc" class="minp" value="${escapeHtml(m.desc || "")}"></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+          <button class="btn ghost" id="em-cancel">取消</button>
+          <button class="btn" id="em-save">保存</button>
+        </div>
+      </div>`;
+    box.style.display = "flex";
+    box.onclick = (e) => { if (e.target === box) box.style.display = "none"; };
+    box.querySelector("#em-cancel").onclick = () => box.style.display = "none";
+    box.querySelector("#em-save").onclick = async () => {
+      const body = {
+        name: m.name,
+        display: box.querySelector("#em-display").value.trim(),
+        tier: box.querySelector("#em-tier").value.trim(),
+        context_len: parseInt(box.querySelector("#em-ctx").value, 10) || 8192,
+        enabled: box.querySelector("#em-enabled").value === "1",
+        desc: box.querySelector("#em-desc").value.trim(),
+      };
+      if (!builtin) {
+        body.base_url = box.querySelector("#em-base").value.trim();
+        const k = box.querySelector("#em-key").value.trim();
+        if (k) body.api_key = k;
+      }
+      try {
+        await api("/api/admin/models/edit", { method: "POST", body: JSON.stringify(body) });
+        toast("模型已更新", "ok");
+        box.style.display = "none";
+        await refresh();
+      } catch (e) { toast(e.message, "err"); }
+    };
+  }
+
+  /* system permission settings */
+  async function loadSettings() {
+    try {
+      const st = await api("/api/admin/settings");
+      $("set-ai").checked = !!st.ai_enabled;
+      $("set-register").checked = !!st.allow_register;
+      $("set-addmodel").checked = !!st.allow_model_add;
+      $("set-announce").value = st.announcement || "";
+      $("set-default").innerHTML = (st.models || []).map((m) =>
+        `<option value="${escapeHtml(m.name)}" ${m.name === st.default_model ? "selected" : ""}>
+           ${escapeHtml(m.display || m.name)}${m.enabled ? "" : "（已暂停）"}</option>`).join("");
+    } catch (_) { /* 401 handled by refresh() */ }
+  }
+  on("btn-save-settings", "click", async () => {
+    try {
+      await api("/api/admin/settings", {
+        method: "POST",
+        body: JSON.stringify({
+          ai_enabled: $("set-ai").checked,
+          allow_register: $("set-register").checked,
+          allow_model_add: $("set-addmodel").checked,
+          announcement: $("set-announce").value,
+          default_model: $("set-default").value || "",
+        }),
+      });
+      toast("系统设置已保存", "ok");
+    } catch (e) { toast(e.message, "err"); }
+  });
+
   /* ---------------------------------------------------------------- boot */
   async function start() {
     clearInterval(timer);
     const who = $("who"); if (who) who.textContent = ME.email + "（管理员）";
     const main = $("main"); if (main) main.classList.remove("hidden");
+    await loadSettings();
     await refresh();
     timer = setInterval(refresh, 2000);
   }
