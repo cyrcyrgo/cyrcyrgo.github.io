@@ -4,9 +4,19 @@
   const $ = (id) => document.getElementById(id);
   let API = "";
   let TOKEN = localStorage.getItem("yjs_token") || "";
+  let ADMIN_TOKEN = sessionStorage.getItem("yjs_admin_token") || "";
   let ME = null;
   let timer = null;
   let drawerUid = null;
+
+  /* The dashboard is opened both as http://host/admin and as
+     https://<user>.github.io/<prefix>/admin.html, so every self-link must be
+     derived from where this script actually lives instead of hardcoding "/". */
+  const APP_ROOT = (function () {
+    const s = document.querySelector('script[src$=".js"]');
+    const base = s ? new URL(s.getAttribute("src"), location.href).href : location.href;
+    return base.replace(/[^/]+$/, "").replace(/assets\/$/, "");
+  })();
 
   /* ---------------------------------------------------------------- utils */
   const escapeHtml = (s) => (s || "").replace(/[&<>"]/g, (c) =>
@@ -76,11 +86,55 @@
       opts.headers || {}
     );
     if (TOKEN) headers["Authorization"] = "Bearer " + TOKEN;
+    if (ADMIN_TOKEN) headers["X-Admin-Token"] = ADMIN_TOKEN;
     const res = await fetch(API + path, Object.assign({}, opts, { headers }));
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || ("HTTP " + res.status));
+    if (!res.ok) {
+      const err = new Error(data.detail || data.error || ("HTTP " + res.status));
+      err.status = res.status;
+      throw err;
+    }
     return data;
   }
+
+  /* ------------------------------------------------- lock screen (password) */
+  function showLock() {
+    clearInterval(timer); timer = null;
+    $("main").classList.add("hidden");
+    $("deny").classList.add("hidden");
+    $("lock").classList.remove("hidden");
+    $("lock-msg").textContent = "";
+    setTimeout(() => $("lock-pw").focus(), 40);
+  }
+  function showDeny(msg) {
+    clearInterval(timer); timer = null;
+    $("main").classList.add("hidden");
+    $("lock").classList.add("hidden");
+    $("deny").classList.remove("hidden");
+    if (msg) $("deny-msg").textContent = msg;
+  }
+  async function unlock() {
+    const pw = $("lock-pw").value;
+    if (!pw) return;
+    $("lock-msg").textContent = "验证中…";
+    try {
+      const d = await api("/api/admin/unlock", {
+        method: "POST", body: JSON.stringify({ password: pw }),
+      });
+      ADMIN_TOKEN = d.admin_token;
+      sessionStorage.setItem("yjs_admin_token", ADMIN_TOKEN);
+      $("lock-pw").value = "";
+      $("lock").classList.add("hidden");
+      await start();
+    } catch (e) {
+      $("lock-msg").textContent = e.status === 401 ? "密码错误" : (e.message || "解锁失败");
+    }
+  }
+  $("lock-ok").onclick = unlock;
+  $("lock-pw").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+  $("lock-back").onclick = () => { location.href = APP_ROOT; };
+  $("btn-back").href = APP_ROOT;
+  $("deny-back").href = APP_ROOT;
 
   /* ---------------------------------------------------------------- modal */
   let modalCb = null;
@@ -329,6 +383,13 @@
       c.textContent = "已连接 · " + new Date().toLocaleTimeString();
       c.className = "pill ok";
     } catch (e) {
+      if (e.status === 401) {           // admin password token expired/invalid
+        ADMIN_TOKEN = "";
+        sessionStorage.removeItem("yjs_admin_token");
+        showLock();
+        $("lock-msg").textContent = "会话已过期，请重新输入管理密码";
+        return;
+      }
       const c = $("conn");
       c.textContent = "连接失败";
       c.className = "pill err";
@@ -337,25 +398,44 @@
 
   $("btn-logout").onclick = () => {
     localStorage.removeItem("yjs_token");
-    location.href = "/";
+    sessionStorage.removeItem("yjs_admin_token");
+    location.href = APP_ROOT;
   };
 
   /* ---------------------------------------------------------------- boot */
-  (async function boot() {
-    await resolveApi();
-    if (!TOKEN) { location.href = "/"; return; }
-    try {
-      const d = await api("/api/me");
-      ME = d.user;
-    } catch (_) { location.href = "/"; return; }
-    if (!ME.is_admin) {
-      $("deny").classList.remove("hidden");
-      return;
-    }
+  async function start() {
+    clearInterval(timer);
     $("who").textContent = ME.email + "（管理员）";
     $("main").classList.remove("hidden");
     await refresh();
     timer = setInterval(refresh, 2000);
+  }
+
+  (async function boot() {
+    await resolveApi();
+    if (!TOKEN) {
+      showDeny("尚未登录。请先回到对话页登录管理员账号，再进入后台。");
+      return;
+    }
+    try {
+      ME = (await api("/api/me")).user;
+    } catch (e) {
+      showDeny(e.status === 401 ? "登录已过期，请重新登录后再进入后台。"
+                                : ("无法连接后端：" + (e.message || "network")));
+      return;
+    }
+    if (!ME.is_admin) {
+      showDeny("当前账号（" + ME.email + "）不是管理员，无权访问后台。");
+      return;
+    }
+    try {
+      const st = await api("/api/admin/status");
+      if (st.locked) { showLock(); return; }
+    } catch (e) {
+      showDeny("无法读取后台状态：" + (e.message || "network"));
+      return;
+    }
+    await start();
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) { clearInterval(timer); timer = null; }
       else if (!timer) { refresh(); timer = setInterval(refresh, 2000); }
