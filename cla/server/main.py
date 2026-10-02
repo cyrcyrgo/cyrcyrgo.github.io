@@ -419,8 +419,49 @@ async def require_admin(user: dict = Depends(current_user)) -> dict:
     return user
 
 
+def _admin_password_hash() -> str:
+    return ((cfg.CONFIG.get("admin") or {}).get("password_hash") or "").strip()
+
+
+async def require_admin_gate(request: Request,
+                             user: dict = Depends(require_admin)) -> dict:
+    """Admin endpoints additionally require the dashboard password.
+
+    When no ``admin.password_hash`` is configured the gate is a no-op, so
+    existing installs keep working until a password is set.
+    """
+    if _admin_password_hash():
+        token = request.headers.get("x-admin-token")
+        if not (token and auth.decode_admin_token(token)):
+            raise HTTPException(401, "管理后台需要密码解锁")
+    return user
+
+
+@app.get("/api/admin/status")
+async def admin_status(request: Request, user: dict = Depends(require_admin)):
+    has_pw = bool(_admin_password_hash())
+    token = request.headers.get("x-admin-token")
+    unlocked = bool(token and auth.decode_admin_token(token)) if has_pw else True
+    return {"ok": True, "has_password": has_pw, "locked": not unlocked,
+            "email": user.get("email")}
+
+
+class AdminUnlockIn(BaseModel):
+    password: str
+
+
+@app.post("/api/admin/unlock")
+async def admin_unlock(body: AdminUnlockIn, user: dict = Depends(require_admin)):
+    stored = _admin_password_hash()
+    if not stored:
+        raise HTTPException(400, "尚未设置管理密码")
+    if not auth.check_password(body.password, stored):
+        raise HTTPException(401, "管理密码错误")
+    return {"ok": True, "admin_token": auth.make_admin_token(user["uid"], user["email"])}
+
+
 @app.get("/api/admin/overview")
-async def admin_overview(user: dict = Depends(require_admin)):
+async def admin_overview(user: dict = Depends(require_admin_gate)):
     """Live dashboard payload: per-model token usage, VRAM residency, calls."""
     snap = metrics.snapshot()
     ollama = await llm.health()
@@ -471,7 +512,7 @@ async def admin_overview(user: dict = Depends(require_admin)):
 
 
 @app.get("/api/admin/users")
-async def admin_users(user: dict = Depends(require_admin)):
+async def admin_users(user: dict = Depends(require_admin_gate)):
     users = store.list_users()
     tokens = metrics.snapshot()["by_user"]
     for u in users:
@@ -487,14 +528,14 @@ async def admin_users(user: dict = Depends(require_admin)):
 
 
 @app.get("/api/admin/users/{uid}/conversations")
-async def admin_user_conversations(uid: str, user: dict = Depends(require_admin)):
+async def admin_user_conversations(uid: str, user: dict = Depends(require_admin_gate)):
     if not store.get_user(uid):
         raise HTTPException(404, "用户不存在")
     return {"ok": True, "conversations": store.all_conversations(uid)}
 
 
 @app.get("/api/admin/users/{uid}/conversations/{cid}")
-async def admin_user_conversation(uid: str, cid: str, user: dict = Depends(require_admin)):
+async def admin_user_conversation(uid: str, cid: str, user: dict = Depends(require_admin_gate)):
     conv = store.get_conversation(uid, cid)
     if not conv:
         raise HTTPException(404, "对话不存在")
@@ -507,7 +548,7 @@ class AdminPasswordIn(BaseModel):
 
 @app.post("/api/admin/users/{uid}/password")
 async def admin_set_password(uid: str, body: AdminPasswordIn,
-                             user: dict = Depends(require_admin)):
+                             user: dict = Depends(require_admin_gate)):
     ok, msg = auth.valid_password(body.password)
     if not ok:
         raise HTTPException(400, msg)
@@ -523,7 +564,7 @@ class AdminQuotaIn(BaseModel):
 
 @app.post("/api/admin/users/{uid}/quota")
 async def admin_set_quota(uid: str, body: AdminQuotaIn,
-                          user: dict = Depends(require_admin)):
+                          user: dict = Depends(require_admin_gate)):
     if body.quota_bytes < 0:
         raise HTTPException(400, "配额不能为负")
     if not store.get_user(uid):
@@ -533,19 +574,20 @@ async def admin_set_quota(uid: str, body: AdminQuotaIn,
 
 
 @app.delete("/api/admin/users/{uid}")
-async def admin_delete_user(uid: str, user: dict = Depends(require_admin)):
+async def admin_delete_user(uid: str, user: dict = Depends(require_admin_gate)):
     if uid == user["uid"]:
         raise HTTPException(400, "不能删除当前登录的管理员账号")
     return {"ok": store.delete_user(uid)}
 
 
 @app.post("/api/admin/metrics/reset")
-async def admin_reset_metrics(user: dict = Depends(require_admin)):
+async def admin_reset_metrics(user: dict = Depends(require_admin_gate)):
     metrics.reset()
     return {"ok": True}
 
 
 @app.get("/admin")
+@app.get("/admin.html")
 async def admin_page():
     f = cfg.ROOT / "admin.html"
     if not f.exists():
