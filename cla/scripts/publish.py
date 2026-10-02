@@ -15,6 +15,7 @@ from server import github_sync  # noqa: E402
 
 EXCLUDES = (
     "config.local.json",
+    "config.local.json.bak",
     "data",
     "models",
     ".venv",
