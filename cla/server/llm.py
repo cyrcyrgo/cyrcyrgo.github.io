@@ -29,6 +29,33 @@ async def health() -> dict:
         return {"ok": False, "error": str(exc), "model": cfg.CONFIG["model"]}
 
 
+async def ps() -> dict:
+    """Models currently loaded in memory / VRAM (Ollama /api/ps).
+
+    Used by the admin dashboard to show, in real time, which model is
+    resident on the GPU right now.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5) as c:
+            r = await c.get(f"{base_url()}/api/ps")
+            r.raise_for_status()
+            data = r.json()
+            models = []
+            for m in data.get("models", []):
+                size = m.get("size") or 0
+                vram = m.get("size_vram") or 0
+                models.append({
+                    "name": m.get("name") or m.get("model"),
+                    "size": size,
+                    "vram": vram,
+                    "gpu_ratio": round(vram / size * 100, 1) if size else 0,
+                    "expires_at": m.get("expires_at"),
+                })
+            return {"ok": True, "models": models}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "models": []}
+
+
 def _merge_tool_calls(acc: list[dict], new: list[dict]) -> None:
     """Accumulate streamed tool_call fragments (Ollama may split args)."""
     for tc in new:
@@ -114,6 +141,8 @@ async def chat_once(
     content_parts: list[str] = []
     tool_calls: list[dict] = []
     last_reported = 0
+    usage = {"prompt_tokens": 0, "completion_tokens": 0,
+             "total_tokens": 0, "seconds": 0.0}
     async for chunk in chat_stream(messages, tools=tools, model=model):
         msg = chunk.get("message") or {}
         text = msg.get("content") or ""
@@ -129,9 +158,19 @@ async def chat_once(
                     last_reported = chars
                     await on_tool_progress(name, chars)
         if chunk.get("done"):
+            # Ollama reports real evaluated-token counts on the final chunk.
+            p_tok = int(chunk.get("prompt_eval_count") or 0)
+            c_tok = int(chunk.get("eval_count") or 0)
+            usage["prompt_tokens"] += p_tok
+            usage["completion_tokens"] += c_tok
+            usage["total_tokens"] += p_tok + c_tok
+            dur = chunk.get("total_duration") or 0
+            if dur:
+                usage["seconds"] += dur / 1e9
             break
 
     out: dict = {"role": "assistant", "content": "".join(content_parts)}
     if tool_calls:
         out["tool_calls"] = tool_calls
+    out["usage"] = usage
     return out
