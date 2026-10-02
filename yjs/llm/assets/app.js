@@ -206,7 +206,9 @@ function addBubble(role, text) {
   if (empty) empty.remove();
   const div = document.createElement("div");
   div.className = "bubble " + role;
-  div.innerHTML = `<div class="who">${role === "user" ? "你" : "Agent"}</div>${escapeHtml(text)}`;
+  div.innerHTML =
+    `<div class="who">${role === "user" ? "你" : "Agent"}</div>` +
+    `<span class="txt">${escapeHtml(text)}</span>`;
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
   return div;
@@ -223,6 +225,44 @@ function addStep(kind, text) {
   return div;
 }
 
+/* --- typewriter: tokens arrive over SSE, characters are printed one by one --- */
+let streamEl = null;   // current assistant bubble receiving streamed text
+let pending = "";      // characters waiting to be typed
+let typing = false;    // a typing loop is running
+
+function typeAppend(text) {
+  if (!streamEl) streamEl = addBubble("assistant", "");
+  pending += text;
+  pump();
+}
+function pump() {
+  if (typing) return;
+  typing = true;
+  const tick = () => {
+    const el = streamEl;
+    if (!el) { typing = false; pending = ""; return; }
+    if (!pending.length) { typing = false; return; }
+    const take = pending.length > 120 ? 4 : (pending.length > 40 ? 2 : 1);
+    const chunk = pending.slice(0, take);
+    pending = pending.slice(take);
+    const t = el.querySelector(".txt");
+    if (t) t.appendChild(document.createTextNode(chunk));
+    const box = $("messages");
+    box.scrollTop = box.scrollHeight;
+    setTimeout(tick, 12);
+  };
+  tick();
+}
+/* finish a streamed answer; `fullText` (authoritative) replaces the typed text */
+function endStream(fullText) {
+  if (streamEl && typeof fullText === "string") {
+    const t = streamEl.querySelector(".txt");
+    if (t) t.textContent = fullText;
+  }
+  streamEl = null;
+  pending = "";
+}
+
 async function sendMessage() {
   const text = $("chat-input").value.trim();
   if (!text || sending) return;
@@ -232,22 +272,37 @@ async function sendMessage() {
   $("chat-input").value = "";
   addBubble("user", text);
 
-  const live = addStep("tool", "⏳ 正在思考…");
+  let live = addStep("tool", "⏳ 正在思考…");
+
+  const ensureLive = () => { if (!live.parentNode) live = addStep("tool", "⏳ 正在思考…"); };
 
   const onEvent = (ev) => {
-    if (ev.type === "status") live.textContent = "⏳ " + ev.text;
-    else if (ev.type === "assistant") { live.remove(); addBubble("assistant", ev.content); }
-    else if (ev.type === "tool_call") {
-      live.remove();
+    if (ev.type === "status") {
+      ensureLive();
+      live.textContent = "⏳ " + ev.text;
+    } else if (ev.type === "assistant_delta") {
+      if (live.parentNode) live.remove();
+      typeAppend(ev.content || "");
+    } else if (ev.type === "assistant") {
+      if (live.parentNode) live.remove();
+      if (streamEl) endStream(ev.content);
+      else if (ev.content) addBubble("assistant", ev.content);
+    } else if (ev.type === "tool_call") {
+      endStream();
+      if (live.parentNode) live.remove();
       addStep("tool", `▶ ${ev.name}(${shorten(JSON.stringify(ev.args || {}), 240)})`);
     } else if (ev.type === "tool_result") {
+      endStream();
       addStep(ev.ok ? "result-ok" : "result-err",
         `${ev.ok ? "✓" : "✗"} ${ev.name}: ${ev.summary}`);
+      ensureLive();
     } else if (ev.type === "done") {
-      live.remove();
+      endStream();
+      if (live.parentNode) live.remove();
       addStep("done", "✅ 完成：" + ev.summary);
     } else if (ev.type === "error") {
-      live.remove();
+      endStream();
+      if (live.parentNode) live.remove();
       addStep("result-err", "⚠ " + ev.error);
     }
   };
@@ -288,6 +343,7 @@ async function sendMessage() {
   } catch (e) {
     addStep("result-err", "⚠ " + e.message);
   } finally {
+    endStream();
     if (live.parentNode) live.remove();
     sending = false;
     $("btn-send-msg").disabled = false;
