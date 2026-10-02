@@ -36,6 +36,9 @@ DEFAULTS: dict = {
         "path_prefix": "cla",
     },
     "ngrok": {"token": "", "domain": ""},
+    # Admin dashboard access. Leave ``emails`` empty to let the
+    # earliest-registered account act as the owner instead.
+    "admin": {"emails": []},
     "smtp": {
         "host": "smtp.qq.com",
         "port": 465,
@@ -82,7 +85,7 @@ def load() -> dict:
 
 def save(cfg: dict) -> None:
     """Persist the *secret* portion of the config (always UTF-8, no BOM)."""
-    secret_keys = ("github", "ngrok", "smtp", "session_secret", "mcp_servers")
+    secret_keys = ("github", "ngrok", "smtp", "session_secret", "mcp_servers", "admin")
     payload = {k: cfg[k] for k in secret_keys if k in cfg}
     LOCAL_CONFIG.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
