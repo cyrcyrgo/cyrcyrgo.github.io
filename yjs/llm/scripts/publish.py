@@ -16,10 +16,14 @@ from server import github_sync  # noqa: E402
 EXCLUDES = (
     "config.local.json",
     "data",
+    "models",
     ".venv",
     "bin",
     "__pycache__",
     ".git",
+    "_probe.py",
+    "_agenttest.py",
+    "start-all.bat",
 )
 
 
