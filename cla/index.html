@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS Cloud LLM Agent</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A4%96%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/style.css" />
 </head>
 <body>
@@ -56,6 +57,7 @@
       <div class="quota" id="quota-bar"><i style="width:0%"></i></div>
     </div>
     <button id="btn-new" style="width:100%">+ 新建对话</button>
+    <input id="conv-search" class="conv-search" placeholder="搜索对话…" autocomplete="off" />
     <div class="conv-list" id="conv-list"></div>
     <div class="sidebar-foot">
       <button id="btn-files" class="ghost" style="flex:1">我的文件</button>
@@ -68,10 +70,12 @@
   </aside>
 
   <main class="chat">
+    <div id="notice" class="notice hidden"></div>
     <div class="chat-head">
       <h2 id="chat-title">个人空间</h2>
       <span id="model-tag" class="tag ok" style="display:none"></span>
       <span id="mode-tag" class="tag mode" style="display:none"></span>
+      <button id="btn-export" class="ghost head-btn hidden" title="导出当前对话为 Markdown">导出</button>
     </div>
     <div class="messages" id="messages">
       <div class="empty">
@@ -80,6 +84,7 @@
       </div>
     </div>
     <div class="composer">
+      <div class="templates" id="templates"></div>
       <textarea id="chat-input" placeholder="描述任务…（Enter 发送，Shift+Enter 换行）"></textarea>
       <div class="comp-row">
         <div class="composer-controls">
@@ -92,6 +97,7 @@
             <option value="think">思考模式 · 深度分析</option>
             <option value="fast">快速模式 · 直接输出</option>
           </select>
+          <span class="char-count" id="char-count">0 字</span>
         </div>
         <button id="btn-send-msg" class="send">发送</button>
       </div>
