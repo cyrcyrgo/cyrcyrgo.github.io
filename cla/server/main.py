@@ -730,6 +730,39 @@ async def admin_edit_model(body: AdminModelEditIn,
     return {"ok": True, "model": target}
 
 
+class AdminModelTestIn(BaseModel):
+    name: str = ""            # model id sent to the provider
+    base_url: str = ""
+    api_key: str = ""         # empty + model_ref = reuse the stored key
+    model_ref: str = ""       # test an already-saved model instead
+
+
+@app.post("/api/admin/models/test")
+async def admin_test_model(body: AdminModelTestIn,
+                           user: dict = Depends(require_admin_gate)):
+    """Round-trip a provider to verify base_url / key / model before saving."""
+    base = body.base_url.strip()
+    key = body.api_key.strip()
+    target = body.name.strip()
+    if body.model_ref:
+        m = llm.model_config(body.model_ref)
+        if not m:
+            raise HTTPException(404, f"model {body.model_ref} not found")
+        base = base or (m.get("base_url") or "")
+        target = target or m.get("name", "")
+        if not key:
+            key = (cfg.CONFIG.get("api_keys") or {}).get(m.get("api_key_ref") or "", "")
+    if not base:
+        raise HTTPException(400, "请填写 Base URL")
+    if not target:
+        raise HTTPException(400, "请填写模型名称")
+    try:
+        reply = await llm.probe(base, key, target)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, f"连接失败：{exc}")
+    return {"ok": True, "reply": reply}
+
+
 class AdminModelAddIn(BaseModel):
     name: str
     display: str = ""
