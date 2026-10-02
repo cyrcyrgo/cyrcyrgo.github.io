@@ -139,3 +139,26 @@ def valid_password(password: str) -> tuple[bool, str]:
     if len(password) > 128:
         return False, "密码过长（最多 128 位）"
     return True, ""
+
+
+# --------------------------------------------------------------------------- #
+# admin dashboard gate (second factor on top of the admin account check)
+# --------------------------------------------------------------------------- #
+def make_admin_token(uid: str, email: str, hours: int = 12) -> str:
+    """Short-lived token proving the admin password was entered."""
+    payload = {
+        "uid": uid,
+        "email": email,
+        "scope": "admin",
+        "iat": int(time.time()),
+        "exp": int(time.time()) + hours * 3600,
+    }
+    return jwt.encode(payload, cfg.CONFIG["session_secret"], algorithm=ALGO)
+
+
+def decode_admin_token(token: str) -> dict | None:
+    try:
+        payload = jwt.decode(token, cfg.CONFIG["session_secret"], algorithms=[ALGO])
+    except Exception:
+        return None
+    return payload if payload.get("scope") == "admin" else None
