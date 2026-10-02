@@ -65,8 +65,13 @@ async def run_agent(uid: str, cid: str, emit: Emit) -> None:
 
     for step in range(cfg.CONFIG["max_agent_steps"]):
         await emit({"type": "status", "text": f"思考中…（第 {step + 1} 步）"})
+
+        async def on_delta(piece: str, _cid: str = cid) -> None:
+            # streamed token -> forwarded to the browser for character-by-character display
+            await emit({"type": "assistant_delta", "content": piece})
+
         try:
-            msg = await llm.chat_once(messages, tools=schemas)
+            msg = await llm.chat_once(messages, tools=schemas, on_delta=on_delta)
         except Exception as exc:  # noqa: BLE001
             await emit({"type": "error", "error": f"模型调用失败：{exc}"})
             return
