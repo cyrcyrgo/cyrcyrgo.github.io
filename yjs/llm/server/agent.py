@@ -82,7 +82,7 @@ def _record_file(name: str, result: dict, produced: list[dict],
         })
 
 
-async def run_agent(uid: str, cid: str, emit: Emit) -> None:
+async def run_agent(uid: str, cid: str, emit: Emit, model: str | None = None) -> None:
     conv = store.get_conversation(uid, cid)
     if not conv:
         await emit({"type": "error", "error": "对话不存在"})
@@ -129,6 +129,7 @@ async def run_agent(uid: str, cid: str, emit: Emit) -> None:
             msg = await llm.chat_once(
                 messages, tools=schemas,
                 on_delta=on_delta, on_tool_progress=on_tool_progress,
+                model=model,
             )
         except Exception as exc:  # noqa: BLE001
             await emit({"type": "error", "error": f"模型调用失败：{exc}"})
