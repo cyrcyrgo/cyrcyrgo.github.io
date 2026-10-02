@@ -66,6 +66,7 @@ class VerifyIn(BaseModel):
 class ChatIn(BaseModel):
     content: str
     model: str | None = None
+    mode: str | None = None   # fast | think | work | expert
 
 
 # --------------------------------------------------------------------------- #
@@ -180,6 +181,12 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
     # Emit a model event so the UI updates the active tag.
     _active_model[uid] = resolved_model
 
+    # Resolve mode: fast | think | work | expert  (default work).
+    MODE_ALLOWED = {"fast", "think", "work", "expert"}
+    resolved_mode = (body.mode or "work").lower()
+    if resolved_mode not in MODE_ALLOWED:
+        resolved_mode = "work"
+
     queue: asyncio.Queue = asyncio.Queue()
     started = time.time()
 
@@ -192,7 +199,8 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
     async def gen():
         # Notify the UI which model is about to run, so it updates the chip.
         await emit({"type": "model", "model": resolved_model})
-        task = asyncio.create_task(agent.run_agent(uid, cid, emit, model=resolved_model))
+        await emit({"type": "mode", "mode": resolved_mode})
+        task = asyncio.create_task(agent.run_agent(uid, cid, emit, model=resolved_model, mode=resolved_mode))
         _RUNNING.add(task)
         task.add_done_callback(_RUNNING.discard)
         idle = 0
@@ -256,6 +264,53 @@ async def download(path: str, user: dict = Depends(current_user)):
 async def delete_file(path: str, user: dict = Depends(current_user)):
     return {"ok": store.delete_file(user["uid"], path),
             "usage": store.usage(user["uid"])}
+
+
+
+@app.get("/api/files/preview")
+async def preview_file(path: str, user: dict = Depends(current_user)):
+    """Return text content of a workspace file for online preview.
+
+    Safe whitelist: .txt .md .json .html .py .js .css .csv ...
+    Binary or unknown types get HTTP 400.
+    """
+    import base64 as _b
+    root = store.workspace(user["uid"]).resolve()
+    target = (root / path).resolve()
+    if root not in target.parents and target != root:
+        raise HTTPException(403, "非法路径")
+    if not target.is_file():
+        raise HTTPException(404, "文件不存在")
+
+    TEXT_EXTS = {
+        ".txt", ".md", ".markdown", ".json", ".yaml", ".yml",
+        ".py", ".js", ".ts", ".jsx", ".tsx",
+        ".css", ".csv", ".log", ".ini", ".toml", ".xml",
+        ".sh", ".bat", ".ps1", ".rs", ".go", ".java",
+        ".c", ".cpp", ".h", ".vue", ".svelte", ".htm", ".html",
+    }
+    ext = target.suffix.lower()
+    size = target.stat().st_size
+
+    if ext in (".html", ".htm"):
+        raw = target.read_bytes()
+        data_uri = "data:text/html;base64," + _b.b64encode(raw).decode("ascii")
+        return {"ok": True, "kind": "html", "path": path, "size": size,
+                "data_uri": data_uri, "filename": target.name}
+
+    if ext not in TEXT_EXTS:
+        raise HTTPException(400, f"不支持预览该文件类型 ({ext})，请使用下载")
+
+    if size > 256 * 1024:
+        raise HTTPException(400, f"文件太大 ({size // 1024} KB)，请下载后查看")
+
+    try:
+        text = target.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        text = target.read_text(encoding="gbk", errors="replace")
+
+    return {"ok": True, "kind": "text", "path": path, "size": size,
+            "filename": target.name, "content": text, "language": ext.lstrip(".")}
 
 
 @app.post("/api/files/clear")
