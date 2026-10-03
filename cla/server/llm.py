@@ -78,6 +78,56 @@ async def probe(base_url: str, api_key: str, model: str) -> str:
         return json.dumps(data, ensure_ascii=False)[:200]
 
 
+async def local_probe(name: str, prompt: str = "请用一句话介绍你自己。",
+                      max_tokens: int = 200) -> dict:
+    """Short non-streaming generation against a local Ollama model.
+
+    Times a real round-trip (including cold-start model loading) and reports
+    generated tokens + tokens/s so the admin dashboard can prove a model works
+    and spot "长时间不输出" (slow / stalled) models.
+    """
+    import time as _time
+
+    payload = {
+        "model": name,
+        # Qwen3-style thinking models burn the first tokens on hidden reasoning;
+        # "/no_think" asks for a direct answer so the probe stays quick and the
+        # reply is human-visible even with a small token budget.
+        "messages": [{"role": "user", "content": prompt + " /no_think"}],
+        "stream": False,
+        "think": False,
+        "keep_alive": KEEP_ALIVE,
+        "options": {"num_predict": max_tokens, "num_ctx": 2048, "temperature": 0.6},
+    }
+    # Cold loading an 8B+ model from disk can take a couple of minutes.
+    timeout = httpx.Timeout(connect=10, read=300, write=60, pool=None)
+    started = _time.time()
+    async with httpx.AsyncClient(timeout=timeout) as c:
+        r = await c.post(f"{base_url()}/api/chat", json=payload)
+        if r.status_code >= 400:
+            raise RuntimeError(f"Ollama HTTP {r.status_code}: {r.text[:300]}")
+        data = r.json()
+    wall = _time.time() - started
+    if data.get("error"):
+        raise RuntimeError(str(data["error"]))
+    reply = ((data.get("message") or {}).get("content") or "").strip()
+    # Older Ollama builds surface thinking-model text as reasoning_content.
+    if not reply:
+        reply = ((data.get("message") or {}).get("reasoning_content") or "").strip()
+    gen_tokens = int(data.get("eval_count") or 0)
+    gen_seconds = (data.get("eval_duration") or 0) / 1e9
+    load_seconds = (data.get("load_duration") or 0) / 1e9
+    return {
+        "ok": True,
+        "reply": reply[:300],
+        "wall_seconds": round(wall, 2),
+        "load_seconds": round(load_seconds, 2),
+        "gen_tokens": gen_tokens,
+        "gen_seconds": round(gen_seconds, 2),
+        "tokens_per_second": round(gen_tokens / gen_seconds, 2) if gen_seconds else 0,
+    }
+
+
 async def health() -> dict:
     try:
         async with httpx.AsyncClient(timeout=5) as c:
