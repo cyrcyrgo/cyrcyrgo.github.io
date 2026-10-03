@@ -1,22 +1,29 @@
-"""ngrok tunnel lifecycle + live-URL watcher.
+"""cpolar tunnel lifecycle + live-URL watcher.
 
-Starts ``ngrok http <port>`` with the configured authtoken and polls its local
-admin API (127.0.0.1:4040). Whenever the public URL changes (free tier rotates
-it), the new URL is pushed to GitHub so the Pages frontend reconnects.
+Spawns ``cpolar http <port>`` (authtoken taken from config / its own yml),
+reads its stdout and extracts the public HTTPS URL from lines like::
+
+    Tunnel established at https://36fb8229.r9.cpolar.cn
+
+Whenever a URL is seen (free tier rotates it on every start), it is pushed
+to GitHub so the Pages frontend can reconnect.
+
+Note: cpolar 3.3.x serves a web UI on 127.0.0.1:4040 but its
+``/api/tunnels`` returns an empty body, so we parse stdout instead.
 """
 from __future__ import annotations
 
 import asyncio
-import json
 import os
+import re
 import shutil
 import subprocess
-from pathlib import Path
-
-import httpx
 
 from . import config as cfg
 from . import github_sync
+
+# e.g. https://36fb8229.r9.cpolar.cn / https://ab-cd.r2.cpolar.com
+_URL_RE = re.compile(r"https://[0-9a-z][0-9a-z.-]*\.cpolar\.[a-z.]+")
 
 
 class Tunnel:
@@ -27,69 +34,69 @@ class Tunnel:
 
     # ------------------------------------------------------------------ #
     def binary(self) -> str | None:
-        exe = cfg.BIN_DIR / ("ngrok.exe" if os.name == "nt" else "ngrok")
+        exe = cfg.BIN_DIR / "cpolar" / ("cpolar.exe" if os.name == "nt" else "cpolar")
         if exe.exists():
             return str(exe)
-        return shutil.which("ngrok")
+        return shutil.which("cpolar")
 
     def available(self) -> bool:
-        return bool(self.binary() and cfg.CONFIG["ngrok"].get("token"))
+        return bool(self.binary())
 
     # ------------------------------------------------------------------ #
     def start(self, port: int) -> None:
-        if not self.available():
-            print("[tunnel] ngrok 不可用或未配置 token，跳过。")
-            return
         exe = self.binary()
-        token = cfg.CONFIG["ngrok"]["token"]
-        try:
-            subprocess.run([exe, "config", "add-authtoken", token],
-                           capture_output=True, timeout=30)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[tunnel] authtoken 配置失败: {exc}")
+        if not exe:
+            print("[tunnel] 未找到 cpolar，跳过内网穿透。")
+            return
+        token = (cfg.CONFIG.get("cpolar") or {}).get("authtoken", "")
+        if token:
+            try:
+                subprocess.run([exe, "authtoken", token],
+                               capture_output=True, timeout=30)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[tunnel] authtoken 配置失败: {exc}")
 
-        cmd = [exe, "http", str(port), "--log", "stdout"]
-        domain = cfg.CONFIG["ngrok"].get("domain")
-        if domain:
-            cmd += ["--domain", domain]
         creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         self.proc = subprocess.Popen(
-            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            [exe, "http", str(port), "-log", "stdout", "-log-level", "INFO"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
             creationflags=creationflags,
         )
-        print(f"[tunnel] ngrok started for port {port}")
+        print(f"[tunnel] cpolar started for port {port}")
         self._task = asyncio.create_task(self._watch())
 
     async def _watch(self) -> None:
-        last = None
-        for _ in range(240):                       # ~20 min of polling then idle
-            await asyncio.sleep(5)
-            url = await self._query()
-            if url and url != last:
-                last = url
-                self.url = url
-                print(f"[tunnel] public url: {url}")
-                await github_sync.push_runtime_config(url)
-        # keep watching slowly forever
+        if not self.proc or not self.proc.stdout:
+            return
+        loop = asyncio.get_running_loop()
+        last: str | None = None
         while True:
-            await asyncio.sleep(60)
-            url = await self._query()
-            if url and url != last:
-                last = url
-                self.url = url
-                print(f"[tunnel] public url changed: {url}")
+            # blocking readline -> executor thread
+            line = await loop.run_in_executor(None, self.proc.stdout.readline)
+            if not line:
+                if self.proc.poll() is not None:
+                    print("[tunnel] cpolar 进程已退出。")
+                    return
+                await asyncio.sleep(2)
+                continue
+            m = _URL_RE.search(line)
+            if not m:
+                continue
+            url = m.group(0)
+            if url == last:
+                continue
+            last = url
+            self.url = url
+            print(f"[tunnel] public url: {url}")
+            try:
                 await github_sync.push_runtime_config(url)
-
-    async def _query(self) -> str | None:
-        try:
-            async with httpx.AsyncClient(timeout=5) as c:
-                r = await c.get("http://127.0.0.1:4040/api/tunnels")
-                for t in r.json().get("tunnels", []):
-                    if t.get("public_url", "").startswith("https"):
-                        return t["public_url"]
-        except Exception:
-            return None
-        return None
+            except Exception as exc:  # noqa: BLE001
+                print(f"[tunnel] config push failed: {exc}")
 
     def stop(self) -> None:
         if self._task:
