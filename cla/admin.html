@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS 管理后台</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%99%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/admin.css?v=20261002b" />
+<link rel="stylesheet" href="assets/admin.css?v=20261003d" />
 </head>
 <body>
 
@@ -94,6 +94,106 @@
     </div>
   </section>
 
+  <!-- 邮件服务 -->
+  <section class="panel">
+    <h3>邮件服务 <span class="hint">· 发件邮箱设置（地址 / 授权码 / 协议）与全体群发</span></h3>
+    <div class="settings-grid">
+      <div class="set-field">
+        <span class="sw-label">发件邮箱地址</span>
+        <input id="mail-user" placeholder="you@qq.com" autocomplete="off" />
+      </div>
+      <div class="set-field">
+        <span class="sw-label">授权码 / 密码</span>
+        <input id="mail-code" type="password" placeholder="留空则不修改" autocomplete="new-password" />
+      </div>
+      <div class="set-field">
+        <span class="sw-label">SMTP 服务器</span>
+        <input id="mail-host" placeholder="smtp.qq.com" autocomplete="off" />
+      </div>
+      <div class="set-field">
+        <span class="sw-label">端口</span>
+        <input id="mail-port" type="number" min="1" max="65535" value="465" />
+      </div>
+      <div class="set-field">
+        <span class="sw-label">加密协议</span>
+        <select id="mail-proto">
+          <option value="ssl">SSL（常用端口 465）</option>
+          <option value="starttls">STARTTLS（常用端口 587）</option>
+        </select>
+      </div>
+      <div class="set-field">
+        <span class="sw-label">发件人显示名</span>
+        <input id="mail-fromname" placeholder="YJS LLM Agent" autocomplete="off" />
+      </div>
+    </div>
+    <div class="set-actions">
+      <span id="mail-msg" class="muted inline-msg"></span>
+      <button class="btn ghost" id="btn-test-mail">发测试邮件给我</button>
+      <button class="btn" id="btn-save-mail">保存邮箱设置</button>
+    </div>
+
+    <h3 style="margin-top:22px">群发邮件通知 <span class="hint">· 发送给全部已注册用户</span></h3>
+    <div class="settings-grid">
+      <div class="set-field wide">
+        <span class="sw-label">邮件主题</span>
+        <input id="bc-subject" placeholder="例如：系统升级通知" />
+      </div>
+      <div class="set-field wide">
+        <span class="sw-label">邮件正文（支持多行）</span>
+        <textarea id="bc-body" rows="5" placeholder="写给全体用户的内容…"></textarea>
+      </div>
+    </div>
+    <div class="set-actions">
+      <span id="bc-msg" class="muted inline-msg"></span>
+      <button class="btn ghost" id="btn-broadcast-me">仅发给我（预览）</button>
+      <button class="btn" id="btn-broadcast">群发给全体用户</button>
+    </div>
+  </section>
+
+  <!-- GitHub 仓库 -->
+  <section class="panel">
+    <h3>GitHub 仓库 <span class="hint">· token 密文存储 / 仓库管理密码解锁 / 发布</span></h3>
+    <div id="gh-status" class="muted" style="margin-bottom:12px">加载中…</div>
+    <div class="settings-grid">
+      <div class="set-field">
+        <span class="sw-label">仓库（owner/repo）</span>
+        <input id="gh-repo" placeholder="cyrcyrgo/cyrcyrgo.github.io" autocomplete="off" />
+      </div>
+      <div class="set-field">
+        <span class="sw-label">分支</span>
+        <input id="gh-branch" placeholder="main" autocomplete="off" />
+      </div>
+      <div class="set-field">
+        <span class="sw-label">发布路径前缀</span>
+        <input id="gh-prefix" placeholder="cla" autocomplete="off" />
+      </div>
+      <div class="set-field">
+        <span class="sw-label">仓库管理密码（解锁 / 设置）</span>
+        <input id="gh-pw" type="password" placeholder="至少 6 位" autocomplete="new-password" />
+      </div>
+      <div class="set-field">
+        <span class="sw-label">GitHub Token（更新时填写）</span>
+        <input id="gh-token" type="password" placeholder="ghp_... 留空则不修改" autocomplete="new-password" />
+      </div>
+    </div>
+    <div class="set-actions">
+      <span id="gh-msg" class="muted inline-msg"></span>
+      <button class="btn ghost" id="btn-gh-unlock">解锁仓库</button>
+      <button class="btn ghost" id="btn-gh-setpw">设置密码</button>
+      <button class="btn ghost" id="btn-gh-test">测试连接</button>
+      <button class="btn ghost" id="btn-gh-save">保存仓库信息</button>
+      <button class="btn" id="btn-gh-publish">发布到仓库</button>
+    </div>
+  </section>
+
+  <!-- 用户反馈 -->
+  <section class="panel">
+    <h3>用户反馈 <span class="hint">· 来自用户端「我 → 向作者反馈」</span>
+      <span id="fb-unread" class="badge tier" style="float:right;display:none"></span>
+    </h3>
+    <div id="fb-list" class="fb-list"></div>
+  </section>
+
   <div class="grid2">
     <!-- 模型 -->
     <section class="panel">
@@ -178,6 +278,6 @@
   </div>
 </div>
 
-<script src="assets/admin.js?v=20261003a"></script>
+<script src="assets/admin.js?v=20261003d"></script>
 </body>
 </html>
