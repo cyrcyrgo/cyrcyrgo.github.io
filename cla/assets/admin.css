@@ -205,8 +205,29 @@ main { padding: 20px 24px; max-width: 1500px; margin: 0 auto; }
   width: 100%; background: var(--bg); border: 1px solid var(--line);
   color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 13px; outline: none;
 }
-.set-field select:focus, .set-field input:focus { border-color: var(--accent); }
-.set-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+.set-field textarea {
+  width: 100%; background: var(--bg); border: 1px solid var(--line);
+  color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 13px;
+  outline: none; resize: vertical; font-family: inherit; line-height: 1.6;
+}
+.set-field select:focus, .set-field input:focus, .set-field textarea:focus { border-color: var(--accent); }
+.set-actions {
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: 8px; flex-wrap: wrap; margin-top: 12px;
+}
+.set-actions .inline-msg { flex: 1 1 auto; text-align: left; font-size: 12px; min-width: 120px; }
+
+/* feedback cards */
+.fb-list { display: flex; flex-direction: column; gap: 10px; }
+.fb-item {
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 12px 14px;
+}
+.fb-item.new { border-color: rgba(59,130,246,.55); }
+.fb-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.fb-head .fb-who { color: var(--text); font-weight: 600; }
+.fb-body { margin: 8px 0; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+.fb-acts { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* ---------- generic form card (model edit modal) ---------- */
 .mcard {
