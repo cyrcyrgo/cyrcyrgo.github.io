@@ -258,6 +258,13 @@
     el.style.color = ov.ollama_ok ? "var(--ok)" : "var(--err)";
     const vram = (ov.vram || []).reduce((a, m) => a + (m.vram || 0), 0);
     $("s-vram").textContent = vram ? "已加载 " + fmtSize(vram) : "无模型常驻";
+
+    const fb = $("fb-unread");
+    if (fb) {
+      const n = ov.feedback_unread || 0;
+      fb.style.display = n ? "inline-block" : "none";
+      fb.textContent = n ? ("未读反馈 " + n) : "";
+    }
   }
 
   let lastModelsSig = "";
@@ -289,6 +296,7 @@
         <td class="num"><b>${fmtNum(m.total_tokens)}</b></td>
         <td class="muted">${fmtAgo(m.last_used)}</td>
         <td style="white-space:nowrap">
+          <button class="btn ghost" data-act="run" title="实际生成几个字并计时，检查模型能否正常输出">试运行</button>
           <button class="btn ghost" data-act="edit">编辑</button>
           <button class="btn ghost" data-act="tog">${m.enabled ? "暂停" : "恢复"}</button>
           ${m.is_builtin
@@ -304,6 +312,25 @@
       const act = btn.dataset.act;
       const model = (ov.models || []).find((x) => x.name === name);
       if (act === "edit") btn.onclick = () => openEditModelModal(model || { name });
+      else if (act === "run") btn.onclick = async () => {
+        const old = btn.textContent;
+        btn.disabled = true; btn.textContent = "试运行中…";
+        try {
+          const d = await api("/api/admin/models/run-test", {
+            method: "POST", body: JSON.stringify({ name }),
+          });
+          if (d.kind === "local") {
+            alert(
+              `试运行成功 ✅\n模型：${name}\n回复：${d.reply || "(空回复)"}\n` +
+              `总耗时 ${d.wall_seconds}s（冷加载 ${d.load_seconds}s）\n` +
+              `生成 ${d.gen_tokens} tokens · ${d.tokens_per_second} tok/s`);
+          } else {
+            alert(`试运行成功 ✅\n模型：${name}\n耗时：${d.wall_seconds}s\n回复：${d.reply}`);
+          }
+        } catch (e) {
+          alert("试运行失败（可能长时间无响应）：" + e.message);
+        } finally { btn.disabled = false; btn.textContent = old; }
+      };
       else if (act === "tog") btn.onclick = async () => {
         const ov2 = await api("/api/admin/overview");
         const target = (ov2.models || []).find((x) => x.name === name);
@@ -884,6 +911,234 @@
     };
   }
 
+  /* ---------------------------------------------------------------- mail */
+  async function loadMail() {
+    try {
+      const d = await api("/api/admin/email");
+      $("mail-host").value = d.host || "";
+      $("mail-port").value = d.port || 465;
+      $("mail-proto").value = d.protocol || "ssl";
+      $("mail-user").value = d.user || "";
+      $("mail-fromname").value = d.from_name || "";
+      $("mail-code").placeholder = d.has_auth_code ? "已配置，留空则不修改" : "请输入授权码";
+    } catch (_) { /* 401 handled by refresh() */ }
+  }
+
+  on("btn-save-mail", "click", async () => {
+    const msg = $("mail-msg");
+    msg.textContent = "保存中…";
+    try {
+      await api("/api/admin/email", {
+        method: "POST",
+        body: JSON.stringify({
+          host: $("mail-host").value.trim(),
+          port: parseInt($("mail-port").value, 10) || 465,
+          protocol: $("mail-proto").value,
+          user: $("mail-user").value.trim(),
+          auth_code: $("mail-code").value.trim(),
+          from_name: $("mail-fromname").value.trim(),
+        }),
+      });
+      $("mail-code").value = "";
+      msg.textContent = "✓ 已保存";
+      toast("发件邮箱设置已保存", "ok");
+      await loadMail();
+    } catch (e) { msg.textContent = "✗ " + e.message; }
+  });
+
+  on("btn-test-mail", "click", async (e) => {
+    const btn = e.target;
+    btn.disabled = true;
+    const msg = $("mail-msg");
+    msg.textContent = "正在发送测试邮件…";
+    try {
+      const d = await api("/api/admin/email/test",
+        { method: "POST", body: JSON.stringify({ to: "" }) });
+      msg.textContent = "✓ 已发送到 " + d.to;
+      toast("测试邮件已发送", "ok");
+    } catch (err) { msg.textContent = "✗ " + err.message; }
+    finally { btn.disabled = false; }
+  });
+
+  async function sendBroadcast(onlyMe) {
+    const msg = $("bc-msg");
+    const subject = $("bc-subject").value.trim();
+    const body = $("bc-body").value.trim();
+    if (!subject || !body) { msg.textContent = "请先填写邮件主题与正文"; return; }
+    if (!onlyMe && !confirm("确定向【全体已注册用户】发送这封邮件？")) return;
+    const btns = [$("btn-broadcast"), $("btn-broadcast-me")];
+    btns.forEach((b) => { b.disabled = true; });
+    msg.textContent = onlyMe ? "发送中…" : "群发中，请稍候（用户较多时较慢）…";
+    try {
+      const d = await api("/api/admin/email/broadcast", {
+        method: "POST",
+        body: JSON.stringify({ subject, body, only_me: !!onlyMe }),
+      });
+      const fail = (d.failed || []).length;
+      msg.textContent = `✓ 发送成功 ${d.sent}/${d.total}` + (fail ? `，失败 ${fail}` : "");
+      toast(`邮件已发送：成功 ${d.sent}/${d.total}`, fail ? "err" : "ok");
+    } catch (e) { msg.textContent = "✗ " + e.message; }
+    finally { btns.forEach((b) => { b.disabled = false; }); }
+  }
+  on("btn-broadcast", "click", () => sendBroadcast(false));
+  on("btn-broadcast-me", "click", () => sendBroadcast(true));
+
+  /* ---------------------------------------------------------------- feedback */
+  async function loadFeedback() {
+    try {
+      const d = await api("/api/admin/feedback");
+      renderFeedback(d.items || []);
+    } catch (_) { /* 401 handled by refresh() */ }
+  }
+
+  function renderFeedback(items) {
+    const box = $("fb-list");
+    if (!items.length) { box.innerHTML = `<div class="muted">暂无用户反馈</div>`; return; }
+    const statusText = { new: "未读", read: "已读", done: "已处理" };
+    box.innerHTML = items.map((f) => `
+      <div class="fb-item ${f.status === "new" ? "new" : ""}" data-id="${escapeHtml(f.id)}">
+        <div class="fb-head">
+          <span class="fb-who">${escapeHtml(f.name || f.email)}</span>
+          <span class="muted">${escapeHtml(f.email)}</span>
+          <span class="badge tier">${escapeHtml(f.category || "其他")}</span>
+          <span class="muted">${fmtTime(f.created_at)}</span>
+          <span class="badge ${f.status === "new" ? "yes" : "user"}">${statusText[f.status] || "已读"}</span>
+        </div>
+        <div class="fb-body">${escapeHtml(f.content)}</div>
+        <div class="fb-acts">
+          <button class="btn ghost" data-act="read">标记已读</button>
+          <button class="btn ghost" data-act="done">标记已处理</button>
+          <button class="btn danger" data-act="del">删除</button>
+        </div>
+      </div>`).join("");
+    box.querySelectorAll(".fb-item").forEach((el) => {
+      const id = el.dataset.id;
+      el.querySelectorAll("button[data-act]").forEach((btn) => {
+        btn.onclick = async () => {
+          const act = btn.dataset.act;
+          try {
+            if (act === "del") {
+              if (!confirm("删除这条用户反馈？")) return;
+              await api("/api/admin/feedback/" + encodeURIComponent(id), { method: "DELETE" });
+            } else {
+              await api(`/api/admin/feedback/${encodeURIComponent(id)}/status`, {
+                method: "POST",
+                body: JSON.stringify({ status: act === "done" ? "done" : "read" }),
+              });
+            }
+            toast("已更新", "ok");
+            await loadFeedback();
+          } catch (e) { toast(e.message, "err"); }
+        };
+      });
+    });
+  }
+
+  /* ---------------------------------------------------------------- github */
+  async function loadGithub() {
+    try {
+      const gh = await api("/api/admin/github");
+      $("gh-repo").value = gh.repo || "";
+      $("gh-branch").value = gh.branch || "main";
+      $("gh-prefix").value = gh.path_prefix || "";
+      const enc = gh.encrypted
+        ? (gh.mode === "repo" ? "已用仓库密码加密" : "已加密（会话密钥）")
+        : "未加密（明文回退）";
+      const tok = gh.has_token
+        ? `<span class="badge yes">token 可用</span>`
+        : `<span class="badge no">无 token</span>`;
+      const lock = gh.unlocked
+        ? `<span class="badge yes">已解锁</span>`
+        : `<span class="badge no">未解锁</span>`;
+      $("gh-status").innerHTML =
+        `存储：${escapeHtml(enc)} · ${gh.has_password ? "已设仓库密码" : "未设仓库密码"} · ${tok} · ${lock}<br>` +
+        `未解锁时「发布 / 改仓库信息」不可用；设置仓库密码后 token 将以密文保存，重启后需再次解锁。`;
+    } catch (_) { /* 401 handled by refresh() */ }
+  }
+
+  on("btn-gh-unlock", "click", async () => {
+    const msg = $("gh-msg");
+    const pw = $("gh-pw").value;
+    if (!pw) { msg.textContent = "请输入仓库管理密码"; return; }
+    msg.textContent = "解锁中…";
+    try {
+      await api("/api/admin/github/unlock",
+        { method: "POST", body: JSON.stringify({ password: pw }) });
+      msg.textContent = "✓ 已解锁，可发布与修改仓库信息";
+      toast("仓库已解锁", "ok");
+      await loadGithub();
+    } catch (e) { msg.textContent = "✗ " + e.message; }
+  });
+
+  on("btn-gh-setpw", "click", async () => {
+    const msg = $("gh-msg");
+    const pw = $("gh-pw").value;
+    if (pw.length < 6) { msg.textContent = "仓库管理密码至少 6 位"; return; }
+    msg.textContent = "加密保存中…";
+    try {
+      await api("/api/admin/github/password", {
+        method: "POST",
+        body: JSON.stringify({ password: pw, token: $("gh-token").value.trim() || null }),
+      });
+      $("gh-token").value = "";
+      $("gh-pw").value = "";
+      msg.textContent = "✓ 仓库密码已设置，token 已加密存储";
+      toast("仓库密码已设置", "ok");
+      await loadGithub();
+    } catch (e) { msg.textContent = "✗ " + e.message; }
+  });
+
+  on("btn-gh-test", "click", async (e) => {
+    const btn = e.target;
+    btn.disabled = true;
+    const msg = $("gh-msg");
+    msg.textContent = "测试中…";
+    try {
+      const d = await api("/api/admin/github/test", { method: "POST" });
+      const r = d.repo || {};
+      msg.textContent = `✓ ${r.full_name}（默认分支 ${r.default_branch}${r.can_push ? "，可写入" : "，只读"}）`;
+    } catch (err) { msg.textContent = "✗ " + err.message; }
+    finally { btn.disabled = false; }
+  });
+
+  on("btn-gh-save", "click", async () => {
+    const msg = $("gh-msg");
+    msg.textContent = "保存中…";
+    try {
+      await api("/api/admin/github/config", {
+        method: "POST",
+        body: JSON.stringify({
+          repo: $("gh-repo").value.trim(),
+          branch: $("gh-branch").value.trim() || "main",
+          path_prefix: $("gh-prefix").value.trim(),
+        }),
+      });
+      const tok = $("gh-token").value.trim();
+      if (tok) {
+        await api("/api/admin/github/token",
+          { method: "POST", body: JSON.stringify({ token: tok }) });
+      }
+      $("gh-token").value = "";
+      msg.textContent = "✓ 仓库信息已保存";
+      toast("仓库信息已保存", "ok");
+      await loadGithub();
+    } catch (e) { msg.textContent = "✗ " + e.message; }
+  });
+
+  on("btn-gh-publish", "click", async (e) => {
+    if (!confirm("确定把当前项目文件发布到仓库？（未解锁会失败）")) return;
+    const btn = e.target;
+    btn.disabled = true;
+    const msg = $("gh-msg");
+    msg.textContent = "发布中…";
+    try {
+      const d = await api("/api/admin/github/publish", { method: "POST" });
+      msg.textContent = `✓ 已发布 ${d.count} 个文件`;
+      toast(`已发布 ${d.count} 个文件`, "ok");
+    } catch (err) { msg.textContent = "✗ " + err.message; }
+    finally { btn.disabled = false; }
+  });
+
   /* ---------------------------------------------------------------- boot */
   async function start() {
     clearInterval(timer);
@@ -891,6 +1146,9 @@
     const main = $("main"); if (main) main.classList.remove("hidden");
     await loadSettings();
     await loadMcp();
+    await loadMail();
+    await loadFeedback();
+    await loadGithub();
     await refresh();
     timer = setInterval(refresh, 2000);
   }
