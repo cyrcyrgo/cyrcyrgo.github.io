@@ -426,3 +426,117 @@ def user_model_allowed(uid: str, model_name: str) -> bool:
     if allowed is None:
         return True
     return model_name in allowed
+
+
+# --------------------------------------------------------------------------- #
+# user profile edits (served by the user-facing settings panel)
+# --------------------------------------------------------------------------- #
+MAX_AVATAR_CHARS = 400_000        # ~300 KB image as a data URI
+
+
+def update_profile(uid: str, name: str | None = None,
+                   avatar: str | None = None) -> dict | None:
+    """Update nickname / avatar. Returns the refreshed profile (None if missing)."""
+    path = user_dir(uid) / "profile.json"
+    profile = _read_json(path, None)
+    if not profile:
+        return None
+    if name is not None:
+        clean = " ".join(str(name).split())[:32]
+        if clean:
+            profile["name"] = clean
+    if avatar is not None:
+        if avatar == "":
+            profile.pop("avatar", None)
+        else:
+            if len(avatar) > MAX_AVATAR_CHARS:
+                raise ValueError("头像图片过大（请选择 300KB 以内的图片）")
+            if not str(avatar).startswith("data:image/"):
+                raise ValueError("头像格式不支持")
+            profile["avatar"] = avatar
+    _write_json(path, profile)
+    return profile
+
+
+def change_email(uid: str, new_email: str) -> tuple[bool, str]:
+    """Move a user to a new email address (index + profile kept in sync)."""
+    new_email = new_email.strip().lower()
+    profile = get_user(uid)
+    if not profile:
+        return False, "用户不存在"
+    if "@" not in new_email or len(new_email) < 5:
+        return False, "邮箱格式不正确"
+    old_email = str(profile.get("email", "")).lower()
+    if new_email == old_email:
+        return False, "新邮箱与当前邮箱相同"
+    idx = load_index()
+    if new_email in idx and idx[new_email].get("uid") != uid:
+        return False, "该邮箱已被其他账号使用"
+    idx.pop(old_email, None)
+    idx[new_email] = {"uid": uid, "created_at": profile.get("created_at") or _now()}
+    profile["email"] = new_email
+    profile["email_changed_at"] = _now()
+    _write_json(user_dir(uid) / "profile.json", profile)
+    _write_json(USERS_INDEX, idx)
+    return True, ""
+
+
+# --------------------------------------------------------------------------- #
+# user feedback (「向作者反馈」) — admins review it in the dashboard
+# --------------------------------------------------------------------------- #
+FEEDBACK_DIR = cfg.DATA_DIR / "feedback"
+
+
+def _feedback_path(fid: str) -> Path:
+    return FEEDBACK_DIR / f"{fid}.json"
+
+
+def add_feedback(uid: str, email: str, category: str, content: str) -> dict:
+    FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+    fid = uuid.uuid4().hex[:12]
+    item = {
+        "id": fid,
+        "uid": uid,
+        "email": email,
+        "name": (get_user(uid) or {}).get("name") or "",
+        "category": (category or "其他").strip()[:24],
+        "content": content.strip()[:4000],
+        "created_at": _now(),
+        "status": "new",          # new | read | done
+    }
+    _write_json(_feedback_path(fid), item)
+    return item
+
+
+def list_feedback() -> list[dict]:
+    if not FEEDBACK_DIR.exists():
+        return []
+    out = []
+    for p in FEEDBACK_DIR.glob("*.json"):
+        item = _read_json(p, None)
+        if item:
+            out.append(item)
+    out.sort(key=lambda x: x.get("created_at") or 0, reverse=True)
+    return out
+
+
+def update_feedback(fid: str, status: str) -> bool:
+    p = _feedback_path(fid)
+    item = _read_json(p, None)
+    if not item:
+        return False
+    item["status"] = status if status in ("new", "read", "done") else "read"
+    _write_json(p, item)
+    return True
+
+
+def delete_feedback(fid: str) -> bool:
+    p = _feedback_path(fid)
+    if p.exists():
+        p.unlink()
+        return True
+    return False
+
+
+def feedback_unread() -> int:
+    return sum(1 for f in list_feedback() if f.get("status") == "new")
