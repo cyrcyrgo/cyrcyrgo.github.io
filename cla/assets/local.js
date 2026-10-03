@@ -7,12 +7,15 @@
  *    SAME-ORIGIN (GitHub Pages / local server), so no cdn.jsdelivr.net
  *    dependency can break startup;
  *  - the onnxruntime WASM binary is also vendored same-origin (wasmPaths);
- *  - model WEIGHTS do NOT go directly from the browser to huggingface /
- *    hf-mirror (that path is often blocked): they are relayed through the
- *    user's own API server (the ngrok tunnel on the deployed setup), which
- *    fetches hf-mirror.com -> huggingface.co server-side and caches the
- *    files once on local disk. The browser also keeps a Cache Storage copy,
- *    so later runs are fully offline.
+ *  - the page shell + engine + wasm are cached by a Service Worker, so the
+ *    local-mode UI opens with NO internet at all after the first visit;
+ *  - model WEIGHTS are downloaded by the BROWSER directly from the fastest
+ *    reachable mirror (ModelScope -> hf-mirror -> huggingface.co) and stored
+ *    in the browser Cache Storage (transformers.js is cache-first: once a
+ *    file is cached it is never refetched). The user's own API server relay
+ *    is only an optional last resort and is NEVER required.
+ * Result: after the first successful download, the model loads and chats
+ * fully offline — zero requests to any server.
  */
 (function () {
   "use strict";
@@ -20,6 +23,7 @@
   const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
   const esc = (s) => (s || "").replace(/[&<>"]/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const mb = (n) => (n / 1048576).toFixed(1) + " MB";
 
   // The page may be served from a GitHub Pages sub-path (/cla/), so every
   // self-link is resolved against the folder containing this page.
@@ -31,15 +35,44 @@
     "https://unpkg.com/@huggingface/transformers@3.0.2/dist/transformers.min.js",
     "https://esm.sh/@huggingface/transformers@3.0.2",
   ];
-  // Weight downloads are relayed by the API server (same resolution rules
-  // as app.js: manual override -> config.json -> current origin).
+  // Direct browser->mirror download sources (fastest first). After the first
+  // successful download the files live in the browser Cache Storage keyed by
+  // URL, so the same source later loads with zero network. ModelScope hosts
+  // an HF-compatible /models/{repo}/resolve/main/ layout with permissive CORS.
   const WEIGHTS_PATH = "/api/local-weights/";
+  const DIRECT_SOURCES = [
+    { name: "ModelScope 魔搭（国内直连，最快）", host: "https://modelscope.cn/models" },
+    { name: "hf-mirror 国内镜像", host: "https://hf-mirror.com" },
+    { name: "Hugging Face 官方", host: "https://huggingface.co" },
+  ];
+
+  // Model weights published as GitHub Release assets (flat names). The
+  // browser pulls them through GitHub accelerator mirrors and stores them
+  // in transformers' cache under the canonical ModelScope URLs, so model
+  // loads are fully offline afterwards and the API server is never touched.
+  const GH_REPO = "cyrcyrgo/cyrcyrgo.github.io";
+  const GH_MIRRORS = [
+    "https://gh-proxy.com/",
+    "https://ghfast.top/",
+    "https://ghproxy.net/",
+    "https://mirror.ghproxy.com/",
+    "https://gh.llkk.cc/",
+  ];
+  // modelId -> release tag. Only models listed here get the GitHub route.
+  const GH_RELEASES = {
+    "onnx-community/Qwen2.5-0.5B-Instruct": { tag: "weights-qwen2.5-0.5b-v1" },
+  };
+  const HUB_SMALL_FILES = [
+    "config.json", "generation_config.json", "tokenizer.json",
+    "tokenizer_config.json", "special_tokens_map.json", "vocab.json", "merges.txt",
+  ];
+  const HUB_CACHE = "transformers-cache";
 
   const MODELS = [
     { id: "onnx-community/Qwen2.5-0.5B-Instruct", name: "Qwen2.5 · 0.5B",
       note: "轻量快速，低配机首选", size: "约 470 MB" },
     { id: "onnx-community/Qwen2.5-1.5B-Instruct", name: "Qwen2.5 · 1.5B",
-      note: "效果更好，需更多内存与耐心", size: "约 1.0 GB" },
+      note: "效果更好，需更多内存与耐心", size: "约 1.1 GB" },
   ];
 
   let engine = null;           // imported transformers module
@@ -157,27 +190,36 @@
     ]);
   }
 
-  function configureEngine(t, apiBase) {
+  function configureEngine(t) {
     t.env.allowLocalModels = false;
+    // Persist every fetched model file in the browser Cache Storage; the
+    // hub loader matches the cache BEFORE touching the network, which is
+    // what makes later loads work with the machine fully offline.
+    t.env.useBrowserCache = true;
+    t.env.useFSCache = false;
     // Same-origin vendored WASM binary — never fetched from a CDN.
     t.env.backends = t.env.backends || {};
     t.env.backends.onnx = t.env.backends.onnx || {};
     t.env.backends.onnx.wasm = t.env.backends.onnx.wasm || {};
     t.env.backends.onnx.wasm.wasmPaths = VENDOR_BASE;
-    // Route every model file (tokenizer/config/weights) via our own server.
-    t.env.remoteHost = apiBase + WEIGHTS_PATH.replace(/\/$/, "");
-    t.env.remotePathTemplate = "{model}/resolve/{revision}/";
     return t;
   }
 
-  async function ensureEngine(apiBase) {
+  // Point the hub loader at one download source. All three direct mirrors
+  // speak the HF layout {model}/resolve/{revision}/file (ModelScope included).
+  function useSource(t, host) {
+    t.env.remoteHost = host;
+    t.env.remotePathTemplate = "{model}/resolve/{revision}/";
+  }
+
+  async function ensureEngine() {
     if (engine) return engine;
     const errors = [];
 
     // 1) same-origin vendored engine (the normal path)
     setProgress("正在加载本地推理引擎…");
     try {
-      engine = configureEngine(await importWithTimeout(ENGINE_LOCAL, 30000), apiBase);
+      engine = configureEngine(await importWithTimeout(ENGINE_LOCAL, 30000));
       return engine;
     } catch (e) { errors.push("本地引擎：" + (e?.message || e)); }
 
@@ -185,11 +227,151 @@
     for (const url of ENGINE_CDNS) {
       setProgress("本地引擎缺失，尝试备用源 " + url.replace(/^https?:\/\//, "").split("/")[0] + " …");
       try {
-        engine = configureEngine(await importWithTimeout(url, 30000), apiBase);
+        engine = configureEngine(await importWithTimeout(url, 30000));
         return engine;
       } catch (e) { errors.push(url.split("/")[2] + "：" + (e?.message || e)); }
     }
     throw new Error("推理引擎加载失败。\n" + errors.join("\n"));
+  }
+
+  // Pull release assets through GitHub accelerator mirrors and inject them
+  // into transformers' Cache Storage under the canonical hub URLs. Once all
+  // needed files are cached (possibly from a previous run), model loading
+  // makes ZERO network requests — fully offline, no server involved.
+  // Returns true when every required file is available in the cache.
+  async function preSeedFromGithub(modelId, dtype) {
+    const spec = GH_RELEASES[modelId];
+    if (!spec || typeof caches === "undefined") return false;
+    const cache = await caches.open(HUB_CACHE);
+    const hubBase = DIRECT_SOURCES[0].host + "/" + modelId + "/resolve/main/";
+    const weightAsset = "model_" + dtype + ".onnx";
+    const want = HUB_SMALL_FILES.map((f) => ({ key: hubBase + f, asset: f }));
+    want.push({ key: hubBase + "onnx/" + weightAsset, asset: weightAsset });
+
+    const missing = [];
+    for (const f of want) {
+      if (cancelled) throw new Error("__CANCELLED__");
+      let hit = null;
+      try { hit = await cache.match(f.key); } catch (_) { hit = null; }
+      if (!hit) missing.push(f);
+    }
+    if (!missing.length) return true;                    // fully cached -> offline
+    if (navigator.onLine === false) return false;
+
+    const ghBase = "https://github.com/" + GH_REPO +
+      "/releases/download/" + spec.tag + "/";
+    let doneBytes = 0;
+    for (const f of missing) {
+      if (cancelled) throw new Error("__CANCELLED__");
+      let saved = false;
+      for (const prefix of GH_MIRRORS) {
+        let ctrl = null;
+        try {
+          ctrl = new AbortController();
+          setProgress("通过 GitHub 加速站连接 " + prefix.replace(/^https?:\/\//, "").replace(/\/$/, "") +
+            " …");
+          const resp = await fetch(prefix + ghBase + f.asset, {
+            signal: ctrl.signal, cache: "no-store",
+          });
+          if (!resp.ok) throw new Error("HTTP " + resp.status);
+
+          // Count progress while collecting chunks; a Blob is disk-backed in
+          // Chromium so the 460 MB weight doesn't blow up JS heap.
+          const chunks = [];
+          let got = 0, lastUi = 0;
+          const total = Number(resp.headers.get("content-length")) || 0;
+          if (resp.body && resp.body.getReader) {
+            const reader = resp.body.getReader();
+            for (;;) {
+              if (cancelled) { ctrl.abort(); throw new Error("__CANCELLED__"); }
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+              got += value.length;
+              const now = Date.now();
+              if (now - lastUi > 250) {
+                lastUi = now;
+                const loaded = doneBytes + got;
+                setProgress(
+                  `GitHub 加速下载 ${mb(loaded)}${total ? " / " + mb(total + doneBytes) : ""}` +
+                  `（${f.asset}）`,
+                  total ? (loaded / (total + doneBytes)) * 100 : null,
+                );
+              }
+            }
+          } else {
+            chunks.push(new Uint8Array(await resp.arrayBuffer()));
+            got = chunks[0].byteLength;
+          }
+          const stored = new Response(new Blob(chunks, {
+            type: resp.headers.get("content-type") || "application/octet-stream",
+          }), {
+            headers: {
+              "Content-Type": resp.headers.get("content-type") || "application/octet-stream",
+              ...(total ? { "Content-Length": String(total) } : {}),
+            },
+          });
+          await cache.put(f.key, stored);
+          doneBytes += total || got;
+          saved = true;
+          break;
+        } catch (e) {
+          if (String(e?.message) === "__CANCELLED__") throw e;
+          if (ctrl) { try { ctrl.abort(); } catch (_) {} }
+          // try the next accelerator mirror
+        }
+      }
+      if (!saved) return false;
+    }
+    return true;
+  }
+
+  // The API-server relay is OPTIONAL: probe it quickly (3 s) and only offer
+  // it as a last resort when the browser itself cannot reach any mirror.
+  // Being offline / no tunnel / no server must never block local mode.
+  async function probeRelaySource() {
+    try {
+      let apiBase = localStorage.getItem("yjs_api_override");
+      if (!apiBase) {
+        const r = await fetch(APP_DIR + "config.json?t=" + Date.now(), { cache: "no-store" });
+        if (r.ok) {
+          const c = await r.json();
+          if (c.api_url) apiBase = String(c.api_url);
+        }
+      }
+      if (!apiBase) return null;
+      apiBase = apiBase.replace(/\/+$/, "");
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 3000);
+      try {
+        const h = await fetch(apiBase + "/api/health?t=" + Date.now(), {
+          cache: "no-store", signal: ctrl.signal,
+          headers: { "ngrok-skip-browser-warning": "true" },
+        });
+        if (!h.ok) return null;
+      } finally { clearTimeout(timer); }
+      installFetchPatch(new URL(apiBase, location.href).origin);
+      return { name: "本机服务器中转（直连镜像均失败时兜底）",
+               host: apiBase + WEIGHTS_PATH.replace(/\/$/, "") };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Trivial factual probe: a healthy model must continue "中国的首都是"
+  // with "北京". Catches backends that produce silently corrupted tokens.
+  async function sanityCheck(p) {
+    try {
+      const r = await p("中国的首都是", {
+        max_new_tokens: 3, do_sample: false, return_full_text: false,
+      });
+      const s = String(r?.[0]?.generated_text ?? "");
+      if (!s.includes("北京")) console.warn("[yjs-sanity] unexpected output:", JSON.stringify(s));
+      return s.includes("北京");
+    } catch (e) {
+      console.warn("[yjs-sanity] probe threw:", e);
+      return false;
+    }
   }
 
   /* Aggregate progress across the (tokenizer + multiple weight) files. */
@@ -227,55 +409,122 @@
     cancelled = false;
 
     try {
-      setProgress("正在连接本机服务器…");
-      const apiBase = await resolveApi();
-      let apiOrigin = apiBase;
-      try { apiOrigin = new URL(apiBase, location.href).origin; } catch (_) {}
-      installFetchPatch(apiOrigin);
-      // quick health probe so users get a clear error instead of a stalled
-      // download when the tunnel/server is offline
-      try {
-        const h = await fetch(apiBase + "/api/health?t=" + Date.now(), {
-          cache: "no-store", headers: { "ngrok-skip-browser-warning": "true" },
-        });
-        if (!h.ok) throw new Error("HTTP " + h.status);
-      } catch (e) {
-        throw new Error("无法连接本机服务器（" + apiBase.replace(/^https?:\/\//, "") +
-          "），首次下载权重需要服务器在线。请先启动服务并重试。");
-      }
-
-      const t = await ensureEngine(apiBase);
+      const t = await ensureEngine();
       const tracker = makeProgressTracker();
       const hasGpu = !!navigator.gpu;
-      // (device, dtype) combos to attempt, best-first. q4f16 is the GPU
-      // storage format; plain q4 is the portable WASM quantization.
-      const attempts = hasGpu
-        ? [{ device: "webgpu", dtype: "q4f16" }, { device: "webgpu", dtype: "q4" },
-           { device: "wasm", dtype: "q4" }]
+      // (device, dtype) combos to attempt, best-first. q4f16 is the ONLY
+      // correct WebGPU storage format; plain q4 is the WASM-only fallback
+      // (running q4 on WebGPU produces garbage output, so never combine).
+      const forceWasm = /[?&]wasm=1\b/.test(location.search);
+      const attempts = (!forceWasm && hasGpu)
+        ? [{ device: "webgpu", dtype: "q4f16" }, { device: "wasm", dtype: "q4" }]
         : [{ device: "wasm", dtype: "q4" }];
 
       let lastErr = null;
+      outer:
       for (const a of attempts) {
         if (cancelled) throw new Error("__CANCELLED__");
-        setProgress(`经本机服务器中转下载，以 ${a.device.toUpperCase()} 模式初始化…`);
-        try {
+
+        // Build a pipeline then verify it actually reasons: ask a trivial
+        // question and require the expected token. WebGPU devices can
+        // occasionally return corrupted outputs (garbage) without throwing,
+        // so an exception-only check is insufficient. A failed check is
+        // treated like a broken backend -> retry once, then next combo.
+        const tryPipe = async (label) => {
+          setProgress(label);
           const p = await t.pipeline("text-generation", modelId, {
             device: a.device, dtype: a.dtype, progress_callback: tracker,
           });
-          pipe = p;
-          break;
-        } catch (e) {
-          if (cancelled || String(e?.message) === "__CANCELLED__") throw new Error("__CANCELLED__");
-          lastErr = e;
-          const msg = String(e?.message || e);
-          // Device/dtype mismatch -> try the next combo; relay/server errors
-          // are fatal (no other download path exists).
-          if (is_networkish(msg)) throw e;
-          if (/gpu|dtype|quantiz|webgpu|unsupported/i.test(msg)) continue;
-          continue;
+          setProgress("正在自检模型输出…");
+          if (await sanityCheck(p)) return p;
+          try { await p.destroy?.(); } catch (_) {}
+          throw new Error("webgpu backend sanity check failed (corrupt output)");
+        };
+
+        // Route 1 — GitHub Release assets via accelerator mirrors. Files are
+        // injected into the browser cache, so the pipeline loads them with
+        // zero network (works fully offline after the first download).
+        if (GH_RELEASES[modelId]) {
+          const seeded = await preSeedFromGithub(modelId, a.dtype);
+          if (seeded) {
+            // Cached keys are the canonical ModelScope URLs.
+            useSource(t, DIRECT_SOURCES[0].host);
+            // Files are cached, so retries cost no traffic.
+            for (const attemptNo of [1, 2]) {
+              if (cancelled) throw new Error("__CANCELLED__");
+              try {
+                pipe = await tryPipe(
+                  `从本机缓存加载模型，以 ${a.device.toUpperCase()} 模式初始化…`);
+                break outer;
+              } catch (e) {
+                if (cancelled || String(e?.message) === "__CANCELLED__") throw new Error("__CANCELLED__");
+                console.error("[yjs-load] cached route failed:", a.device, a.dtype, "attempt", attemptNo, e);
+                lastErr = e;
+                if (attemptNo === 2) break;
+                setProgress("模型自检未通过，正在重新初始化…");
+                await new Promise((r) => setTimeout(r, 800));
+              }
+            }
+            continue;   // this device/dtype is unusable -> next combo
+          }
+        }
+
+        // Route 2 — direct HF-compatible mirrors (ModelScope first; fast).
+        for (const src of DIRECT_SOURCES) {
+          if (cancelled) throw new Error("__CANCELLED__");
+          useSource(t, src.host);
+          try {
+            pipe = await tryPipe(
+              `从 ${src.name} 获取模型，以 ${a.device.toUpperCase()} 模式初始化…`);
+            break outer;
+          } catch (e) {
+            if (cancelled || String(e?.message) === "__CANCELLED__") throw new Error("__CANCELLED__");
+            lastErr = e;
+            const msg = String(e?.message || e);
+            if (is_networkish(msg)) break;                  // next source
+            if (/gpu|dtype|quantiz|webgpu|unsupported|execution provider|backend|sanity/i.test(msg)) continue outer;
+            break;
+          }
         }
       }
-      if (!pipe) throw lastErr || new Error("模型加载失败");
+
+      // All direct mirrors failed/blocked: only now probe the OPTIONAL
+      // local-server relay (this is why no server is needed in normal use).
+      // Also attempted offline, since a localhost server still works without
+      // internet when weights were cached server-side on an earlier run.
+      if (!pipe && !cancelled) {
+        setProgress("直连镜像均不可达，尝试本机服务器中转…");
+        const relay = await probeRelaySource();
+        if (relay) {
+          useSource(t, relay.host);
+          for (const a of attempts) {
+            if (cancelled) throw new Error("__CANCELLED__");
+            try {
+              const p = await t.pipeline("text-generation", modelId, {
+                device: a.device, dtype: a.dtype, progress_callback: tracker,
+              });
+              if (!(await sanityCheck(p))) {
+                try { await p.destroy?.(); } catch (_) {}
+                throw new Error("backend sanity check failed");
+              }
+              pipe = p;
+              break;
+            } catch (e) {
+              if (cancelled || String(e?.message) === "__CANCELLED__") throw new Error("__CANCELLED__");
+              lastErr = e;
+              if (is_networkish(String(e?.message || e))) break;
+            }
+          }
+        }
+      }
+
+      if (!pipe) {
+        if (navigator.onLine === false) {
+          throw new Error("当前处于离线状态，且本机尚未缓存该模型。" +
+            "请先联网完成一次下载，之后即可永久离线使用。");
+        }
+        throw lastErr || new Error("所有下载线路均失败");
+      }
 
       loadedId = modelId;
       setProgress(null);
@@ -291,7 +540,7 @@
       } else {
         const msg = String(e?.message || e);
         setProgress("✗ 模型加载失败：" + msg +
-          "\n请确认本机服务器与内网穿透已启动（页面左下角显示的服务器地址可连），然后重试。");
+          "\n可切换网络（如手机热点）后重试；下载成功一次后即可永久离线使用。");
       }
     } finally {
       btn.disabled = false;
@@ -333,6 +582,7 @@
         max_new_tokens: 512,
         temperature: 0.6,
         top_p: 0.9,
+        repetition_penalty: 1.15,
         do_sample: true,
         return_full_text: false,
         callback_function: (beams) => {
@@ -363,6 +613,12 @@
   function enter() {
     if (entered) return;
     entered = true;
+    // Enable the offline app shell (page + engine + wasm cached by the SW).
+    if ("serviceWorker" in navigator) {
+      const reg = () => navigator.serviceWorker.register(APP_DIR + "sw.js").catch(() => {});
+      if (document.readyState === "complete") reg();
+      else window.addEventListener("load", reg);
+    }
     detectGpu();
     renderModelList(loadedId);
     if (!pipe) setTimeout(openSetup, 250);
