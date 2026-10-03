@@ -66,12 +66,32 @@
         <span class="sw-label">默认模型</span>
         <select id="set-default"></select>
       </div>
+      <div class="set-field">
+        <span class="sw-label">每轮工具调用上限</span>
+        <input id="set-toolcalls" type="number" min="1" max="50" step="1" value="8" />
+        <span class="hint">Agent 单步最多执行多少个工具（1–50）</span>
+      </div>
       <div class="set-field wide">
         <span class="sw-label">站点公告（显示在对话页顶部，留空隐藏）</span>
         <input id="set-announce" placeholder="例如：系统将于今晚 23:00 维护，请提前保存文件" />
       </div>
     </div>
     <div class="set-actions"><button class="btn" id="btn-save-settings">保存设置</button></div>
+  </section>
+
+  <!-- MCP 工具服务器 -->
+  <section class="panel">
+    <h3>MCP 工具服务器 <span class="hint">· 为 Agent 添加 stdio 协议 MCP 工具</span>
+      <button class="btn" id="btn-add-mcp" style="float:right;padding:4px 14px">+ 添加 MCP 服务器</button>
+    </h3>
+    <div class="table-wrap">
+      <table class="tbl" id="tbl-mcp">
+        <thead><tr>
+          <th>名称</th><th>启动命令</th><th>环境变量</th><th>工具检测</th><th>操作</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </section>
 
   <div class="grid2">
@@ -158,6 +178,6 @@
   </div>
 </div>
 
-<script src="assets/admin.js?v=20261002c"></script>
+<script src="assets/admin.js?v=20261003a"></script>
 </body>
 </html>
