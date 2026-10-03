@@ -555,8 +555,6 @@
     renderMeCard(user);
     renderUsage(user.usage);
     applySidebarState();
-    $("btn-admin").classList.toggle("hidden", !user.is_admin);
-    $("btn-admin").onclick = () => { location.href = APP_ROOT + "admin.html"; };
     wireUi();
     await Promise.all([loadModels(user.model_preference), loadAgents()]);
     await loadConversations();
