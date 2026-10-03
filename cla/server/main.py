@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from html import escape as _esc
 from pathlib import Path
 
 import uvicorn
@@ -13,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agent, auth, config as cfg, github_sync, llm, mcp_client, metrics, store, tools, tunnel
+from . import agent, agents, auth, config as cfg, github_sync, llm, mcp_client, metrics, store, tools, tunnel
 
 app = FastAPI(title="YJS LLM Agent", version="1.0")
 app.add_middleware(
@@ -67,6 +68,7 @@ class ChatIn(BaseModel):
     content: str
     model: str | None = None
     mode: str | None = None   # fast | think | work | expert
+    agent: str | None = None  # domain agent id (dev | office | writer | study | life)
 
 
 # --------------------------------------------------------------------------- #
@@ -110,6 +112,7 @@ def _public_user(user: dict) -> dict:
         "uid": user["uid"],
         "email": user["email"],
         "name": user.get("name"),
+        "avatar": user.get("avatar") or "",
         "created_at": user.get("created_at"),
         "model_preference": user.get("model_preference"),
         "quota_bytes": int(user.get("quota_bytes") or cfg.CONFIG["quota_bytes"]),
@@ -153,6 +156,82 @@ async def set_own_password(body: SetPasswordIn, user: dict = Depends(current_use
         raise HTTPException(400, msg)
     store.set_password_hash(user["uid"], auth.hash_password(body.password))
     return {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
+# my account: profile / email change / feedback   (settings panel)
+# --------------------------------------------------------------------------- #
+class ProfileIn(BaseModel):
+    name: str | None = None
+    avatar: str | None = None       # data:image/...  ("空串" clears it)
+
+
+@app.post("/api/me/profile")
+async def update_my_profile(body: ProfileIn, user: dict = Depends(current_user)):
+    try:
+        profile = store.update_profile(user["uid"], name=body.name, avatar=body.avatar)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    if not profile:
+        raise HTTPException(404, "用户不存在")
+    return {"ok": True, "user": _public_user(profile)}
+
+
+class EmailCodeIn(BaseModel):
+    email: str
+
+
+@app.post("/api/me/email/send-code")
+async def send_change_email_code(body: EmailCodeIn, user: dict = Depends(current_user)):
+    """Send a verification code to a *new* address before switching to it."""
+    email = body.email.strip().lower()
+    if "@" not in email or len(email) < 5:
+        raise HTTPException(400, "邮箱格式不正确")
+    other = store.get_user_by_email(email)
+    if other and other["uid"] != user["uid"]:
+        raise HTTPException(400, "该邮箱已被其他账号使用")
+    ok, wait = auth.can_send(email)
+    if not ok:
+        raise HTTPException(429, f"请 {wait} 秒后再试")
+    try:
+        await asyncio.to_thread(auth.send_code, email)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"验证码发送失败：{exc}") from exc
+    return {"ok": True, "message": "验证码已发送到新邮箱"}
+
+
+class EmailChangeIn(BaseModel):
+    email: str
+    code: str
+
+
+@app.post("/api/me/email")
+async def change_my_email(body: EmailChangeIn, user: dict = Depends(current_user)):
+    email = body.email.strip().lower()
+    if not auth.verify_code(email, body.code):
+        raise HTTPException(400, "验证码错误或已过期")
+    ok, msg = store.change_email(user["uid"], email)
+    if not ok:
+        raise HTTPException(400, msg)
+    updated = store.get_user(user["uid"]) or {}
+    # The old token still carries the stale email; hand back a fresh one.
+    return {"ok": True, "token": auth.make_token(user["uid"], email),
+            "user": _public_user(updated)}
+
+
+class FeedbackIn(BaseModel):
+    category: str = "其他"
+    content: str
+
+
+@app.post("/api/feedback")
+async def submit_feedback(body: FeedbackIn, user: dict = Depends(current_user)):
+    """「向作者反馈」—— stored server-side for the admin to review."""
+    content = (body.content or "").strip()
+    if len(content) < 2:
+        raise HTTPException(400, "请填写反馈内容")
+    item = store.add_feedback(user["uid"], user.get("email", ""), body.category, content)
+    return {"ok": True, "id": item["id"]}
 
 
 # --------------------------------------------------------------------------- #
@@ -205,10 +284,14 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
     store.append_message(uid, cid, {"role": "user", "content": text, "ts": time.time()})
 
     # Resolve which model to run this conversation with.
-    # Order: request body override -> user profile preference -> server default.
+    # Order: request body override -> user profile preference ->
+    # domain agent's suggested (small, low-spec-friendly) model -> server default.
+    agent_meta = agents.get_agent(body.agent)
     resolved_model = body.model
     if not resolved_model:
         resolved_model = user.get("model_preference")
+    if not resolved_model and agent_meta and agent_meta.get("suggest_model"):
+        resolved_model = agent_meta["suggest_model"]
     if not resolved_model:
         resolved_model = cfg.CONFIG.get("default_model") or cfg.CONFIG["model"]
     # Validate — intersect the globally-enabled set with the user's allow-list.
@@ -243,7 +326,8 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
         # Notify the UI which model is about to run, so it updates the chip.
         await emit({"type": "model", "model": resolved_model})
         await emit({"type": "mode", "mode": resolved_mode})
-        task = asyncio.create_task(agent.run_agent(uid, cid, emit, model=resolved_model, mode=resolved_mode))
+        task = asyncio.create_task(agent.run_agent(uid, cid, emit, model=resolved_model,
+                                                   mode=resolved_mode, agent_id=body.agent))
         _RUNNING.add(task)
         task.add_done_callback(_RUNNING.discard)
         idle = 0
@@ -509,6 +593,14 @@ async def list_tools():
 
 
 # --------------------------------------------------------------------------- #
+# domain agents (locally "trained" presets for the small on-device models)
+# --------------------------------------------------------------------------- #
+@app.get("/api/agents")
+async def list_agents(user: dict = Depends(current_user)):
+    return {"ok": True, "agents": agents.public_list(), "default": agents.DEFAULT_AGENT_ID}
+
+
+# --------------------------------------------------------------------------- #
 # admin dashboard
 # --------------------------------------------------------------------------- #
 async def require_admin(user: dict = Depends(current_user)) -> dict:
@@ -611,6 +703,7 @@ async def admin_overview(user: dict = Depends(require_admin_gate)):
         "by_mode": snap["by_mode"],
         "by_user": snap["by_user"],
         "users_total": store.total_users(),
+        "feedback_unread": store.feedback_unread(),
         "vram": ps.get("models", []),
         "ollama_ok": ollama.get("ok", False),
     }
@@ -817,8 +910,44 @@ async def admin_test_model(body: AdminModelTestIn,
     try:
         reply = await llm.probe(base, key, target)
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(400, f"连接失败：{exc}")
+        raise HTTPException(400, f"连接失败：{exc}") from exc
     return {"ok": True, "reply": reply}
+
+
+class AdminModelRunTestIn(BaseModel):
+    name: str          # catalog name of the model to exercise
+    prompt: str = ""   # optional custom probe prompt
+
+
+@app.post("/api/admin/models/run-test")
+async def admin_run_test(body: AdminModelRunTestIn,
+                         user: dict = Depends(require_admin_gate)):
+    """Actually generate a few tokens with the model and report timing.
+
+    Local Ollama models are timed through the native API (including cold-start
+    load duration); external API models reuse the lightweight provider probe.
+    This is the "检查本地部署模型是否能正常运行 / 长时间不输出" health check.
+    """
+    name = (body.name or "").strip()
+    if not any(m.get("name") == name for m in cfg.CONFIG.get("models", [])):
+        raise HTTPException(404, f"未知模型: {name}")
+    m = llm.model_config(name)
+    if (m.get("base_url") or "").strip():
+        import time as _time
+        key = (cfg.CONFIG.get("api_keys") or {}).get(m.get("api_key_ref") or "", "")
+        started = _time.time()
+        try:
+            reply = await llm.probe(m["base_url"], key, name)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(400, f"试运行失败：{exc}") from exc
+        return {"ok": True, "kind": "api", "wall_seconds": round(_time.time() - started, 2),
+                "reply": reply}
+    try:
+        res = await llm.local_probe(name, prompt=body.prompt or "请用一句话介绍你自己。")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, f"试运行失败：{exc}") from exc
+    res["kind"] = "local"
+    return res
 
 
 class AdminModelAddIn(BaseModel):
@@ -898,6 +1027,284 @@ async def admin_delete_user(uid: str, user: dict = Depends(require_admin_gate)):
 async def admin_reset_metrics(user: dict = Depends(require_admin_gate)):
     metrics.reset()
     return {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
+# mail service (admin): sender account settings + broadcast to all users
+# --------------------------------------------------------------------------- #
+class SmtpIn(BaseModel):
+    host: str | None = None
+    port: int | None = None
+    protocol: str | None = None          # ssl | starttls
+    user: str | None = None              # sender address
+    auth_code: str | None = None         # empty = keep the stored one
+    from_name: str | None = None
+
+
+@app.get("/api/admin/email")
+async def admin_get_email(user: dict = Depends(require_admin_gate)):
+    s = cfg.CONFIG.get("smtp") or {}
+    return {
+        "ok": True,
+        "host": s.get("host", ""),
+        "port": int(s.get("port") or 465),
+        "protocol": s.get("protocol") or "ssl",
+        "user": s.get("user", ""),
+        "from_name": s.get("from_name", ""),
+        "has_auth_code": bool(s.get("auth_code")),
+        "users_total": store.total_users(),
+    }
+
+
+@app.post("/api/admin/email")
+async def admin_set_email(body: SmtpIn, user: dict = Depends(require_admin_gate)):
+    s = cfg.CONFIG.setdefault("smtp", {})
+    if body.host is not None:
+        s["host"] = body.host.strip() or "smtp.qq.com"
+    if body.port is not None:
+        s["port"] = max(1, min(int(body.port), 65535))
+    if body.protocol is not None:
+        p = body.protocol.strip().lower()
+        s["protocol"] = p if p in ("ssl", "starttls") else "ssl"
+    if body.user is not None:
+        s["user"] = body.user.strip()
+    if body.auth_code:
+        s["auth_code"] = body.auth_code.strip()
+    if body.from_name is not None:
+        s["from_name"] = body.from_name.strip() or "YJS LLM Agent"
+    cfg.save(cfg.CONFIG)
+    return {"ok": True}
+
+
+class TestMailIn(BaseModel):
+    to: str = ""
+
+
+@app.post("/api/admin/email/test")
+async def admin_test_email(body: TestMailIn, user: dict = Depends(require_admin_gate)):
+    """Log in to the SMTP server and send one message to prove it works."""
+    to = (body.to or "").strip() or user["email"]
+    html = auth._wrap("邮件配置测试",
+                      "<p>如果你收到这封邮件，说明后台的发件邮箱配置正确。</p>")
+    try:
+        await asyncio.to_thread(auth.send_mail, to, "YJS 邮件配置测试", html)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, f"发送失败：{exc}") from exc
+    return {"ok": True, "to": to}
+
+
+class BroadcastIn(BaseModel):
+    subject: str
+    body: str
+    only_me: bool = False        # send only to the admin's own mailbox (dry run)
+
+
+@app.post("/api/admin/email/broadcast")
+async def admin_broadcast(body: BroadcastIn, user: dict = Depends(require_admin_gate)):
+    """Send an announcement mail to every registered account."""
+    subject = (body.subject or "").strip()[:120]
+    content = (body.body or "").strip()
+    if not subject:
+        raise HTTPException(400, "请填写邮件主题")
+    if not content:
+        raise HTTPException(400, "请填写邮件正文")
+    targets = [u["email"] for u in store.list_users() if u.get("email")]
+    if body.only_me:
+        targets = [user["email"]]
+    targets = targets[:500]
+    if not targets:
+        raise HTTPException(400, "没有可发送的目标邮箱")
+    html = auth._wrap(_esc(subject), "<p>" + _esc(content).replace("\n", "<br>") + "</p>")
+    sent: list[str] = []
+    failed: list[dict] = []
+    for email in targets:
+        try:
+            await asyncio.to_thread(auth.send_mail, email, subject, html)
+            sent.append(email)
+        except Exception as exc:  # noqa: BLE001
+            failed.append({"email": email, "error": str(exc)[:200]})
+    return {"ok": True, "total": len(targets), "sent": len(sent), "failed": failed}
+
+
+# --------------------------------------------------------------------------- #
+# user feedback (admin review)
+# --------------------------------------------------------------------------- #
+@app.get("/api/admin/feedback")
+async def admin_list_feedback(user: dict = Depends(require_admin_gate)):
+    items = store.list_feedback()
+    return {"ok": True, "items": items,
+            "unread": sum(1 for i in items if i.get("status") == "new")}
+
+
+class FeedbackStatusIn(BaseModel):
+    status: str
+
+
+@app.post("/api/admin/feedback/{fid}/status")
+async def admin_feedback_status(fid: str, body: FeedbackStatusIn,
+                                user: dict = Depends(require_admin_gate)):
+    if not store.update_feedback(fid, body.status):
+        raise HTTPException(404, "反馈不存在")
+    return {"ok": True}
+
+
+@app.delete("/api/admin/feedback/{fid}")
+async def admin_feedback_delete(fid: str, user: dict = Depends(require_admin_gate)):
+    return {"ok": store.delete_feedback(fid)}
+
+
+# --------------------------------------------------------------------------- #
+# GitHub repository (admin): encrypted token + repo password gate
+# --------------------------------------------------------------------------- #
+REPO_SESSION_TTL = 6 * 3600
+_REPO_SESSION: dict[str, dict] = {}       # uid -> {"key": password, "exp": ts}
+
+PUBLISH_EXCLUDES = (
+    "config.local.json", "config.local.json.bak", "data", "models", ".venv",
+    "bin", "__pycache__", ".git", "_probe.py", "_agenttest.py", "start-all.bat",
+)
+
+
+def _github_cfg() -> dict:
+    return cfg.CONFIG.setdefault("github", {})
+
+
+def _repo_unlocked(uid: str) -> bool:
+    sess = _REPO_SESSION.get(uid)
+    return bool(sess and sess.get("exp", 0) > time.time())
+
+
+def _require_repo_unlocked(uid: str) -> dict:
+    if not _repo_unlocked(uid):
+        raise HTTPException(401, "请先输入仓库管理密码解锁")
+    return _REPO_SESSION[uid]
+
+
+class AdminPasswordIn(BaseModel):
+    password: str
+
+
+@app.get("/api/admin/github")
+async def admin_github_status(user: dict = Depends(require_admin_gate)):
+    gh = _github_cfg()
+    sec = gh.get("token_secret") or {}
+    unlocked = _repo_unlocked(user["uid"])
+    return {
+        "ok": True,
+        "repo": gh.get("repo", ""),
+        "branch": gh.get("branch", "main"),
+        "path_prefix": gh.get("path_prefix", ""),
+        "has_token": bool(gh.get("token")),
+        "encrypted": bool(sec),
+        "mode": sec.get("mode", ""),          # session | repo | ""
+        "has_password": bool((gh.get("password_hash") or "").strip()),
+        "unlocked": unlocked,
+    }
+
+
+class RepoPasswordIn(BaseModel):
+    password: str
+    token: str | None = None       # optional: encrypt & store this token right away
+
+
+@app.post("/api/admin/github/password")
+async def admin_github_set_password(body: RepoPasswordIn,
+                                    user: dict = Depends(require_admin_gate)):
+    """Set (or change) the repo password; optionally encrypt the token with it."""
+    pw = (body.password or "").strip()
+    if len(pw) < 6:
+        raise HTTPException(400, "仓库管理密码至少 6 位")
+    gh = _github_cfg()
+    token = (body.token or "").strip() or str(gh.get("token") or "").strip()
+    gh["password_hash"] = auth.hash_password(pw)
+    if token:
+        gh["token"] = token
+        gh["token_secret"] = {"mode": "repo", **cfg.encrypt_secret(token, pw)}
+    cfg.save(cfg.CONFIG)
+    _REPO_SESSION[user["uid"]] = {"key": pw, "exp": time.time() + REPO_SESSION_TTL}
+    return {"ok": True, "has_token": bool(token), "encrypted": bool(token)}
+
+
+@app.post("/api/admin/github/unlock")
+async def admin_github_unlock(body: AdminPasswordIn,
+                              user: dict = Depends(require_admin_gate)):
+    """Enter the repo password to decrypt the token and enable repo changes."""
+    gh = _github_cfg()
+    stored = (gh.get("password_hash") or "").strip()
+    if not stored:
+        raise HTTPException(400, "尚未设置仓库管理密码，请先设置")
+    if not auth.check_password(body.password, stored):
+        raise HTTPException(401, "仓库管理密码错误")
+    sec = gh.get("token_secret") or {}
+    if sec.get("mode") == "repo":
+        token = cfg.decrypt_secret(sec, body.password)
+        if not token:
+            raise HTTPException(400, "密码与已加密的 token 不匹配")
+        gh["token"] = token
+    _REPO_SESSION[user["uid"]] = {"key": body.password,
+                                  "exp": time.time() + REPO_SESSION_TTL}
+    return {"ok": True, "has_token": bool(gh.get("token"))}
+
+
+class RepoTokenIn(BaseModel):
+    token: str
+
+
+@app.post("/api/admin/github/token")
+async def admin_github_set_token(body: RepoTokenIn,
+                                 user: dict = Depends(require_admin_gate)):
+    """Replace the token; encrypted with the repo password from the session."""
+    sess = _require_repo_unlocked(user["uid"])
+    token = (body.token or "").strip()
+    if not token:
+        raise HTTPException(400, "请填写 GitHub token")
+    gh = _github_cfg()
+    gh["token"] = token
+    gh["token_secret"] = {"mode": "repo", **cfg.encrypt_secret(token, sess["key"])}
+    cfg.save(cfg.CONFIG)
+    return {"ok": True}
+
+
+class RepoConfigIn(BaseModel):
+    repo: str
+    branch: str = "main"
+    path_prefix: str = ""
+
+
+@app.post("/api/admin/github/config")
+async def admin_github_config(body: RepoConfigIn,
+                              user: dict = Depends(require_admin_gate)):
+    _require_repo_unlocked(user["uid"])
+    repo = (body.repo or "").strip().strip("/")
+    if repo.count("/") != 1:
+        raise HTTPException(400, "仓库格式应为 owner/repo")
+    gh = _github_cfg()
+    gh["repo"] = repo
+    gh["branch"] = (body.branch or "main").strip() or "main"
+    gh["path_prefix"] = (body.path_prefix or "").strip().strip("/")
+    cfg.save(cfg.CONFIG)
+    return {"ok": True}
+
+
+@app.post("/api/admin/github/test")
+async def admin_github_test(user: dict = Depends(require_admin_gate)):
+    _require_repo_unlocked(user["uid"])
+    try:
+        info = await github_sync.whoami()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, f"连接失败：{exc}") from exc
+    return {"ok": True, "repo": info}
+
+
+@app.post("/api/admin/github/publish")
+async def admin_github_publish(user: dict = Depends(require_admin_gate)):
+    """Push the current workspace tree to the configured repository."""
+    _require_repo_unlocked(user["uid"])
+    try:
+        uploaded = await github_sync.publish_tree(cfg.ROOT, excludes=PUBLISH_EXCLUDES)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, f"发布失败：{exc}") from exc
+    return {"ok": True, "count": len(uploaded), "files": uploaded}
 
 
 # --------------------------------------------------------------------------- #
