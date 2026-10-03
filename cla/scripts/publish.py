@@ -20,6 +20,8 @@ EXCLUDES = (
     "models",
     ".venv",
     "bin",
+    "tests",
+    ".pytest_cache",
     "__pycache__",
     ".git",
     "_probe.py",
