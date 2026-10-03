@@ -672,6 +672,38 @@
     await refreshMe(); loadFiles();
   };
 
+  /* --- upload --- */
+  async function uploadOne(file, rel) {
+    const headers = { "Content-Type": "application/octet-stream",
+                      "ngrok-skip-browser-warning": "true" };
+    if (TOKEN) headers["Authorization"] = "Bearer " + TOKEN;
+    const res = await fetch(API + "/api/files/upload?path=" + encodeURIComponent(rel),
+      { method: "POST", headers, body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || data.error || ("HTTP " + res.status));
+    return data;
+  }
+  $("btn-upload-file").onclick = () => $("upload-input").click();
+  $("upload-input").onchange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    const box = $("files-usage");
+    const btn = $("btn-upload-file");
+    btn.disabled = true;
+    let done = 0, failed = 0, lastErr = "";
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      box.textContent = `上传中… ${i + 1}/${files.length}：${f.name}`;
+      try { await uploadOne(f, f.name); done++; }
+      catch (err) { failed++; lastErr = f.name + "：" + err.message; }
+    }
+    btn.disabled = false;
+    await refreshMe();
+    await loadFiles();
+    if (failed) alert(`上传完成：成功 ${done} 个，失败 ${failed} 个\n${lastErr}`);
+  };
+
   /* --- preview --- */
   async function openPreview(path) {
     $("preview-panel").classList.remove("hidden");
