@@ -227,6 +227,20 @@ async def _run_agent_inner(uid: str, cid: str, emit: Emit,
             final_summary = final_summary or content or "任务结束。"
             break
 
+        # Cap how many tools run in a single step (admin-configurable). Provider
+        # APIs require a tool message for EVERY tool_call id, so the skipped
+        # calls still get a short "not executed" reply below instead of being
+        # dropped silently.
+        limit = max(1, int(cfg.CONFIG.get("max_tool_calls_per_step") or 8))
+        skipped: list[dict] = []
+        if len(tool_calls) > limit:
+            skipped = tool_calls[limit:]
+            tool_calls = tool_calls[:limit]
+            await emit({
+                "type": "status",
+                "text": f"本轮工具调用 {len(skipped) + limit} 个，超过上限 {limit}，仅执行前 {limit} 个",
+            })
+
         for call in tool_calls:
             fn = call.get("function", {})
             name = fn.get("name", "")
@@ -270,6 +284,16 @@ async def _run_agent_inner(uid: str, cid: str, emit: Emit,
                         "ts": time.time(),
                     })
                 return
+
+        # Reply to the over-limit tool calls so every tool_call id has a match.
+        for call in skipped:
+            name = (call.get("function") or {}).get("name", "")
+            note = f"未执行：本轮工具调用数量超过上限（{limit}），请在下一轮重新调用。"
+            tool_msg = {"role": "tool", "content": note, "name": name}
+            if call.get("id"):
+                tool_msg["tool_call_id"] = call["id"]
+            messages.append(tool_msg)
+            await emit({"type": "tool_result", "name": name, "ok": False, "summary": note})
 
     if produced_files:
         await emit({"type": "files", "files": list(produced_files)})
