@@ -1,9 +1,19 @@
 /* YJS — fully offline, in-browser chat (WebGPU / WASM via Transformers.js).
  *
  * The model runs inside this browser tab; the server never sees messages.
- * The engine (@huggingface/transformers) and model weights are fetched on
- * first use (engine from a CDN, weights from a configurable mirror, default
- * hf-mirror.com), then cached by the browser for true offline reuse. */
+ *
+ * Reliability design (国内网络环境):
+ *  - the Transformers.js ENGINE is vendored under assets/vendor/ and loaded
+ *    SAME-ORIGIN (GitHub Pages / local server), so no cdn.jsdelivr.net
+ *    dependency can break startup;
+ *  - the onnxruntime WASM binary is also vendored same-origin (wasmPaths);
+ *  - model WEIGHTS do NOT go directly from the browser to huggingface /
+ *    hf-mirror (that path is often blocked): they are relayed through the
+ *    user's own API server (the ngrok tunnel on the deployed setup), which
+ *    fetches hf-mirror.com -> huggingface.co server-side and caches the
+ *    files once on local disk. The browser also keeps a Cache Storage copy,
+ *    so later runs are fully offline.
+ */
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -11,10 +21,25 @@
   const esc = (s) => (s || "").replace(/[&<>"]/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-  const ENGINE_URL = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/+esm";
+  // The page may be served from a GitHub Pages sub-path (/cla/), so every
+  // self-link is resolved against the folder containing this page.
+  const APP_DIR = location.pathname.replace(/[^/]*$/, "");
+  const VENDOR_BASE = APP_DIR + "assets/vendor/";
+  const ENGINE_LOCAL = VENDOR_BASE + "transformers.min.js?v=3.0.2";
+  const ENGINE_CDNS = [
+    "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/dist/transformers.min.js",
+    "https://unpkg.com/@huggingface/transformers@3.0.2/dist/transformers.min.js",
+    "https://esm.sh/@huggingface/transformers@3.0.2",
+  ];
+  // Weight downloads are relayed by the API server (same resolution rules
+  // as app.js: manual override -> config.json -> current origin).
+  const WEIGHTS_PATH = "/api/local-weights/";
+
   const MODELS = [
-    { id: "onnx-community/Qwen2.5-0.5B-Instruct", name: "Qwen2.5 · 0.5B", note: "轻量快速，低配机推荐", size: "约 400 MB" },
-    { id: "onnx-community/Qwen2.5-1.5B-Instruct", name: "Qwen2.5 · 1.5B", note: "效果更好，需较多显存/内存", size: "约 1 GB" },
+    { id: "onnx-community/Qwen2.5-0.5B-Instruct", name: "Qwen2.5 · 0.5B",
+      note: "轻量快速，低配机首选", size: "约 470 MB" },
+    { id: "onnx-community/Qwen2.5-1.5B-Instruct", name: "Qwen2.5 · 1.5B",
+      note: "效果更好，需更多内存与耐心", size: "约 1.0 GB" },
   ];
 
   let engine = null;           // imported transformers module
@@ -54,10 +79,10 @@
     let html = "";
     if (navigator.gpu) {
       if (tag) { tag.textContent = "WebGPU 可用"; tag.style.display = "inline-block"; }
-      html = "✓ 检测到 WebGPU，模型将以 GPU 加速运行。";
+      html = "✓ 检测到 WebGPU，模型将以 GPU 加速运行（失败会自动切换 CPU）。";
     } else {
       if (tag) { tag.textContent = "仅 CPU 模式"; tag.style.display = "inline-block"; }
-      html = "⚠ 当前浏览器不支持 WebGPU（建议使用最新版 Chrome / Edge），将使用 CPU 运行，速度较慢。";
+      html = "⚠ 当前浏览器不支持 WebGPU（建议最新版 Chrome / Edge），将使用 CPU 运行，速度较慢。";
     }
     if (note) note.textContent = html;
   }
@@ -87,24 +112,106 @@
   }
 
   /* ------------------------------------------------------------- engine */
-  async function ensureEngine() {
-    if (engine) return engine;
-    setProgress("正在加载本地推理引擎（首次需访问 CDN）…");
+  async function resolveApi() {
+    const override = localStorage.getItem("yjs_api_override");
+    if (override) return override.replace(/\/+$/, "");
     try {
-      engine = await import(ENGINE_URL);
-    } catch (e) {
-      throw new Error("推理引擎加载失败：" + (e?.message || e) +
-        "。请确认网络可访问 cdn.jsdelivr.net（仅首次需要）。");
-    }
-    return engine;
+      const r = await fetch(APP_DIR + "config.json?t=" + Date.now(), { cache: "no-store" });
+      if (r.ok) {
+        const c = await r.json();
+        if (c.api_url) return String(c.api_url).replace(/\/+$/, "");
+      }
+    } catch (_) { /* fall through */ }
+    return location.origin;
   }
 
-  function applyMirror(t) {
-    const mirror = (($("local-mirror")?.value || "").trim() || "https://hf-mirror.com")
-      .replace(/\/+$/, "");
+  // Requests to the tunnel must carry the ngrok free-tier bypass header,
+  // otherwise users get the ngrok warning page instead of the binary.
+  // transformers.js has no per-request header hook, so patch global fetch
+  // narrowly for the weights proxy only.
+  function installFetchPatch(apiOrigin) {
+    const prefix = apiOrigin + WEIGHTS_PATH;
+    const prev = window.fetch;
+    if (prev.__yjsPatched) return;
+    const wrapped = function (input, init) {
+      try {
+        const url = typeof input === "string" ? input : (input && input.url) || "";
+        if (url.indexOf(prefix) === 0) {
+          init = Object.assign({}, init || {});
+          const h = new Headers(init.headers ||
+            (typeof input !== "string" && input ? input.headers : undefined));
+          h.set("ngrok-skip-browser-warning", "true");
+          init.headers = h;
+        }
+      } catch (_) { /* never break fetch because of the patch */ }
+      return prev.call(window, input, init);
+    };
+    wrapped.__yjsPatched = true;
+    window.fetch = wrapped;
+  }
+
+  async function importWithTimeout(url, ms) {
+    return Promise.race([
+      import(/* @vite-ignore */ url),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("加载超时")), ms)),
+    ]);
+  }
+
+  function configureEngine(t, apiBase) {
     t.env.allowLocalModels = false;
-    try { t.env.remoteHost = mirror; } catch (_) {}
-    return mirror;
+    // Same-origin vendored WASM binary — never fetched from a CDN.
+    t.env.backends = t.env.backends || {};
+    t.env.backends.onnx = t.env.backends.onnx || {};
+    t.env.backends.onnx.wasm = t.env.backends.onnx.wasm || {};
+    t.env.backends.onnx.wasm.wasmPaths = VENDOR_BASE;
+    // Route every model file (tokenizer/config/weights) via our own server.
+    t.env.remoteHost = apiBase + WEIGHTS_PATH.replace(/\/$/, "");
+    t.env.remotePathTemplate = "{model}/resolve/{revision}/";
+    return t;
+  }
+
+  async function ensureEngine(apiBase) {
+    if (engine) return engine;
+    const errors = [];
+
+    // 1) same-origin vendored engine (the normal path)
+    setProgress("正在加载本地推理引擎…");
+    try {
+      engine = configureEngine(await importWithTimeout(ENGINE_LOCAL, 30000), apiBase);
+      return engine;
+    } catch (e) { errors.push("本地引擎：" + (e?.message || e)); }
+
+    // 2) CDN fallbacks (only if the vendored file is somehow missing)
+    for (const url of ENGINE_CDNS) {
+      setProgress("本地引擎缺失，尝试备用源 " + url.replace(/^https?:\/\//, "").split("/")[0] + " …");
+      try {
+        engine = configureEngine(await importWithTimeout(url, 30000), apiBase);
+        return engine;
+      } catch (e) { errors.push(url.split("/")[2] + "：" + (e?.message || e)); }
+    }
+    throw new Error("推理引擎加载失败。\n" + errors.join("\n"));
+  }
+
+  /* Aggregate progress across the (tokenizer + multiple weight) files. */
+  function makeProgressTracker() {
+    const seen = new Map();   // file -> {loaded, total}
+    return function (p) {
+      if (cancelled) throw new Error("__CANCELLED__");
+      if (p.status === "progress" && p.file) {
+        seen.set(p.file, { loaded: p.loaded || 0, total: p.total || 0 });
+        let loaded = 0, total = 0, knownFiles = 0, active = "";
+        for (const [f, v] of seen) {
+          loaded += v.loaded; total += v.total;
+          if (v.total && v.loaded < v.total) { active = f; knownFiles++; }
+        }
+        const mb = (n) => (n / 1048576).toFixed(1) + " MB";
+        const pct = total ? (loaded / total) * 100 : null;
+        const tail = active ? `（正在下载 ${active.replace(/^.*[\\/]/, "")}）` : "";
+        setProgress(`下载权重 ${mb(loaded)}${total ? " / " + mb(total) : ""} ${tail}`, pct);
+      } else if (p.status === "ready" || p.status === "done") {
+        setProgress(p.status === "done" ? "权重就绪，正在编译模型（首次较慢）…" : "准备中…");
+      }
+    };
   }
 
   async function loadModel() {
@@ -113,61 +220,88 @@
     const modelId = selectedModelId();
     if (loadedId === modelId && pipe) {
       $("local-setup").classList.add("hidden");
-      localMsg("sys", `模型 ${modelId} 已在运行中。`);
       return;
     }
     btn.disabled = true;
     if (cancelBtn) cancelBtn.classList.remove("hidden");
     cancelled = false;
+
     try {
-      const t = await ensureEngine();
-      const mirror = applyMirror(t);
-      setProgress(`将从 ${mirror} 下载权重，开始初始化「${modelId}」…`);
-
-      const progressCb = (p) => {
-        if (cancelled) throw new Error("已取消");
-        if (p.status === "progress" && p.file) {
-          const pct = p.progress != null ? p.progress : null;
-          const loaded = p.loaded ? (p.loaded / 1048576).toFixed(1) + " MB" : "";
-          const total = p.total ? (p.total / 1048576).toFixed(1) + " MB" : "";
-          setProgress(`下载 ${p.file.replace(/^.*[\\/]/, "")} ${loaded}${total ? " / " + total : ""}`, pct);
-        } else if (p.status === "ready" || p.status === "done") {
-          setProgress(p.status === "done" ? "权重就绪，正在编译模型（首次较慢）…" : "准备中…");
-        }
-      };
-
-      let attempt;
+      setProgress("正在连接本机服务器…");
+      const apiBase = await resolveApi();
+      let apiOrigin = apiBase;
+      try { apiOrigin = new URL(apiBase, location.href).origin; } catch (_) {}
+      installFetchPatch(apiOrigin);
+      // quick health probe so users get a clear error instead of a stalled
+      // download when the tunnel/server is offline
       try {
-        attempt = await t.pipeline("text-generation", modelId, {
-          device: navigator.gpu ? "webgpu" : "wasm",
-          dtype: "q4",
-          progress_callback: progressCb,
+        const h = await fetch(apiBase + "/api/health?t=" + Date.now(), {
+          cache: "no-store", headers: { "ngrok-skip-browser-warning": "true" },
         });
-      } catch (gpuErr) {
-        if (cancelled) throw gpuErr;
-        setProgress("WebGPU 初始化失败，自动切换 CPU 模式重试…");
-        attempt = await t.pipeline("text-generation", modelId, {
-          device: "wasm", dtype: "q4", progress_callback: progressCb,
-        });
+        if (!h.ok) throw new Error("HTTP " + h.status);
+      } catch (e) {
+        throw new Error("无法连接本机服务器（" + apiBase.replace(/^https?:\/\//, "") +
+          "），首次下载权重需要服务器在线。请先启动服务并重试。");
       }
 
-      pipe = attempt;
+      const t = await ensureEngine(apiBase);
+      const tracker = makeProgressTracker();
+      const hasGpu = !!navigator.gpu;
+      // (device, dtype) combos to attempt, best-first. q4f16 is the GPU
+      // storage format; plain q4 is the portable WASM quantization.
+      const attempts = hasGpu
+        ? [{ device: "webgpu", dtype: "q4f16" }, { device: "webgpu", dtype: "q4" },
+           { device: "wasm", dtype: "q4" }]
+        : [{ device: "wasm", dtype: "q4" }];
+
+      let lastErr = null;
+      for (const a of attempts) {
+        if (cancelled) throw new Error("__CANCELLED__");
+        setProgress(`经本机服务器中转下载，以 ${a.device.toUpperCase()} 模式初始化…`);
+        try {
+          const p = await t.pipeline("text-generation", modelId, {
+            device: a.device, dtype: a.dtype, progress_callback: tracker,
+          });
+          pipe = p;
+          break;
+        } catch (e) {
+          if (cancelled || String(e?.message) === "__CANCELLED__") throw new Error("__CANCELLED__");
+          lastErr = e;
+          const msg = String(e?.message || e);
+          // Device/dtype mismatch -> try the next combo; relay/server errors
+          // are fatal (no other download path exists).
+          if (is_networkish(msg)) throw e;
+          if (/gpu|dtype|quantiz|webgpu|unsupported/i.test(msg)) continue;
+          continue;
+        }
+      }
+      if (!pipe) throw lastErr || new Error("模型加载失败");
+
       loadedId = modelId;
       setProgress(null);
       const meta = MODELS.find((m) => m.id === modelId);
       setLabel(`${meta ? meta.name : modelId} · 本地运行`);
       $("local-setup").classList.add("hidden");
-      localMsg("sys", `✓ 本地模型「${meta ? meta.name : modelId}」已就绪，可以开始离线对话。`);
+      localMsg("sys", `✓ 本地模型「${meta ? meta.name : modelId}」已就绪，可离线对话。`);
       renderModelList(modelId);
       $("local-input")?.focus();
     } catch (e) {
-      if (cancelled) setProgress("已取消下载。");
-      else setProgress("✗ " + (e?.message || e));
+      if (cancelled || String(e?.message) === "__CANCELLED__") {
+        setProgress("已取消下载（已下载部分会保留在浏览器缓存中，下次继续）。");
+      } else {
+        const msg = String(e?.message || e);
+        setProgress("✗ 模型加载失败：" + msg +
+          "\n请确认本机服务器与内网穿透已启动（页面左下角显示的服务器地址可连），然后重试。");
+      }
     } finally {
       btn.disabled = false;
       if (cancelBtn) cancelBtn.classList.add("hidden");
       cancelled = false;
     }
+  }
+  // small helper kept outside to avoid redefining per attempt
+  function is_networkish(m) {
+    return /fetch|network|load failed|timeout|404|cors|failed to fetch|abort|getaddrinfo|enotfound/i.test(m);
   }
 
   /* -------------------------------------------------------------- chat -- */
@@ -223,7 +357,6 @@
 
   function openSetup() {
     renderModelList(loadedId);
-    if (!$("local-mirror")?.value) $("local-mirror").value = "https://hf-mirror.com";
     $("local-setup").classList.remove("hidden");
   }
 
@@ -232,8 +365,6 @@
     entered = true;
     detectGpu();
     renderModelList(loadedId);
-    if (!$("local-mirror")) return;
-    $("local-mirror").value = localStorage.getItem("yjs_local_mirror") || "https://hf-mirror.com";
     if (!pipe) setTimeout(openSetup, 250);
   }
 
@@ -251,10 +382,5 @@
     const box = $("local-messages");
     if (box) box.innerHTML = `<div class="empty">对话已清空，所有记录仅保存在本页内存中。</div>`;
   });
-  on("local-mirror", "change", () => {
-    const v = ($("local-mirror").value || "").trim();
-    if (v) localStorage.setItem("yjs_local_mirror", v);
-  });
-
   window.YJSLocal = { enter };
 })();
