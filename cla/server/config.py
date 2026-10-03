@@ -98,7 +98,8 @@ DEFAULTS: dict = {
         "branch": "main",
         "path_prefix": "cla",
     },
-    "ngrok": {"token": "", "domain": ""},
+    "ngrok": {"token": "", "domain": ""},   # legacy, kept for compatibility
+    "cpolar": {"authtoken": ""},
     # Admin dashboard access. Leave ``emails`` empty to let the
     # earliest-registered account act as the owner instead.
     "admin": {"emails": [], "password_hash": ""},
@@ -229,7 +230,7 @@ def _migrate_github_token(cfg: dict) -> None:
 
 def save(cfg: dict) -> None:
     """Persist the *secret* portion of the config (always UTF-8, no BOM)."""
-    secret_keys = ("github", "ngrok", "smtp", "session_secret",
+    secret_keys = ("github", "ngrok", "cpolar", "smtp", "session_secret",
                    "mcp_servers", "models", "api_keys", "admin",
                    "allow_register", "ai_enabled", "allow_model_add",
                    "announcement", "default_model", "max_tool_calls_per_step")
