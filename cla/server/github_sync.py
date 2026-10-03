@@ -62,6 +62,22 @@ async def get_sha(path_in_repo: str) -> str | None:
         return None
 
 
+async def whoami() -> dict:
+    """Verify the token + repo by reading the repository metadata."""
+    g = _gh()
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.get(f"{API}/repos/{g['repo']}", headers=_headers())
+        if r.status_code >= 400:
+            raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+        data = r.json()
+    return {
+        "full_name": data.get("full_name"),
+        "default_branch": data.get("default_branch"),
+        "private": data.get("private"),
+        "can_push": bool((data.get("permissions") or {}).get("push")),
+    }
+
+
 async def put_file(rel_or_repo_path: str, content: bytes, message: str,
                    already_in_repo: bool = False) -> dict:
     g = _gh()
