@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS Cloud LLM Agent</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A4%96%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/style.css?v=20261003f" />
+<link rel="stylesheet" href="assets/style.css?v=20261003j" />
 </head>
 <body>
 
@@ -251,15 +251,15 @@
   <div class="modal-box wide">
     <h3>本地模型</h3>
     <p class="muted">
-      模型在本机浏览器内运行（WebGPU）。首次使用由本机服务器中转下载权重并缓存，之后再次使用可直接秒开、离线对话。
-      此模式下服务器不保留任何对话信息，也无需登录。
+      模型在本机浏览器内运行（WebGPU）。首次使用经 GitHub 加速镜像下载权重并缓存到本浏览器，
+      之后断网也能直接打开页面离线对话，全程不经过服务器。
     </p>
     <div id="local-gpu-note" class="local-note"></div>
     <div id="local-models" class="local-models"></div>
     <div class="me-field">
       <div class="me-hint">
-        首次下载由本机服务器经国内镜像中转（浏览器直连不通时也能下），权重缓存到服务器与本浏览器；
-        之后再次使用可离线秒开，此模式下服务器不保留任何对话信息。
+        首次下载通过 GitHub 加速镜像（如 gh-proxy.com）获取，文件保存在本浏览器缓存中；
+        下载完成后即使断网也能离线对话，服务器不保留任何对话信息。
       </div>
     </div>
     <div id="local-progress" class="local-progress"></div>
@@ -271,7 +271,7 @@
   </div>
 </div>
 
-<script src="assets/app.js?v=20261003f"></script>
-<script src="assets/local.js?v=20261003f"></script>
+<script src="assets/app.js?v=20261003j"></script>
+<script src="assets/local.js?v=20261003j"></script>
 </body>
 </html>
