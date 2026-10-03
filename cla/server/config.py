@@ -192,6 +192,7 @@ def load() -> dict:
     cfg = json.loads(json.dumps(DEFAULTS))
     cfg["models"] = _merge_models(DEFAULT_MODELS, [])
     read_ok = False
+    graph_present = True
     if LOCAL_CONFIG.exists():
         try:
             raw = LOCAL_CONFIG.read_text(encoding="utf-8-sig")
@@ -199,6 +200,7 @@ def load() -> dict:
             if "models" in raw_data:
                 cfg["models"] = _merge_models(DEFAULT_MODELS, raw_data["models"])
                 raw_data.pop("models", None)
+            graph_present = isinstance(raw_data.get("msgraph"), dict)
             cfg = _deep_merge(cfg, raw_data)
             read_ok = True
         except Exception as exc:  # pragma: no cover
@@ -208,24 +210,26 @@ def load() -> dict:
         if read_ok or not LOCAL_CONFIG.exists():
             save(cfg)
     _migrate_github_token(cfg)
-    _migrate_mail(cfg)
+    _migrate_mail(cfg, graph_present=graph_present)
     for d in (DATA_DIR, USERS_DIR, RUNTIME_DIR, BIN_DIR):
         d.mkdir(parents=True, exist_ok=True)
     return cfg
 
 
-def _migrate_mail(cfg: dict) -> None:
+def _migrate_mail(cfg: dict, *, graph_present: bool = True) -> None:
     """Carry the sender address/display name over from the retired SMTP block.
 
     Host/port/auth_code are dropped — Microsoft retired basic SMTP auth, so the
-    admin must paste a fresh client id + refresh token in the dashboard.
+    admin must paste a fresh client id + refresh token in the dashboard. When
+    the file never had a ``msgraph`` block, SMTP's user/from_name win over the
+    built-in defaults; later edits to ``msgraph`` are always left untouched.
     """
     g = cfg.get("msgraph")
     old = cfg.pop("smtp", None)
     if isinstance(g, dict) and isinstance(old, dict):
-        if not g.get("user") and old.get("user"):
+        if old.get("user") and (not graph_present or not g.get("user")):
             g["user"] = old["user"]
-        if not g.get("from_name") and old.get("from_name"):
+        if old.get("from_name") and (not graph_present or not g.get("from_name")):
             g["from_name"] = old["from_name"]
     if old is not None and LOCAL_CONFIG.exists():
         # Rewrite once so the retired SMTP host/auth_code no longer sits on disk.
