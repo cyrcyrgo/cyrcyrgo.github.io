@@ -1376,8 +1376,7 @@ async def admin_github_set_password(body: RepoPasswordIn,
     token = (body.token or "").strip() or str(gh.get("token") or "").strip()
     gh["password_hash"] = auth.hash_password(pw)
     if token:
-        gh["token"] = token
-        gh["token_secret"] = {"mode": "repo", **cfg.encrypt_secret(token, pw)}
+        cfg.set_github_token(cfg.CONFIG, token, pw)
     cfg.save(cfg.CONFIG)
     _REPO_SESSION[user["uid"]] = {"key": pw, "exp": time.time() + REPO_SESSION_TTL}
     return {"ok": True, "has_token": bool(token), "encrypted": bool(token)}
@@ -1416,9 +1415,7 @@ async def admin_github_set_token(body: RepoTokenIn,
     token = (body.token or "").strip()
     if not token:
         raise HTTPException(400, "请填写 GitHub token")
-    gh = _github_cfg()
-    gh["token"] = token
-    gh["token_secret"] = {"mode": "repo", **cfg.encrypt_secret(token, sess["key"])}
+    cfg.set_github_token(cfg.CONFIG, token, sess["key"])
     cfg.save(cfg.CONFIG)
     return {"ok": True}
 
