@@ -236,26 +236,53 @@ def _migrate_mail(cfg: dict, *, graph_present: bool = True) -> None:
         save(cfg)
 
 
-def _migrate_github_token(cfg: dict) -> None:
-    """Keep the GitHub token encrypted on disk.
+def set_github_token(conf: dict, token: str, repo_password: str | None = None) -> None:
+    """Store *token* under both encryption regimes.
+
+    * ``token_secret`` (mode ``repo``) is opened ONLY by the repo-management
+      password the admin types in the dashboard — it gates interactive writes
+      such as publishing a site-wide notice.
+    * ``token_session_secret`` (mode ``session``) lets unattended boot jobs —
+      pushing the tunnel domain to the repo on every startup — run without a
+      human typing the password. It is encrypted with the local session secret.
+    """
+    gh = conf["github"]
+    gh["token"] = token
+    if repo_password:
+        gh["token_secret"] = {"mode": "repo",
+                              **encrypt_secret(token, repo_password)}
+    gh["token_session_secret"] = {
+        "mode": "session", **encrypt_secret(token, conf["session_secret"])}
+
+
+def _migrate_github_token(conf: dict) -> None:
+    """Load the GitHub token into memory from the right ciphertext.
 
     * legacy plaintext token  -> encrypted with the session secret ("session" mode)
-    * "session" mode          -> decrypted back into memory for this process
-    * "repo" mode             -> left locked until the repo password is entered
+    * primary ``token_secret`` in "session" mode -> decrypted straight away
+    * primary in "repo" mode   -> left password-locked for interactive use, but
+      the ``token_session_secret`` companion still unlocks unattended boot jobs
     """
-    gh = cfg.get("github")
+    gh = conf.get("github")
     if not isinstance(gh, dict):
         return
     sec = gh.get("token_secret") or {}
     mode = sec.get("mode") or ("repo" if sec else "")
-    if mode == "session" and not gh.get("token"):
-        tok = decrypt_secret(sec, cfg["session_secret"])
-        if tok:
-            gh["token"] = tok
+    companion = gh.get("token_session_secret") or {}
+    if not gh.get("token"):
+        if mode == "session":
+            tok = decrypt_secret(sec, conf["session_secret"])
+            if tok:
+                gh["token"] = tok
+        if not gh.get("token") and companion:
+            tok = decrypt_secret(companion, conf["session_secret"])
+            if tok:
+                gh["token"] = tok
+    # Legacy: a plaintext token with NO encrypted blob at all gets wrapped once.
     if gh.get("token") and not sec:
         gh["token_secret"] = {"mode": "session",
-                              **encrypt_secret(gh["token"], cfg["session_secret"])}
-        save(cfg)
+                              **encrypt_secret(gh["token"], conf["session_secret"])}
+        save(conf)
 
 
 def save(cfg: dict) -> None:
