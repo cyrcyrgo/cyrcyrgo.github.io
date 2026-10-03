@@ -160,6 +160,54 @@ async def set_own_password(body: SetPasswordIn, user: dict = Depends(current_use
     return {"ok": True}
 
 
+class ResetSendIn(BaseModel):
+    email: str
+
+
+@app.post("/api/auth/reset/send-code")
+async def send_reset_code(body: ResetSendIn):
+    """Forgot-password flow: email a reset code to a registered address."""
+    email = body.email.strip().lower()
+    if "@" not in email or len(email) < 5:
+        raise HTTPException(400, "邮箱格式不正确")
+    if not store.get_user_by_email(email):
+        # Same wording as a normal "sent" reply on purpose? We keep it explicit:
+        # registration is closed by default, so no reset target exists.
+        raise HTTPException(404, "该邮箱尚未注册")
+    ok, wait = auth.can_send(email)
+    if not ok:
+        raise HTTPException(429, f"请 {wait} 秒后再试")
+    try:
+        await asyncio.to_thread(auth.send_code, email, "reset")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"验证码发送失败：{exc}") from exc
+    return {"ok": True, "message": "重置验证码已发送，请查收邮件"}
+
+
+class ResetPasswordIn(BaseModel):
+    email: str
+    code: str
+    password: str
+
+
+@app.post("/api/auth/reset/password")
+async def reset_password(body: ResetPasswordIn):
+    """Set a new password using the emailed reset code; logs the user in."""
+    email = body.email.strip().lower()
+    if not auth.verify_code(email, body.code, purpose="reset"):
+        raise HTTPException(400, "验证码错误或已过期")
+    user = store.get_user_by_email(email)
+    if not user:
+        raise HTTPException(404, "该邮箱尚未注册")
+    ok, msg = auth.valid_password(body.password)
+    if not ok:
+        raise HTTPException(400, msg)
+    store.set_password_hash(user["uid"], auth.hash_password(body.password))
+    store.touch_login(user["uid"])
+    token = auth.make_token(user["uid"], email)
+    return {"ok": True, "token": token, "user": _public_user(user)}
+
+
 # --------------------------------------------------------------------------- #
 # my account: profile / email change / feedback   (settings panel)
 # --------------------------------------------------------------------------- #
@@ -1427,7 +1475,30 @@ async def admin_page():
 # --------------------------------------------------------------------------- #
 WEB_WEIGHTS_DIR = cfg.DATA_DIR / "web_weights"
 _weight_locks: dict[str, asyncio.Lock] = {}
-_HF_BASES = ("https://hf-mirror.com", "https://huggingface.co")
+# Fastest mirror first (measured from the local server):
+#   modelscope ~9 MB/s > hf-mirror ~2 MB/s > huggingface.co (often blocked).
+# Each entry maps an HF-style path ("{model}/resolve/{revision}/{file}")
+# to a full upstream URL, or returns None when the mirror cannot serve it.
+def _mirror_modelscope(rest: str) -> str | None:
+    # ModelScope keeps the same repo layout but uses "master" as the branch.
+    parts = rest.split("/resolve/", 1)
+    if len(parts) != 2:
+        return None
+    model, tail = parts
+    rev, _, fname = tail.partition("/")
+    branch = "master" if rev == "main" else rev
+    return f"https://modelscope.cn/models/{model}/resolve/{branch}/{fname}"
+
+
+def _mirror_hf(base: str):
+    return lambda rest: f"{base}/{rest}"
+
+
+_WEIGHT_MIRRORS = (
+    ("modelscope", _mirror_modelscope),
+    ("hf-mirror", lambda r: _mirror_hf("https://hf-mirror.com")(r)),
+    ("huggingface", lambda r: _mirror_hf("https://huggingface.co")(r)),
+)
 _HF_PASS_HEADERS = (
     "content-type", "content-length", "accept-ranges",
     "content-range", "etag", "last-modified",
@@ -1452,8 +1523,11 @@ async def local_weights_proxy(rest: str, request: Request):
         part_path = cache_path.with_name(cache_path.name + ".part")
 
         last_error = "未知错误"
-        for base in _HF_BASES:
-            url = f"{base}/{rest}"
+        last_status = 502
+        for name, build_url in _WEIGHT_MIRRORS:
+            url = build_url(rest)
+            if not url:
+                continue
             client = httpx.AsyncClient(
                 follow_redirects=True,
                 timeout=httpx.Timeout(60.0, connect=30.0, read=300.0),
@@ -1464,11 +1538,15 @@ async def local_weights_proxy(rest: str, request: Request):
                 )
                 upstream = await client.send(req, stream=True)
             except Exception as e:  # network error -> try next mirror
-                last_error = str(e)
+                last_error = f"{name}: {e}"
                 await client.aclose()
                 continue
             if upstream.status_code >= 400:
-                last_error = f"上游 HTTP {upstream.status_code}"
+                # Remember the status: a genuinely missing optional file
+                # (transformers.js tolerates 404s) must look like a 404 to
+                # the browser even after every mirror has been tried.
+                last_status = upstream.status_code
+                last_error = f"{name}: 上游 HTTP {upstream.status_code}"
                 await upstream.aclose()
                 await client.aclose()
                 continue
@@ -1505,6 +1583,8 @@ async def local_weights_proxy(rest: str, request: Request):
 
             return StreamingResponse(_stream(), status_code=200, headers=headers)
 
+        if last_status in (401, 403, 404, 410):
+            return Response(status_code=last_status)
         raise HTTPException(502, f"权重上游不可用：{last_error}")
 
 
@@ -1514,6 +1594,14 @@ async def local_weights_proxy(rest: str, request: Request):
 @app.get("/")
 async def index():
     return FileResponse(cfg.ROOT / "index.html")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    f = cfg.ROOT / "sw.js"
+    if not f.exists():
+        raise HTTPException(404)
+    return FileResponse(f, media_type="application/javascript")
 
 
 @app.get("/config.json")
