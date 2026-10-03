@@ -82,41 +82,56 @@ def can_send(email: str) -> tuple[bool, int]:
     return True, 0
 
 
-def send_code(email: str) -> None:
+def send_code(email: str, purpose: str = "login") -> None:
     email = email.lower()
     _smtp()
     code = f"{random.randint(0, 999999):06d}"
     if cfg.CONFIG.get("debug_codes"):
-        print(f"[auth] code for {email} = {code}", flush=True)
+        print(f"[auth] {purpose} code for {email} = {code}", flush=True)
     _CODES[email] = {
         "code": code,
+        "purpose": purpose,
         "expires": time.time() + cfg.CONFIG["code_ttl_seconds"],
         "last_sent": time.time(),
         "attempts": 0,
     }
-    body = _wrap(
-        "YJS LLM Agent 登录验证码",
-        f"<p>你的验证码是：</p>"
-        f"<p style='font-size:32px;font-weight:700;letter-spacing:6px;color:#2563eb'>{code}</p>"
-        f"<p style='color:#666'>10 分钟内有效，请勿泄露给他人。</p>",
-    )
-    send_mail(email, "YJS LLM Agent 登录验证码", body)
+    if purpose == "reset":
+        body = _wrap(
+            "YJS LLM Agent 重置密码验证码",
+            f"<p>你正在重置登录密码，验证码是：</p>"
+            f"<p style='font-size:32px;font-weight:700;letter-spacing:6px;color:#dc2626'>{code}</p>"
+            f"<p style='color:#666'>10 分钟内有效，请勿泄露给他人。"
+            f"如果不是你本人操作，请忽略此邮件。</p>",
+        )
+        send_mail(email, "YJS LLM Agent 重置密码验证码", body)
+    else:
+        body = _wrap(
+            "YJS LLM Agent 登录验证码",
+            f"<p>你的验证码是：</p>"
+            f"<p style='font-size:32px;font-weight:700;letter-spacing:6px;color:#2563eb'>{code}</p>"
+            f"<p style='color:#666'>10 分钟内有效，请勿泄露给他人。</p>",
+        )
+        send_mail(email, "YJS LLM Agent 登录验证码", body)
 
 
-def verify_code(email: str, code: str) -> bool:
-    rec = _CODES.get(email.lower())
+def verify_code(email: str, code: str, purpose: str = "login") -> bool:
+    key = email.lower()
+    rec = _CODES.get(key)
     if not rec:
         return False
     if time.time() > rec["expires"]:
-        _CODES.pop(email.lower(), None)
+        _CODES.pop(key, None)
+        return False
+    # A code minted for one flow (login/reset) must not unlock the other.
+    if rec.get("purpose", "login") != purpose:
         return False
     rec["attempts"] += 1
     if rec["attempts"] > 8:
-        _CODES.pop(email.lower(), None)
+        _CODES.pop(key, None)
         return False
     if rec["code"] != str(code).strip():
         return False
-    _CODES.pop(email.lower(), None)
+    _CODES.pop(key, None)
     return True
 
 
