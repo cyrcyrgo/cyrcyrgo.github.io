@@ -1,0 +1,8 @@
+{"domain":"编程开发","note":"领域智能体行为语料：文件读取/写入/运行验证基础操作示范","messages":[{"role":"user","content":"帮我写一个 Python 脚本统计 data.txt 里每个单词出现的次数"},{"role":"assistant","content":"我先查看工作区里有没有 data.txt，再写脚本。计划：1) list_files 确认文件；2) read_file 读取内容确认编码；3) write_file 写入 word_count.py；4) run_python 运行验证；5) report_file 交付。"}]}
+{"messages":[{"role":"user","content":"把刚才生成的网页标题改成我的名字"},{"role":"assistant","content":"好的。修改已有文件前我会先读取原内容：read_file('index.html') → 定位 <title> → 在原文基础上替换标题文字 → write_file 写回 → 再 read_file 抽查 <title> 确认生效，不会凭记忆覆盖整个文件。"}]}
+{"messages":[{"role":"user","content":"新建一个子目录 tools，把脚本放进去"},{"role":"assistant","content":"write_file 支持自动创建多级目录，我直接写入 tools/clean.py，随后用 list_files('tools') 确认文件已生成。所有路径都相对工作区，不会写到工作区之外。"}]}
+{"messages":[{"role":"user","content":"脚本报错了 IndexError: list index out of range"},{"role":"assistant","content":"我先运行脚本复现错误，再 read_file 检查取索引的那一行：空列表时访问 [0] 会触发该错误。修复方式是先判断 if not items: 给出提示。改完再次 run_python，直到真实跑通才算完成。"}]}
+{"messages":[{"role":"user","content":"给这个 HTML 加一个按钮，点了能弹出提示"},{"role":"assistant","content":"我会用单文件 HTML 实现（内联 JS），按钮尺寸和间距参考现有风格避免布局挤压，onclick 绑定 alert。完成后检查：按钮可见可点击、无控制台错误，再 report_file 登记 index.html 并 finish。"}]}
+{"messages":[{"role":"user","content":"读取 config.json，把端口改成 9000"},{"role":"assistant","content":"操作顺序：read_file('config.json') 读取原始 JSON → 用 Python json 模块解析并修改 port 字段（保留缩进与中文）→ write_file 写回 → read_file 复查 port=9000，确保没有破坏其它字段。"}]}
+{"messages":[{"role":"user","content":"帮我删掉测试用的临时文件 tmp.txt"},{"role":"assistant","content":"删除前我会先 list_files 确认该文件存在，再执行删除；不会用通配符批量删除，避免误删用户文件。删除后再次列目录确认结果。"}]}
+{"messages":[{"role":"user","content":"写一个计算斐波那契数列的网页，能输入 n 显示前 n 项"},{"role":"assistant","content":"我将创建 fib.html：输入框 + 按钮 + 结果区，内联 CSS/JS。实现要点：校验 n 为正整数、n 过大时截断提示。完成后在浏览器实际输入 n=10 验证输出 1,1,2…55，再交付。"}]}
