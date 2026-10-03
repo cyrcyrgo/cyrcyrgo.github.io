@@ -24,11 +24,13 @@ from . import github_sync
 
 # e.g. https://36fb8229.r9.cpolar.cn / https://ab-cd.r2.cpolar.com
 _URL_RE = re.compile(r"https://[0-9a-z][0-9a-z.-]*\.cpolar\.[a-z.]+")
+_PUSH_ATTEMPTS = 5
 
 
 class Tunnel:
     def __init__(self) -> None:
         self.url: str | None = None
+        self.pushed: bool = False
         self.proc: subprocess.Popen | None = None
         self._task: asyncio.Task | None = None
 
@@ -93,10 +95,21 @@ class Tunnel:
             last = url
             self.url = url
             print(f"[tunnel] public url: {url}")
+            await self._push(url)
+
+    async def _push(self, url: str) -> None:
+        """Publish the tunnel URL to GitHub, retrying transient failures."""
+        self.pushed = False
+        for attempt in range(1, _PUSH_ATTEMPTS + 1):
             try:
-                await github_sync.push_runtime_config(url)
+                if await github_sync.push_runtime_config(url):
+                    self.pushed = True
+                    print(f"[tunnel] 域名已推送至 GitHub: {url}")
+                    return
             except Exception as exc:  # noqa: BLE001
-                print(f"[tunnel] config push failed: {exc}")
+                print(f"[tunnel] config push failed ({attempt}/{_PUSH_ATTEMPTS}): {exc}")
+            await asyncio.sleep(min(30, 5 * attempt))
+        print("[tunnel] config push gave up; will retry when the url changes")
 
     def stop(self) -> None:
         if self._task:
