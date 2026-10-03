@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS 管理后台</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%99%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/admin.css?v=20261003k" />
+<link rel="stylesheet" href="assets/admin.css?v=20261003l" />
 </head>
 <body>
 
@@ -94,33 +94,36 @@
     </div>
   </section>
 
-  <!-- 邮件服务 -->
+  <!-- 邮件服务（Microsoft Graph） -->
   <section class="panel">
-    <h3>邮件服务 <span class="hint">· 发件邮箱设置（地址 / 授权码 / 协议）与全体群发</span></h3>
+    <h3>邮件服务 <span class="hint">· Microsoft Graph API 发件（OAuth2）与全体群发</span></h3>
+    <div class="muted" style="margin-bottom:10px;line-height:1.7">
+      微软已停用邮箱的 SMTP 基本认证，现统一通过 Microsoft Graph 发送。请先在
+      <a href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noopener">Azure 应用注册</a>
+      创建应用（重定向 URI 选「公共客户端/native」，如 http://localhost），
+      为其授予委托权限 <b>Mail.Send</b> 与 <b>offline_access</b>，再用 OAuth 授权流程取得 refresh_token。
+    </div>
     <div id="mail-status" class="muted" style="margin-bottom:12px">加载中…</div>
     <div class="settings-grid">
       <div class="set-field">
         <span class="sw-label">发件邮箱地址</span>
-        <input id="mail-user" placeholder="you@qq.com" autocomplete="off" />
+        <input id="mail-user" placeholder="you@outlook.com / you@hotmail.com" autocomplete="off" />
       </div>
       <div class="set-field">
-        <span class="sw-label">授权码 / 密码</span>
-        <input id="mail-code" type="password" placeholder="留空则不修改" autocomplete="new-password" />
+        <span class="sw-label">租户 ID（可留空，默认 common）</span>
+        <input id="mail-tenant" placeholder="common / consumers / 组织租户 GUID" autocomplete="off" />
       </div>
       <div class="set-field">
-        <span class="sw-label">SMTP 服务器</span>
-        <input id="mail-host" placeholder="smtp.qq.com" autocomplete="off" />
+        <span class="sw-label">客户端 ID（Application client_id）</span>
+        <input id="mail-clientid" placeholder="Azure 应用注册的应用程序(客户端) ID" autocomplete="off" />
       </div>
       <div class="set-field">
-        <span class="sw-label">端口</span>
-        <input id="mail-port" type="number" min="1" max="65535" value="465" />
+        <span class="sw-label">客户端密钥（可选，公共客户端留空）</span>
+        <input id="mail-secret" type="password" placeholder="已配置则留空不修改" autocomplete="new-password" />
       </div>
-      <div class="set-field">
-        <span class="sw-label">加密协议</span>
-        <select id="mail-proto">
-          <option value="ssl">SSL（常用端口 465）</option>
-          <option value="starttls">STARTTLS（常用端口 587）</option>
-        </select>
+      <div class="set-field wide">
+        <span class="sw-label">刷新令牌 refresh_token（委托权限 Mail.Send + offline_access）</span>
+        <textarea id="mail-refresh" rows="2" placeholder="粘贴 OAuth 授权后取得的 refresh_token；已配置则留空不修改" autocomplete="off"></textarea>
       </div>
       <div class="set-field">
         <span class="sw-label">发件人显示名</span>
@@ -300,6 +303,6 @@
   </div>
 </div>
 
-<script src="assets/admin.js?v=20261003k"></script>
+<script src="assets/admin.js?v=20261003l"></script>
 </body>
 </html>
