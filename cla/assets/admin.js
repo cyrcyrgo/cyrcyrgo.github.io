@@ -428,6 +428,7 @@
           <button class="btn ghost" data-act="convs">对话</button>
           <button class="btn ghost" data-act="pwd">密码</button>
           <button class="btn ghost" data-act="quota">配额</button>
+          <button class="btn ghost" data-act="role">${u.is_admin ? "取消管理员" : "设为管理员"}</button>
           <button class="btn danger" data-act="del">删除</button>
         </td>
       </tr>`;
@@ -471,6 +472,18 @@
             { method: "POST", body: JSON.stringify({ quota_bytes: Math.round(gb * 1073741824) }) });
           toast("配额已更新", "ok"); await refresh();
         });
+      else if (act === "role") btn.onclick = async () => {
+        const grant = !u.is_admin;
+        if (!confirm(grant ? `确定把 ${u.email} 设为管理员？对方将能打开管理后台。`
+                          : `确定取消 ${u.email} 的管理员权限？`)) return;
+        try {
+          await api(`/api/admin/users/${u.uid}/admin`, {
+            method: "POST", body: JSON.stringify({ admin: grant }),
+          });
+          toast(grant ? "已设为管理员" : "已取消管理员", "ok");
+          await refresh();
+        } catch (e) { toast(e.message, "err"); }
+      };
       else if (act === "del") btn.onclick = async () => {
         if (!confirm(`确定删除用户 ${u.email}？其全部对话与文件将一并删除，不可恢复。`)) return;
         try {
@@ -921,29 +934,46 @@
       $("mail-user").value = d.user || "";
       $("mail-fromname").value = d.from_name || "";
       $("mail-code").placeholder = d.has_auth_code ? "已配置，留空则不修改" : "请输入授权码";
+      const st = $("mail-status");
+      if (st) {
+        st.innerHTML = d.user
+          ? `发件邮箱：${escapeHtml(d.user)} · 授权码：` +
+            (d.has_auth_code
+              ? `<span class="badge yes">已保存</span>`
+              : `<span class="badge no">未配置</span>`) +
+            ` · ${escapeHtml(d.host || "")}:${d.port || 465}（${escapeHtml(d.protocol || "ssl")}）`
+          : "尚未配置发件邮箱";
+      }
     } catch (_) { /* 401 handled by refresh() */ }
   }
 
   on("btn-save-mail", "click", async () => {
     const msg = $("mail-msg");
+    const typed = $("mail-code").value.trim();
     msg.textContent = "保存中…";
     try {
-      await api("/api/admin/email", {
+      const d = await api("/api/admin/email", {
         method: "POST",
         body: JSON.stringify({
           host: $("mail-host").value.trim(),
           port: parseInt($("mail-port").value, 10) || 465,
           protocol: $("mail-proto").value,
           user: $("mail-user").value.trim(),
-          auth_code: $("mail-code").value.trim(),
+          auth_code: typed,
           from_name: $("mail-fromname").value.trim(),
         }),
       });
+      // Only wipe the secret field AFTER the server confirmed the save.
       $("mail-code").value = "";
-      msg.textContent = "✓ 已保存";
-      toast("发件邮箱设置已保存", "ok");
       await loadMail();
-    } catch (e) { msg.textContent = "✗ " + e.message; }
+      const okCode = (d && d.has_auth_code) || typed !== "";
+      msg.textContent = okCode ? "✓ 已保存（授权码已加密存入本机配置）" : "✓ 已保存";
+      toast("发件邮箱设置已保存", "ok");
+    } catch (e) {
+      if (e.status === 401) { showLock(); return; }
+      msg.textContent = "✗ 保存失败：" + e.message;
+      toast("保存失败：" + e.message, "err");
+    }
   });
 
   on("btn-test-mail", "click", async (e) => {
@@ -1034,6 +1064,48 @@
     });
   }
 
+  /* ---------------------------------------------------------------- notice */
+  async function loadNotice() {
+    try {
+      const d = await api("/api/admin/notification");
+      $("nt-title").value = d.title || "";
+      $("nt-body").value = d.body || "";
+      const st = $("nt-status");
+      const when = d.updated_at ? `最近更新 ${escapeHtml(d.updated_at)}` : "尚未发布";
+      const repo = d.repo ? `${escapeHtml(d.repo)} · ${escapeHtml(d.repo_file)}` : "未配置仓库";
+      const lock = d.unlocked ? "已解锁可发布" : "未解锁（仅能保存到本机）";
+      st.innerHTML = `${when}${d.author ? " · " + escapeHtml(d.author) : ""}<br>` +
+        `同步目标：${repo} · ${lock}`;
+    } catch (_) { /* 401 handled by refresh() */ }
+  }
+
+  async function saveNotice(publish) {
+    const msg = $("nt-msg");
+    const title = $("nt-title").value.trim();
+    const body = $("nt-body").value.trim();
+    if (!title && !body) { msg.textContent = "请先填写通知标题或内容"; return; }
+    msg.textContent = publish ? "正在发布到 GitHub…" : "保存中…";
+    try {
+      const d = await api("/api/admin/notification", {
+        method: "POST",
+        body: JSON.stringify({ title, body, publish: !!publish }),
+      });
+      if (publish && d.pushed) {
+        msg.textContent = "✓ 已发布，并已更新到 GitHub 仓库";
+        toast("全站通知已发布到 GitHub", "ok");
+      } else if (publish) {
+        msg.textContent = "✓ 已保存到本机，但未推送到 GitHub：" + (d.error || "未知原因");
+        toast("已保存，GitHub 推送失败", "err");
+      } else {
+        msg.textContent = "✓ 已保存到本机（未推送 GitHub）";
+        toast("全站通知已保存", "ok");
+      }
+      await loadNotice();
+    } catch (e) { msg.textContent = "✗ " + e.message; }
+  }
+  on("btn-nt-save", "click", () => saveNotice(false));
+  on("btn-nt-publish", "click", () => saveNotice(true));
+
   /* ---------------------------------------------------------------- github */
   async function loadGithub() {
     try {
@@ -1067,7 +1139,10 @@
       msg.textContent = "✓ 已解锁，可发布与修改仓库信息";
       toast("仓库已解锁", "ok");
       await loadGithub();
-    } catch (e) { msg.textContent = "✗ " + e.message; }
+    } catch (e) {
+      if (e.status === 401) { showLock(); return; }
+      msg.textContent = "✗ " + e.message;
+    }
   });
 
   on("btn-gh-setpw", "click", async () => {
@@ -1085,7 +1160,10 @@
       msg.textContent = "✓ 仓库密码已设置，token 已加密存储";
       toast("仓库密码已设置", "ok");
       await loadGithub();
-    } catch (e) { msg.textContent = "✗ " + e.message; }
+    } catch (e) {
+      if (e.status === 401) { showLock(); return; }
+      msg.textContent = "✗ " + e.message;
+    }
   });
 
   on("btn-gh-test", "click", async (e) => {
@@ -1122,7 +1200,10 @@
       msg.textContent = "✓ 仓库信息已保存";
       toast("仓库信息已保存", "ok");
       await loadGithub();
-    } catch (e) { msg.textContent = "✗ " + e.message; }
+    } catch (e) {
+      if (e.status === 401) { showLock(); return; }
+      msg.textContent = "✗ " + e.message;
+    }
   });
 
   on("btn-gh-publish", "click", async (e) => {
@@ -1147,6 +1228,7 @@
     await loadSettings();
     await loadMcp();
     await loadMail();
+    await loadNotice();
     await loadFeedback();
     await loadGithub();
     await refresh();
