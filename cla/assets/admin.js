@@ -260,9 +260,14 @@
     $("s-vram").textContent = vram ? "已加载 " + fmtSize(vram) : "无模型常驻";
   }
 
+  let lastModelsSig = "";
   function renderModels(ov) {
     const tb = $("tbl-models").querySelector("tbody");
-    tb.innerHTML = (ov.models || []).map((m) => {
+    const rows = ov.models || [];
+    const sig = JSON.stringify(rows);
+    if (sig === lastModelsSig) return;   // unchanged → keep DOM (and click handlers) intact
+    lastModelsSig = sig;
+    tb.innerHTML = rows.map((m) => {
       let status, cls;
       if (m.active > 0) { status = `调用中 ×${m.active}`; cls = "busy"; }
       else if (m.loaded) { status = "显存常驻"; cls = "on"; }
@@ -361,8 +366,12 @@
       : `<div class="muted">暂无数据</div>`;
   }
 
+  let lastUsersSig = "";
   function renderUsers(users) {
     window.__users = users;
+    const sig = JSON.stringify(users);
+    if (sig === lastUsersSig) return;   // unchanged → keep DOM (and click handlers) intact
+    lastUsersSig = sig;
     const tb = $("tbl-users").querySelector("tbody");
     tb.innerHTML = users.map((u) => {
       const pct = u.usage ? Math.min(u.usage.percent, 100) : 0;
@@ -513,7 +522,20 @@
   }
 
   /* ---------------------------------------------------------------- loop */
+  // Pause the 2s auto-refresh while a modal / drawer is open: rebuilding the
+  // table under the cursor mid-click is what makes row buttons feel "dead".
+  function anyOverlayOpen() {
+    const ids = ["modal", "drawer", "mp-modal", "am-modal", "em-modal", "mcp-modal"];
+    return ids.some((id) => {
+      const el = document.getElementById(id);
+      if (!el) return false;
+      if (el.classList.contains("hidden")) return false;
+      return el.style.display !== "none";
+    });
+  }
+
   async function refresh() {
+    if (anyOverlayOpen()) return;
     try {
       const [ov, us] = await Promise.all([
         api("/api/admin/overview"),
@@ -738,6 +760,7 @@
       $("set-register").checked = !!st.allow_register;
       $("set-addmodel").checked = !!st.allow_model_add;
       $("set-announce").value = st.announcement || "";
+      $("set-toolcalls").value = st.max_tool_calls_per_step || 8;
       $("set-default").innerHTML = (st.models || []).map((m) =>
         `<option value="${escapeHtml(m.name)}" ${m.name === st.default_model ? "selected" : ""}>
            ${escapeHtml(m.display || m.name)}${m.enabled ? "" : "（已暂停）"}</option>`).join("");
@@ -753,11 +776,113 @@
           allow_model_add: $("set-addmodel").checked,
           announcement: $("set-announce").value,
           default_model: $("set-default").value || "",
+          max_tool_calls_per_step: parseInt($("set-toolcalls").value, 10) || 8,
         }),
       });
       toast("系统设置已保存", "ok");
     } catch (e) { toast(e.message, "err"); }
   });
+
+  /* ---------------------------------------------------------------- MCP */
+  async function loadMcp() {
+    try {
+      const d = await api("/api/admin/mcp");
+      renderMcp(d.servers || []);
+    } catch (_) { /* 401 handled by refresh() */ }
+  }
+
+  function renderMcp(servers) {
+    const tb = $("tbl-mcp").querySelector("tbody");
+    tb.innerHTML = servers.map((s) => `<tr data-name="${escapeHtml(s.name)}">
+        <td><b>${escapeHtml(s.name)}</b></td>
+        <td class="mono" style="font-size:12px;word-break:break-all">${escapeHtml(s.command_str || "")}</td>
+        <td class="muted">${s.env && Object.keys(s.env).length ? escapeHtml(Object.keys(s.env).join(", ")) : "—"}</td>
+        <td class="muted" data-tools>未检测</td>
+        <td style="white-space:nowrap">
+          <button class="btn ghost" data-act="test">测试</button>
+          <button class="btn danger" data-act="del">删除</button>
+        </td>
+      </tr>`).join("") || `<tr><td colspan="5" class="muted">尚未配置 MCP 服务器</td></tr>`;
+
+    tb.querySelectorAll("button[data-act]").forEach((btn) => {
+      const tr = btn.closest("tr");
+      const name = tr.dataset.name;
+      const act = btn.dataset.act;
+      const cell = tr.querySelector("[data-tools]");
+      if (act === "test") btn.onclick = async () => {
+        btn.disabled = true; cell.textContent = "检测中…";
+        try {
+          const d = await api("/api/admin/mcp/test?name=" + encodeURIComponent(name),
+                              { method: "POST" });
+          const n = (d.tools || []).length;
+          cell.innerHTML = `<span class="badge yes">可用</span> ${n} 个工具`;
+          toast(`MCP「${name}」可用，共 ${n} 个工具`, "ok");
+        } catch (e) {
+          cell.innerHTML = `<span class="badge no">失败</span>`;
+          toast("连接失败：" + e.message, "err");
+        } finally { btn.disabled = false; }
+      };
+      else if (act === "del") btn.onclick = async () => {
+        if (!confirm(`确定删除 MCP 服务器「${name}」？`)) return;
+        try {
+          await api("/api/admin/mcp?name=" + encodeURIComponent(name), { method: "DELETE" });
+          toast("已删除", "ok"); await loadMcp();
+        } catch (e) { toast(e.message, "err"); }
+      };
+    });
+  }
+
+  on("btn-add-mcp", "click", () => openAddMcpModal());
+  function openAddMcpModal() {
+    let box = document.getElementById("mcp-modal");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "mcp-modal";
+      box.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.5);
+        display:flex;align-items:center;justify-content:center;z-index:9999`;
+      document.body.appendChild(box);
+    }
+    box.innerHTML = `
+      <div class="mcard">
+        <h3 style="margin:0 0 4px">添加 / 更新 MCP 服务器</h3>
+        <div class="muted" style="font-size:12px;margin-bottom:12px">
+          填写 stdio 启动命令，保存后点「测试」验证，Agent 即可调用其工具</div>
+        <div style="display:grid;gap:10px">
+          <div><label class="mlabel">名称（唯一标识）</label>
+            <input id="mcp-name" class="minp" placeholder="filesystem"></div>
+          <div><label class="mlabel">启动命令（空格分隔；也可填 JSON 数组）</label>
+            <input id="mcp-cmd" class="minp" placeholder="npx -y @modelcontextprotocol/server-filesystem D:/yjs"></div>
+          <div><label class="mlabel">环境变量（可选，每行 KEY=VALUE）</label>
+            <textarea id="mcp-env" class="minp" rows="3" style="resize:vertical" placeholder="FOO=bar"></textarea></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+          <button class="btn ghost" id="mcp-cancel">取消</button>
+          <button class="btn" id="mcp-save">保存</button>
+        </div>
+        <div id="mcp-msg" class="muted" style="font-size:12px;text-align:right;margin-top:8px;word-break:break-all"></div>
+      </div>`;
+    box.style.display = "flex";
+    box.onclick = (e) => { if (e.target === box) box.style.display = "none"; };
+    box.querySelector("#mcp-cancel").onclick = () => box.style.display = "none";
+    box.querySelector("#mcp-save").onclick = async () => {
+      const name = box.querySelector("#mcp-name").value.trim();
+      const command = box.querySelector("#mcp-cmd").value.trim();
+      const msg = box.querySelector("#mcp-msg");
+      if (!name || !command) { msg.textContent = "名称与启动命令必填"; return; }
+      const env = {};
+      box.querySelector("#mcp-env").value.split("\n").forEach((line) => {
+        const i = line.indexOf("=");
+        if (i > 0) env[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+      });
+      msg.textContent = "保存中…";
+      try {
+        await api("/api/admin/mcp", { method: "POST", body: JSON.stringify({ name, command, env }) });
+        toast("MCP 服务器已保存", "ok");
+        box.style.display = "none";
+        await loadMcp();
+      } catch (e) { msg.textContent = "✗ " + e.message; }
+    };
+  }
 
   /* ---------------------------------------------------------------- boot */
   async function start() {
@@ -765,6 +890,7 @@
     const who = $("who"); if (who) who.textContent = ME.email + "（管理员）";
     const main = $("main"); if (main) main.classList.remove("hidden");
     await loadSettings();
+    await loadMcp();
     await refresh();
     timer = setInterval(refresh, 2000);
   }
