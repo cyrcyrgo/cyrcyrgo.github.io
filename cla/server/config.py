@@ -5,7 +5,10 @@ Runtime data lives under ``D:/yjs/data``.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import os
 import secrets
 from pathlib import Path
 
@@ -16,6 +19,58 @@ RUNTIME_DIR = DATA_DIR / "runtime"
 BIN_DIR = ROOT / "bin"
 LOCAL_CONFIG = ROOT / "config.local.json"
 PUBLIC_CONFIG = ROOT / "config.json"
+
+
+# --------------------------------------------------------------------------- #
+# symmetric encryption for secrets at rest (stdlib only)
+#
+# A PBKDF2-derived key drives an HMAC-SHA256 counter keystream (CTR-like) and an
+# HMAC tag proves integrity. Used to keep the GitHub token as ciphertext on disk
+# until the repo password is entered. No third-party crypto dependency needed.
+# --------------------------------------------------------------------------- #
+PBKDF2_ITER = 120_000
+
+
+def _derive_key(material: str, salt: bytes) -> bytes:
+    return hashlib.pbkdf2_hmac("sha256", material.encode("utf-8"), salt, PBKDF2_ITER, dklen=32)
+
+
+def _keystream(key: bytes, nonce: bytes, length: int) -> bytes:
+    out = bytearray()
+    counter = 0
+    while len(out) < length:
+        out += hmac.new(key, nonce + counter.to_bytes(8, "big"), hashlib.sha256).digest()
+        counter += 1
+    return bytes(out[:length])
+
+
+def encrypt_secret(plaintext: str, material: str) -> dict:
+    """Return an opaque dict {salt, nonce, ct, tag} for *plaintext*."""
+    salt, nonce = os.urandom(16), os.urandom(16)
+    key = _derive_key(material, salt)
+    data = plaintext.encode("utf-8")
+    ct = bytes(a ^ b for a, b in zip(data, _keystream(key, nonce, len(data))))
+    tag = hmac.new(key, nonce + ct, hashlib.sha256).hexdigest()
+    return {"salt": salt.hex(), "nonce": nonce.hex(), "ct": ct.hex(), "tag": tag}
+
+
+def decrypt_secret(blob: dict | None, material: str) -> str | None:
+    """Inverse of :func:`encrypt_secret`; ``None`` when *material* is wrong."""
+    if not isinstance(blob, dict):
+        return None
+    try:
+        salt = bytes.fromhex(blob["salt"])
+        nonce = bytes.fromhex(blob["nonce"])
+        ct = bytes.fromhex(blob["ct"])
+        key = _derive_key(material, salt)
+        if not hmac.compare_digest(
+            hmac.new(key, nonce + ct, hashlib.sha256).hexdigest(), blob["tag"]
+        ):
+            return None
+        ks = _keystream(key, nonce, len(ct))
+        return bytes(a ^ b for a, b in zip(ct, ks)).decode("utf-8")
+    except Exception:
+        return None
 
 DEFAULTS: dict = {
     "host": "127.0.0.1",
@@ -36,7 +91,9 @@ DEFAULTS: dict = {
     "announcement": "",            # site-wide notice shown on the chat page
     "default_model": "",           # "" = fall back to "model"
     "github": {
-        "token": "",
+        "token": "",                  # legacy plaintext (runtime copy only once encrypted)
+        "token_secret": {},           # token encrypted with the repo password
+        "password_hash": "",          # repo-management password (separate from admin lockdown)
         "repo": "cyrcyrgo/cyrcyrgo.github.io",
         "branch": "main",
         "path_prefix": "cla",
@@ -48,6 +105,7 @@ DEFAULTS: dict = {
     "smtp": {
         "host": "smtp.qq.com",
         "port": 465,
+        "protocol": "ssl",            # ssl | starttls
         "user": "",
         "auth_code": "",
         "from_name": "YJS LLM Agent",
@@ -141,9 +199,32 @@ def load() -> dict:
         cfg["session_secret"] = secrets.token_urlsafe(48)
         if read_ok or not LOCAL_CONFIG.exists():
             save(cfg)
+    _migrate_github_token(cfg)
     for d in (DATA_DIR, USERS_DIR, RUNTIME_DIR, BIN_DIR):
         d.mkdir(parents=True, exist_ok=True)
     return cfg
+
+
+def _migrate_github_token(cfg: dict) -> None:
+    """Keep the GitHub token encrypted on disk.
+
+    * legacy plaintext token  -> encrypted with the session secret ("session" mode)
+    * "session" mode          -> decrypted back into memory for this process
+    * "repo" mode             -> left locked until the repo password is entered
+    """
+    gh = cfg.get("github")
+    if not isinstance(gh, dict):
+        return
+    sec = gh.get("token_secret") or {}
+    mode = sec.get("mode") or ("repo" if sec else "")
+    if mode == "session" and not gh.get("token"):
+        tok = decrypt_secret(sec, cfg["session_secret"])
+        if tok:
+            gh["token"] = tok
+    if gh.get("token") and not sec:
+        gh["token_secret"] = {"mode": "session",
+                              **encrypt_secret(gh["token"], cfg["session_secret"])}
+        save(cfg)
 
 
 def save(cfg: dict) -> None:
@@ -153,6 +234,14 @@ def save(cfg: dict) -> None:
                    "allow_register", "ai_enabled", "allow_model_add",
                    "announcement", "default_model", "max_tool_calls_per_step")
     payload = {k: cfg[k] for k in secret_keys if k in cfg}
+    # Never persist the GitHub token in the clear: only its encrypted form
+    # (github.token_secret) belongs on disk. The plaintext copy stays in memory
+    # for the running process, decrypted on demand after the repo password.
+    gh = payload.get("github")
+    if isinstance(gh, dict):
+        gh = dict(gh)
+        gh.pop("token", None)
+        payload["github"] = gh
     LOCAL_CONFIG.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
