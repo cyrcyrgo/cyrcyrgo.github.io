@@ -106,12 +106,16 @@ DEFAULTS: dict = {
     # Admin dashboard access. Leave ``emails`` empty to let the
     # earliest-registered account act as the owner instead.
     "admin": {"emails": [], "password_hash": ""},
-    "smtp": {
-        "host": "smtp.qq.com",
-        "port": 465,
-        "protocol": "ssl",            # ssl | starttls
-        "user": "",
-        "auth_code": "",
+    # Outgoing mail goes through Microsoft Graph (OAuth2 delegated flow).
+    # A refresh token minted with Mail.Send + offline_access is exchanged for
+    # short-lived access tokens on demand. Consumer accounts (outlook.com,
+    # hotmail.com) only support this delegated flow, not client credentials.
+    "msgraph": {
+        "tenant_id": "common",         # common | consumers | organizations | GUID
+        "client_id": "",               # Azure app registration Application (client) ID
+        "client_secret": "",           # optional; public/native apps leave empty
+        "refresh_token": "",           # delegated OAuth refresh token
+        "user": "",                    # sender mailbox (UPN), e.g. you@hotmail.com
         "from_name": "YJS LLM Agent",
     },
     "mcp_servers": {},
@@ -204,9 +208,28 @@ def load() -> dict:
         if read_ok or not LOCAL_CONFIG.exists():
             save(cfg)
     _migrate_github_token(cfg)
+    _migrate_mail(cfg)
     for d in (DATA_DIR, USERS_DIR, RUNTIME_DIR, BIN_DIR):
         d.mkdir(parents=True, exist_ok=True)
     return cfg
+
+
+def _migrate_mail(cfg: dict) -> None:
+    """Carry the sender address/display name over from the retired SMTP block.
+
+    Host/port/auth_code are dropped — Microsoft retired basic SMTP auth, so the
+    admin must paste a fresh client id + refresh token in the dashboard.
+    """
+    g = cfg.get("msgraph")
+    old = cfg.pop("smtp", None)
+    if isinstance(g, dict) and isinstance(old, dict):
+        if not g.get("user") and old.get("user"):
+            g["user"] = old["user"]
+        if not g.get("from_name") and old.get("from_name"):
+            g["from_name"] = old["from_name"]
+    if old is not None and LOCAL_CONFIG.exists():
+        # Rewrite once so the retired SMTP host/auth_code no longer sits on disk.
+        save(cfg)
 
 
 def _migrate_github_token(cfg: dict) -> None:
@@ -233,7 +256,7 @@ def _migrate_github_token(cfg: dict) -> None:
 
 def save(cfg: dict) -> None:
     """Persist the *secret* portion of the config (always UTF-8, no BOM)."""
-    secret_keys = ("github", "ngrok", "cpolar", "smtp", "session_secret",
+    secret_keys = ("github", "ngrok", "cpolar", "msgraph", "session_secret",
                    "mcp_servers", "models", "api_keys", "admin",
                    "allow_register", "ai_enabled", "allow_model_add",
                    "announcement", "default_model", "max_tool_calls_per_step",
