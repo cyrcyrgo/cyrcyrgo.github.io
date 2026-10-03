@@ -82,6 +82,10 @@ async def put_file(rel_or_repo_path: str, content: bytes, message: str,
                    already_in_repo: bool = False) -> dict:
     g = _gh()
     path_in_repo = rel_or_repo_path if already_in_repo else repo_path(rel_or_repo_path)
+    # The Contents API rejects payloads over ~1 MB; route bigger files
+    # (e.g. the 20 MB onnxruntime WASM binary) through the Git Data API.
+    if len(content) > 900_000:
+        return await _put_file_via_blobs(path_in_repo, content, message)
     sha = await get_sha(path_in_repo)
     body = {
         "message": message,
@@ -96,6 +100,63 @@ async def put_file(rel_or_repo_path: str, content: bytes, message: str,
         if r.status_code not in (200, 201):
             raise RuntimeError(f"GitHub 上传失败 {r.status_code}: {r.text[:300]}")
         return r.json()
+
+
+async def _put_file_via_blobs(path_in_repo: str, content: bytes, message: str) -> dict:
+    """Create/update one file through blobs + tree + commit + ref update."""
+    g = _gh()
+    repo, branch = g["repo"], g["branch"]
+    timeout = httpx.Timeout(300.0, connect=30.0)
+    async with httpx.AsyncClient(timeout=timeout) as c:
+        rb = await c.post(
+            f"{API}/repos/{repo}/git/blobs",
+            headers=_headers(),
+            json={"content": base64.b64encode(content).decode("ascii"),
+                  "encoding": "base64"},
+        )
+        if rb.status_code >= 400:
+            raise RuntimeError(f"blob 创建失败 {rb.status_code}: {rb.text[:300]}")
+        blob_sha = rb.json()["sha"]
+
+        rr = await c.get(f"{API}/repos/{repo}/git/ref/heads/{branch}",
+                         headers=_headers())
+        if rr.status_code >= 400:
+            raise RuntimeError(f"分支 ref 获取失败 {rr.status_code}: {rr.text[:200]}")
+        commit_sha = rr.json()["object"]["sha"]
+
+        rc = await c.get(f"{API}/repos/{repo}/git/commits/{commit_sha}",
+                         headers=_headers())
+        base_tree = rc.json()["tree"]["sha"]
+
+        rt = await c.post(
+            f"{API}/repos/{repo}/git/trees",
+            headers=_headers(),
+            json={"base_tree": base_tree, "tree": [{
+                "path": path_in_repo, "mode": "100644",
+                "type": "blob", "sha": blob_sha,
+            }]},
+        )
+        if rt.status_code >= 400:
+            raise RuntimeError(f"tree 创建失败 {rt.status_code}: {rt.text[:300]}")
+        new_tree = rt.json()["sha"]
+
+        rcm = await c.post(
+            f"{API}/repos/{repo}/git/commits",
+            headers=_headers(),
+            json={"message": message, "tree": new_tree,
+                  "parents": [commit_sha]},
+        )
+        if rcm.status_code >= 400:
+            raise RuntimeError(f"commit 创建失败 {rcm.status_code}: {rcm.text[:300]}")
+        new_commit = rcm.json()["sha"]
+
+        ru = await c.patch(
+            f"{API}/repos/{repo}/git/refs/heads/{branch}",
+            headers=_headers(), json={"sha": new_commit, "force": False},
+        )
+        if ru.status_code >= 400:
+            raise RuntimeError(f"ref 更新失败 {ru.status_code}: {ru.text[:300]}")
+        return {"sha": new_commit, "path": path_in_repo}
 
 
 async def list_repo_paths(rel_prefix: str = "") -> list[str]:
