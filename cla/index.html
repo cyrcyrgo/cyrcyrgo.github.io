@@ -108,8 +108,12 @@
 <div id="files-panel" class="drawer hidden">
   <div class="drawer-head">
     <h3>我的文件</h3>
-    <div><button id="btn-close-files" class="ghost">关闭</button></div>
+    <div>
+      <button id="btn-upload-file" class="ghost">上传文件</button>
+      <button id="btn-close-files" class="ghost">关闭</button>
+    </div>
   </div>
+  <input id="upload-input" type="file" multiple style="display:none" />
   <div id="files-usage" style="color:#8b98b4;font-size:12px;margin-bottom:10px"></div>
   <div id="files-list"></div>
   <div class="foot"><button id="btn-clear-files" class="ghost">清空全部</button></div>
@@ -135,6 +139,6 @@
   </div>
 </div>
 
-<script src="assets/app.js?v=20261002b"></script>
+<script src="assets/app.js?v=20261003a"></script>
 </body>
 </html>
