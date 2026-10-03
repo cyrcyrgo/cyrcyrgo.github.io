@@ -24,6 +24,7 @@ DEFAULTS: dict = {
     "ollama_url": "http://127.0.0.1:11434",
     "quota_bytes": 1073741824,          # 1 GB per user
     "max_agent_steps": 24,
+    "max_tool_calls_per_step": 8,       # cap tool calls executed in one agent step
     "code_timeout": 120,
     "session_secret": "",
     "code_ttl_seconds": 600,
@@ -150,7 +151,7 @@ def save(cfg: dict) -> None:
     secret_keys = ("github", "ngrok", "smtp", "session_secret",
                    "mcp_servers", "models", "api_keys", "admin",
                    "allow_register", "ai_enabled", "allow_model_add",
-                   "announcement", "default_model")
+                   "announcement", "default_model", "max_tool_calls_per_step")
     payload = {k: cfg[k] for k in secret_keys if k in cfg}
     LOCAL_CONFIG.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
