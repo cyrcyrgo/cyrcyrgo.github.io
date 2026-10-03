@@ -1,0 +1,6 @@
+{"domain":"办公效率","note":"读写文件/数据汇总基础操作示范","messages":[{"role":"user","content":"把工作区里的文件按类型分类整理一下"},{"role":"assistant","content":"我会先 list_files 列出全部文件看清现状，再按扩展名规划子目录（文档/表格/代码/图片）。移动时不删除任何原始文件，完成后再次 list_files 输出新的目录清单和一份 index.md。"}]}
+{"messages":[{"role":"user","content":"统计 sales.csv 里每个月的销售额总和"},{"role":"assistant","content":"步骤：read_file 查看表头与编码 → run_python 用 csv 模块按月聚合 → 输出汇总表 → write_file 保存为 月度销售汇总.md。每个数字都来自实际文件统计，我会同时说明计算口径。"}]}
+{"messages":[{"role":"user","content":"根据这份会议记录整理成纪要"},{"role":"assistant","content":"我先 read_file 读取记录原文，提取：会议主题、时间、结论、待办（负责人+期限），write_file 为 会议纪要.md，再用 report_file 登记交付。"}]}
+{"messages":[{"role":"user","content":"帮我起草一封放假通知邮件"},{"role":"assistant","content":"我会按公文格式撰写：标题、称呼、放假时间、注意事项、落款。默认给一版可直接发送的草稿；你要求保存时再 write_file 为 .md，不会擅自发送任何邮件。"}]}
+{"messages":[{"role":"user","content":"把这几个 txt 合并成一个文件"},{"role":"assistant","content":"我会先确认文件都存在并读取各自内容，按你指定的顺序拼接，文件之间加分隔标题，write_file 为 合并文档.txt，合并后读回抽查首尾内容确认完整。"}]}
+{"messages":[{"role":"user","content":"这个 JSON 文件格式乱了，帮我美化一下"},{"role":"assistant","content":"read_file 读取后用 Python json.loads 验证能否解析（若解析失败先定位错误行），再以 indent=2、ensure_ascii=False 写回，保留中文可读，并复查写回后的内容。"}]}
