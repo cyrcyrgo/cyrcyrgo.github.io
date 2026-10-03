@@ -7,9 +7,18 @@
   let currentConv = null;
   let sending = false;
   let MODELS = [];
+  let AGENTS = [];
+  let ME = null;
   let currentMode = "work";
+  let currentAgent = localStorage.getItem("yjs_agent") || "";
   let uiWired = false;
   let SITE = { ai_enabled: true, announcement: "" };
+
+  /* Bind a handler only when the element actually exists — a stale HTML id
+     must never abort the whole bundle (that caused the "clicks do nothing"). */
+  function on(id, ev, fn) { const el = $(id); if (el) el.addEventListener(ev, fn); }
+  function setHtml(id, html) { const el = $(id); if (el) el.innerHTML = html; }
+  function setText(id, txt) { const el = $(id); if (el) el.textContent = txt; }
 
   /* ------------------------------------------------------------------ */
   /* API resolution + auth                                                */
@@ -29,8 +38,8 @@
       } catch (_) {}
       if (!API && location.protocol.startsWith("http")) API = location.origin;
     }
-    $("api-label").textContent = API || "(未配置)";
-    $("api-input").value = API;
+    setText("api-label", API || "(未配置)");
+    const inp = $("api-input"); if (inp) inp.value = API;
   }
 
   async function api(path, opts = {}) {
@@ -73,6 +82,7 @@
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const shorten = (s, n) => { s = s || ""; return s.length > n ? s.slice(0, n) + "…" : s; };
   function fmtSize(n) {
+    if (n == null) return "--";
     if (n < 1024) return n + " B";
     if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
     if (n < 1073741824) return (n / 1048576).toFixed(1) + " MB";
@@ -80,16 +90,23 @@
   }
   function setMsg(text, kind = "") {
     const el = $("login-msg");
+    if (!el) return;
     el.textContent = text || "";
     el.className = "msg " + kind;
   }
+  function inlineMsg(id, text, kind) {
+    const el = $(id); if (!el) return;
+    el.textContent = text || "";
+    el.className = "me-msg" + (kind ? " " + kind : "");
+  }
   function renderUsage(u) {
     if (!u) return;
-    $("quota-text").textContent =
-      `空间 ${fmtSize(u.used)} / ${fmtSize(u.quota)}（${u.percent}%）`;
+    setText("quota-text", `空间 ${fmtSize(u.used)} / ${fmtSize(u.quota)}（${u.percent}%）`);
     const bar = $("quota-bar");
-    bar.querySelector("i").style.width = Math.min(u.percent, 100) + "%";
-    bar.classList.toggle("full", !!u.full);
+    if (bar) {
+      bar.querySelector("i").style.width = Math.min(u.percent, 100) + "%";
+      bar.classList.toggle("full", !!u.full);
+    }
   }
   const downloadUrl = (path) =>
     `${API}/api/files/download?path=${encodeURIComponent(path)}&token=${encodeURIComponent(TOKEN)}`;
@@ -104,10 +121,10 @@
 
   /* ------------------------------------------------------------------ */
   /* Sidebar collapse — CSS pins the floating button to the sidebar edge  */
-  /* via the #app.sb-collapsed class, so both classes must move together. */
   /* ------------------------------------------------------------------ */
   function setSidebar(collapsed) {
     const sb = $("sidebar"), app = $("app");
+    if (!sb || !app) return;
     sb.classList.toggle("collapsed", collapsed);
     app.classList.toggle("sb-collapsed", collapsed);
     localStorage.setItem("yjs_sidebar_collapsed", collapsed ? "1" : "0");
@@ -115,13 +132,13 @@
   function applySidebarState() {
     setSidebar(localStorage.getItem("yjs_sidebar_collapsed") === "1");
   }
-  $("sidebar-toggle").onclick = () =>
-    setSidebar(!$("sidebar").classList.contains("collapsed"));
+  on("sidebar-toggle", "click", () =>
+    setSidebar(!$("sidebar").classList.contains("collapsed")));
 
   /* ------------------------------------------------------------------ */
-  /* model + mode loaders                                                */
+  /* model + mode + agent loaders                                         */
   /* ------------------------------------------------------------------ */
-  async function loadModels() {
+  async function loadModels(prefValue) {
     try {
       const d = await api("/api/models");
       MODELS = d.models || [];
@@ -136,9 +153,39 @@
         if (d.default && m.name === d.default) opt.dataset.isDefault = "1";
         sel.appendChild(opt);
       });
-      const chosen = d.preference || d.default || (MODELS[0]?.name || "");
-      sel.value = chosen;
+      const chosen = prefValue || d.preference || d.default || (MODELS[0]?.name || "");
+      if ([...sel.options].some((o) => o.value === chosen)) sel.value = chosen;
     } catch (e) { console.warn("loadModels failed:", e); }
+  }
+
+  async function loadAgents() {
+    const sel = $("agent-select");
+    if (!sel) return;
+    try {
+      const d = await api("/api/agents");
+      AGENTS = d.agents || [];
+    } catch (e) { AGENTS = []; }
+    sel.innerHTML = "";
+    const auto = document.createElement("option");
+    auto.value = ""; auto.textContent = "🤖 默认智能体";
+    sel.appendChild(auto);
+    AGENTS.forEach((a) => {
+      const opt = document.createElement("option");
+      opt.value = a.id;
+      opt.textContent = `${a.icon || "🤖"} ${a.name}`;
+      opt.title = a.desc || "";
+      sel.appendChild(opt);
+    });
+    if ([...sel.options].some((o) => o.value === currentAgent)) sel.value = currentAgent;
+    renderAgentTag();
+  }
+
+  function renderAgentTag() {
+    const el = $("agent-tag");
+    if (!el) return;
+    const a = AGENTS.find((x) => x.id === currentAgent);
+    if (a) { el.textContent = `${a.icon || "🤖"} ${a.name}`; el.style.display = "inline-block"; }
+    else el.style.display = "none";
   }
 
   /* ------------------------------------------------------------------ */
@@ -153,11 +200,11 @@
     localStorage.setItem("yjs_login_tab", which);
     setMsg("");
   }
-  $("tab-code").onclick = () => selectLoginTab("code");
-  $("tab-pwd").onclick = () => selectLoginTab("pwd");
-  selectLoginTab(localStorage.getItem("yjs_login_tab") === "pwd" ? "pwd" : "code");
+  on("tab-code", "click", () => selectLoginTab("code"));
+  on("tab-pwd", "click", () => selectLoginTab("pwd"));
+  if ($("tab-code")) selectLoginTab(localStorage.getItem("yjs_login_tab") === "pwd" ? "pwd" : "code");
 
-  $("btn-send").onclick = async () => {
+  on("btn-send", "click", async () => {
     const email = $("login-email").value.trim();
     if (!email) return setMsg("请填写邮箱", "err");
     const btn = $("btn-send"); btn.disabled = true; setMsg("发送中…");
@@ -169,7 +216,7 @@
         if (--left < 0) { clearInterval(timer); btn.disabled = false; btn.textContent = "获取验证码"; }
       }, 1000);
     } catch (e) { setMsg(e.message, "err"); btn.disabled = false; }
-  };
+  });
 
   async function doVerify() {
     const email = $("login-email").value.trim();
@@ -182,13 +229,13 @@
       enterApp(d.user);
     } catch (e) { setMsg(e.message, "err"); }
   }
-  $("btn-verify").onclick = doVerify;
-  $("login-code").addEventListener("keydown", (e) => { if (e.key === "Enter") doVerify(); });
+  on("btn-verify", "click", doVerify);
+  on("login-code", "keydown", (e) => { if (e.key === "Enter") doVerify(); });
 
   async function doPasswordLogin() {
     const email = $("login-email").value.trim();
     const password = $("login-password").value;
-    if (!email || !password) return setMsg("请填写邮箱和密码", "err");
+    if (!email || !password) return setMsg("请填写邮箱和验证码", "err");
     setMsg("登录中…");
     try {
       const d = await api("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
@@ -196,39 +243,174 @@
       enterApp(d.user);
     } catch (e) { setMsg(e.message, "err"); }
   }
-  $("btn-pwd-login").onclick = doPasswordLogin;
-  $("login-password").addEventListener("keydown", (e) => { if (e.key === "Enter") doPasswordLogin(); });
+  on("btn-pwd-login", "click", doPasswordLogin);
+  on("login-password", "keydown", (e) => { if (e.key === "Enter") doPasswordLogin(); });
 
   function logout() {
     TOKEN = ""; localStorage.removeItem("yjs_token");
-    currentConv = null;
-    $("app").classList.add("hidden"); $("login").classList.remove("hidden");
+    currentConv = null; ME = null;
+    $("app")?.classList.add("hidden");
+    $("local")?.classList.add("hidden");
+    $("login")?.classList.remove("hidden");
   }
-  $("btn-logout").onclick = logout;
-  $("api-input").addEventListener("change", () => {
+  on("btn-logout", "click", logout);
+  on("api-input", "change", () => {
     const v = $("api-input").value.trim();
     if (v) { localStorage.setItem("yjs_api_override", v); API = v.replace(/\/$/, ""); }
     else localStorage.removeItem("yjs_api_override");
-    $("api-label").textContent = API;
+    setText("api-label", API);
   });
 
   /* ------------------------------------------------------------------ */
-  /* set / change own password                                           */
+  /* my account panel: profile / avatar / email / password / feedback     */
   /* ------------------------------------------------------------------ */
-  function openPwModal() { $("pw-modal").classList.remove("hidden"); $("pw-input").focus(); }
-  function closePwModal() { $("pw-modal").classList.add("hidden"); $("pw-input").value = ""; }
-  $("btn-setpw").onclick = openPwModal;
-  $("pw-cancel").onclick = closePwModal;
-  $("pw-modal").addEventListener("click", (e) => { if (e.target === $("pw-modal")) closePwModal(); });
-  $("pw-ok").onclick = async () => {
-    const pw = $("pw-input").value;
-    if (pw.length < 6) return alert("密码至少 6 位");
+  function renderMeCard(user) {
+    ME = user;
+    setText("user-email", user.email);
+    setText("me-mini-name", user.name || "我");
+    const mini = $("me-mini-avatar"), big = $("me-avatar");
+    const avatarHtml = user.avatar
+      ? `<img src="${user.avatar}" alt="头像" />` : "👤";
+    if (mini) mini.innerHTML = avatarHtml;
+    if (big) big.innerHTML = avatarHtml;
+    if ($("me-name")) $("me-name").value = user.name || "";
+    setText("me-email", user.email);
+    setText("me-quota",
+      `${fmtSize(user.usage?.used)} / ${fmtSize(user.quota_bytes)}（${user.usage?.percent ?? 0}%）`);
+  }
+
+  function openMePanel() {
+    if (!ME) return;
+    $("me-panel").classList.remove("hidden");
+    renderMeCard(ME);
+  }
+  on("btn-me", "click", openMePanel);
+  on("btn-settings", "click", openMePanel);
+  on("btn-close-me", "click", () => $("me-panel").classList.add("hidden"));
+
+  /* Client-side downscale so a phone photo never exceeds the 300 KB limit. */
+  function fileToAvatarDataUri(file, maxBytes = 290 * 1024) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("读取图片失败"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("图片解码失败"));
+        img.onload = () => {
+          let size = 160;
+          const attempt = () => {
+            const cv = document.createElement("canvas");
+            cv.width = cv.height = size;
+            const ctx = cv.getContext("2d");
+            ctx.clearRect(0, 0, size, size);
+            const s = Math.min(img.width, img.height);
+            ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+            const uri = cv.toDataURL("image/jpeg", 0.85);
+            if (uri.length <= maxBytes || size <= 64) return resolve(uri);
+            size = Math.round(size * 0.8);
+            attempt();
+          };
+          attempt();
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  on("btn-avatar-pick", "click", () => $("avatar-input")?.click());
+  on("avatar-input", "change", async (e) => {
+    const file = (e.target.files || [])[0];
+    e.target.value = "";
+    if (!file) return;
+    inlineMsg("me-profile-msg", "处理图片中…");
     try {
-      await api("/api/auth/password", { method: "POST", body: JSON.stringify({ password: pw }) });
-      closePwModal();
-      alert("密码已保存，下次可用「密码登录」进入");
-    } catch (e) { alert(e.message); }
-  };
+      const uri = await fileToAvatarDataUri(file);
+      const d = await api("/api/me/profile", { method: "POST", body: JSON.stringify({ avatar: uri }) });
+      renderMeCard(d.user);
+      inlineMsg("me-profile-msg", "✓ 头像已更新", "ok");
+    } catch (err) { inlineMsg("me-profile-msg", err.message, "err"); }
+  });
+  on("btn-avatar-clear", "click", async () => {
+    try {
+      const d = await api("/api/me/profile", { method: "POST", body: JSON.stringify({ avatar: "" }) });
+      renderMeCard(d.user);
+      inlineMsg("me-profile-msg", "✓ 头像已清除", "ok");
+    } catch (err) { inlineMsg("me-profile-msg", err.message, "err"); }
+  });
+  on("btn-save-profile", "click", async () => {
+    const name = $("me-name").value.trim();
+    if (!name) return inlineMsg("me-profile-msg", "昵称不能为空", "err");
+    try {
+      const d = await api("/api/me/profile", { method: "POST", body: JSON.stringify({ name }) });
+      renderMeCard(d.user);
+      inlineMsg("me-profile-msg", "✓ 资料已保存", "ok");
+    } catch (err) { inlineMsg("me-profile-msg", err.message, "err"); }
+  });
+
+  on("btn-me-send-code", "click", async () => {
+    const email = $("me-new-email").value.trim();
+    if (!email) return inlineMsg("me-email-msg", "请填写新邮箱", "err");
+    const btn = $("btn-me-send-code"); btn.disabled = true;
+    try {
+      await api("/api/me/email/send-code", { method: "POST", body: JSON.stringify({ email }) });
+      inlineMsg("me-email-msg", "✓ 验证码已发送", "ok");
+      let left = 60; const timer = setInterval(() => {
+        btn.textContent = left + "s";
+        if (--left < 0) { clearInterval(timer); btn.disabled = false; btn.textContent = "获取验证码"; }
+      }, 1000);
+    } catch (err) {
+      inlineMsg("me-email-msg", err.message, "err"); btn.disabled = false;
+    }
+  });
+  on("btn-me-change-email", "click", async () => {
+    const email = $("me-new-email").value.trim();
+    const code = $("me-email-code").value.trim();
+    if (!email || !code) return inlineMsg("me-email-msg", "请填写新邮箱和验证码", "err");
+    try {
+      const d = await api("/api/me/email", { method: "POST", body: JSON.stringify({ email, code }) });
+      TOKEN = d.token; localStorage.setItem("yjs_token", TOKEN);
+      renderMeCard(d.user);
+      $("me-new-email").value = ""; $("me-email-code").value = "";
+      inlineMsg("me-email-msg", "✓ 邮箱已更改", "ok");
+    } catch (err) { inlineMsg("me-email-msg", err.message, "err"); }
+  });
+
+  on("btn-me-save-pw", "click", async () => {
+    const pw1 = $("me-pw1").value, pw2 = $("me-pw2").value;
+    if (pw1.length < 6) return inlineMsg("me-pw-msg", "密码至少 6 位", "err");
+    if (pw1 !== pw2) return inlineMsg("me-pw-msg", "两次输入不一致", "err");
+    try {
+      await api("/api/auth/password", { method: "POST", body: JSON.stringify({ password: pw1 }) });
+      $("me-pw1").value = ""; $("me-pw2").value = "";
+      inlineMsg("me-pw-msg", "✓ 密码已保存，下次可用密码登录", "ok");
+    } catch (err) { inlineMsg("me-pw-msg", err.message, "err"); }
+  });
+
+  on("btn-me-feedback", "click", async () => {
+    const category = $("me-fb-cat").value;
+    const content = $("me-fb-text").value.trim();
+    if (content.length < 2) return inlineMsg("me-fb-msg", "请填写反馈内容", "err");
+    try {
+      await api("/api/feedback", { method: "POST",
+        body: JSON.stringify({ category, content }) });
+      $("me-fb-text").value = "";
+      inlineMsg("me-fb-msg", "✓ 反馈已提交，感谢你的反馈", "ok");
+    } catch (err) { inlineMsg("me-fb-msg", err.message, "err"); }
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* offline (in-browser WebGPU) mode entry — implemented in local.js     */
+  /* ------------------------------------------------------------------ */
+  on("btn-local", "click", () => {
+    $("login").classList.add("hidden");
+    $("local").classList.remove("hidden");
+    if (window.YJSLocal && window.YJSLocal.enter) window.YJSLocal.enter();
+  });
+  on("btn-local-back", "click", () => {
+    $("local").classList.add("hidden");
+    $("login").classList.remove("hidden");
+  });
 
   /* ------------------------------------------------------------------ */
   /* bootstrap                                                           */
@@ -238,9 +420,23 @@
     uiWired = true;
 
     // Model selector change → persist preference
-    $("model-select").addEventListener("change", async () => {
+    $("model-select").addEventListener("change", () => {
       const v = $("model-select").value;
-      try { await api("/api/models/set", { method: "POST", body: JSON.stringify({ model: v || null }) }); } catch (_) {}
+      api("/api/models/set", { method: "POST", body: JSON.stringify({ model: v || null }) }).catch(() => {});
+    });
+
+    // Domain agent selector
+    $("agent-select").addEventListener("change", () => {
+      currentAgent = $("agent-select").value;
+      localStorage.setItem("yjs_agent", currentAgent);
+      renderAgentTag();
+      // An agent can recommend a small low-spec model; switch when the user
+      // hasn't pinned a personal preference server-side.
+      const a = AGENTS.find((x) => x.id === currentAgent);
+      if (a && a.suggest_model && !ME?.model_preference) {
+        const sel = $("model-select");
+        if ([...sel.options].some((o) => o.value === a.suggest_model)) sel.value = a.suggest_model;
+      }
     });
 
     // Mode selector
@@ -252,11 +448,11 @@
     $("mode-select").value = savedMode; currentMode = savedMode;
 
     // Files drawer
-    $("btn-files").onclick = () => { $("files-panel").classList.remove("hidden"); loadFiles(); };
-    $("btn-close-files").onclick = () => $("files-panel").classList.add("hidden");
+    on("btn-files", "click", () => { $("files-panel").classList.remove("hidden"); loadFiles(); });
+    on("btn-close-files", "click", () => $("files-panel").classList.add("hidden"));
 
     // Preview drawer
-    $("btn-preview-close").onclick = () => $("preview-panel").classList.add("hidden");
+    on("btn-preview-close", "click", () => $("preview-panel").classList.add("hidden"));
 
     // Quick task templates
     const TPL = [
@@ -290,7 +486,7 @@
     });
 
     // Export current conversation
-    $("btn-export").onclick = exportConversation;
+    on("btn-export", "click", exportConversation);
   }
 
   function applyConvFilter() {
@@ -323,14 +519,15 @@
   }
 
   async function enterApp(user) {
-    $("login").classList.add("hidden"); $("app").classList.remove("hidden");
-    $("user-email").textContent = user.email;
+    $("login").classList.add("hidden"); $("local")?.classList.add("hidden");
+    $("app").classList.remove("hidden");
+    renderMeCard(user);
     renderUsage(user.usage);
     applySidebarState();
     $("btn-admin").classList.toggle("hidden", !user.is_admin);
     $("btn-admin").onclick = () => { location.href = APP_ROOT + "admin.html"; };
     wireUi();
-    await loadModels();
+    await Promise.all([loadModels(user.model_preference), loadAgents()]);
     await loadConversations();
   }
 
@@ -379,10 +576,10 @@
 
   function newChatView() {
     $("chat-title").textContent = "新对话";
-    $("messages").innerHTML =
-      `<div class="empty">描述你的任务，Agent 会在本机直接执行。</div>`;
+    setHtml("messages", `<div class="empty">描述你的任务，Agent 会在本机直接执行。</div>`);
     $("model-tag").style.display = "none";
     $("mode-tag").style.display = "none";
+    const at = $("agent-tag"); if (at) at.style.display = currentAgent ? "" : "none";
     $("btn-export").classList.add("hidden");
   }
 
@@ -531,6 +728,12 @@
         if (live.parentNode) live.remove();
         if (streamEl) endStream(ev.content);
         else if (ev.content) addBubble("assistant", ev.content);
+      } else if (ev.type === "agent") {
+        if (ev.icon && ev.name) {
+          const el = $("agent-tag");
+          el.textContent = `${ev.icon} ${ev.name}`;
+          el.style.display = "inline-block";
+        }
       } else if (ev.type === "model") {
         if (ev.model) {
           const sel = $("model-select"); if (sel) sel.value = ev.model;
@@ -580,7 +783,10 @@
           "Authorization": "Bearer " + TOKEN,
           "ngrok-skip-browser-warning": "true",
         },
-        body: JSON.stringify({ content: text, model: chosenModel || null, mode: chosenMode }),
+        body: JSON.stringify({
+          content: text, model: chosenModel || null,
+          mode: chosenMode, agent: currentAgent || null,
+        }),
       });
       if (res.status === 401) { logout(); return; }
       if (!res.ok) {
@@ -614,14 +820,16 @@
       loadConversations(); refreshMe();
     }
   }
-  $("btn-send-msg").onclick = sendMessage;
-  $("chat-input").addEventListener("keydown", (e) => {
+  on("btn-send-msg", "click", sendMessage);
+  on("chat-input", "keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
 
   async function refreshMe() {
     try {
-      const d = await api("/api/me"); renderUsage(d.user.usage);
+      const d = await api("/api/me");
+      ME = d.user;
+      renderUsage(d.user.usage);
     } catch (_) {}
   }
 
@@ -666,11 +874,11 @@
       });
     } catch (e) { alert(e.message); }
   }
-  $("btn-clear-files").onclick = async () => {
+  on("btn-clear-files", "click", async () => {
     if (!confirm("确定清空全部工作区文件？此操作不可恢复。")) return;
     await api("/api/files/clear", { method: "POST" });
     await refreshMe(); loadFiles();
-  };
+  });
 
   /* --- upload --- */
   async function uploadOne(file, rel) {
@@ -683,8 +891,8 @@
     if (!res.ok) throw new Error(data.detail || data.error || ("HTTP " + res.status));
     return data;
   }
-  $("btn-upload-file").onclick = () => $("upload-input").click();
-  $("upload-input").onchange = async (e) => {
+  on("btn-upload-file", "click", () => $("upload-input")?.click());
+  on("upload-input", "change", async (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = "";
     if (!files.length) return;
@@ -702,13 +910,13 @@
     await refreshMe();
     await loadFiles();
     if (failed) alert(`上传完成：成功 ${done} 个，失败 ${failed} 个\n${lastErr}`);
-  };
+  });
 
   /* --- preview --- */
   async function openPreview(path) {
     $("preview-panel").classList.remove("hidden");
     $("preview-title").textContent = "预览 · " + path;
-    $("preview-body").innerHTML = `<div style="color:#8b98b4">加载中…</div>`;
+    setHtml("preview-body", `<div style="color:#8b98b4">加载中…</div>`);
     try {
       const d = await api("/api/files/preview?path=" + encodeURIComponent(path));
       if (d.kind === "html") {
