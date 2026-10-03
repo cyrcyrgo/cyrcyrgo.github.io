@@ -561,6 +561,7 @@ async def health():
         "models": cfg.CONFIG.get("models", []),
         "ollama": await llm.health(),
         "tunnel": tunnel.TUNNEL.url,
+        "tunnel_pushed": tunnel.TUNNEL.pushed,
         "quota_bytes": cfg.CONFIG["quota_bytes"],
     }
 
