@@ -89,6 +89,9 @@ DEFAULTS: dict = {
     "ai_enabled": True,            # master switch: suspend ALL model calls
     "allow_model_add": True,       # whether admins may still add new models
     "announcement": "",            # site-wide notice shown on the chat page
+    "notification": {              # structured notice, mirrored to the repo
+        "title": "", "body": "", "updated_at": "", "author": "",
+    },
     "default_model": "",           # "" = fall back to "model"
     "github": {
         "token": "",                  # legacy plaintext (runtime copy only once encrypted)
@@ -233,7 +236,8 @@ def save(cfg: dict) -> None:
     secret_keys = ("github", "ngrok", "cpolar", "smtp", "session_secret",
                    "mcp_servers", "models", "api_keys", "admin",
                    "allow_register", "ai_enabled", "allow_model_add",
-                   "announcement", "default_model", "max_tool_calls_per_step")
+                   "announcement", "default_model", "max_tool_calls_per_step",
+                   "notification")
     payload = {k: cfg[k] for k in secret_keys if k in cfg}
     # Never persist the GitHub token in the clear: only its encrypted form
     # (github.token_secret) belongs on disk. The plaintext copy stays in memory
