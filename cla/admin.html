@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS 管理后台</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%99%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/admin.css?v=20261003d" />
+<link rel="stylesheet" href="assets/admin.css?v=20261003k" />
 </head>
 <body>
 
@@ -97,6 +97,7 @@
   <!-- 邮件服务 -->
   <section class="panel">
     <h3>邮件服务 <span class="hint">· 发件邮箱设置（地址 / 授权码 / 协议）与全体群发</span></h3>
+    <div id="mail-status" class="muted" style="margin-bottom:12px">加载中…</div>
     <div class="settings-grid">
       <div class="set-field">
         <span class="sw-label">发件邮箱地址</span>
@@ -147,6 +148,27 @@
       <span id="bc-msg" class="muted inline-msg"></span>
       <button class="btn ghost" id="btn-broadcast-me">仅发给我（预览）</button>
       <button class="btn" id="btn-broadcast">群发给全体用户</button>
+    </div>
+  </section>
+
+  <!-- 全站通知 -->
+  <section class="panel">
+    <h3>全站通知 <span class="hint">· 显示在对话页顶部；发布后同步到 GitHub 仓库</span></h3>
+    <div id="nt-status" class="muted" style="margin-bottom:12px">加载中…</div>
+    <div class="settings-grid">
+      <div class="set-field wide">
+        <span class="sw-label">通知标题</span>
+        <input id="nt-title" placeholder="例如：系统维护通知" />
+      </div>
+      <div class="set-field wide">
+        <span class="sw-label">通知内容</span>
+        <textarea id="nt-body" rows="5" placeholder="写给全体用户的内容…"></textarea>
+      </div>
+    </div>
+    <div class="set-actions">
+      <span id="nt-msg" class="muted inline-msg"></span>
+      <button class="btn ghost" id="btn-nt-save">仅保存到本机</button>
+      <button class="btn" id="btn-nt-publish">发布全站通知并更新到 GitHub</button>
     </div>
   </section>
 
@@ -278,6 +300,6 @@
   </div>
 </div>
 
-<script src="assets/admin.js?v=20261003d"></script>
+<script src="assets/admin.js?v=20261003k"></script>
 </body>
 </html>
