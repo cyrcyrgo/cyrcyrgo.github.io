@@ -1074,6 +1074,112 @@ async def admin_delete_user(uid: str, user: dict = Depends(require_admin_gate)):
     return {"ok": store.delete_user(uid)}
 
 
+class AdminRoleIn(BaseModel):
+    admin: bool
+
+
+@app.post("/api/admin/users/{uid}/admin")
+async def admin_set_role(uid: str, body: AdminRoleIn,
+                         user: dict = Depends(require_admin_gate)):
+    """Grant or revoke the administrator role (used to hand over ownership)."""
+    target = store.get_user(uid)
+    if not target:
+        raise HTTPException(404, "用户不存在")
+    email = str(target.get("email", "")).strip().lower()
+    if not email:
+        raise HTTPException(400, "该账号没有可用邮箱")
+    admin_cfg = cfg.CONFIG.setdefault("admin", {})
+    emails = [str(e).strip().lower() for e in (admin_cfg.get("emails") or []) if e]
+    if not emails:
+        # Materialise the implicit owner first, otherwise granting the very
+        # first admin would silently demote the earliest-registered account.
+        emails = [str(u.get("email", "")).lower()
+                  for u in store.list_users() if store.is_admin(u)]
+    if body.admin:
+        if email not in emails:
+            emails.append(email)
+    else:
+        remaining = [e for e in emails if e != email]
+        if not remaining:
+            raise HTTPException(400, "至少需要保留一名管理员，请先指定新的管理员")
+        emails = remaining
+    admin_cfg["emails"] = emails
+    cfg.save(cfg.CONFIG)
+    return {"ok": True, "admins": emails}
+
+
+# --------------------------------------------------------------------------- #
+# site-wide notice: stored locally + published to the GitHub repository
+# --------------------------------------------------------------------------- #
+NOTICE_FILE = cfg.ROOT / "notification.json"
+
+
+def _notice() -> dict:
+    n = cfg.CONFIG.get("notification") or {}
+    return {
+        "title": n.get("title", "") or "",
+        "body": n.get("body", "") or "",
+        "updated_at": n.get("updated_at", "") or "",
+        "author": n.get("author", "") or "",
+    }
+
+
+@app.get("/api/admin/notification")
+async def admin_get_notification(user: dict = Depends(require_admin_gate)):
+    gh = _github_cfg()
+    prefix = (gh.get("path_prefix") or "").strip("/")
+    return {
+        "ok": True,
+        **_notice(),
+        "repo": gh.get("repo", ""),
+        "branch": gh.get("branch", "main"),
+        "repo_file": f"{prefix}/notification.json" if prefix else "notification.json",
+        "has_token": bool(gh.get("token")),
+        "unlocked": _repo_unlocked(user["uid"]),
+    }
+
+
+class NoticeIn(BaseModel):
+    title: str = ""
+    body: str = ""
+    publish: bool = True
+
+
+@app.post("/api/admin/notification")
+async def admin_set_notification(body: NoticeIn,
+                                 user: dict = Depends(require_admin_gate)):
+    """Save the notice locally and (optionally) push it to the repo."""
+    title = (body.title or "").strip()[:200]
+    text = (body.body or "").strip()[:2000]
+    if not title and not text:
+        raise HTTPException(400, "请填写通知标题或内容")
+    notice = {
+        "title": title,
+        "body": text,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "author": str(user.get("email", "")),
+    }
+    cfg.CONFIG["notification"] = notice
+    cfg.CONFIG["announcement"] = ((title + "：" + text) if title and text else (title or text))[:500]
+    cfg.save(cfg.CONFIG)
+    NOTICE_FILE.write_text(json.dumps(notice, ensure_ascii=False, indent=2),
+                           encoding="utf-8")
+
+    pushed, err = False, ""
+    if body.publish:
+        try:
+            _require_repo_unlocked(user["uid"])
+            await github_sync.put_file(
+                "notification.json", NOTICE_FILE.read_bytes(),
+                f"chore: publish site notice ({title or 'notice'})")
+            pushed = True
+        except HTTPException as exc:
+            err = str(exc.detail)
+        except Exception as exc:  # noqa: BLE001
+            err = str(exc)[:200]
+    return {"ok": True, "pushed": pushed, "error": err, "notice": notice}
+
+
 @app.post("/api/admin/metrics/reset")
 async def admin_reset_metrics(user: dict = Depends(require_admin_gate)):
     metrics.reset()
@@ -1124,7 +1230,7 @@ async def admin_set_email(body: SmtpIn, user: dict = Depends(require_admin_gate)
     if body.from_name is not None:
         s["from_name"] = body.from_name.strip() or "YJS LLM Agent"
     cfg.save(cfg.CONFIG)
-    return {"ok": True}
+    return {"ok": True, "has_auth_code": bool(s.get("auth_code"))}
 
 
 class TestMailIn(BaseModel):
@@ -1603,6 +1709,14 @@ async def service_worker():
     if not f.exists():
         raise HTTPException(404)
     return FileResponse(f, media_type="application/javascript")
+
+
+@app.get("/notification.json")
+async def public_notice():
+    """Same file the admin publishes to the repo; served locally too."""
+    if NOTICE_FILE.exists():
+        return JSONResponse(json.loads(NOTICE_FILE.read_text(encoding="utf-8")))
+    return JSONResponse({"title": "", "body": ""})
 
 
 @app.get("/config.json")
