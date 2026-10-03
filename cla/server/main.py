@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agent, auth, config as cfg, github_sync, llm, metrics, store, tools, tunnel
+from . import agent, auth, config as cfg, github_sync, llm, mcp_client, metrics, store, tools, tunnel
 
 app = FastAPI(title="YJS LLM Agent", version="1.0")
 app.add_middleware(
@@ -362,6 +362,60 @@ async def clear_files(user: dict = Depends(current_user)):
     return {"ok": True, "usage": store.usage(user["uid"])}
 
 
+MAX_UPLOAD_BYTES = 100 * 1024 * 1024          # 100 MB per uploaded file
+
+
+@app.post("/api/files/upload")
+async def upload_file(request: Request, path: str = Query(...),
+                      user: dict = Depends(current_user)):
+    """Upload a user file straight into their workspace (quota-checked).
+
+    Sent as a raw octet-stream body with the destination path in ``?path=``
+    (no multipart dependency needed). The body is streamed to a ``.part`` file
+    and only moved into place once the size and quota checks pass.
+    """
+    raw = (path or "").strip().replace("\\", "/")
+    if not raw or raw.endswith("/"):
+        raise HTTPException(400, "请提供文件名")
+    parts = [p for p in raw.split("/") if p not in ("", ".")]
+    if any(p == ".." for p in parts):
+        raise HTTPException(400, "非法路径")
+    rel = "/".join(parts)
+    root = store.workspace(user["uid"]).resolve()
+    target = (root / rel).resolve()
+    if root not in target.parents:
+        raise HTTPException(403, "非法路径")
+    if target.exists() and target.is_dir():
+        raise HTTPException(400, "目标是一个目录")
+
+    usage = store.usage(user["uid"])
+    if usage["full"]:
+        raise HTTPException(403, "你的云空间已满，请清理文件后再上传")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(target.name + ".part")
+    total = 0
+    try:
+        with tmp.open("wb") as fh:
+            async for chunk in request.stream():
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        413, f"单个文件不能超过 {MAX_UPLOAD_BYTES // (1024 * 1024)}MB")
+                fh.write(chunk)
+        if total == 0:
+            raise HTTPException(400, "文件内容为空")
+        if usage["used"] + total > usage["quota"]:
+            raise HTTPException(413, "云空间不足，无法上传该文件")
+    except HTTPException:
+        tmp.unlink(missing_ok=True)
+        raise
+    tmp.replace(target)
+    return {"ok": True, "path": rel, "size": total, "usage": store.usage(user["uid"])}
+
+
 # --------------------------------------------------------------------------- #
 # system
 # --------------------------------------------------------------------------- #
@@ -649,6 +703,7 @@ class AdminSettingsIn(BaseModel):
     allow_model_add: bool | None = None
     announcement: str | None = None
     default_model: str | None = None
+    max_tool_calls_per_step: int | None = None
 
 
 @app.get("/api/admin/settings")
@@ -661,6 +716,7 @@ async def admin_get_settings(user: dict = Depends(require_admin_gate)):
         "allow_model_add": bool(cfg.CONFIG.get("allow_model_add", True)),
         "announcement": cfg.CONFIG.get("announcement", "") or "",
         "default_model": cfg.CONFIG.get("default_model") or cfg.CONFIG.get("model"),
+        "max_tool_calls_per_step": int(cfg.CONFIG.get("max_tool_calls_per_step") or 8),
         "models": [
             {"name": m["name"], "display": m.get("display") or m["name"],
              "enabled": m.get("enabled", True)}
@@ -680,6 +736,8 @@ async def admin_set_settings(body: AdminSettingsIn,
         cfg.CONFIG["allow_model_add"] = bool(body.allow_model_add)
     if body.announcement is not None:
         cfg.CONFIG["announcement"] = body.announcement.strip()[:500]
+    if body.max_tool_calls_per_step is not None:
+        cfg.CONFIG["max_tool_calls_per_step"] = max(1, min(int(body.max_tool_calls_per_step), 50))
     if body.default_model is not None:
         names = {m["name"] for m in cfg.CONFIG.get("models", [])}
         if body.default_model and body.default_model not in names:
@@ -840,6 +898,107 @@ async def admin_delete_user(uid: str, user: dict = Depends(require_admin_gate)):
 async def admin_reset_metrics(user: dict = Depends(require_admin_gate)):
     metrics.reset()
     return {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
+# MCP servers (admin)
+# --------------------------------------------------------------------------- #
+def _parse_command(raw: str) -> list[str]:
+    """Parse a shell-ish command line into argv.
+
+    Accepts a JSON array (``["npx","-y","pkg"]``) or a plain space-separated
+    string; quoted segments are kept together.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return []
+    if raw.startswith("["):
+        try:
+            arr = json.loads(raw)
+            if isinstance(arr, list):
+                return [str(x) for x in arr]
+        except json.JSONDecodeError:
+            pass
+    import shlex
+
+    try:
+        tokens = shlex.split(raw, posix=False)
+    except ValueError:
+        tokens = raw.split()
+    return [t[1:-1] if len(t) >= 2 and t[0] == t[-1] and t[0] in "\"'" else t
+            for t in tokens if t]
+
+
+class MCPServerIn(BaseModel):
+    name: str
+    command: str = ""
+    env: dict[str, str] | None = None
+
+
+@app.get("/api/admin/mcp")
+async def admin_list_mcp(with_tools: bool = Query(default=False),
+                         user: dict = Depends(require_admin_gate)):
+    servers = cfg.CONFIG.get("mcp_servers", {}) or {}
+    out: list[dict] = []
+    for name, spec in servers.items():
+        cmd = list(spec.get("command", []) or [])
+        out.append({
+            "name": name,
+            "command": cmd,
+            "command_str": " ".join(cmd),
+            "env": spec.get("env", {}) or {},
+        })
+    if with_tools:
+        for s in out:
+            res = await mcp_client.list_tools(s["name"])
+            s["tools"] = res.get("tools", []) if res.get("ok") else []
+            s["error"] = None if res.get("ok") else res.get("error")
+    return {"ok": True, "servers": out}
+
+
+@app.post("/api/admin/mcp")
+async def admin_save_mcp(body: MCPServerIn, user: dict = Depends(require_admin_gate)):
+    """Add or update an MCP server (stdio command + optional env)."""
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(400, "请填写服务器名称")
+    cmd = _parse_command(body.command)
+    if not cmd:
+        raise HTTPException(400, "请填写启动命令，例如：npx -y @modelcontextprotocol/server-filesystem D:/yjs")
+    servers = cfg.CONFIG.setdefault("mcp_servers", {})
+    entry: dict = {"command": cmd}
+    env = {str(k).strip(): str(v) for k, v in (body.env or {}).items() if str(k).strip()}
+    if env:
+        entry["env"] = env
+    servers[name] = entry
+    cfg.CONFIG["mcp_servers"] = servers
+    cfg.save(cfg.CONFIG)
+    return {"ok": True, "name": name}
+
+
+@app.delete("/api/admin/mcp")
+async def admin_delete_mcp(name: str = Query(...), user: dict = Depends(require_admin_gate)):
+    servers = cfg.CONFIG.get("mcp_servers", {}) or {}
+    if name not in servers:
+        raise HTTPException(404, f"未配置的 MCP 服务器: {name}")
+    servers.pop(name, None)
+    cfg.CONFIG["mcp_servers"] = servers
+    cfg.save(cfg.CONFIG)
+    await mcp_client.shutdown()
+    return {"ok": True}
+
+
+@app.post("/api/admin/mcp/test")
+async def admin_test_mcp(name: str = Query(...), user: dict = Depends(require_admin_gate)):
+    """Start the server and list its tools to prove the command works."""
+    servers = cfg.CONFIG.get("mcp_servers", {}) or {}
+    if name not in servers:
+        raise HTTPException(404, f"未配置的 MCP 服务器: {name}")
+    await mcp_client.shutdown()
+    res = await mcp_client.list_tools(name)
+    if not res.get("ok"):
+        raise HTTPException(400, f"连接失败：{res.get('error')}")
+    return {"ok": True, "tools": res.get("tools", [])}
 
 
 @app.get("/admin")
