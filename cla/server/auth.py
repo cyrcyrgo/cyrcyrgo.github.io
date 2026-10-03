@@ -26,8 +26,51 @@ ALGO = "HS256"
 def _smtp():
     s = cfg.CONFIG["smtp"]
     if not s.get("user") or not s.get("auth_code"):
-        raise RuntimeError("SMTP 未配置：请在 config.local.json 中填写 smtp.user / smtp.auth_code")
+        raise RuntimeError("SMTP 未配置：请在后台「邮件服务」中填写发件邮箱与授权码")
     return s
+
+
+def _connect(s: dict):
+    """Open an authenticated SMTP connection (SSL or STARTTLS per config)."""
+    host = s["host"]
+    proto = (s.get("protocol") or "ssl").lower()
+    if proto == "starttls":
+        smtp = smtplib.SMTP(host, int(s.get("port") or 587), timeout=25)
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
+    else:
+        smtp = smtplib.SMTP_SSL(host, int(s.get("port") or 465), timeout=25)
+    smtp.login(s["user"], s["auth_code"])
+    return smtp
+
+
+def send_mail(to: str, subject: str, html: str, text: str | None = None) -> None:
+    """Send one UTF-8 HTML mail through the configured SMTP account."""
+    s = _smtp()
+    msg = MIMEText(html, "html", "utf-8")
+    msg["Subject"] = Header(subject, "utf-8")
+    msg["From"] = f"{s.get('from_name', 'YJS')} <{s['user']}>"
+    msg["To"] = to
+    with _connect(s) as smtp:
+        smtp.sendmail(s["user"], [to], msg.as_string())
+
+
+def check_smtp() -> str:
+    """Log in and close — used by the admin "test mail settings" button."""
+    s = _smtp()
+    with _connect(s):
+        pass
+    return s["user"]
+
+
+def _wrap(title: str, body_html: str) -> str:
+    return (
+        "<div style='font-family:system-ui,Arial;padding:24px;color:#111'>"
+        f"<h2 style='margin:0 0 12px'>{title}</h2>{body_html}"
+        "<p style='color:#888;font-size:12px;margin-top:20px'>此邮件由 YJS LLM Agent 发送</p>"
+        "</div>"
+    )
 
 
 def can_send(email: str) -> tuple[bool, int]:
@@ -41,7 +84,7 @@ def can_send(email: str) -> tuple[bool, int]:
 
 def send_code(email: str) -> None:
     email = email.lower()
-    s = _smtp()
+    _smtp()
     code = f"{random.randint(0, 999999):06d}"
     if cfg.CONFIG.get("debug_codes"):
         print(f"[auth] code for {email} = {code}", flush=True)
@@ -51,21 +94,13 @@ def send_code(email: str) -> None:
         "last_sent": time.time(),
         "attempts": 0,
     }
-    body = (
-        f"<div style='font-family:system-ui,Arial;padding:24px'>"
-        f"<h2>YJS LLM Agent 登录验证码</h2>"
+    body = _wrap(
+        "YJS LLM Agent 登录验证码",
         f"<p>你的验证码是：</p>"
         f"<p style='font-size:32px;font-weight:700;letter-spacing:6px;color:#2563eb'>{code}</p>"
-        f"<p style='color:#666'>10 分钟内有效，请勿泄露给他人。</p></div>"
+        f"<p style='color:#666'>10 分钟内有效，请勿泄露给他人。</p>",
     )
-    msg = MIMEText(body, "html", "utf-8")
-    msg["Subject"] = Header("YJS LLM Agent 登录验证码", "utf-8")
-    msg["From"] = f"{s.get('from_name', 'YJS')} <{s['user']}>"
-    msg["To"] = email
-
-    with smtplib.SMTP_SSL(s["host"], int(s.get("port", 465)), timeout=20) as smtp:
-        smtp.login(s["user"], s["auth_code"])
-        smtp.sendmail(s["user"], [email], msg.as_string())
+    send_mail(email, "YJS LLM Agent 登录验证码", body)
 
 
 def verify_code(email: str, code: str) -> bool:
