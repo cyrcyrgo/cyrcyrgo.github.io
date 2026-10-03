@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import Awaitable, Callable
 
+from . import agents as agents_mod
 from . import config as cfg
 from . import llm, metrics, store, tools
 
@@ -102,21 +103,23 @@ def _record_file(name: str, result: dict, produced: list[dict],
 
 
 async def run_agent(uid: str, cid: str, emit: Emit,
-                    model: str | None = None, mode: str = "work") -> None:
+                    model: str | None = None, mode: str = "work",
+                    agent_id: str | None = None) -> None:
     """Public entry point: wraps the loop with live-call bookkeeping."""
     user = store.get_user(uid) or {}
     call_id = metrics.start_live(
         uid, user.get("email", ""), model or cfg.CONFIG["model"], (mode or "work").lower()
     )
     try:
-        await _run_agent_inner(uid, cid, emit, model=model, mode=mode, call_id=call_id)
+        await _run_agent_inner(uid, cid, emit, model=model, mode=mode,
+                               agent_id=agent_id, call_id=call_id)
     finally:
         metrics.end_live(call_id)
 
 
 async def _run_agent_inner(uid: str, cid: str, emit: Emit,
                            model: str | None = None, mode: str = "work",
-                           call_id: str = "") -> None:
+                           agent_id: str | None = None, call_id: str = "") -> None:
     conv = store.get_conversation(uid, cid)
     if not conv:
         await emit({"type": "error", "error": "对话不存在"})
@@ -132,8 +135,12 @@ async def _run_agent_inner(uid: str, cid: str, emit: Emit,
 
     ctx = tools.ToolContext(uid=uid, cid=cid, workspace=store.workspace(uid))
 
-    # Pick system prompt and tool policy based on mode.
+    # Pick system prompt / tool policy.
+    # fast / think keep their built-in personalities; work / expert run the
+    # selected domain agent (编程、办公、写作、学习、生活 …), with expert
+    # unlocking the full step budget and work using the agent's own budget.
     mode = (mode or "work").lower()
+    agent_meta = agents_mod.get_agent(agent_id) or agents_mod.AGENTS_BY_ID[agents_mod.DEFAULT_AGENT_ID]
     if mode == "fast":
         system_prompt = SYSTEM_PROMPT_FAST
         use_tools = False
@@ -143,13 +150,16 @@ async def _run_agent_inner(uid: str, cid: str, emit: Emit,
         use_tools = True
         max_steps = min(2, cfg.CONFIG["max_agent_steps"])
     elif mode == "expert":
-        system_prompt = SYSTEM_PROMPT_BASE.format(workspace=str(ctx.workspace))
+        system_prompt, _, _, agent_meta = agents_mod.system_prompt(agent_id, ctx.workspace)
         use_tools = True
         max_steps = cfg.CONFIG["max_agent_steps"]
-    else:  # work
-        system_prompt = SYSTEM_PROMPT_BASE.format(workspace=str(ctx.workspace))
-        use_tools = True
-        max_steps = cfg.CONFIG["max_agent_steps"]
+    else:  # work — domain agent presets
+        system_prompt, use_tools, agent_steps, agent_meta = agents_mod.system_prompt(
+            agent_id, ctx.workspace)
+        max_steps = min(int(agent_steps), cfg.CONFIG["max_agent_steps"])
+
+    await emit({"type": "agent", "id": agent_meta["id"], "name": agent_meta["name"],
+                "icon": agent_meta.get("icon", "🤖"), "mode": mode})
 
     # rebuild model history from stored messages
     messages: list[dict] = [
