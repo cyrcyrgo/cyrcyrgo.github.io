@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from html import escape as _esc
 from pathlib import Path
 
 import uvicorn
+import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -1415,6 +1417,95 @@ async def admin_page():
     if not f.exists():
         raise HTTPException(404, "admin.html 缺失")
     return FileResponse(f)
+
+
+# --------------------------------------------------------------------------- #
+# WebGPU offline model weights proxy
+#   browser -> (ngrok tunnel) -> local server -> hf-mirror / huggingface.co
+# Browser network may be blocked while the local server can reach mirrors,
+# so weights are relayed here and cached once on local disk (shared, not per-user).
+# --------------------------------------------------------------------------- #
+WEB_WEIGHTS_DIR = cfg.DATA_DIR / "web_weights"
+_weight_locks: dict[str, asyncio.Lock] = {}
+_HF_BASES = ("https://hf-mirror.com", "https://huggingface.co")
+_HF_PASS_HEADERS = (
+    "content-type", "content-length", "accept-ranges",
+    "content-range", "etag", "last-modified",
+)
+
+
+@app.get("/api/local-weights/{rest:path}")
+async def local_weights_proxy(rest: str, request: Request):
+    if not rest or "\\" in rest or ".." in rest.split("/"):
+        raise HTTPException(400, "非法路径")
+    cache_path = (WEB_WEIGHTS_DIR / rest).resolve()
+    if WEB_WEIGHTS_DIR.resolve() not in cache_path.parents:
+        raise HTTPException(400, "非法路径")
+    if cache_path.is_file():
+        return FileResponse(cache_path)
+
+    lock = _weight_locks.setdefault(rest, asyncio.Lock())
+    async with lock:
+        if cache_path.is_file():
+            return FileResponse(cache_path)
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        part_path = cache_path.with_name(cache_path.name + ".part")
+
+        last_error = "未知错误"
+        for base in _HF_BASES:
+            url = f"{base}/{rest}"
+            client = httpx.AsyncClient(
+                follow_redirects=True,
+                timeout=httpx.Timeout(60.0, connect=30.0, read=300.0),
+            )
+            try:
+                req = client.build_request(
+                    "GET", url, headers={"User-Agent": "yjs-webgpu/1.0"}
+                )
+                upstream = await client.send(req, stream=True)
+            except Exception as e:  # network error -> try next mirror
+                last_error = str(e)
+                await client.aclose()
+                continue
+            if upstream.status_code >= 400:
+                last_error = f"上游 HTTP {upstream.status_code}"
+                await upstream.aclose()
+                await client.aclose()
+                continue
+
+            headers = {
+                k: v for k, v in upstream.headers.items()
+                if k.lower() in _HF_PASS_HEADERS
+            }
+            fout = open(part_path, "wb")
+
+            async def _stream():
+                ok = False
+                try:
+                    async for chunk in upstream.aiter_bytes(262144):
+                        fout.write(chunk)
+                        yield chunk
+                    fout.flush()
+                    ok = True
+                finally:
+                    fout.close()
+                    await upstream.aclose()
+                    await client.aclose()
+                    if ok and await request.is_disconnected() is False:
+                        try:
+                            os.replace(part_path, cache_path)
+                        except OSError:
+                            pass
+                    else:
+                        # aborted/incomplete download: never serve a .part
+                        try:
+                            os.remove(part_path)
+                        except OSError:
+                            pass
+
+            return StreamingResponse(_stream(), status_code=200, headers=headers)
+
+        raise HTTPException(502, f"权重上游不可用：{last_error}")
 
 
 # --------------------------------------------------------------------------- #
