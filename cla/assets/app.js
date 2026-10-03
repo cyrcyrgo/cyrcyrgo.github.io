@@ -55,10 +55,41 @@
     return data;
   }
 
+  /* The site-wide notice lives in the GitHub repo (the same file the admin
+     publishes); read it from there first so the message is delivered even when
+     the tunnel/back-end is down, then fall back to the local API. */
+  const NOTICE_RAW =
+    "https://raw.githubusercontent.com/cyrcyrgo/cyrcyrgo.github.io/main/cla/notification.json";
+
+  async function loadGithubNotice() {
+    const dir = location.pathname.replace(/[^/]*$/, "");     // /cla/ on Pages
+    const targets = [
+      dir + "notification.json?t=" + Date.now(),              // same-origin copy
+      "https://gh-proxy.com/" + NOTICE_RAW + "?t=" + Date.now(),
+      "https://ghfast.top/" + NOTICE_RAW + "?t=" + Date.now(),
+    ];
+    for (const url of targets) {
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        if (!r.ok) continue;
+        const d = await r.json();
+        const title = (d.title || "").trim();
+        const body = (d.body || "").trim();
+        if (!title && !body) continue;
+        return title && body ? title + "：" + body : (title || body);
+      } catch (_) { /* try the next mirror */ }
+    }
+    return "";
+  }
+
   async function loadSiteSettings() {
     try {
       const r = await fetch(API + "/api/settings?t=" + Date.now(), { cache: "no-store" });
       if (r.ok) SITE = Object.assign({ ai_enabled: true, announcement: "" }, await r.json());
+    } catch (_) {}
+    try {
+      const remote = await loadGithubNotice();
+      if (remote) SITE.announcement = remote;
     } catch (_) {}
     applyNotice();
   }
