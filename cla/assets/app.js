@@ -124,17 +124,25 @@
     const res = await fetch(API + path, Object.assign({}, opts, { headers }));
     if (res.status === 401) { logout(); throw new Error("登录已过期"); }
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || data.error || ("HTTP " + res.status));
+    if (!res.ok) {
+      const detail = data.detail;
+      const err = new Error(typeof detail === "string"
+        ? detail
+        : (detail && detail.message) || data.error || ("HTTP " + res.status));
+      err.status = res.status;
+      err.data = (detail && typeof detail === "object") ? detail : data;
+      throw err;
+    }
     return data;
   }
 
-  /* The site-wide notice lives in the GitHub repo (the same file the admin
-     publishes); read it from there first so the message is delivered even when
-     the tunnel/back-end is down, then fall back to the local API. */
+  /* Service notifications are published to the GitHub repo as a HISTORY
+     array (notification.json). Read it from there / mirrors when the
+     back-end is unreachable; after login we use /api/notifications. */
   const NOTICE_RAW =
     "https://raw.githubusercontent.com/cyrcyrgo/cyrcyrgo.github.io/main/cla/notification.json";
 
-  async function loadGithubNotice() {
+  async function fetchNoticeFile() {
     const dir = location.pathname.replace(/[^/]*$/, "");     // /cla/ on Pages
     const targets = [
       dir + "notification.json?t=" + Date.now(),              // same-origin copy
@@ -146,13 +154,10 @@
         const r = await fetch(url, { cache: "no-store" });
         if (!r.ok) continue;
         const d = await r.json();
-        const title = (d.title || "").trim();
-        const body = (d.body || "").trim();
-        if (!title && !body) continue;
-        return title && body ? title + "：" + body : (title || body);
+        if (Array.isArray(d.notifications)) return d.notifications;
       } catch (_) { /* try the next mirror */ }
     }
-    return "";
+    return [];
   }
 
   async function loadSiteSettings() {
@@ -160,23 +165,20 @@
       const r = await fetch(API + "/api/settings?t=" + Date.now(), { cache: "no-store" });
       if (r.ok) SITE = Object.assign({ ai_enabled: true, announcement: "" }, await r.json());
     } catch (_) {}
-    try {
-      const remote = await loadGithubNotice();
-      if (remote) SITE.announcement = remote;
-    } catch (_) {}
     applyNotice();
   }
 
   function applyNotice() {
+    // Announcements moved to the sidebar 「服务通知」; this bar is now only
+    // for the global AI-suspension warning.
     const el = $("notice");
     if (!el) return;
-    const parts = [];
-    if (SITE.announcement) parts.push(SITE.announcement);
-    if (SITE.ai_enabled === false) parts.push("⚠ 管理员已全局暂停模型调用，暂时无法执行新任务。");
-    if (!parts.length) { el.textContent = ""; el.classList.add("hidden"); return; }
-    el.textContent = parts.join("　　");
-    el.classList.toggle("warn", SITE.ai_enabled === false);
-    el.classList.remove("hidden");
+    if (SITE.ai_enabled === false) {
+      el.textContent = "⚠ 管理员已全局暂停模型调用，暂时无法执行新任务。";
+      el.classList.add("warn"); el.classList.remove("hidden");
+    } else {
+      el.textContent = ""; el.classList.remove("warn"); el.classList.add("hidden");
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -339,16 +341,174 @@
   async function doPasswordLogin() {
     const email = $("login-email").value.trim();
     const password = $("login-password").value;
-    if (!email || !password) return setMsg("请填写邮箱和验证码", "err");
+    if (!email || !password) return setMsg("请填写邮箱和密码", "err");
     setMsg("登录中…");
+    const btn = $("btn-pwd-login");
     try {
       const d = await api("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
       TOKEN = d.token; localStorage.setItem("yjs_token", TOKEN);
       enterApp(d.user);
-    } catch (e) { setMsg(e.message, "err"); }
+    } catch (e) {
+      if (e.status === 429 && e.data && e.data.code === "soft_locked") {
+        let wait = e.data.wait || 30;
+        btn.disabled = true;
+        const tick = () => {
+          setMsg(`密码错误次数过多，请 ${wait} 秒后再试（服务器计时，刷新页面无效）`, "err");
+          if (wait <= 0) { btn.disabled = false; setMsg("可以重新尝试登录，再错一次账号将被冻结", "err"); return; }
+          wait--; setTimeout(tick, 1000);
+        };
+        tick();
+      } else if (e.status === 423 || (e.data && e.data.code === "hard_locked")) {
+        setMsg("账号已被安全冻结，请点击下方「账号解冻」", "err");
+        openUnfreeze(email);
+      } else {
+        setMsg(e.message, "err");
+      }
+    }
   }
   on("btn-pwd-login", "click", doPasswordLogin);
   on("login-password", "keydown", (e) => { if (e.key === "Enter") doPasswordLogin(); });
+
+  /* account hard-freeze: usage-trace questionnaire -> system score -> review */
+  let ufQuestions = [];
+  let ufTimer = null;
+  function showUnfreezePane(show) {
+    ["pane-unfreeze"].forEach((id) => $(id).classList.toggle("hidden", !show));
+    $("pane-pwd").classList.toggle("hidden", show);
+    $("pane-code").classList.toggle("hidden", true);
+    $("pane-reset").classList.add("hidden");
+    $("tab-code").classList.toggle("on", false);
+    $("tab-pwd").classList.toggle("on", !show);
+  }
+  async function openUnfreeze(email) {
+    if (email) $("uf-email").value = email;
+    showUnfreezePane(true);
+    const box = $("uf-questions");
+    setUfMsg("");
+    try {
+      const d = await api("/api/auth/unfreeze/questions");
+      ufQuestions = d.questions || [];
+      box.innerHTML = ufQuestions.map((q) => `
+        <div class="uf-q">
+          <label>${escapeHtml(q.label)} <span class="me-hint">（${q.weight} 分）</span></label>
+          <input data-k="${escapeHtml(q.key)}" autocomplete="off" />
+        </div>`).join("");
+    } catch (e) { box.innerHTML = `<div class="msg err">${escapeHtml(e.message)}</div>`; }
+    pollUnfreeze();
+  }
+  function setUfMsg(t, kind) {
+    const el = $("uf-result");
+    el.textContent = t || "";
+    el.className = "msg" + (kind ? " " + kind : "");
+  }
+  async function pollUnfreeze() {
+    clearInterval(ufTimer);
+    const check = async () => {
+      const email = ($("uf-email").value || "").trim();
+      if (!email || $("pane-unfreeze").classList.contains("hidden")) {
+        clearInterval(ufTimer); return;
+      }
+      try {
+        const d = await api("/api/auth/unfreeze/check", {
+          method: "POST", body: JSON.stringify({ email }),
+        });
+        const r = d.request;
+        if (r && ["approved", "pin_unlocked"].includes(r.status) && !d.hard_locked) {
+          clearInterval(ufTimer);
+          setUfMsg("✓ 账号已解冻，请使用密码或验证码登录", "ok");
+        }
+      } catch (_) {}
+    };
+    ufTimer = setInterval(check, 5000);
+  }
+  on("btn-uf-back", "click", () => {
+    clearInterval(ufTimer);
+    showUnfreezePane(false);
+    selectLoginTab("pwd");
+  });
+  on("btn-uf-submit", "click", async () => {
+    const email = ($("uf-email").value || "").trim();
+    const reason = $("uf-reason").value.trim();
+    if (!email) return setUfMsg("请填写被冻结的邮箱", "err");
+    if (reason.length < 5) return setUfMsg("请填写至少 5 个字的解冻原因", "err");
+    const answers = {};
+    $("uf-questions").querySelectorAll("input[data-k]").forEach((inp) => {
+      answers[inp.dataset.k] = inp.value.trim();
+    });
+    setUfMsg("正在由系统评估使用痕迹相似度…");
+    try {
+      const d = await api("/api/auth/unfreeze/request", {
+        method: "POST", body: JSON.stringify({ email, reason, answers }),
+      });
+      const sc = d.request.score;
+      if (d.auto_denied) {
+        setUfMsg(`系统评分 ${sc} 分（低于 50 分），已自动否决。`
+          + `管理员无法直接审批，只能向你的邮箱发送高级解冻 PIN，`
+          + `请联系管理员并留意邮件中的 6 位 PIN。`, "err");
+      } else {
+        setUfMsg(`系统评分 ${sc} 分（达到 50 分），申请已进入管理员后台，请等待管理员审批。`, "ok");
+      }
+      pollUnfreeze();
+    } catch (e) { setUfMsg(e.message, "err"); }
+  });
+  // entry link under the password pane after freeze hint
+  document.addEventListener("click", (e) => {
+    if (e.target && e.target.id === "btn-go-unfreeze") {
+      openUnfreeze($("login-email").value.trim());
+    }
+  });
+
+  /* forgotten password: email code -> reset -> auto login */
+  function setResetMsg(t, kind) {
+    const el = $("reset-msg");
+    el.textContent = t || "";
+    el.className = "msg" + (kind ? " " + kind : "");
+  }
+  function showResetPane(show) {
+    $("pane-reset").classList.toggle("hidden", !show);
+    $("pane-pwd").classList.toggle("hidden", show);
+    $("pane-code").classList.toggle("hidden", true);
+    $("tab-code").classList.toggle("on", false);
+    $("tab-pwd").classList.toggle("on", !show);
+    setResetMsg("");
+  }
+  on("btn-forgot", "click", () => {
+    const em = $("login-email").value.trim();
+    if (em) $("reset-email").value = em;
+    showResetPane(true);
+  });
+  on("btn-reset-back", "click", () => {
+    showResetPane(false);
+    selectLoginTab(localStorage.getItem("yjs_login_tab") === "pwd" ? "pwd" : "code");
+  });
+  on("btn-reset-send", "click", async () => {
+    const email = $("reset-email").value.trim();
+    if (!email) return setResetMsg("请填写注册邮箱", "err");
+    const btn = $("btn-reset-send"); btn.disabled = true; setResetMsg("发送中…");
+    try {
+      const d = await api("/api/auth/reset/send-code",
+        { method: "POST", body: JSON.stringify({ email }) });
+      setResetMsg(d.message || "验证码已发送，请查收邮件", "ok");
+      let left = 60; const timer = setInterval(() => {
+        btn.textContent = left + "s";
+        if (--left < 0) { clearInterval(timer); btn.disabled = false; btn.textContent = "获取验证码"; }
+      }, 1000);
+    } catch (e) { setResetMsg(e.message, "err"); btn.disabled = false; }
+  });
+  on("btn-reset-ok", "click", async () => {
+    const email = $("reset-email").value.trim();
+    const code = $("reset-code").value.trim();
+    const password = $("reset-password").value;
+    if (!email || !code || !password) return setResetMsg("请填写邮箱、验证码和新密码", "err");
+    setResetMsg("重置中…");
+    try {
+      const d = await api("/api/auth/reset/password", {
+        method: "POST", body: JSON.stringify({ email, code, password }),
+      });
+      TOKEN = d.token; localStorage.setItem("yjs_token", TOKEN);
+      enterApp(d.user);
+    } catch (e) { setResetMsg(e.message, "err"); }
+  });
 
   function logout() {
     TOKEN = ""; localStorage.removeItem("yjs_token");
@@ -381,24 +541,44 @@
     setText("me-email", user.email);
     setText("me-quota",
       `${fmtSize(user.usage?.used)} / ${fmtSize(user.quota_bytes)}（${user.usage?.percent ?? 0}%）`);
+    $("me-oldpw-field")?.classList.toggle("hidden", !user.has_password);
+    if ($("me-pw0")) $("me-pw0").value = "";
     renderQreq(user.quota_request);
   }
 
-  /* cloud-space expansion request */
+  /* cloud-space adjustment request (grow or shrink; may be temporary) */
+  function fmtDeadline(ts) {
+    const d = new Date(ts * 1000);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+           `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
   function renderQreq(req) {
     const st = $("qreq-status");
     const btn = $("btn-qreq-submit");
     if (!st) return;
     if (!req) { st.innerHTML = ""; st.classList.remove("show"); if (btn) btn.disabled = false; return; }
+    const mb = Math.round(req.request_bytes / 1024 / 1024);
+    const curMb = Math.round((req.current_bytes || 0) / 1024 / 1024);
+    const dir = req.request_bytes > (req.current_bytes || 0) ? "扩大" : "缩小";
     const map = {
-      pending: ["⏳ 申请审核中", "tag tier"],
-      approved: ["✅ 申请已通过", "tag ok"],
-      rejected: ["❌ 申请未通过", "tag danger"],
+      pending: [`⏳ ${dir}调整审核中 · 目标 ${mb} MB`, "tag tier"],
+      approved: [`✅ ${dir}调整已通过 · 当前 ${mb} MB`, "tag ok"],
+      rejected: ["❌ 调整申请未通过", "tag danger"],
+      expired: ["⏰ 临时调整已到期，配额已自动还原", "tag tier"],
+      superseded: ["ℹ 该调整已被新的调整替代", "tag"],
     };
     const [txt, cls] = map[req.status] || [req.status, "tag"];
-    const mb = Math.round(req.request_bytes / 1024 / 1024);
-    st.innerHTML = `<span class="${cls}">${txt} · ${mb} MB</span>` +
-      (req.note ? `<div class="me-hint" style="margin-top:6px">管理员备注：${escapeHtml(req.note)}</div>` : "");
+    let html = `<span class="${cls}">${txt}</span>`;
+    if (req.status === "approved" && req.expire_at) {
+      html += `<div class="me-hint" style="margin-top:6px">临时调整至 ${fmtDeadline(req.expire_at)} 到期，`
+        + `之后自动恢复为 ${Math.round((req.revert_bytes || 0) / 1024 / 1024)} MB</div>`;
+    }
+    if (curMb && req.status === "pending") {
+      html += `<div class="me-hint" style="margin-top:4px">当前 ${curMb} MB → 申请 ${mb} MB</div>`;
+    }
+    if (req.note) html += `<div class="me-hint" style="margin-top:6px">管理员备注：${escapeHtml(req.note)}</div>`;
+    st.innerHTML = html;
     st.classList.add("show");
     if (btn) btn.disabled = req.status === "pending";
   }
@@ -418,6 +598,7 @@
     const msg = $("qreq-msg");
     msg.style.color = "#ef4444";
     if (!sizeMb || sizeMb <= 0) { msg.textContent = "请填写期望空间大小"; return; }
+    if (sizeMb < 1) { msg.textContent = "最小可申请 1 MB"; return; }
     if (sizeMb > 51200) { msg.textContent = "最大可申请 51200 MB"; return; }
     if (reason.length < 5) { msg.textContent = "申请理由至少 5 个字"; return; }
     const btn = $("btn-qreq-submit"); btn.disabled = true;
@@ -427,7 +608,8 @@
       });
       renderQreq(d.request);
       $("qreq-size").value = ""; $("qreq-reason").value = "";
-      msg.style.color = "#16a34a"; msg.textContent = "✓ 申请已提交，等待管理员审批";
+      msg.style.color = "#16a34a"; msg.textContent = "✓ 调整申请已提交，等待管理员审批";
+      await refreshMe();
     } catch (e) {
       msg.textContent = e.message; btn.disabled = false;
     }
@@ -438,6 +620,7 @@
     $("me-panel").classList.remove("hidden");
     renderMeCard(ME);
     loadQreq();
+    loadMyFeedback();
   }
   on("btn-me", "click", openMePanel);
   on("btn-settings", "click", openMePanel);
@@ -532,27 +715,92 @@
   });
 
   on("btn-me-save-pw", "click", async () => {
+    const pw0 = $("me-pw0").value;
     const pw1 = $("me-pw1").value, pw2 = $("me-pw2").value;
+    if (ME?.has_password && !pw0) {
+      return inlineMsg("me-pw-msg", "请先输入旧密码", "err");
+    }
     if (pw1.length < 6) return inlineMsg("me-pw-msg", "密码至少 6 位", "err");
     if (pw1 !== pw2) return inlineMsg("me-pw-msg", "两次输入不一致", "err");
     try {
-      await api("/api/auth/password", { method: "POST", body: JSON.stringify({ password: pw1 }) });
-      $("me-pw1").value = ""; $("me-pw2").value = "";
-      inlineMsg("me-pw-msg", "✓ 密码已保存，下次可用密码登录", "ok");
+      await api("/api/auth/password", {
+        method: "POST",
+        body: JSON.stringify({ password: pw1, old_password: pw0 || "" }),
+      });
+      $("me-pw0").value = ""; $("me-pw1").value = ""; $("me-pw2").value = "";
+      ME.has_password = true;
+      $("me-oldpw-field").classList.remove("hidden");
+      inlineMsg("me-pw-msg", "✓ 密码已更新，下次可用新密码登录", "ok");
     } catch (err) { inlineMsg("me-pw-msg", err.message, "err"); }
   });
 
+  function fbTarget() {
+    const el = document.querySelector('input[name="fb-target"]:checked');
+    return el ? el.value : "admin";
+  }
   on("btn-me-feedback", "click", async () => {
     const category = $("me-fb-cat").value;
     const content = $("me-fb-text").value.trim();
+    const target = fbTarget();
     if (content.length < 2) return inlineMsg("me-fb-msg", "请填写反馈内容", "err");
     try {
       await api("/api/feedback", { method: "POST",
-        body: JSON.stringify({ category, content }) });
+        body: JSON.stringify({ category, content, target }) });
       $("me-fb-text").value = "";
-      inlineMsg("me-fb-msg", "✓ 反馈已提交，感谢你的反馈", "ok");
+      inlineMsg("me-fb-msg",
+        target === "email" ? "✓ 已发送到官方邮箱（仅收取，不支持回访）" : "✓ 已发送到管理员后台",
+        "ok");
+      loadMyFeedback();
     } catch (err) { inlineMsg("me-fb-msg", err.message, "err"); }
   });
+
+  async function loadMyFeedback() {
+    const box = $("my-fb-list");
+    if (!box) return;
+    try {
+      const d = await api("/api/feedback/mine");
+      const items = d.items || [];
+      if (!items.length) { box.innerHTML = `<div class="me-hint">暂无已发送的反馈</div>`; return; }
+      box.innerHTML = items.map((f) => {
+        const via = f.target === "email"
+          ? `<span class="myfb-tag mail">📮 官方邮箱${f.email_status === "failed" ? "（发送失败）" : ""}</span>`
+          : `<span class="myfb-tag admin">🛠 管理员后台</span>`;
+        const stMap = { new: "未读", read: "已查看", done: "已回复", revoked: "已撤销" };
+        let body = "";
+        if (f.target !== "email" && f.revoked) body = `<div class="me-hint">已撤销</div>`;
+        else {
+          body = `<div class="myfb-body">${escapeHtml(f.content)}</div>`;
+          (f.replies || []).forEach((r) => {
+            const ways = [r.via_email ? "邮箱" : "", r.via_notice ? "站内通知" : ""].filter(Boolean).join("+");
+            body += `<div class="myfb-reply"><b>管理员回复${ways ? "（" + escapeHtml(ways) + "）" : ""}：</b>${escapeHtml(r.content)}</div>`;
+          });
+        }
+        const canRevoke = f.target !== "email" && !f.revoked;
+        return `<div class="myfb-item">
+          <div class="myfb-head">
+            ${via}
+            <span class="myfb-cat">${escapeHtml(f.category || "")}</span>
+            <span class="me-hint">${new Date(f.created_at * 1000).toLocaleString()}</span>
+            <span class="me-hint">${stMap[f.status] || ""}</span>
+          </div>
+          ${body}
+          ${canRevoke ? `<button class="ghost myfb-revoke" data-id="${escapeHtml(f.id)}">撤销反馈</button>` : ""}
+        </div>`;
+      }).join("");
+      box.querySelectorAll(".myfb-revoke").forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm("确定撤销这条反馈？管理员将看不到它。")) return;
+          try {
+            await api(`/api/feedback/${encodeURIComponent(btn.dataset.id)}/revoke`,
+              { method: "POST" });
+            toast("反馈已撤销", "ok");
+            loadMyFeedback();
+          } catch (e) { toast(e.message, "err"); }
+        };
+      });
+    } catch (e) { box.innerHTML = `<div class="msg err">${escapeHtml(e.message)}</div>`; }
+  }
+  on("btn-myfb-refresh", "click", loadMyFeedback);
 
   /* ------------------------------------------------------------------ */
   /* offline (in-browser WebGPU) mode entry — implemented in local.js     */
@@ -600,6 +848,11 @@
     // Files drawer
     on("btn-files", "click", () => { $("files-panel").classList.remove("hidden"); loadFiles(); });
     on("btn-close-files", "click", () => $("files-panel").classList.add("hidden"));
+
+    // Service notifications drawer
+    on("btn-notifications", "click", openNotifications);
+    on("btn-close-notifications", "click", () =>
+      $("notifications-panel").classList.add("hidden"));
 
     // Preview drawer
     on("btn-preview-close", "click", () => $("preview-panel").classList.add("hidden"));
@@ -668,6 +921,126 @@
     } catch (e) { alert(e.message); }
   }
 
+  /* ------------------------------------------------------------------ */
+  /* service notifications (sidebar) — global history + personal replies  */
+  /* ------------------------------------------------------------------ */
+  let NOTICES = [];           // global notices (read state in localStorage)
+  let PERSONAL = [];          // personal notices (read state server-side)
+  let ntDetailId = null;
+
+  function readNoticeStore() {
+    try { return JSON.parse(localStorage.getItem("yjs_read_notices") || "{}"); }
+    catch (_) { return {}; }
+  }
+  function saveRead(map) {
+    localStorage.setItem("yjs_read_notices", JSON.stringify(map));
+  }
+  function fmtNtTime(ts) {
+    if (!ts) return "";
+    const d = new Date(ts * 1000);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+           `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function allNoticeItems() {
+    const g = NOTICES.map((n) => Object.assign({ scope: "global" }, n));
+    const p = PERSONAL.map((n) => Object.assign({ scope: "personal" }, n));
+    return g.concat(p).sort((a, b) =>
+      (b.updated_at || b.created_at || 0) - (a.updated_at || a.created_at || 0));
+  }
+  function updateNoticeBadge() {
+    const read = readNoticeStore();
+    const unread = NOTICES.filter((n) => !read[n.id]).length
+      + PERSONAL.filter((n) => !n.read).length;
+    const badge = $("nt-badge");
+    badge.textContent = String(unread > 99 ? "99+" : unread);
+    badge.classList.toggle("hidden", unread === 0);
+  }
+  function renderNoticeList() {
+    const box = $("nt-list");
+    const read = readNoticeStore();
+    const items = allNoticeItems();
+    if (!items.length) {
+      box.innerHTML = `<div class="muted" style="padding:24px;text-align:center">暂无服务通知</div>`;
+      return;
+    }
+    box.innerHTML = items.map((n) => {
+      const unread = n.scope === "personal" ? !n.read : !read[n.id];
+      const tag = n.scope === "personal"
+        ? `<span class="nt-scope personal">个人</span>` : "";
+      return `<div class="nt-card${unread ? " unread" : ""}" data-id="${escapeHtml(n.id)}" data-scope="${n.scope}">
+        <div class="nt-card-head">
+          <span class="nt-card-title">${tag}${escapeHtml(n.title || "（无标题）")}</span>
+          <span class="nt-time">${fmtNtTime(n.updated_at || n.created_at)}</span>
+        </div>
+        <div class="nt-card-preview">${escapeHtml((n.body || "").slice(0, 60))}…</div>
+      </div>`;
+    }).join("");
+    box.querySelectorAll(".nt-card").forEach((el) => {
+      el.addEventListener("click", () => showNoticeDetail(el.dataset.id, el.dataset.scope));
+    });
+  }
+  function renderNoticeDetail(id, scope) {
+    const pool = scope === "personal" ? PERSONAL : NOTICES;
+    const n = pool.find((x) => x.id === id);
+    const box = $("nt-list");
+    if (!n) { renderNoticeList(); return; }
+    const tag = scope === "personal"
+      ? `<span class="nt-scope personal">个人通知</span>` : "";
+    box.innerHTML = `
+      <button class="ghost nt-back" id="nt-back">← 返回通知列表</button>
+      <div class="nt-detail">
+        <h3 class="nt-detail-title">${tag}${escapeHtml(n.title || "（无标题）")}</h3>
+        <div class="nt-detail-meta">
+          <div>🕐 ${fmtNtTime(n.updated_at || n.created_at)}</div>
+          <div>🛡 发布者：${escapeHtml(n.author || "管理员")}</div>
+        </div>
+        <div class="nt-detail-body">${escapeHtml(n.body || "")}</div>
+      </div>`;
+    $("nt-back").addEventListener("click", () => { ntDetailId = null; renderNoticeList(); });
+  }
+  async function showNoticeDetail(id, scope) {
+    ntDetailId = id + "|" + scope;
+    if (scope === "personal") {
+      // server-side read state
+      try { await api("/api/notifications/read", { method: "POST" }); } catch (_) {}
+      const n = PERSONAL.find((x) => x.id === id);
+      if (n) n.read = true;
+    } else {
+      const read = readNoticeStore();
+      read[id] = Date.now();
+      saveRead(read);
+    }
+    updateNoticeBadge();
+    renderNoticeDetail(id, scope);
+  }
+  function openNotifications() {
+    $("notifications-panel").classList.remove("hidden");
+    if (ntDetailId) {
+      const [id, scope] = ntDetailId.split("|");
+      renderNoticeDetail(id, scope);
+    } else renderNoticeList();
+    loadNotifications();
+  }
+  async function loadNotifications() {
+    try {
+      const d = await api("/api/notifications");
+      NOTICES = d.notifications || [];
+      PERSONAL = d.personal || [];
+    } catch (_) {
+      NOTICES = await fetchNoticeFile().catch(() => []);
+      PERSONAL = [];
+    }
+    updateNoticeBadge();
+    const panel = $("notifications-panel");
+    if (panel && !panel.classList.contains("hidden")) {
+      if (ntDetailId) {
+        const [id, scope] = ntDetailId.split("|");
+        renderNoticeDetail(id, scope);
+      } else renderNoticeList();
+    }
+  }
+
   async function enterApp(user) {
     $("login").classList.add("hidden"); $("local")?.classList.add("hidden");
     $("app").classList.remove("hidden");
@@ -677,6 +1050,8 @@
     wireUi();
     await Promise.all([loadModels(user.model_preference), loadAgents()]);
     await loadConversations();
+    loadNotifications();
+    setInterval(() => { if (TOKEN) loadNotifications(); }, 120000);
   }
 
   /* ------------------------------------------------------------------ */
