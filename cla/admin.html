@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS 管理后台</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%99%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/admin.css?v=20261003n" />
+<link rel="stylesheet" href="assets/admin.css?v=20261003o" />
 </head>
 <body>
 
@@ -47,6 +47,35 @@
     <div class="stat"><div class="k">今日 Token</div><div class="v" id="s-today">0</div><div class="s" id="s-today-calls">今日调用 0 次</div></div>
     <div class="stat"><div class="k">实时活跃</div><div class="v" id="s-live">0</div><div class="s">正在生成的调用</div></div>
     <div class="stat"><div class="k">Ollama</div><div class="v" id="s-ollama">—</div><div class="s" id="s-vram">显存占用 —</div></div>
+  </section>
+
+  <!-- 主机与 Ollama 远程控制 -->
+  <section class="panel">
+    <h3>主机与引擎 <span class="hint">· 远程开关 Ollama / 关闭服务器主机</span></h3>
+    <div class="power-row">
+      <div class="power-item">
+        <span class="sw-label">Ollama 引擎</span>
+        <span id="sys-ollama-state" class="badge">检测中…</span>
+      </div>
+      <div class="power-actions">
+        <button class="btn ghost" id="btn-ollama-start">启动 Ollama</button>
+        <button class="btn ghost" id="btn-ollama-restart">重启 Ollama</button>
+        <button class="btn danger" id="btn-ollama-stop">停止 Ollama</button>
+        <span id="sys-msg" class="muted inline-msg"></span>
+      </div>
+    </div>
+    <div class="power-row">
+      <div class="power-item">
+        <span class="sw-label">服务器主机</span>
+        <span class="hint">关闭后内网穿透与本站全部下线，需要人工重新开机</span>
+      </div>
+      <div class="power-actions">
+        <input id="shutdown-delay" type="number" min="3" max="120" value="5" style="width:80px" />
+        <span class="hint">秒后关机</span>
+        <button class="btn danger" id="btn-shutdown">⏻ 关闭服务器</button>
+      </div>
+    </div>
+    <div id="sys-tunnel" class="muted" style="margin-top:8px"></div>
   </section>
 
   <!-- 系统权限 -->
@@ -215,10 +244,18 @@
 
   <!-- 用户反馈 -->
   <section class="panel">
-    <h3>用户反馈 <span class="hint">· 来自用户端「我 → 向作者反馈」</span>
+    <h3>用户反馈 <span class="hint">· 提交到服务器后自动通过 SMTP 转发至 YJS-CLA@hotmail.com</span>
       <span id="fb-unread" class="badge tier" style="float:right;display:none"></span>
     </h3>
     <div id="fb-list" class="fb-list"></div>
+  </section>
+
+  <!-- 云空间扩容申请 -->
+  <section class="panel">
+    <h3>云空间扩容申请 <span class="hint">· 基础空间 50MB，审批后自动调整配额并邮件通知用户</span>
+      <span id="qreq-unread" class="badge tier" style="float:right;display:none"></span>
+    </h3>
+    <div id="qreq-list" class="qreq-list"><div class="muted">加载中…</div></div>
   </section>
 
   <div class="grid2">
@@ -267,7 +304,11 @@
 
   <!-- 用户管理 -->
   <section class="panel">
-    <h3>用户管理 <span class="hint">· 对话 / 密码 / 配额 / 模型权限 / 删除</span></h3>
+    <h3>用户管理 <span class="hint">· 对话 / 密码 / 配额 / 模型权限 / 发信 / 删除</span></h3>
+    <div class="user-toolbar">
+      <input id="user-search" type="search" placeholder="🔍 搜索邮箱 / 昵称 / UID…" />
+      <span id="user-count" class="muted"></span>
+    </div>
     <div class="table-wrap">
       <table class="tbl" id="tbl-users">
         <thead><tr>
@@ -305,6 +346,21 @@
   </div>
 </div>
 
-<script src="assets/admin.js?v=20261003n"></script>
+<!-- 给用户发信弹窗 -->
+<div id="letter-modal" class="modal hidden">
+  <div class="modal-box wide">
+    <h3>✉ 给用户发一封信</h3>
+    <p class="muted" id="letter-to">—</p>
+    <input id="letter-subject" placeholder="邮件主题" style="margin-bottom:10px" />
+    <textarea id="letter-body" rows="7" placeholder="邮件正文…" style="width:100%;resize:vertical"></textarea>
+    <div id="letter-msg" class="muted inline-msg" style="margin-top:8px"></div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="letter-cancel">取消</button>
+      <button class="btn" id="letter-ok">发送</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/admin.js?v=20261003o"></script>
 </body>
 </html>
