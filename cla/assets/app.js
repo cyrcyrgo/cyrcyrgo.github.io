@@ -369,9 +369,11 @@
   on("btn-pwd-login", "click", doPasswordLogin);
   on("login-password", "keydown", (e) => { if (e.key === "Enter") doPasswordLogin(); });
 
-  /* account hard-freeze: usage-trace questionnaire -> system score -> review */
+  /* account hard-freeze: multiple-choice trace quiz -> system score -> review.
+     One submission per freeze (enforced server-side); below 50 only PIN path. */
   let ufQuestions = [];
   let ufTimer = null;
+  let ufSubmitted = false;
   function showUnfreezePane(show) {
     ["pane-unfreeze"].forEach((id) => $(id).classList.toggle("hidden", !show));
     $("pane-pwd").classList.toggle("hidden", show);
@@ -380,21 +382,64 @@
     $("tab-code").classList.toggle("on", false);
     $("tab-pwd").classList.toggle("on", !show);
   }
+  function setUfFormDisabled(disabled) {
+    ["uf-email", "uf-reason", "btn-uf-submit"].forEach((id) => { $(id).disabled = disabled; });
+    $("uf-questions").querySelectorAll("select,input,button").forEach((el) => {
+      el.disabled = disabled;
+    });
+  }
+  function renderUfQuestions(qs) {
+    const box = $("uf-questions");
+    ufQuestions = qs || [];
+    if (!qs.length) { box.innerHTML = ""; return; }
+    box.innerHTML = qs.map((q, qi) => `
+      <div class="uf-q">
+        <label>${qi + 1}. ${escapeHtml(q.label)} <span class="me-hint">（${q.weight} 分）</span></label>
+        <select data-k="${escapeHtml(q.key)}">
+          <option value="">— 请选择 —</option>
+          ${(q.options || []).map((o) =>
+            `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("")}
+        </select>
+      </div>`).join("");
+  }
+  function showUfSubmitted(r) {
+    ufSubmitted = true;
+    setUfFormDisabled(true);
+    const sc = r ? r.score : "?";
+    if (r && r.auto_denied) {
+      setUfMsg(`系统评分 ${sc} 分（低于 50 分），已自动否决，本次冻结无法再次提交申请。`
+        + `管理员无法直接审批，只能向你的邮箱发送高级解冻 PIN，`
+        + `请联系管理员并留意邮件中的 6 位 PIN。`, "err");
+    } else if (r && (r.status === "denied")) {
+      setUfMsg("管理员已拒绝本次解冻申请。本次冻结无法再次提交，请联系管理员使用 PIN 高级解冻。", "err");
+    } else {
+      setUfMsg(`申请已提交（系统评分 ${sc} 分，达到 50 分），请等待管理员审批，结果会在此自动刷新。`, "ok");
+    }
+  }
   async function openUnfreeze(email) {
     if (email) $("uf-email").value = email;
     showUnfreezePane(true);
-    const box = $("uf-questions");
     setUfMsg("");
-    try {
-      const d = await api("/api/auth/unfreeze/questions");
-      ufQuestions = d.questions || [];
-      box.innerHTML = ufQuestions.map((q) => `
-        <div class="uf-q">
-          <label>${escapeHtml(q.label)} <span class="me-hint">（${q.weight} 分）</span></label>
-          <input data-k="${escapeHtml(q.key)}" autocomplete="off" />
-        </div>`).join("");
-    } catch (e) { box.innerHTML = `<div class="msg err">${escapeHtml(e.message)}</div>`; }
+    ufSubmitted = false;
+    setUfFormDisabled(false);
+    const box = $("uf-questions");
+    box.innerHTML = `<div class="me-hint">正在生成使用痕迹选择题…</div>`;
+    await loadUfQuestions();
     pollUnfreeze();
+  }
+  async function loadUfQuestions() {
+    const email = ($("uf-email").value || "").trim();
+    const box = $("uf-questions");
+    if (!email) { box.innerHTML = `<div class="me-hint">请先填写被冻结的邮箱地址</div>`; return; }
+    try {
+      const d = await api("/api/auth/unfreeze/questions?email=" + encodeURIComponent(email));
+      if (d.submitted) {
+        renderUfQuestions([]);
+        showUfSubmitted(d.request);
+      } else {
+        renderUfQuestions(d.questions || []);
+      }
+    } catch (e) { box.innerHTML = `<div class="msg err">${escapeHtml(e.message)}</div>`; }
   }
   function setUfMsg(t, kind) {
     const el = $("uf-result");
@@ -415,41 +460,51 @@
         const r = d.request;
         if (r && ["approved", "pin_unlocked"].includes(r.status) && !d.hard_locked) {
           clearInterval(ufTimer);
+          setUfFormDisabled(false);
           setUfMsg("✓ 账号已解冻，请使用密码或验证码登录", "ok");
+          return;
+        }
+        if (d.submitted && !ufSubmitted && r) showUfSubmitted(r);
+        if (r && r.status === "denied" && ufSubmitted) {
+          setUfMsg("管理员已拒绝本次解冻申请。本次冻结无法再次提交，请联系管理员使用 PIN 高级解冻。", "err");
         }
       } catch (_) {}
     };
     ufTimer = setInterval(check, 5000);
   }
+  on("uf-email", "change", loadUfQuestions);
   on("btn-uf-back", "click", () => {
     clearInterval(ufTimer);
     showUnfreezePane(false);
     selectLoginTab("pwd");
   });
   on("btn-uf-submit", "click", async () => {
+    if (ufSubmitted) return;
     const email = ($("uf-email").value || "").trim();
     const reason = $("uf-reason").value.trim();
     if (!email) return setUfMsg("请填写被冻结的邮箱", "err");
     if (reason.length < 5) return setUfMsg("请填写至少 5 个字的解冻原因", "err");
     const answers = {};
-    $("uf-questions").querySelectorAll("input[data-k]").forEach((inp) => {
-      answers[inp.dataset.k] = inp.value.trim();
+    let allAnswered = true;
+    $("uf-questions").querySelectorAll("select[data-k]").forEach((sel) => {
+      answers[sel.dataset.k] = sel.value.trim();
+      if (!sel.value) allAnswered = false;
     });
+    if (!allAnswered) return setUfMsg("请完成全部选择题后再提交", "err");
     setUfMsg("正在由系统评估使用痕迹相似度…");
     try {
       const d = await api("/api/auth/unfreeze/request", {
         method: "POST", body: JSON.stringify({ email, reason, answers }),
       });
-      const sc = d.request.score;
-      if (d.auto_denied) {
-        setUfMsg(`系统评分 ${sc} 分（低于 50 分），已自动否决。`
-          + `管理员无法直接审批，只能向你的邮箱发送高级解冻 PIN，`
-          + `请联系管理员并留意邮件中的 6 位 PIN。`, "err");
-      } else {
-        setUfMsg(`系统评分 ${sc} 分（达到 50 分），申请已进入管理员后台，请等待管理员审批。`, "ok");
-      }
+      showUfSubmitted(d.request);
       pollUnfreeze();
-    } catch (e) { setUfMsg(e.message, "err"); }
+    } catch (e) {
+      if (e.data && e.data.code === "already_submitted") {
+        ufSubmitted = true;
+        setUfFormDisabled(true);
+      }
+      setUfMsg(e.message, "err");
+    }
   });
   // entry link under the password pane after freeze hint
   document.addEventListener("click", (e) => {
