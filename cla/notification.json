@@ -2,6 +2,14 @@
   "version": 2,
   "notifications": [
     {
+      "id": "9ea92c34f7bf",
+      "title": "模型变更通知",
+      "body": "亲爱的各位用户们：\n  您好！\n  因服务器改变模型部署方式，将从原来的Ollama部署全面转向LM Studio部署，预计模型速度会得到大幅提升。但与此同时可能会出现新的问题，如UI不统一，底层算法问题，无法接收到信息息等一系列新问题。如有发现问题的请发送邮箱至：yjs-cla@hotmail.com，或者直接通过网页端反馈给作者。期待您的宝贵意见，谢谢🙏",
+      "author": "cyr12345679@qq.com",
+      "created_at": 1791123087.6998963,
+      "updated_at": 1791123087.6998963
+    },
+    {
       "id": "b98f56ddd7c4",
       "title": "【公告】关于YJS管理后台管理员账号的公示",
       "body": "为保障系统稳定、明确管理职责，现将拥有“管理员”权限的账号公示如下：cyrcyrgo@outlook.com、cyr12345679@qq.com、hicodehc@outlook.com、cyr2048@outlook.com、yjs-cla@hotmail.com、yjs_cla@125.com、biye63@outlook.com。请以上管理员妥善保管账号，严禁转借。欢迎广大用户监督。特此公示。如有疑问请发邮箱：yjs-cla@hotmail.com，或者直接向作者反馈。YJS管理后台运营团队，2026年10月4日。",
@@ -10,8 +18,8 @@
       "updated_at": 1791105471.0
     }
   ],
-  "title": "【公告】关于YJS管理后台管理员账号的公示",
-  "body": "为保障系统稳定、明确管理职责，现将拥有“管理员”权限的账号公示如下：cyrcyrgo@outlook.com、cyr12345679@qq.com、hicodehc@outlook.com、cyr2048@outlook.com、yjs-cla@hotmail.com、yjs_cla@125.com、biye63@outlook.com。请以上管理员妥善保管账号，严禁转借。欢迎广大用户监督。特此公示。如有疑问请发邮箱：yjs-cla@hotmail.com，或者直接向作者反馈。YJS管理后台运营团队，2026年10月4日。",
-  "updated_at": 1791105471.0,
+  "title": "模型变更通知",
+  "body": "亲爱的各位用户们：\n  您好！\n  因服务器改变模型部署方式，将从原来的Ollama部署全面转向LM Studio部署，预计模型速度会得到大幅提升。但与此同时可能会出现新的问题，如UI不统一，底层算法问题，无法接收到信息息等一系列新问题。如有发现问题的请发送邮箱至：yjs-cla@hotmail.com，或者直接通过网页端反馈给作者。期待您的宝贵意见，谢谢🙏",
+  "updated_at": 1791123087.6998963,
   "author": "cyr12345679@qq.com"
 }
