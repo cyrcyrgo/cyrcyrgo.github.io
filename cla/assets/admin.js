@@ -924,57 +924,51 @@
     };
   }
 
-  /* ---------------------------------------- mail (Microsoft Graph) */
+  /* ---------------------------------------- mail (SMTP) */
   async function loadMail() {
     try {
       const d = await api("/api/admin/email");
-      $("mail-tenant").value = d.tenant_id || "common";
-      $("mail-clientid").value = d.client_id || "";
+      $("mail-host").value = d.host || "";
+      $("mail-port").value = d.port || 465;
+      $("mail-protocol").value = d.protocol || "ssl";
       $("mail-user").value = d.user || "";
       $("mail-fromname").value = d.from_name || "";
-      $("mail-secret").placeholder = d.has_client_secret ? "已配置，留空则不修改" : "公共客户端可留空";
-      $("mail-refresh").placeholder = d.has_refresh_token
-        ? "已配置刷新令牌，留空则不修改" : "请粘贴 refresh_token";
+      $("mail-code").placeholder = d.has_auth_code ? "已配置，留空则不修改" : "请输入 SMTP 授权码";
       const st = $("mail-status");
       if (st) {
         const badge = (ok) => ok
           ? `<span class="badge yes">已保存</span>`
           : `<span class="badge no">未配置</span>`;
         st.innerHTML = d.user
-          ? `发件邮箱：${escapeHtml(d.user)} · 客户端 ID：` +
-            (d.client_id ? badge(true) : badge(false)) +
-            ` · 刷新令牌：${badge(d.has_refresh_token)} · 租户：${escapeHtml(d.tenant_id || "common")}`
-          : "尚未配置 Microsoft Graph 发件邮箱";
+          ? `发件邮箱：${escapeHtml(d.user)} · 授权码：${badge(d.has_auth_code)}` +
+            ` · ${escapeHtml(d.host || "")}:${d.port || 465}（${escapeHtml(d.protocol || "ssl")}）`
+          : "尚未配置发件邮箱";
       }
     } catch (_) { /* 401 handled by refresh() */ }
   }
 
   on("btn-save-mail", "click", async () => {
     const msg = $("mail-msg");
-    const typedRT = $("mail-refresh").value.trim();
-    const typedSecret = $("mail-secret").value.trim();
+    const typed = $("mail-code").value.trim();
     msg.textContent = "保存中…";
     try {
       const d = await api("/api/admin/email", {
         method: "POST",
         body: JSON.stringify({
-          tenant_id: $("mail-tenant").value.trim(),
-          client_id: $("mail-clientid").value.trim(),
-          client_secret: typedSecret,
-          refresh_token: typedRT,
+          host: $("mail-host").value.trim(),
+          port: parseInt($("mail-port").value, 10) || 465,
+          protocol: $("mail-protocol").value,
           user: $("mail-user").value.trim(),
+          auth_code: typed,
           from_name: $("mail-fromname").value.trim(),
         }),
       });
-      // Only wipe the secret fields AFTER the server confirmed the save.
-      $("mail-refresh").value = "";
-      $("mail-secret").value = "";
+      // Only wipe the secret field AFTER the server confirmed the save.
+      $("mail-code").value = "";
       await loadMail();
-      const configured = (d && d.has_refresh_token) || typedRT !== "";
-      msg.textContent = configured
-        ? "✓ 已保存（刷新令牌与密钥已加密存入本机配置）"
-        : "✓ 已保存";
-      toast("Microsoft Graph 发件设置已保存", "ok");
+      const okCode = (d && d.has_auth_code) || typed !== "";
+      msg.textContent = okCode ? "✓ 已保存（授权码已加密存入本机配置）" : "✓ 已保存";
+      toast("发件邮箱设置已保存", "ok");
     } catch (e) {
       if (e.status === 401) { showLock(); return; }
       msg.textContent = "✗ 保存失败：" + e.message;
