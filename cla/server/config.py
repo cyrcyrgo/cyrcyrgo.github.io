@@ -106,17 +106,14 @@ DEFAULTS: dict = {
     # Admin dashboard access. Leave ``emails`` empty to let the
     # earliest-registered account act as the owner instead.
     "admin": {"emails": [], "password_hash": ""},
-    # Outgoing mail goes through Microsoft Graph (OAuth2 delegated flow).
-    # A refresh token minted with Mail.Send + offline_access is exchanged for
-    # short-lived access tokens on demand. Consumer accounts (outlook.com,
-    # hotmail.com) only support this delegated flow, not client credentials.
-    "msgraph": {
-        "tenant_id": "common",         # common | consumers | organizations | GUID
-        "client_id": "",               # Azure app registration Application (client) ID
-        "client_secret": "",           # optional; public/native apps leave empty
-        "refresh_token": "",           # delegated OAuth refresh token
-        "user": "",                    # sender mailbox (UPN), e.g. you@hotmail.com
-        "from_name": "YJS LLM Agent",
+    # Outgoing mail goes through SMTP (SSL on 465 or STARTTLS on 587).
+    "smtp": {
+        "host": "",           # e.g. smtp.office365.com / smtp.qq.com / smtp.163.com
+        "port": 465,
+        "protocol": "ssl",    # ssl | starttls
+        "user": "",           # sender mailbox
+        "auth_code": "",      # SMTP authorization code / app password
+        "from_name": "YJS Cloud LLM Agent",
     },
     "mcp_servers": {},
 }
@@ -192,7 +189,6 @@ def load() -> dict:
     cfg = json.loads(json.dumps(DEFAULTS))
     cfg["models"] = _merge_models(DEFAULT_MODELS, [])
     read_ok = False
-    graph_present = True
     if LOCAL_CONFIG.exists():
         try:
             raw = LOCAL_CONFIG.read_text(encoding="utf-8-sig")
@@ -200,7 +196,6 @@ def load() -> dict:
             if "models" in raw_data:
                 cfg["models"] = _merge_models(DEFAULT_MODELS, raw_data["models"])
                 raw_data.pop("models", None)
-            graph_present = isinstance(raw_data.get("msgraph"), dict)
             cfg = _deep_merge(cfg, raw_data)
             read_ok = True
         except Exception as exc:  # pragma: no cover
@@ -210,29 +205,35 @@ def load() -> dict:
         if read_ok or not LOCAL_CONFIG.exists():
             save(cfg)
     _migrate_github_token(cfg)
-    _migrate_mail(cfg, graph_present=graph_present)
+    _migrate_mail(cfg)
     for d in (DATA_DIR, USERS_DIR, RUNTIME_DIR, BIN_DIR):
         d.mkdir(parents=True, exist_ok=True)
     return cfg
 
 
-def _migrate_mail(cfg: dict, *, graph_present: bool = True) -> None:
-    """Carry the sender address/display name over from the retired SMTP block.
+def _migrate_mail(cfg: dict) -> None:
+    """Mail is SMTP again.
 
-    Host/port/auth_code are dropped — Microsoft retired basic SMTP auth, so the
-    admin must paste a fresh client id + refresh token in the dashboard. When
-    the file never had a ``msgraph`` block, SMTP's user/from_name win over the
-    built-in defaults; later edits to ``msgraph`` are always left untouched.
+    Drop the obsolete Microsoft Graph block. If SMTP has no sender yet, carry
+    over the mailbox address / display name that Graph used so the admin only
+    has to fill host + authorization code.
     """
-    g = cfg.get("msgraph")
-    old = cfg.pop("smtp", None)
-    if isinstance(g, dict) and isinstance(old, dict):
-        if old.get("user") and (not graph_present or not g.get("user")):
-            g["user"] = old["user"]
-        if old.get("from_name") and (not graph_present or not g.get("from_name")):
-            g["from_name"] = old["from_name"]
-    if old is not None and LOCAL_CONFIG.exists():
-        # Rewrite once so the retired SMTP host/auth_code no longer sits on disk.
+    g = cfg.pop("msgraph", None)
+    s = cfg.get("smtp")
+    if not isinstance(s, dict):
+        s = {}
+        cfg["smtp"] = s
+    changed = g is not None
+    if isinstance(g, dict):
+        if g.get("user") and not s.get("user"):
+            s["user"] = g["user"]
+        if g.get("from_name") and not s.get("from_name"):
+            s["from_name"] = g["from_name"]
+    s.setdefault("host", "")
+    s.setdefault("port", 465)
+    s.setdefault("protocol", "ssl")
+    s.setdefault("auth_code", "")
+    if changed and LOCAL_CONFIG.exists():
         save(cfg)
 
 
@@ -287,7 +288,7 @@ def _migrate_github_token(conf: dict) -> None:
 
 def save(cfg: dict) -> None:
     """Persist the *secret* portion of the config (always UTF-8, no BOM)."""
-    secret_keys = ("github", "ngrok", "cpolar", "msgraph", "session_secret",
+    secret_keys = ("github", "ngrok", "cpolar", "smtp", "session_secret",
                    "mcp_servers", "models", "api_keys", "admin",
                    "allow_register", "ai_enabled", "allow_model_add",
                    "announcement", "default_model", "max_tool_calls_per_step",
