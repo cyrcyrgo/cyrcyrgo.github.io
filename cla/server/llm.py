@@ -1,21 +1,13 @@
-"""Thin async client for the local Ollama server (OpenAI-ish agent chat)."""
+"""LLM client: local models run through llama.cpp (llama-server, OpenAI API),
+external models through their own OpenAI-compatible provider."""
 from __future__ import annotations
 
 import json
-from typing import AsyncIterator
 
 import httpx
 
 from . import config as cfg
-
-# Model context. The 9B model on an 8GB GPU is fastest with a modest window;
-# a smaller KV cache lets more layers stay on the GPU.
-NUM_CTX = 8192
-KEEP_ALIVE = "30m"
-
-
-def base_url() -> str:
-    return cfg.CONFIG["ollama_url"].rstrip("/")
+from . import engine
 
 
 def model_config(name: str | None) -> dict:
@@ -30,7 +22,7 @@ def api_credentials(name: str | None) -> tuple[str, str] | None:
     """``(base_url, api_key)`` when *name* is an external API model, else ``None``.
 
     A model is treated as external as soon as it carries its own ``base_url``;
-    local Ollama models leave that field empty.
+    local models (served by llama.cpp) leave that field empty.
     """
     m = model_config(name)
     base = (m.get("base_url") or "").strip()
@@ -78,124 +70,125 @@ async def probe(base_url: str, api_key: str, model: str) -> str:
         return json.dumps(data, ensure_ascii=False)[:200]
 
 
+def _local_payload(name: str, messages: list[dict], *, max_tokens: int,
+                   temperature: float, stream: bool = False) -> dict:
+    """OpenAI chat-completions body tuned for a local Qwen-style model.
+
+    ``enable_thinking=false`` keeps Qwen3 thinking models from burning their
+    first tokens (and the reply) on hidden reasoning.
+    """
+    return {
+        "model": name,
+        "messages": messages,
+        "stream": stream,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+
+
+def _first_message(data: dict) -> dict:
+    try:
+        return (data.get("choices") or [{}])[0].get("message") or {}
+    except (AttributeError, IndexError, TypeError):
+        return {}
+
+
+async def _local_post(name: str, payload: dict, read_timeout: float) -> dict:
+    base = await engine.ensure(name)
+    timeout = httpx.Timeout(connect=10, read=read_timeout, write=60, pool=None)
+    async with httpx.AsyncClient(timeout=timeout) as c:
+        r = await c.post(_completions_url(base), json=payload)
+        if r.status_code >= 400:
+            raise RuntimeError(f"引擎 HTTP {r.status_code}: {r.text[:300]}")
+        return r.json()
+
+
 async def local_probe(name: str, prompt: str = "请用一句话介绍你自己。",
                       max_tokens: int = 200) -> dict:
-    """Short non-streaming generation against a local Ollama model.
+    """Short non-streaming generation against a local model.
 
-    Times a real round-trip (including cold-start model loading) and reports
-    generated tokens + tokens/s so the admin dashboard can prove a model works
-    and spot "长时间不输出" (slow / stalled) models.
+    Loads the model first (cold start excluded from the timing) then times a
+    real generation and reports tokens + tokens/s so the admin dashboard can
+    prove a model works and spot "长时间不输出" (slow / stalled) models.
     """
     import time as _time
 
-    payload = {
-        "model": name,
-        # Qwen3-style thinking models burn the first tokens on hidden reasoning;
-        # "/no_think" asks for a direct answer so the probe stays quick and the
-        # reply is human-visible even with a small token budget.
-        "messages": [{"role": "user", "content": prompt + " /no_think"}],
-        "stream": False,
-        "think": False,
-        "keep_alive": KEEP_ALIVE,
-        "options": {"num_predict": max_tokens, "num_ctx": 2048, "temperature": 0.6},
-    }
-    # Cold loading an 8B+ model from disk can take a couple of minutes.
-    timeout = httpx.Timeout(connect=10, read=300, write=60, pool=None)
+    await engine.ensure(name)   # cold load, not counted below
+    payload = _local_payload(name, [{"role": "user", "content": prompt}],
+                             max_tokens=max_tokens, temperature=0.6)
     started = _time.time()
-    async with httpx.AsyncClient(timeout=timeout) as c:
-        r = await c.post(f"{base_url()}/api/chat", json=payload)
-        if r.status_code >= 400:
-            raise RuntimeError(f"Ollama HTTP {r.status_code}: {r.text[:300]}")
-        data = r.json()
+    data = await _local_post(name, payload, read_timeout=300)
     wall = _time.time() - started
-    if data.get("error"):
-        raise RuntimeError(str(data["error"]))
-    reply = ((data.get("message") or {}).get("content") or "").strip()
-    # Older Ollama builds surface thinking-model text as reasoning_content.
-    if not reply:
-        reply = ((data.get("message") or {}).get("reasoning_content") or "").strip()
-    gen_tokens = int(data.get("eval_count") or 0)
-    gen_seconds = (data.get("eval_duration") or 0) / 1e9
-    load_seconds = (data.get("load_duration") or 0) / 1e9
+    msg = _first_message(data)
+    reply = (msg.get("content") or msg.get("reasoning_content") or "").strip()
+    usage = data.get("usage") or {}
+    gen_tokens = int(usage.get("completion_tokens") or 0)
     return {
         "ok": True,
         "reply": reply[:300],
         "wall_seconds": round(wall, 2),
-        "load_seconds": round(load_seconds, 2),
+        "load_seconds": 0,
         "gen_tokens": gen_tokens,
-        "gen_seconds": round(gen_seconds, 2),
-        "tokens_per_second": round(gen_tokens / gen_seconds, 2) if gen_seconds else 0,
+        "gen_seconds": round(wall, 2),
+        "tokens_per_second": round(gen_tokens / wall, 2) if wall else 0,
     }
 
 
 async def raw_chat(name: str, prompt: str, max_tokens: int = 900,
                    temperature: float = 0.4) -> str:
-    """Single non-streaming turn against a local Ollama model.
+    """Single non-streaming turn against a local model.
 
     Unlike :func:`local_probe` the full (untruncated) reply is returned, which
     lets callers ask a model to emit a complete JSON document.
     """
-    payload = {
-        "model": name,
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": False,
-        "think": False,
-        "keep_alive": KEEP_ALIVE,
-        "options": {"num_predict": max_tokens, "num_ctx": 4096,
-                    "temperature": temperature},
-    }
-    timeout = httpx.Timeout(connect=10, read=180, write=60, pool=None)
-    async with httpx.AsyncClient(timeout=timeout) as c:
-        r = await c.post(f"{base_url()}/api/chat", json=payload)
-        if r.status_code >= 400:
-            raise RuntimeError(f"Ollama HTTP {r.status_code}: {r.text[:300]}")
-        data = r.json()
-    if data.get("error"):
-        raise RuntimeError(str(data["error"]))
-    msg = data.get("message") or {}
+    payload = _local_payload(name, [{"role": "user", "content": prompt}],
+                             max_tokens=max_tokens, temperature=temperature)
+    data = await _local_post(name, payload, read_timeout=180)
+    msg = _first_message(data)
     return (msg.get("content") or msg.get("reasoning_content") or "").strip()
 
 
 async def health() -> dict:
-    try:
-        async with httpx.AsyncClient(timeout=5) as c:
-            r = await c.get(f"{base_url()}/api/tags")
-            r.raise_for_status()
-            models = [m["name"] for m in r.json().get("models", [])]
-            return {"ok": True, "models": models, "model": cfg.CONFIG["model"]}
-    except Exception as exc:
-        return {"ok": False, "error": str(exc), "model": cfg.CONFIG["model"]}
+    """Engine status: which local models are installed and which are resident."""
+    st = engine.status()
+    return {
+        "ok": bool(st.get("installed")),
+        "models": st.get("installed", []),
+        "running": st.get("running", []),
+        "engine_path": st.get("engine_path", ""),
+        "model": cfg.CONFIG["model"],
+    }
+
+
+def _size_bytes(name: str) -> int:
+    return int(model_config(name).get("size_mb") or 0) * 1024 * 1024
 
 
 async def ps() -> dict:
-    """Models currently loaded in memory / VRAM (Ollama /api/ps).
+    """Models currently resident in VRAM (live llama-server instances).
 
-    Used by the admin dashboard to show, in real time, which model is
-    resident on the GPU right now.
+    Used by the admin dashboard to show, in real time, which model is loaded
+    on the GPU right now. VRAM is approximated from the configured model size.
     """
-    try:
-        async with httpx.AsyncClient(timeout=5) as c:
-            r = await c.get(f"{base_url()}/api/ps")
-            r.raise_for_status()
-            data = r.json()
-            models = []
-            for m in data.get("models", []):
-                size = m.get("size") or 0
-                vram = m.get("size_vram") or 0
-                models.append({
-                    "name": m.get("name") or m.get("model"),
-                    "size": size,
-                    "vram": vram,
-                    "gpu_ratio": round(vram / size * 100, 1) if size else 0,
-                    "expires_at": m.get("expires_at"),
-                })
-            return {"ok": True, "models": models}
-    except Exception as exc:
-        return {"ok": False, "error": str(exc), "models": []}
+    st = engine.status()
+    models = []
+    for inst in st.get("running", []):
+        size = _size_bytes(inst["name"])
+        models.append({
+            "name": inst["name"],
+            "size": size,
+            "vram": size,
+            "gpu_ratio": 100 if inst.get("ready") else 0,
+            "expires_at": None,
+            "port": inst.get("port"),
+            "idle_seconds": inst.get("idle_seconds"),
+        })
+    return {"ok": bool(models), "models": models}
 
 
 def _merge_tool_calls(acc: list[dict], new: list[dict]) -> None:
-    """Accumulate streamed tool_call fragments (Ollama may split args)."""
+    """Accumulate streamed tool_call fragments (the model may split args)."""
     for tc in new:
         idx = tc.get("index")
         fn = tc.get("function", {}) or {}
@@ -225,38 +218,6 @@ def _tool_call_size(tool_calls: list[dict]) -> tuple[str, int]:
             name = fn["name"]
         chars += len(fn.get("arguments") or "")
     return name, chars
-
-
-async def chat_stream(messages: list[dict], tools: list[dict] | None = None,
-                     model: str | None = None) -> AsyncIterator[dict]:
-    """Yield raw Ollama streaming chunks (each has .message / .done)."""
-    payload = {
-        "model": model or cfg.CONFIG["model"],
-        "messages": messages,
-        "stream": True,
-        "keep_alive": KEEP_ALIVE,
-        "options": {"temperature": 0.6, "num_ctx": NUM_CTX},
-    }
-    if tools:
-        payload["tools"] = tools
-    # Streaming keeps the connection alive while the (slow) local model generates,
-    # so we never hit the server's non-streaming request timeout.
-    timeout = httpx.Timeout(connect=10, read=None, write=30, pool=None)
-    async with httpx.AsyncClient(timeout=timeout) as c:
-        async with c.stream("POST", f"{base_url()}/api/chat", json=payload) as r:
-            if r.status_code >= 400:
-                body = (await r.aread()).decode("utf-8", "replace")
-                raise RuntimeError(f"Ollama HTTP {r.status_code}: {body[:300]}")
-            async for line in r.aiter_lines():
-                if not line.strip():
-                    continue
-                try:
-                    chunk = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if chunk.get("error"):
-                    raise RuntimeError(str(chunk["error"]))
-                yield chunk
 
 
 def _for_openai(messages: list[dict]) -> list[dict]:
@@ -295,11 +256,13 @@ async def _openai_once(
     model: str | None,
     on_delta=None,
     on_tool_progress=None,
+    local: bool = False,
 ) -> dict:
-    """One full turn against an external OpenAI-compatible provider.
+    """One full turn against an OpenAI-compatible endpoint.
 
-    Works with DeepSeek / OpenAI / SiliconFlow / Moonshot and similar services
-    that expose ``POST {base}/chat/completions`` with SSE streaming.
+    Used for both external providers (DeepSeek / OpenAI / SiliconFlow …) and
+    the local llama.cpp server. ``local`` disables Qwen thinking mode so the
+    answer lands in ``content`` instead of hidden reasoning.
     """
     url = _completions_url(base_url)
     headers = {"Content-Type": "application/json"}
@@ -313,8 +276,11 @@ async def _openai_once(
     }
     if tools:
         payload["tools"] = tools
+    if local:
+        payload["chat_template_kwargs"] = {"enable_thinking": False}
 
     content_parts: list[str] = []
+    reasoning_parts: list[str] = []
     tool_calls: list[dict] = []
     last_reported = 0
     usage = {"prompt_tokens": 0, "completion_tokens": 0,
@@ -347,6 +313,10 @@ async def _openai_once(
                         content_parts.append(text)
                         if on_delta is not None:
                             await on_delta(text)
+                    elif delta.get("reasoning_content"):
+                        # Thinking model that ignored enable_thinking: keep the
+                        # reasoning so the turn is not surfaced as empty.
+                        reasoning_parts.append(delta["reasoning_content"])
                     if delta.get("tool_calls"):
                         _merge_tool_calls(tool_calls, delta["tool_calls"])
                         if on_tool_progress is not None:
@@ -360,7 +330,10 @@ async def _openai_once(
                     usage["completion_tokens"] += int(u.get("completion_tokens") or 0)
 
     usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
-    out: dict = {"role": "assistant", "content": "".join(content_parts)}
+    content = "".join(content_parts)
+    if not content and reasoning_parts:
+        content = "".join(reasoning_parts)
+    out: dict = {"role": "assistant", "content": content}
     if tool_calls:
         out["tool_calls"] = tool_calls
     out["usage"] = usage
@@ -374,65 +347,13 @@ async def chat_once(
     on_tool_progress=None,
     model: str | None = None,
 ) -> dict:
-    """One full turn for the selected model (external API or local Ollama)."""
-    creds = api_credentials(model or cfg.CONFIG["model"])
+    """One full turn for the selected model (external API or local engine)."""
+    name = model or cfg.CONFIG["model"]
+    creds = api_credentials(name)
     if creds:
-        return await _openai_once(messages, tools, creds[0], creds[1], model,
+        return await _openai_once(messages, tools, creds[0], creds[1], name,
                                   on_delta=on_delta, on_tool_progress=on_tool_progress)
-    return await _ollama_once(messages, tools, on_delta=on_delta,
-                              on_tool_progress=on_tool_progress, model=model)
-
-
-async def _ollama_once(
-    messages: list[dict],
-    tools: list[dict] | None = None,
-    on_delta=None,
-    on_tool_progress=None,
-    model: str | None = None,
-) -> dict:
-    """One full turn, assembled from the streaming endpoint.
-
-    ``on_delta(text)`` is awaited for every token chunk so callers can stream
-    the answer to the UI as it is generated. ``on_tool_progress(name, chars)``
-    fires while a (potentially huge) tool-call argument is being generated,
-    which on a slow local model can take minutes with no other output.
-
-    Returns the assistant message dict, e.g.
-    {"role": "assistant", "content": "...", "tool_calls": [...]}.
-    """
-    content_parts: list[str] = []
-    tool_calls: list[dict] = []
-    last_reported = 0
-    usage = {"prompt_tokens": 0, "completion_tokens": 0,
-             "total_tokens": 0, "seconds": 0.0}
-    async for chunk in chat_stream(messages, tools=tools, model=model):
-        msg = chunk.get("message") or {}
-        text = msg.get("content") or ""
-        if text:
-            content_parts.append(text)
-            if on_delta is not None:
-                await on_delta(text)
-        if msg.get("tool_calls"):
-            _merge_tool_calls(tool_calls, msg["tool_calls"])
-            if on_tool_progress is not None:
-                name, chars = _tool_call_size(tool_calls)
-                if chars - last_reported >= 64:
-                    last_reported = chars
-                    await on_tool_progress(name, chars)
-        if chunk.get("done"):
-            # Ollama reports real evaluated-token counts on the final chunk.
-            p_tok = int(chunk.get("prompt_eval_count") or 0)
-            c_tok = int(chunk.get("eval_count") or 0)
-            usage["prompt_tokens"] += p_tok
-            usage["completion_tokens"] += c_tok
-            usage["total_tokens"] += p_tok + c_tok
-            dur = chunk.get("total_duration") or 0
-            if dur:
-                usage["seconds"] += dur / 1e9
-            break
-
-    out: dict = {"role": "assistant", "content": "".join(content_parts)}
-    if tool_calls:
-        out["tool_calls"] = tool_calls
-    out["usage"] = usage
-    return out
+    base = await engine.ensure(name)
+    return await _openai_once(messages, tools, base, "", name,
+                              on_delta=on_delta, on_tool_progress=on_tool_progress,
+                              local=True)
