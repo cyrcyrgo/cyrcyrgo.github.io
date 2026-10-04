@@ -477,16 +477,60 @@ def _norm_answer(s: str) -> str:
     return s
 
 
+# Chinese numerals <-> arabic, used to understand identity-question answers.
+_CN_NUM = {"零": "0", "一": "1", "二": "2", "两": "2", "三": "3", "四": "4",
+           "五": "5", "六": "6", "七": "7", "八": "8", "九": "9"}
+_CN_TENS = {"十": "10", "二十": "20", "三十": "30"}
+def _semantic_forms(text: str) -> set[str]:
+    """Canonical spellings of a free-text answer (dates, months, ranges)."""
+    s = str(text or "").strip().lower()
+    forms = {_norm_answer(s)}
+
+    # full date: 2026年3月15日 / 2026-3-15 / 2026/03/15 -> 20260315
+    m = re.search(r"(20\d{2})\s*[年\-/\.](\d{1,2})\s*[月\-/\.](\d{1,2})\s*日?", s)
+    if m:
+        forms.add(m.group(1) + f"{int(m.group(2)):02d}" + f"{int(m.group(3)):02d}")
+    # month: 2026年3月 / 2026-03 / 今年三月 handled by caller via year context;
+    # here we normalise month-only forms like "3月" / "三月".
+    m = re.search(r"^(20\d{2})?\s*年?\s*([0-9一二两三四五六七八九十]{1,3})\s*月$", s)
+    if m:
+        word = m.group(2)
+        num = _CN_TENS.get(word) or "".join(_CN_NUM.get(ch, ch) for ch in word)
+        if num.isdigit() and 1 <= int(num) <= 12:
+            mm = f"{int(num):02d}"
+            forms.add(mm)
+            if m.group(1):
+                forms.add(m.group(1) + mm)
+    # time/quantity range wording: 2–3天内 / 两三天前 -> canonical range "23天"
+    t = re.sub(r"[\s~～\-—–到至]", "", s)
+    t = t.replace("两", "二")
+    t = t.replace("以内", "天").replace("内", "天").replace("前", "天")
+    m = re.match(r"^([二三四五六七八九十0-9]{2,3})(天|个|次|年|月)", t)
+    if m:
+        digits = "".join(_CN_NUM.get(ch, ch) for ch in m.group(1))
+        forms.add(digits + m.group(2))      # "23天"
+        forms.add(digits)                   # bare range "23"
+    # strip common fillers so "我的昵称是云影" still contains "云影"
+    for f in ("我的昵称是", "昵称是", "名字是", "我叫", "用户名是", "邮箱是",
+              "大概", "好像", "应该是", "是", "吧", "呢", "的"):
+        forms.add(_norm_answer(s.replace(f, "")))
+    return {f for f in forms if f}
+
+
 def _text_correct(val: str, correct: list) -> bool:
-    v = _norm_answer(val)
-    if not v:
+    """Deterministic semantic comparison of an open answer to references."""
+    if not (val or "").strip():
         return False
+    v_forms = _semantic_forms(val)
     for c in correct:
-        cv = _norm_answer(c)
-        if not cv:
-            continue
-        if v == cv or (len(v) >= 2 and (cv in v or v in cv)):
-            return True
+        for cv in _semantic_forms(c):
+            if not cv:
+                continue
+            if cv in v_forms:
+                return True
+            if len(cv) >= 2 and any(cv in vf or (len(vf) >= 2 and vf in cv)
+                                    for vf in v_forms):
+                return True
     return False
 
 
@@ -793,7 +837,10 @@ async def _llm_judge_text(question: str, reference: list, answer: str) -> bool |
         "参考答案：云影；用户回答：我的昵称是云影 -> {\"correct\":true}\n"
         "参考答案：云影；用户回答：不知道 -> {\"correct\":false}\n"
         "参考答案：2–3 天内；用户回答：两三天前 -> {\"correct\":true}\n"
+        "参考答案：2–3 天内；用户回答：一年多前 -> {\"correct\":false}\n"
         "参考答案：4–7 天内；用户回答：两三天前 -> {\"correct\":false}\n"
+        "参考答案：今天；用户回答：半年前 -> {\"correct\":false}\n"
+        "参考答案：1–5 个；用户回答：几十个 -> {\"correct\":false}\n"
         "参考答案：2026-03；用户回答：去年八月 -> {\"correct\":false}\n"
         "只输出 JSON，不要解释。\n"
         f"验证题：{question}\n参考答案：{ref}；用户回答：{answer} -> /no_think"
@@ -837,8 +884,15 @@ async def _score_quiz(quiz: dict, answers: dict) -> tuple[float, list, list]:
             if not val:
                 ok = False
             else:
-                verdict = await _llm_judge_text(q.get("label", ""), correct, val)
-                ok = _text_correct(val, correct) if verdict is None else verdict
+                # Deterministic semantic match is authoritative (it cannot be
+                # fooled). The 0.8B model is only consulted for paraphrases the
+                # rules do not recognise, and can rescue but never overturn a
+                # deterministic mismatch that rules themselves would accept.
+                if _text_correct(val, correct):
+                    ok = True
+                else:
+                    verdict = await _llm_judge_text(q.get("label", ""), correct, val)
+                    ok = bool(verdict)
         else:
             ok = bool(val) and val.lower() in [str(c).lower() for c in correct]
         (matched if ok else missed).append(q.get("label", ""))
