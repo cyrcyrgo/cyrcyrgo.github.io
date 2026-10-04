@@ -79,7 +79,7 @@ DEFAULTS: dict = {
     "ollama_url": "http://127.0.0.1:11434",
     "quota_bytes": 50 * 1024 * 1024,        # 50 MB base cloud space per user
     "max_agent_steps": 24,
-    "max_tool_calls_per_step": 8,       # cap tool calls executed in one agent step
+    "max_tool_calls_per_step": 500,      # cap tool calls executed in one agent step
     "code_timeout": 120,
     "session_secret": "",
     "code_ttl_seconds": 600,
