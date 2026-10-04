@@ -395,11 +395,14 @@
     box.innerHTML = qs.map((q, qi) => `
       <div class="uf-q">
         <label>${qi + 1}. ${escapeHtml(q.label)} <span class="me-hint">（${q.weight} 分）</span></label>
-        <select data-k="${escapeHtml(q.key)}">
-          <option value="">— 请选择 —</option>
-          ${(q.options || []).map((o) =>
-            `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("")}
-        </select>
+        ${(q.type === "text") ? `
+          <input type="text" data-k="${escapeHtml(q.key)}" data-t="text"
+            placeholder="请输入你的答案" autocomplete="off" />` : `
+          <select data-k="${escapeHtml(q.key)}" data-t="choice">
+            <option value="">— 请选择 —</option>
+            ${(q.options || []).map((o) =>
+              `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("")}
+          </select>`}
       </div>`).join("");
   }
   function showUfSubmitted(r) {
@@ -485,11 +488,11 @@
     if (reason.length < 5) return setUfMsg("请填写至少 5 个字的解冻原因", "err");
     const answers = {};
     let allAnswered = true;
-    $("uf-questions").querySelectorAll("select[data-k]").forEach((sel) => {
-      answers[sel.dataset.k] = sel.value.trim();
-      if (!sel.value) allAnswered = false;
+    $("uf-questions").querySelectorAll("[data-k]").forEach((el) => {
+      answers[el.dataset.k] = (el.value || "").trim();
+      if (!(el.value || "").trim()) allAnswered = false;
     });
-    if (!allAnswered) return setUfMsg("请完成全部选择题后再提交", "err");
+    if (!allAnswered) return setUfMsg("请完成全部题目后再提交", "err");
     setUfMsg("正在由系统评估使用痕迹相似度…");
     try {
       const d = await api("/api/auth/unfreeze/request", {
