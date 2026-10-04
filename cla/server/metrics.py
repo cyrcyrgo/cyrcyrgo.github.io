@@ -4,8 +4,8 @@ Everything is persisted to ``data/runtime/metrics.json`` so the admin dashboard
 survives a backend restart. Live (in-flight) calls only exist in memory — they
 are by definition transient.
 
-Token counts come straight from Ollama's final stream chunk
-(``prompt_eval_count`` / ``eval_count``), so they are the real evaluated-token
+Token counts come straight from the provider's ``usage`` block (external APIs
+and the local llama.cpp engine alike), so they are the real evaluated-token
 numbers, not an estimate.
 """
 from __future__ import annotations
