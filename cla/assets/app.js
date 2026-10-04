@@ -381,12 +381,63 @@
     setText("me-email", user.email);
     setText("me-quota",
       `${fmtSize(user.usage?.used)} / ${fmtSize(user.quota_bytes)}（${user.usage?.percent ?? 0}%）`);
+    renderQreq(user.quota_request);
   }
+
+  /* cloud-space expansion request */
+  function renderQreq(req) {
+    const st = $("qreq-status");
+    const btn = $("btn-qreq-submit");
+    if (!st) return;
+    if (!req) { st.innerHTML = ""; st.classList.remove("show"); if (btn) btn.disabled = false; return; }
+    const map = {
+      pending: ["⏳ 申请审核中", "tag tier"],
+      approved: ["✅ 申请已通过", "tag ok"],
+      rejected: ["❌ 申请未通过", "tag danger"],
+    };
+    const [txt, cls] = map[req.status] || [req.status, "tag"];
+    const mb = Math.round(req.request_bytes / 1024 / 1024);
+    st.innerHTML = `<span class="${cls}">${txt} · ${mb} MB</span>` +
+      (req.note ? `<div class="me-hint" style="margin-top:6px">管理员备注：${escapeHtml(req.note)}</div>` : "");
+    st.classList.add("show");
+    if (btn) btn.disabled = req.status === "pending";
+  }
+  async function loadQreq() {
+    try {
+      const d = await api("/api/quota/request");
+      renderQreq(d.request || null);
+      if (d.base_quota && !$("qreq-size").value) {
+        $("qreq-size").placeholder =
+          `期望空间（MB），当前基础 ${Math.round(d.base_quota / 1024 / 1024)}MB`;
+      }
+    } catch (_) {}
+  }
+  on("btn-qreq-submit", "click", async () => {
+    const sizeMb = parseInt($("qreq-size").value, 10);
+    const reason = $("qreq-reason").value.trim();
+    const msg = $("qreq-msg");
+    msg.style.color = "#ef4444";
+    if (!sizeMb || sizeMb <= 0) { msg.textContent = "请填写期望空间大小"; return; }
+    if (sizeMb > 51200) { msg.textContent = "最大可申请 51200 MB"; return; }
+    if (reason.length < 5) { msg.textContent = "申请理由至少 5 个字"; return; }
+    const btn = $("btn-qreq-submit"); btn.disabled = true;
+    try {
+      const d = await api("/api/quota/request", {
+        method: "POST", body: JSON.stringify({ size_mb: sizeMb, reason }),
+      });
+      renderQreq(d.request);
+      $("qreq-size").value = ""; $("qreq-reason").value = "";
+      msg.style.color = "#16a34a"; msg.textContent = "✓ 申请已提交，等待管理员审批";
+    } catch (e) {
+      msg.textContent = e.message; btn.disabled = false;
+    }
+  });
 
   function openMePanel() {
     if (!ME) return;
     $("me-panel").classList.remove("hidden");
     renderMeCard(ME);
+    loadQreq();
   }
   on("btn-me", "click", openMePanel);
   on("btn-settings", "click", openMePanel);
@@ -529,18 +580,13 @@
       api("/api/models/set", { method: "POST", body: JSON.stringify({ model: v || null }) }).catch(() => {});
     });
 
-    // Domain agent selector
-    $("agent-select").addEventListener("change", () => {
-      currentAgent = $("agent-select").value;
+    // Domain agents are chosen automatically by mode; the manual selector
+    // was removed from the UI to keep the composer to model + mode.
+    const agentSel = $("agent-select");
+    if (agentSel) agentSel.addEventListener("change", () => {
+      currentAgent = agentSel.value;
       localStorage.setItem("yjs_agent", currentAgent);
       renderAgentTag();
-      // An agent can recommend a small low-spec model; switch when the user
-      // hasn't pinned a personal preference server-side.
-      const a = AGENTS.find((x) => x.id === currentAgent);
-      if (a && a.suggest_model && !ME?.model_preference) {
-        const sel = $("model-select");
-        if ([...sel.options].some((o) => o.value === a.suggest_model)) sel.value = a.suggest_model;
-      }
     });
 
     // Mode selector
@@ -678,10 +724,11 @@
 
   function newChatView() {
     $("chat-title").textContent = "新对话";
-    setHtml("messages", `<div class="empty">描述你的任务，Agent 会在本机直接执行。</div>`);
+    setHtml("messages", `<div class="empty">描述你的任务，选择模型与模式，Agent 就会在本机直接执行。</div>`);
     $("model-tag").style.display = "none";
     $("mode-tag").style.display = "none";
-    const at = $("agent-tag"); if (at) at.style.display = currentAgent ? "" : "none";
+    const at = $("agent-tag"); if (at) at.style.display = "none";
+    const rs = $("run-status"); if (rs) rs.style.display = "none";
     $("btn-export").classList.add("hidden");
   }
 
@@ -700,7 +747,42 @@
       loadConversations();
       $("btn-export").classList.remove("hidden");
       box.scrollTop = box.scrollHeight;
+      refreshRunStatus();
     } catch (e) { alert(e.message); }
+  }
+
+  /* A run survives network drops: poll status and auto-reload the finished
+     result when the page was offline while the agent kept working. */
+  let runPollTimer = null;
+  function setRunBanner(running, elapsed) {
+    const el = $("run-status");
+    if (!el) return;
+    if (running) {
+      el.style.display = "inline-block";
+      el.textContent = `⏳ 任务运行中（${elapsed}s）· 断线也不影响，完成后会自动保存`;
+    } else {
+      el.style.display = "none";
+    }
+  }
+  async function pollRunning() {
+    if (!currentConv) return;
+    try {
+      const d = await api(`/api/conversations/${currentConv}/status`);
+      if (d.running) { setRunBanner(true, d.elapsed); return; }
+      setRunBanner(false, 0);
+      if (runPollTimer) { clearInterval(runPollTimer); runPollTimer = null; }
+      // Finished while this tab was away -> pull the persisted messages.
+      if (!sending) { await openConversation(currentConv); }
+    } catch (_) { /* keep polling */ }
+  }
+  async function refreshRunStatus() {
+    if (!currentConv) return;
+    try {
+      const d = await api(`/api/conversations/${currentConv}/status`);
+      setRunBanner(d.running, d.elapsed);
+      if (d.running && !runPollTimer) runPollTimer = setInterval(pollRunning, 4000);
+      if (!d.running && runPollTimer) { clearInterval(runPollTimer); runPollTimer = null; }
+    } catch (_) {}
   }
 
   /* ------------------------------------------------------------------ */
@@ -807,6 +889,8 @@
     if (!text || sending) return;
     if (!currentConv) { alert("请先新建对话"); return; }
     sending = true; $("btn-send-msg").disabled = true; $("chat-input").value = "";
+    setRunBanner(true, 0);
+    if (!runPollTimer) runPollTimer = setInterval(pollRunning, 4000);
     const chosenModel = $("model-select")?.value || "";
     const chosenMode = $("mode-select")?.value || "work";
     currentMode = chosenMode;
@@ -831,8 +915,8 @@
         if (streamEl) endStream(ev.content);
         else if (ev.content) addBubble("assistant", ev.content);
       } else if (ev.type === "agent") {
-        if (ev.icon && ev.name) {
-          const el = $("agent-tag");
+        const el = $("agent-tag");
+        if (el && ev.icon && ev.name) {
           el.textContent = `${ev.icon} ${ev.name}`;
           el.style.display = "inline-block";
         }
@@ -887,7 +971,7 @@
         },
         body: JSON.stringify({
           content: text, model: chosenModel || null,
-          mode: chosenMode, agent: currentAgent || null,
+          mode: chosenMode, agent: null,
         }),
       });
       if (res.status === 401) { logout(); return; }
@@ -915,11 +999,14 @@
     } catch (e) {
       if (live.parentNode) live.remove();
       addStep("result-err",
-        "⚠ 连接中断（" + (e.message || "network") + "）。稍后重开对话即可看到已完成部分。");
+        "⚠ 连接中断（" + (e.message || "network") + "）。任务仍在服务器执行，完成后会自动保存；可稍后重开对话查看。");
+      // Keep polling: the agent run is tied to the server task, not this SSE.
+      refreshRunStatus();
     } finally {
       endStream(); if (live.parentNode) live.remove();
       sending = false; $("btn-send-msg").disabled = false;
       loadConversations(); refreshMe();
+      setTimeout(refreshRunStatus, 800);
     }
   }
   on("btn-send-msg", "click", sendMessage);
@@ -938,27 +1025,65 @@
   /* ------------------------------------------------------------------ */
   /* files drawer + preview                                              */
   /* ------------------------------------------------------------------ */
+  let lastFiles = [];   // current file listing, for batch selection
+
+  function toast(text) {
+    let el = document.getElementById("mini-toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "mini-toast"; el.className = "mini-toast";
+      document.body.appendChild(el);
+    }
+    el.textContent = text;
+    el.classList.add("show");
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => el.classList.remove("show"), 2400);
+  }
+
+  function selectedPaths() {
+    return Array.from(document.querySelectorAll(".fr-check:checked"))
+      .map((cb) => cb.value);
+  }
+  function updateBatchBar() {
+    const paths = selectedPaths();
+    const bar = $("files-batchbar");
+    if (bar) bar.classList.toggle("hidden", lastFiles.length === 0);
+    const cnt = $("files-sel-count");
+    if (cnt) cnt.textContent = `已选 ${paths.length} 项`;
+    const ck = $("files-checkall");
+    if (ck) {
+      ck.checked = lastFiles.length > 0 && paths.length === lastFiles.length;
+      ck.indeterminate = paths.length > 0 && paths.length < lastFiles.length;
+    }
+    ["btn-batch-download", "btn-batch-email", "btn-batch-delete"].forEach((id) => {
+      const b = $(id); if (b) b.disabled = paths.length === 0;
+    });
+  }
+
   async function loadFiles() {
     try {
       const d = await api("/api/files");
       renderUsage(d.usage);
+      lastFiles = d.files || [];
       $("files-usage").textContent =
-        `${d.files.length} 个文件 · 已用 ${fmtSize(d.usage.used)} / ${fmtSize(d.usage.quota)}`;
+        `${lastFiles.length} 个文件 · 已用 ${fmtSize(d.usage.used)} / ${fmtSize(d.usage.quota)}`;
       const box = $("files-list"); box.innerHTML = "";
-      if (!d.files.length) {
+      if (!lastFiles.length) {
         box.innerHTML = `<div style="color:#8b98b4;padding:20px;text-align:center">暂无文件 —— 让 Agent 写点什么吧</div>`;
+        updateBatchBar();
         return;
       }
       const TEXT_EXTS = new Set(["txt","md","markdown","json","py","js","ts","jsx","tsx",
         "css","csv","log","ini","toml","xml","html","htm","sh","bat","ps1","rs","go","java",
         "c","cpp","h","vue","svelte"]);
-      d.files.forEach((f) => {
+      lastFiles.forEach((f) => {
         const row = document.createElement("div");
         row.className = "file-row";
         const filename = f.path.split("/").pop();
         const ext = (filename.split(".").pop() || "").toLowerCase();
         const canPreview = TEXT_EXTS.has(ext);
         row.innerHTML =
+          `<label class="fr-pick"><input type="checkbox" class="fr-check" value="${escapeHtml(f.path)}" /></label>` +
           `<div class="fr-main">` +
           `<div class="fr-name" title="${escapeHtml(f.path)}">📄 ${escapeHtml(f.path)}</div>` +
           `<div class="fr-meta">${fmtSize(f.size)} · ${new Date(f.modified * 1000).toLocaleString()}</div>` +
@@ -966,6 +1091,7 @@
           (canPreview ? `<button class="btn btn-prev">预览</button>` : "") +
           `<a class="btn btn-dl" href="${escapeHtml(downloadUrl(f.path))}" download="${escapeHtml(filename)}" target="_blank" rel="noopener">下载</a>` +
           `<button class="btn btn-del">删除</button></div>`;
+        row.querySelector(".fr-check").addEventListener("change", updateBatchBar);
         if (canPreview) row.querySelector(".btn-prev").onclick = () => openPreview(f.path);
         row.querySelector(".btn-del").onclick = async () => {
           if (!confirm("删除 " + f.path + " ?")) return;
@@ -974,12 +1100,83 @@
         };
         box.appendChild(row);
       });
+      updateBatchBar();
     } catch (e) { alert(e.message); }
   }
   on("btn-clear-files", "click", async () => {
     if (!confirm("确定清空全部工作区文件？此操作不可恢复。")) return;
     await api("/api/files/clear", { method: "POST" });
     await refreshMe(); loadFiles();
+  });
+
+  /* --- batch select / download / delete / email --- */
+  on("files-checkall", "change", (e) => {
+    document.querySelectorAll(".fr-check").forEach((cb) => { cb.checked = e.target.checked; });
+    updateBatchBar();
+  });
+  on("btn-batch-download", "click", () => {
+    const paths = selectedPaths();
+    if (!paths.length) return;
+    let url;
+    if (paths.length === 1) {
+      url = downloadUrl(paths[0]);
+    } else {
+      const q = paths.map((p) => "paths=" + encodeURIComponent(p)).join("&");
+      url = `${API}/api/files/batch-download?${q}&token=${encodeURIComponent(TOKEN || "")}`;
+    }
+    const a = document.createElement("a");
+    a.href = url; a.target = "_blank"; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+  on("btn-batch-delete", "click", async () => {
+    const paths = selectedPaths();
+    if (!paths.length) return;
+    if (!confirm(`确定删除选中的 ${paths.length} 个文件？此操作不可恢复。`)) return;
+    try {
+      const r = await api("/api/files/batch-delete", {
+        method: "POST", body: JSON.stringify({ paths }),
+      });
+      await refreshMe(); await loadFiles();
+      toast(`已删除 ${r.deleted ?? paths.length} 个文件`);
+    } catch (e) { alert(e.message); }
+  });
+
+  let mailPaths = [];
+  function closeFileMail() {
+    $("file-mail-modal").classList.add("hidden");
+    $("file-mail-msg").textContent = "";
+  }
+  on("btn-batch-email", "click", () => {
+    mailPaths = selectedPaths();
+    if (!mailPaths.length) return;
+    const total = mailPaths.reduce((s, p) => {
+      const f = lastFiles.find((x) => x.path === p);
+      return s + (f ? f.size : 0);
+    }, 0);
+    $("file-mail-info").textContent =
+      `将发送 ${mailPaths.length} 个文件（共 ${fmtSize(total)}）到你注册的邮箱 ${ME?.email || ""}。附件总量不超过 25MB。`;
+    const radios = document.querySelectorAll('input[name="mail-as"]');
+    if (mailPaths.length === 1) radios.forEach((r) => { r.disabled = false; });
+    else { document.querySelector('input[name="mail-as"][value="zip"]').checked = true; }
+    $("file-mail-msg").textContent = "";
+    $("file-mail-modal").classList.remove("hidden");
+  });
+  on("file-mail-cancel", "click", closeFileMail);
+  on("file-mail-ok", "click", async () => {
+    if (!mailPaths.length) return;
+    const asZip = document.querySelector('input[name="mail-as"]:checked')?.value === "zip";
+    const msg = $("file-mail-msg");
+    const btn = $("file-mail-ok");
+    btn.disabled = true; msg.style.color = "#8b98b4"; msg.textContent = "发送中，请稍候…";
+    try {
+      await api("/api/files/email", {
+        method: "POST", body: JSON.stringify({ paths: mailPaths, as_zip: asZip }),
+      });
+      msg.style.color = "#16a34a"; msg.textContent = "✓ 已发送到你的邮箱（SMTP 投递可能需要一点时间）";
+      setTimeout(closeFileMail, 1500);
+    } catch (e) {
+      msg.style.color = "#ef4444"; msg.textContent = e.message;
+    } finally { btn.disabled = false; }
   });
 
   /* --- upload --- */
