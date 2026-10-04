@@ -1181,10 +1181,17 @@
   on("reply-modal", "click", (e) => { if (e.target === $("reply-modal")) closeReply(); });
   on("reply-tpl-select", "change", () => {
     const t = replyTemplates.find((x) => x.id === $("reply-tpl-select").value);
-    if (t) $("reply-body").value = t.body || "";
+    const ta = $("reply-body");
+    if (!t) return;
+    ta.value = t.body || "";
+    ta.focus();
+    $("reply-msg").textContent = t.body
+      ? "已载入模板，可修改后直接发送"
+      : "该模板正文为空，请先填写回信内容";
   });
   on("btn-reply-tpl-save", "click", async () => {
     const body = $("reply-body").value.trim();
+    if (!body) return toast("请先在回信内容中填写要存为模板的正文", "err");
     const title = prompt("模板名称：", body.slice(0, 20));
     if (!title) return;
     try {
@@ -1341,14 +1348,14 @@
       } else {
         box.innerHTML = items.map((n) => `
           <div class="nt-hist-item" data-id="${escapeHtml(n.id)}">
-            <div class="nt-hist-head">
-              <b>${escapeHtml(n.title || "（无标题）")}</b>
+            <div class="nt-hist-head" title="点击展开 / 收起">
+              <b><i class="collapse-mark">▾</i>${escapeHtml(n.title || "（无标题）")}</b>
               <span class="muted">${fmtNtTime(n.updated_at || n.created_at)}</span>
             </div>
             <div class="muted nt-hist-meta">发布者：${escapeHtml(n.author || "管理员")}
               ${n.updated_at && n.created_at && Math.abs(n.updated_at - n.created_at) > 60 ? "· 已编辑" : ""}
             </div>
-            <div class="nt-hist-body">${escapeHtml((n.body || "").slice(0, 140))}${(n.body || "").length > 140 ? "…" : ""}</div>
+            <div class="nt-hist-body">${escapeHtml(n.body || "")}</div>
             <div class="nt-hist-acts">
               <button class="btn ghost" data-act="edit">编辑</button>
               <button class="btn danger" data-act="del">删除</button>
@@ -1356,6 +1363,9 @@
           </div>`).join("");
         box.querySelectorAll(".nt-hist-item").forEach((el) => {
           const id = el.dataset.id;
+          el.querySelector(".nt-hist-head").addEventListener("click", () => {
+            el.classList.toggle("open");
+          });
           el.querySelector('[data-act="edit"]').onclick = () => {
             const n = items.find((x) => x.id === id);
             if (!n) return;
@@ -1722,6 +1732,76 @@
       .catch((e) => toast(e.message, "err"));
   });
 
+  /* ---------------------------------------------------- collapsible panels */
+  // Every admin <section.panel> can be folded by clicking its <h3>. The state
+  // persists locally so long inboxes (feedback / unfreeze / notice history…)
+  // never blow the page up again.
+  const PANEL_STORE_KEY = "yjs_admin_collapsed_v1";
+  function readCollapsedStore() {
+    try { return JSON.parse(localStorage.getItem(PANEL_STORE_KEY) || "{}"); }
+    catch (_) { return {}; }
+  }
+  function saveCollapsedStore(o) {
+    try { localStorage.setItem(PANEL_STORE_KEY, JSON.stringify(o)); } catch (_) {}
+  }
+  function initCollapsibles() {
+    const store = readCollapsedStore();
+    document.querySelectorAll("#main section.panel").forEach((sec, idx) => {
+      const h3 = sec.querySelector(":scope > h3");
+      if (!h3) return;
+      // stable id: explicit attribute, else heading text, else position
+      const key = sec.dataset.collapse ||
+        (h3.textContent.trim().replace(/\s+/g, "").slice(0, 12)) || ("p" + idx);
+      sec.dataset.collapse = key;
+      sec.classList.add("collapsible");
+      if (!h3.querySelector(".collapse-mark")) {
+        const mark = document.createElement("i");
+        mark.className = "collapse-mark";
+        mark.textContent = "▾";
+        h3.insertBefore(mark, h3.firstChild);
+      }
+      if (store[key]) sec.classList.add("collapsed");
+      h3.addEventListener("click", (e) => {
+        // let buttons / links / badges inside the heading do their own job
+        if (e.target.closest("button, a, input, select, textarea, label")) return;
+        const collapsed = sec.classList.toggle("collapsed");
+        const s = readCollapsedStore();
+        if (collapsed) s[key] = 1; else delete s[key];
+        saveCollapsedStore(s);
+      });
+    });
+
+    // notice history subsection (editor stays visible, history folds away)
+    const head = document.querySelector(".nt-history-head");
+    const list = $("nt-history");
+    if (head && list) {
+      if (!head.querySelector(".collapse-mark")) {
+        const lab = head.querySelector(".sw-label");
+        const mark = document.createElement("i");
+        mark.className = "collapse-mark";
+        mark.textContent = "▾";
+        if (lab) lab.insertBefore(mark, lab.firstChild);
+        else head.insertBefore(mark, head.firstChild);
+      }
+      // default: history folded until the admin opens it
+      const histKey = "__notice_history__";
+      const histClosed = store[histKey] !== 0;
+      const applyHist = (closed) => {
+        head.classList.toggle("collapsed", closed);
+        list.classList.toggle("collapsed", closed);
+      };
+      applyHist(histClosed);
+      head.addEventListener("click", (e) => {
+        if (e.target.closest("button, a")) return;   // republish button
+        const closed = !head.classList.contains("collapsed");
+        applyHist(closed);
+        const s = readCollapsedStore();
+        if (closed) s[histKey] = 1; else s[histKey] = 0;
+        saveCollapsedStore(s);
+      });
+    }
+  }
+
   /* ---------------------------------------------------------------- boot */
   async function start() {
     clearInterval(timer);
@@ -1748,6 +1828,7 @@
   }
 
   (async function boot() {
+    initCollapsibles();
     await resolveApi();
     if (!TOKEN) {
       showDeny("尚未登录。请先回到对话页登录管理员账号，再进入后台。");
