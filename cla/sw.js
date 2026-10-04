@@ -5,7 +5,7 @@
  * UI opens with NO internet. API calls and cross-origin weight downloads
  * are never intercepted.
  */
-const VERSION = "yjs-shell-v20261003t";
+const VERSION = "yjs-shell-v20261003u";
 const BASE = self.registration.scope;
 
 const PRECACHE = [
