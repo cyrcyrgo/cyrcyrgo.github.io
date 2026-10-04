@@ -128,6 +128,34 @@ async def local_probe(name: str, prompt: str = "请用一句话介绍你自己�
     }
 
 
+async def raw_chat(name: str, prompt: str, max_tokens: int = 900,
+                   temperature: float = 0.4) -> str:
+    """Single non-streaming turn against a local Ollama model.
+
+    Unlike :func:`local_probe` the full (untruncated) reply is returned, which
+    lets callers ask a model to emit a complete JSON document.
+    """
+    payload = {
+        "model": name,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+        "think": False,
+        "keep_alive": KEEP_ALIVE,
+        "options": {"num_predict": max_tokens, "num_ctx": 4096,
+                    "temperature": temperature},
+    }
+    timeout = httpx.Timeout(connect=10, read=180, write=60, pool=None)
+    async with httpx.AsyncClient(timeout=timeout) as c:
+        r = await c.post(f"{base_url()}/api/chat", json=payload)
+        if r.status_code >= 400:
+            raise RuntimeError(f"Ollama HTTP {r.status_code}: {r.text[:300]}")
+        data = r.json()
+    if data.get("error"):
+        raise RuntimeError(str(data["error"]))
+    msg = data.get("message") or {}
+    return (msg.get("content") or msg.get("reasoning_content") or "").strip()
+
+
 async def health() -> dict:
     try:
         async with httpx.AsyncClient(timeout=5) as c:
