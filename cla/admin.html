@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS 管理后台</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%99%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/admin.css?v=20261003o" />
+<link rel="stylesheet" href="assets/admin.css?v=20261003p" />
 </head>
 <body>
 
@@ -80,7 +80,7 @@
 
   <!-- 系统权限 -->
   <section class="panel">
-    <h3>系统权限设置 <span class="hint">· 全局开关 / 注册 / 模型新增 / 默认模型 / 公告</span></h3>
+    <h3>系统权限设置 <span class="hint">· 全局开关 / 注册 / 模型新增 / 默认模型</span></h3>
     <div class="settings-grid">
       <label class="switch-row"><input type="checkbox" id="set-ai" />
         <span class="sw-label">全局 AI 调用</span>
@@ -99,10 +99,6 @@
         <span class="sw-label">每轮工具调用上限</span>
         <input id="set-toolcalls" type="number" min="1" max="50" step="1" value="8" />
         <span class="hint">Agent 单步最多执行多少个工具（1–50）</span>
-      </div>
-      <div class="set-field wide">
-        <span class="sw-label">站点公告（显示在对话页顶部，留空隐藏）</span>
-        <input id="set-announce" placeholder="例如：系统将于今晚 23:00 维护，请提前保存文件" />
       </div>
     </div>
     <div class="set-actions"><button class="btn" id="btn-save-settings">保存设置</button></div>
@@ -185,25 +181,32 @@
     </div>
   </section>
 
-  <!-- 全站通知 -->
+  <!-- 全站通知（历史保留） -->
   <section class="panel">
-    <h3>全站通知 <span class="hint">· 显示在对话页顶部；发布后同步到 GitHub 仓库</span></h3>
-    <div id="nt-status" class="muted" style="margin-bottom:12px">加载中…</div>
-    <div class="settings-grid">
+    <h3>服务通知（公告） <span class="hint">· 历史永久保留，用户在左侧「服务通知」翻阅；发布即同步整个历史到 GitHub</span></h3>
+    <div id="nt-status" class="muted" style="margin-bottom:10px">加载中…</div>
+
+    <div class="nt-editor">
       <div class="set-field wide">
-        <span class="sw-label">通知标题</span>
-        <input id="nt-title" placeholder="例如：系统维护通知" />
+        <span class="sw-label" id="nt-editor-title">发布新通知</span>
+        <input id="nt-title" placeholder="通知标题，例如：系统维护通知" />
       </div>
       <div class="set-field wide">
-        <span class="sw-label">通知内容</span>
-        <textarea id="nt-body" rows="5" placeholder="写给全体用户的内容…"></textarea>
+        <textarea id="nt-body" rows="4" placeholder="通知内容…"></textarea>
+      </div>
+      <div class="set-actions">
+        <span id="nt-msg" class="muted inline-msg"></span>
+        <button class="btn ghost" id="btn-nt-cancel-edit" style="display:none">取消编辑</button>
+        <button class="btn ghost" id="btn-nt-save">仅保存到本机</button>
+        <button class="btn" id="btn-nt-publish">发布并同步到 GitHub</button>
       </div>
     </div>
-    <div class="set-actions">
-      <span id="nt-msg" class="muted inline-msg"></span>
-      <button class="btn ghost" id="btn-nt-save">仅保存到本机</button>
-      <button class="btn" id="btn-nt-publish">发布全站通知并更新到 GitHub</button>
+
+    <div class="nt-history-head">
+      <span class="sw-label">历史通知（<b id="nt-count">0</b>）</span>
+      <button class="btn ghost" id="btn-nt-republish">⟳ 重新推送全部历史到 GitHub</button>
     </div>
+    <div id="nt-history" class="nt-history"><div class="muted">加载中…</div></div>
   </section>
 
   <!-- GitHub 仓库 -->
@@ -244,18 +247,26 @@
 
   <!-- 用户反馈 -->
   <section class="panel">
-    <h3>用户反馈 <span class="hint">· 提交到服务器后自动通过 SMTP 转发至 YJS-CLA@hotmail.com</span>
+    <h3>用户反馈（管理员后台） <span class="hint">· 仅显示发送到后台的反馈；发往邮箱的不在这里</span>
       <span id="fb-unread" class="badge tier" style="float:right;display:none"></span>
     </h3>
     <div id="fb-list" class="fb-list"></div>
   </section>
 
-  <!-- 云空间扩容申请 -->
+  <!-- 云空间调整申请 -->
   <section class="panel">
-    <h3>云空间扩容申请 <span class="hint">· 基础空间 50MB，审批后自动调整配额并邮件通知用户</span>
+    <h3>云空间调整申请 <span class="hint">· 扩大/缩小均可，可设临时期限（30 秒~三个月）到期自动还原</span>
       <span id="qreq-unread" class="badge tier" style="float:right;display:none"></span>
     </h3>
     <div id="qreq-list" class="qreq-list"><div class="muted">加载中…</div></div>
+  </section>
+
+  <!-- 账号解冻申请 -->
+  <section class="panel">
+    <h3>账号安全 · 解冻申请 <span class="hint">· 系统按使用痕迹自动评分；≥50 分可直接审批，&lt;50 分仅可 PIN 高级解冻</span>
+      <span id="uf-unread" class="badge no" style="float:right;display:none"></span>
+    </h3>
+    <div id="uf-list" class="uf-list"><div class="muted">加载中…</div></div>
   </section>
 
   <div class="grid2">
@@ -346,6 +357,41 @@
   </div>
 </div>
 
+<!-- 云空间调整审批弹窗 -->
+<div id="qdecide-modal" class="modal hidden">
+  <div class="modal-box wide">
+    <h3 id="qdecide-title">审批云空间调整</h3>
+    <p class="muted" id="qdecide-desc">—</p>
+    <div class="me-field">
+      <label class="sw-label">调整期限</label>
+      <select id="qdecide-duration">
+        <option value="0">永久有效</option>
+        <option value="30">30 秒（测试用）</option>
+        <option value="3600">1 小时</option>
+        <option value="86400">1 天</option>
+        <option value="604800">7 天</option>
+        <option value="2592000">30 天（一个月）</option>
+        <option value="7776000" selected>90 天（三个月）</option>
+        <option value="custom">自定义…</option>
+      </select>
+    </div>
+    <div class="me-field" id="qdecide-custom-wrap" style="display:none">
+      <label class="sw-label">自定义秒数（30 ~ 8035200，即 93 天）</label>
+      <input id="qdecide-custom" type="number" min="30" max="8035200" placeholder="例如 120" />
+    </div>
+    <div class="me-field">
+      <label class="sw-label">备注（可选，会通过邮件通知用户）</label>
+      <textarea id="qdecide-note" rows="3" placeholder="备注…"></textarea>
+    </div>
+    <div id="qdecide-msg" class="muted inline-msg" style="margin-bottom:8px"></div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="qdecide-cancel">取消</button>
+      <button class="btn danger" id="qdecide-reject">拒绝</button>
+      <button class="btn" id="qdecide-approve">批准</button>
+    </div>
+  </div>
+</div>
+
 <!-- 给用户发信弹窗 -->
 <div id="letter-modal" class="modal hidden">
   <div class="modal-box wide">
@@ -361,6 +407,32 @@
   </div>
 </div>
 
-<script src="assets/admin.js?v=20261003o"></script>
+<!-- 反馈快速回信弹窗 -->
+<div id="reply-modal" class="modal hidden">
+  <div class="modal-box wide">
+    <h3>快速回信</h3>
+    <p class="muted" id="reply-to">—</p>
+    <div class="reply-tpl-row">
+      <select id="reply-tpl-select" style="flex:1">
+        <option value="">— 选择回信模板 —</option>
+      </select>
+      <button class="btn ghost" id="btn-reply-tpl-save" type="button">＋ 存为模板</button>
+      <button class="btn ghost" id="btn-reply-tpl-del" type="button">删除模板</button>
+    </div>
+    <textarea id="reply-body" rows="6" placeholder="回信内容…"
+              style="width:100%;resize:vertical;margin:10px 0"></textarea>
+    <div class="reply-via">
+      <label><input type="checkbox" id="reply-via-email" checked /> 发送到用户邮箱（SMTP）</label>
+      <label><input type="checkbox" id="reply-via-notice" /> 发送到用户账号的服务通知</label>
+    </div>
+    <div id="reply-msg" class="muted inline-msg" style="margin-top:8px"></div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="reply-cancel">取消</button>
+      <button class="btn" id="reply-ok">发送回信</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/admin.js?v=20261003p"></script>
 </body>
 </html>
