@@ -880,7 +880,6 @@
       $("set-ai").checked = !!st.ai_enabled;
       $("set-register").checked = !!st.allow_register;
       $("set-addmodel").checked = !!st.allow_model_add;
-      $("set-announce").value = st.announcement || "";
       $("set-toolcalls").value = st.max_tool_calls_per_step || 8;
       $("set-default").innerHTML = (st.models || []).map((m) =>
         `<option value="${escapeHtml(m.name)}" ${m.name === st.default_model ? "selected" : ""}>
@@ -895,7 +894,6 @@
           ai_enabled: $("set-ai").checked,
           allow_register: $("set-register").checked,
           allow_model_add: $("set-addmodel").checked,
-          announcement: $("set-announce").value,
           default_model: $("set-default").value || "",
           max_tool_calls_per_step: parseInt($("set-toolcalls").value, 10) || 8,
         }),
@@ -1095,21 +1093,37 @@
   on("btn-broadcast-me", "click", () => sendBroadcast(true));
 
   /* ---------------------------------------------------------------- feedback */
+  let replyTemplates = [];
+  let replyFid = null;
+
   async function loadFeedback() {
     try {
       const d = await api("/api/admin/feedback");
+      replyTemplates = d.templates || [];
       renderFeedback(d.items || []);
+      renderTemplateOptions();
     } catch (_) { /* 401 handled by refresh() */ }
+  }
+
+  function renderTemplateOptions() {
+    const sel = $("reply-tpl-select");
+    if (!sel) return;
+    sel.innerHTML = `<option value="">— 选择回信模板 —</option>` +
+      replyTemplates.map((t) =>
+        `<option value="${escapeHtml(t.id)}">${escapeHtml(t.title)}</option>`).join("");
   }
 
   function renderFeedback(items) {
     const box = $("fb-list");
-    if (!items.length) { box.innerHTML = `<div class="muted">暂无用户反馈</div>`; return; }
-    const statusText = { new: "未读", read: "已读", done: "已处理" };
-    const mailBadge = { sent: `<span class="badge yes" title="已通过 SMTP 转发至 YJS-CLA@hotmail.com">✉ 已转发</span>`,
-      failed: `<span class="badge no" title="SMTP 转发失败，服务器已记录错误">✉ 转发失败</span>`,
-      skipped: `<span class="badge user">✉ 未转发</span>` };
-    box.innerHTML = items.map((f) => `
+    if (!items.length) { box.innerHTML = `<div class="muted">暂无后台反馈（发往邮箱的反馈不在这里显示）</div>`; return; }
+    const statusText = { new: "未读", read: "已读", done: "已回复/处理" };
+    box.innerHTML = items.map((f) => {
+      const replies = (f.replies || []).map((r) => {
+        const ways = [r.via_email ? "📮邮箱" : "", r.via_notice ? "🔔站内通知" : ""]
+          .filter(Boolean).join(" ");
+        return `<div class="fb-reply-log"><b>回复（${escapeHtml(ways)} · ${fmtTime(r.created_at)}）：</b>${escapeHtml(r.content)}</div>`;
+      }).join("");
+      return `
       <div class="fb-item ${f.status === "new" ? "new" : ""}" data-id="${escapeHtml(f.id)}">
         <div class="fb-head">
           <span class="fb-who">${escapeHtml(f.name || f.email)}</span>
@@ -1117,20 +1131,23 @@
           <span class="badge tier">${escapeHtml(f.category || "其他")}</span>
           <span class="muted">${fmtTime(f.created_at)}</span>
           <span class="badge ${f.status === "new" ? "yes" : "user"}">${statusText[f.status] || "已读"}</span>
-          ${mailBadge[f.email_status] || ""}
         </div>
         <div class="fb-body">${escapeHtml(f.content)}</div>
+        ${replies}
         <div class="fb-acts">
+          <button class="btn" data-act="reply">✏ 快速回信</button>
           <button class="btn ghost" data-act="read">标记已读</button>
           <button class="btn ghost" data-act="done">标记已处理</button>
           <button class="btn danger" data-act="del">删除</button>
         </div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
     box.querySelectorAll(".fb-item").forEach((el) => {
       const id = el.dataset.id;
       el.querySelectorAll("button[data-act]").forEach((btn) => {
         btn.onclick = async () => {
           const act = btn.dataset.act;
+          if (act === "reply") { openReply(id, items.find((x) => x.id === id)); return; }
           try {
             if (act === "del") {
               if (!confirm("删除这条用户反馈？")) return;
@@ -1149,18 +1166,219 @@
     });
   }
 
+  function openReply(fid, f) {
+    replyFid = fid;
+    $("reply-to").textContent = `回复给：${f ? escapeHtml(f.name || f.email || "") + " <" + escapeHtml(f.email || "") + ">" : ""}`;
+    $("reply-body").value = "";
+    $("reply-via-email").checked = true;
+    $("reply-via-notice").checked = false;
+    $("reply-msg").textContent = "";
+    renderTemplateOptions();
+    $("reply-modal").classList.remove("hidden");
+  }
+  function closeReply() { $("reply-modal").classList.add("hidden"); replyFid = null; }
+  on("reply-cancel", "click", closeReply);
+  on("reply-modal", "click", (e) => { if (e.target === $("reply-modal")) closeReply(); });
+  on("reply-tpl-select", "change", () => {
+    const t = replyTemplates.find((x) => x.id === $("reply-tpl-select").value);
+    if (t) $("reply-body").value = t.body || "";
+  });
+  on("btn-reply-tpl-save", "click", async () => {
+    const body = $("reply-body").value.trim();
+    const title = prompt("模板名称：", body.slice(0, 20));
+    if (!title) return;
+    try {
+      const d = await api("/api/admin/reply-templates", {
+        method: "POST", body: JSON.stringify({ title, body }),
+      });
+      replyTemplates.push(d.template);
+      renderTemplateOptions();
+      $("reply-tpl-select").value = d.template.id;
+      toast("模板已保存", "ok");
+    } catch (e) { toast(e.message, "err"); }
+  });
+  on("btn-reply-tpl-del", "click", async () => {
+    const id = $("reply-tpl-select").value;
+    if (!id) return toast("请先选择要删除的模板", "err");
+    if (!confirm("删除该回信模板？")) return;
+    try {
+      await api("/api/admin/reply-templates/" + encodeURIComponent(id), { method: "DELETE" });
+      replyTemplates = replyTemplates.filter((t) => t.id !== id);
+      renderTemplateOptions();
+      toast("模板已删除", "ok");
+    } catch (e) { toast(e.message, "err"); }
+  });
+  on("reply-ok", "click", async () => {
+    if (!replyFid) return;
+    const content = $("reply-body").value.trim();
+    const viaEmail = $("reply-via-email").checked;
+    const viaNotice = $("reply-via-notice").checked;
+    if (!content) return $("reply-msg").textContent = "请填写回信内容";
+    if (!viaEmail && !viaNotice) return $("reply-msg").textContent = "请至少选择一种回信方式";
+    const btn = $("reply-ok"); btn.disabled = true;
+    $("reply-msg").textContent = "发送中…";
+    try {
+      const d = await api(`/api/admin/feedback/${encodeURIComponent(replyFid)}/reply`, {
+        method: "POST",
+        body: JSON.stringify({ content, via_email: viaEmail, via_notice: viaNotice }),
+      });
+      toast("回信已发送" + (d.mail_error ? "（邮件失败：" + d.mail_error + "）" : ""),
+        d.mail_error ? "err" : "ok");
+      closeReply();
+      await loadFeedback();
+    } catch (e) { $("reply-msg").textContent = "✗ " + e.message; }
+    finally { btn.disabled = false; }
+  });
+
+  /* ----------------------------------------------------- unfreeze review -- */
+  async function loadUnfreeze() {
+    try {
+      const d = await api("/api/admin/unfreeze");
+      renderUnfreeze(d.items || []);
+      const badge = $("uf-unread");
+      badge.style.display = d.pending ? "inline-block" : "none";
+      badge.textContent = d.pending + " 条待处理";
+    } catch (_) {}
+  }
+  function renderUnfreeze(items) {
+    const box = $("uf-list");
+    if (!items.length) { box.innerHTML = `<div class="muted">暂无解冻申请</div>`; return; }
+    const stMap = { open: ["待处理", "tier"], approved: ["已批准解冻", "yes"],
+      denied: ["已取消/拒绝", "no"], pin_unlocked: ["PIN 验证解冻", "yes"],
+      superseded: ["已被新申请替代", "user"] };
+    box.innerHTML = items.map((u) => {
+      const [stText, stCls] = stMap[u.status] || [u.status, "user"];
+      const passed = (u.score || 0) >= 50;
+      const answers = Object.entries(u.answers || {}).map(([k, v]) =>
+        `<tr><td class="muted">${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`).join("");
+      const matched = (u.matched || []).map((x) => `<li>✅ ${escapeHtml(x)}</li>`).join("");
+      const missed = (u.missed || []).map((x) => `<li>❌ ${escapeHtml(x)}</li>`).join("");
+      return `<div class="uf-item ${u.status}" data-id="${escapeHtml(u.id)}">
+        <div class="fb-head">
+          <span class="fb-who">${escapeHtml(u.email)}</span>
+          <span class="badge ${stCls}">${stText}</span>
+          <span class="badge ${passed ? "yes" : "no"}">系统评分 ${u.score} 分${passed ? "（达标）" : "（否决）"}</span>
+          <span class="muted">${fmtTime(u.created_at)}</span>
+        </div>
+        <div class="uf-reason"><b>解冻原因：</b>${escapeHtml(u.reason || "")}</div>
+        <details class="uf-detail">
+          <summary>查看使用痕迹问卷与评分明细</summary>
+          <table class="tbl uf-tbl"><tbody>${answers}</tbody></table>
+          <ul class="uf-score">${matched}${missed}</ul>
+        </details>
+        ${u.decided_at ? `<div class="muted" style="margin-top:6px">处理时间：${fmtTime(u.decided_at)} · 处理人：${escapeHtml(u.decided_by || "")}</div>` : ""}
+        ${u.status === "open" ? `<div class="qreq-acts">
+          ${passed ? `
+            <button class="btn" data-act="approve">✓ 评分达标，同意解冻</button>
+            <button class="btn danger" data-act="deny">取消申请</button>` : `
+            <button class="btn" data-act="pin">📧 发送高级解冻 PIN 邮件</button>
+            <button class="btn ghost" data-act="verify">输入 PIN 验证解冻</button>
+            <span class="muted">评分不足 50，系统已否决，管理员无法直接解冻</span>`}
+        </div>` : ""}
+      </div>`;
+    }).join("");
+    box.querySelectorAll(".uf-item").forEach((el) => {
+      const id = el.dataset.id;
+      el.querySelectorAll("button[data-act]").forEach((btn) => {
+        btn.onclick = async () => actUnfreeze(id, btn.dataset.act);
+      });
+    });
+  }
+  async function actUnfreeze(id, act) {
+    try {
+      if (act === "approve" || act === "deny") {
+        if (act === "deny" && !confirm("确定拒绝该解冻申请？账号将保持冻结。")) return;
+        await api(`/api/admin/unfreeze/${encodeURIComponent(id)}/decide`, {
+          method: "POST", body: JSON.stringify({ approve: act === "approve" }),
+        });
+        toast(act === "approve" ? "已解冻账号" : "已拒绝申请", "ok");
+      } else if (act === "pin") {
+        if (!confirm("向该账号邮箱发送 6 位高级解冻 PIN？")) return;
+        await api(`/api/admin/unfreeze/${encodeURIComponent(id)}/send-pin`, { method: "POST" });
+        toast("PIN 邮件已发送，请等待用户提供 PIN", "ok");
+      } else if (act === "verify") {
+        const pin = prompt("请输入用户从邮箱中获取的 6 位 PIN：");
+        if (!pin) return;
+        await api(`/api/admin/unfreeze/${encodeURIComponent(id)}/verify-pin`, {
+          method: "POST", body: JSON.stringify({ pin: pin.trim() }),
+        });
+        toast("PIN 验证通过，账号已解冻", "ok");
+      }
+      await loadUnfreeze();
+    } catch (e) { toast(e.message, "err"); }
+  }
+
   /* ---------------------------------------------------------------- notice */
+  let editingNoticeId = null;
+
+  function fmtNtTime(ts) {
+    if (!ts) return "";
+    const d = new Date(ts * 1000);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
+  function resetNoticeEditor() {
+    editingNoticeId = null;
+    $("nt-title").value = ""; $("nt-body").value = "";
+    $("nt-editor-title").textContent = "发布新通知";
+    $("btn-nt-publish").textContent = "发布并同步到 GitHub";
+    $("btn-nt-cancel-edit").style.display = "none";
+  }
+
   async function loadNotice() {
     try {
-      const d = await api("/api/admin/notification");
-      $("nt-title").value = d.title || "";
-      $("nt-body").value = d.body || "";
+      const d = await api("/api/admin/notifications");
+      const items = d.notifications || [];
       const st = $("nt-status");
-      const when = d.updated_at ? `最近更新 ${escapeHtml(d.updated_at)}` : "尚未发布";
       const repo = d.repo ? `${escapeHtml(d.repo)} · ${escapeHtml(d.repo_file)}` : "未配置仓库";
       const lock = d.unlocked ? "已解锁可发布" : "未解锁（仅能保存到本机）";
-      st.innerHTML = `${when}${d.author ? " · " + escapeHtml(d.author) : ""}<br>` +
-        `同步目标：${repo} · ${lock}`;
+      st.innerHTML = `共 ${items.length} 条历史通知 · 同步目标：${repo} · ${lock}`;
+      $("nt-count").textContent = String(items.length);
+      const box = $("nt-history");
+      if (!items.length) {
+        box.innerHTML = `<div class="muted">暂无历史通知</div>`;
+      } else {
+        box.innerHTML = items.map((n) => `
+          <div class="nt-hist-item" data-id="${escapeHtml(n.id)}">
+            <div class="nt-hist-head">
+              <b>${escapeHtml(n.title || "（无标题）")}</b>
+              <span class="muted">${fmtNtTime(n.updated_at || n.created_at)}</span>
+            </div>
+            <div class="muted nt-hist-meta">发布者：${escapeHtml(n.author || "管理员")}
+              ${n.updated_at && n.created_at && Math.abs(n.updated_at - n.created_at) > 60 ? "· 已编辑" : ""}
+            </div>
+            <div class="nt-hist-body">${escapeHtml((n.body || "").slice(0, 140))}${(n.body || "").length > 140 ? "…" : ""}</div>
+            <div class="nt-hist-acts">
+              <button class="btn ghost" data-act="edit">编辑</button>
+              <button class="btn danger" data-act="del">删除</button>
+            </div>
+          </div>`).join("");
+        box.querySelectorAll(".nt-hist-item").forEach((el) => {
+          const id = el.dataset.id;
+          el.querySelector('[data-act="edit"]').onclick = () => {
+            const n = items.find((x) => x.id === id);
+            if (!n) return;
+            editingNoticeId = id;
+            $("nt-title").value = n.title || "";
+            $("nt-body").value = n.body || "";
+            $("nt-editor-title").textContent = "编辑通知（历史保留，同步更新）";
+            $("btn-nt-publish").textContent = "保存并同步到 GitHub";
+            $("btn-nt-cancel-edit").style.display = "";
+            $("nt-title").scrollIntoView({ behavior: "smooth", block: "center" });
+          };
+          el.querySelector('[data-act="del"]').onclick = async () => {
+            if (!confirm("确定删除这条通知？用户端也将无法再看到它。")) return;
+            try {
+              const d2 = await api(`/api/admin/notifications/${encodeURIComponent(id)}?publish=true`,
+                { method: "DELETE" });
+              toast(d2.pushed ? "已删除并同步 GitHub" : "已删除（GitHub 未同步）", "ok");
+              await loadNotice();
+              if (editingNoticeId === id) resetNoticeEditor();
+            } catch (e) { toast(e.message, "err"); }
+          };
+        });
+      }
     } catch (_) { /* 401 handled by refresh() */ }
   }
 
@@ -1169,27 +1387,37 @@
     const title = $("nt-title").value.trim();
     const body = $("nt-body").value.trim();
     if (!title && !body) { msg.textContent = "请先填写通知标题或内容"; return; }
-    msg.textContent = publish ? "正在发布到 GitHub…" : "保存中…";
+    msg.textContent = publish ? "正在同步到 GitHub（推送完整历史）…" : "保存中…";
     try {
-      const d = await api("/api/admin/notification", {
+      const url = editingNoticeId
+        ? `/api/admin/notifications/${encodeURIComponent(editingNoticeId)}`
+        : "/api/admin/notifications";
+      const d = await api(url, {
         method: "POST",
         body: JSON.stringify({ title, body, publish: !!publish }),
       });
       if (publish && d.pushed) {
-        msg.textContent = "✓ 已发布，并已更新到 GitHub 仓库";
-        toast("全站通知已发布到 GitHub", "ok");
+        msg.textContent = "✓ 已同步到 GitHub 仓库（历史完整保留）";
+        toast("通知已同步到 GitHub", "ok");
       } else if (publish) {
-        msg.textContent = "✓ 已保存到本机，但未推送到 GitHub：" + (d.error || "未知原因");
-        toast("已保存，GitHub 推送失败", "err");
+        msg.textContent = "✓ 已保存到本机，但未推送 GitHub：" + (d.error || "未知原因");
       } else {
         msg.textContent = "✓ 已保存到本机（未推送 GitHub）";
-        toast("全站通知已保存", "ok");
       }
+      resetNoticeEditor();
       await loadNotice();
     } catch (e) { msg.textContent = "✗ " + e.message; }
   }
   on("btn-nt-save", "click", () => saveNotice(false));
   on("btn-nt-publish", "click", () => saveNotice(true));
+  on("btn-nt-cancel-edit", "click", () => { resetNoticeEditor(); $("nt-msg").textContent = ""; });
+  on("btn-nt-republish", "click", async () => {
+    try {
+      await api("/api/admin/notifications-republish", { method: "POST" });
+      toast("已将完整历史重新推送到 GitHub", "ok");
+      await loadNotice();
+    } catch (e) { toast(e.message, "err"); }
+  });
 
   /* ---------------------------------------------------------------- github */
   async function loadGithub() {
@@ -1357,13 +1585,23 @@
   }
   function renderQuotaRequests(items) {
     const box = $("qreq-list");
-    if (!items.length) { box.innerHTML = `<div class="muted">暂无扩容申请</div>`; return; }
+    if (!items.length) { box.innerHTML = `<div class="muted">暂无云空间调整申请</div>`; return; }
     const stMap = { pending: ["待审批", "tier"], approved: ["已通过", "yes"],
-                    rejected: ["已拒绝", "no"] };
+                    rejected: ["已拒绝", "no"], expired: ["已到期还原", "user"],
+                    superseded: ["已被新调整替代", "user"] };
     box.innerHTML = items.map((r) => {
       const [stText, stCls] = stMap[r.status] || [r.status, "user"];
       const reqMb = Math.round(r.request_bytes / 1048576);
       const curMb = Math.round((r.current_bytes || 0) / 1048576);
+      const grow = r.request_bytes > (r.current_bytes || 0);
+      let term = "";
+      if (r.status === "approved") {
+        term = r.expire_at
+          ? `<div class="muted" style="margin-top:4px">临时调整至 ${fmtTime(r.expire_at)} 到期，`
+            + `自动还原为 ${Math.round((r.revert_bytes || 0) / 1048576)} MB`
+            + (r.status === "expired" ? "（已还原）" : "") + `</div>`
+          : `<div class="muted" style="margin-top:4px">永久调整</div>`;
+      }
       return `<div class="qreq-item ${r.status}" data-id="${escapeHtml(r.id)}">
         <div class="fb-head">
           <span class="fb-who">${escapeHtml(r.name || r.email || r.uid)}</span>
@@ -1372,13 +1610,14 @@
           <span class="muted">${fmtTime(r.created_at)}</span>
         </div>
         <div class="qreq-main">
-          申请 <b>${reqMb} MB</b>（当前 ${curMb} MB）
+          申请${grow ? "扩大" : "缩小"}至 <b>${reqMb} MB</b>（当前 ${curMb} MB）
           <div class="muted" style="margin-top:4px;white-space:pre-wrap">理由：${escapeHtml(r.reason || "")}</div>
+          ${term}
           ${r.note ? `<div class="muted" style="margin-top:4px">管理员备注：${escapeHtml(r.note)}</div>` : ""}
           ${r.decided_at ? `<div class="muted" style="margin-top:4px">处理时间：${fmtTime(r.decided_at)}</div>` : ""}
         </div>
         ${r.status === "pending" ? `<div class="qreq-acts">
-          <button class="btn" data-act="approve">✓ 批准（调至 ${reqMb} MB）</button>
+          <button class="btn" data-act="approve">✓ 批准（${grow ? "扩大" : "缩小"}至 ${reqMb} MB）</button>
           <button class="btn danger" data-act="reject">拒绝</button>
         </div>` : ""}
       </div>`;
@@ -1386,24 +1625,62 @@
     box.querySelectorAll(".qreq-item").forEach((el) => {
       const id = el.dataset.id;
       el.querySelectorAll("button[data-act]").forEach((btn) => {
-        btn.onclick = () => {
-          const approve = btn.dataset.act === "approve";
-          openModal(
-            approve ? "批准扩容申请" : "拒绝扩容申请",
-            approve ? "可填写备注（会通过邮件通知用户，留空也可）"
-                    : "建议填写拒绝原因（会通过邮件通知用户，留空也可）",
-            "", "备注（可选）",
-            async (note) => {
-              await api(`/api/admin/quota-requests/${encodeURIComponent(id)}/decide`, {
-                method: "POST", body: JSON.stringify({ approve, note: note || "" }),
-              });
-              toast(approve ? "已批准，配额已调整" : "已拒绝", "ok");
-              await Promise.all([loadQuotaRequests(), refresh()]);
-            });
-        };
+        btn.onclick = () => openQuotaDecide(id, btn.dataset.act === "approve");
       });
     });
   }
+
+  /* quota approval modal with duration (30s .. 3 months / permanent) */
+  let qdecideId = null;
+  function openQuotaDecide(id, approve) {
+    qdecideId = id;
+    $("qdecide-title").textContent = approve ? "批准云空间调整" : "拒绝云空间调整";
+    $("qdecide-desc").textContent = approve
+      ? "选择调整期限：到期后系统自动恢复到调整前的配额。"
+      : "拒绝时期限不生效，可填写拒绝原因（会邮件通知用户）。";
+    $("qdecide-duration").value = approve ? "7776000" : "0";
+    $("qdecide-duration").disabled = !approve;
+    $("qdecide-custom-wrap").style.display = "none";
+    $("qdecide-custom").value = "";
+    $("qdecide-note").value = "";
+    $("qdecide-msg").textContent = "";
+    $("qdecide-modal").classList.remove("hidden");
+  }
+  function closeQuotaDecide() { $("qdecide-modal").classList.add("hidden"); qdecideId = null; }
+  on("qdecide-cancel", "click", closeQuotaDecide);
+  on("qdecide-modal", "click", (e) => { if (e.target === $("qdecide-modal")) closeQuotaDecide(); });
+  on("qdecide-duration", "change", (e) => {
+    $("qdecide-custom-wrap").style.display = e.target.value === "custom" ? "" : "none";
+  });
+  async function submitQuotaDecision(approve) {
+    if (!qdecideId) return;
+    let duration = 0;
+    if (approve) {
+      const sel = $("qdecide-duration").value;
+      if (sel === "custom") {
+        duration = parseInt($("qdecide-custom").value, 10);
+        if (!duration || duration < 30 || duration > 8035200) {
+          $("qdecide-msg").textContent = "自定义秒数需在 30 ~ 8035200 之间";
+          return;
+        }
+      } else {
+        duration = parseInt(sel, 10) || 0;
+      }
+    }
+    const note = $("qdecide-note").value.trim();
+    $("qdecide-msg").textContent = "提交中…";
+    try {
+      await api(`/api/admin/quota-requests/${encodeURIComponent(qdecideId)}/decide`, {
+        method: "POST",
+        body: JSON.stringify({ approve, note, duration_seconds: duration || null }),
+      });
+      toast(approve ? "已批准，配额已调整" : "已拒绝", "ok");
+      closeQuotaDecide();
+      await Promise.all([loadQuotaRequests(), refresh()]);
+    } catch (e) { $("qdecide-msg").textContent = "✗ " + e.message; }
+  }
+  on("qdecide-approve", "click", () => submitQuotaDecision(true));
+  on("qdecide-reject", "click", () => submitQuotaDecision(false));
 
   /* ---------------------------------------------------- host + ollama */
   async function loadSystemStatus() {
@@ -1457,6 +1734,7 @@
     await loadNotice();
     await loadFeedback();
     await loadQuotaRequests();
+    await loadUnfreeze();
     await loadGithub();
     await loadSystemStatus();
     await refresh();
@@ -1464,6 +1742,7 @@
     auxTimer = setInterval(() => {
       if (anyOverlayOpen()) return;
       loadQuotaRequests();
+      loadUnfreeze();
       loadSystemStatus();
     }, 6000);
   }
@@ -1502,7 +1781,7 @@
         refresh(); timer = setInterval(refresh, 2000);
         auxTimer = setInterval(() => {
           if (anyOverlayOpen()) return;
-          loadQuotaRequests(); loadSystemStatus();
+          loadQuotaRequests(); loadUnfreeze(); loadSystemStatus();
         }, 6000);
       }
     });
