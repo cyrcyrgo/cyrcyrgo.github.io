@@ -101,11 +101,15 @@ def create_user(email: str) -> dict:
     return profile
 
 
-def touch_login(uid: str) -> None:
+def touch_login(uid: str, ip: str = "") -> None:
     p = user_dir(uid) / "profile.json"
     profile = _read_json(p, None)
     if profile:
-        profile["last_login"] = _now()
+        now = _now()
+        profile["last_login"] = now
+        hist = profile.get("login_history") or []
+        hist.append({"at": now, "ip": (ip or "")[:64]})
+        profile["login_history"] = hist[-30:]
         _write_json(p, profile)
 
 
@@ -518,7 +522,8 @@ def _feedback_path(fid: str) -> Path:
     return FEEDBACK_DIR / f"{fid}.json"
 
 
-def add_feedback(uid: str, email: str, category: str, content: str) -> dict:
+def add_feedback(uid: str, email: str, category: str, content: str,
+                 target: str = "admin") -> dict:
     FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
     fid = uuid.uuid4().hex[:12]
     item = {
@@ -528,11 +533,56 @@ def add_feedback(uid: str, email: str, category: str, content: str) -> dict:
         "name": (get_user(uid) or {}).get("name") or "",
         "category": (category or "其他").strip()[:24],
         "content": content.strip()[:4000],
+        "target": target if target in ("email", "admin") else "admin",
         "created_at": _now(),
         "status": "new",          # new | read | done
+        "revoked": False,
+        "replies": [],
     }
     _write_json(_feedback_path(fid), item)
     return item
+
+
+def last_feedback_time(uid: str) -> float:
+    times = [f.get("created_at", 0) for f in list_feedback() if f.get("uid") == uid]
+    return max(times) if times else 0.0
+
+
+def list_feedback_for_user(uid: str) -> list[dict]:
+    return [f for f in list_feedback() if f.get("uid") == uid]
+
+
+def revoke_feedback(fid: str, uid: str) -> bool:
+    """Only backend-target (never emailed) feedback can be revoked."""
+    p = _feedback_path(fid)
+    item = _read_json(p, None)
+    if (not item or item.get("uid") != uid
+            or item.get("target") == "email" or item.get("revoked")):
+        return False
+    item["revoked"] = True
+    item["status"] = "revoked"
+    _write_json(p, item)
+    return True
+
+
+def add_feedback_reply(fid: str, content: str, via_email: bool,
+                       via_notice: bool, author: str) -> dict | None:
+    p = _feedback_path(fid)
+    item = _read_json(p, None)
+    if not item:
+        return None
+    reply = {
+        "id": uuid.uuid4().hex[:10],
+        "content": content.strip()[:4000],
+        "via_email": bool(via_email),
+        "via_notice": bool(via_notice),
+        "author": (author or "管理员").strip()[:120],
+        "created_at": _now(),
+    }
+    item.setdefault("replies", []).append(reply)
+    item["status"] = "done"
+    _write_json(p, item)
+    return reply
 
 
 def list_feedback() -> list[dict]:
@@ -545,6 +595,10 @@ def list_feedback() -> list[dict]:
             out.append(item)
     out.sort(key=lambda x: x.get("created_at") or 0, reverse=True)
     return out
+
+
+def get_feedback(fid: str) -> dict | None:
+    return _read_json(_feedback_path(fid), None)
 
 
 def update_feedback(fid: str, status: str) -> bool:
@@ -638,7 +692,16 @@ def latest_quota_request(uid: str) -> dict | None:
     return items[0] if items else None
 
 
-def decide_quota_request(rid: str, approve: bool, note: str = "") -> dict | None:
+def decide_quota_request(rid: str, approve: bool, note: str = "",
+                         duration_seconds: int | None = None) -> dict | None:
+    """Approve/reject a quota *adjustment* request.
+
+    On approval the quota is changed to ``request_bytes``. When
+    ``duration_seconds`` is given (>=30s), the change is temporary:
+    ``expire_at`` is recorded and a background job restores
+    ``revert_bytes`` (the quota in effect before the first still-active
+    temporary adjustment) once it passes. ``None`` means permanent.
+    """
     item = get_quota_request(rid)
     if not item or item.get("status") != "pending":
         return None
@@ -646,10 +709,306 @@ def decide_quota_request(rid: str, approve: bool, note: str = "") -> dict | None
     item["decided_at"] = _now()
     item["note"] = (note or "").strip()[:300]
     if approve:
+        profile = get_user(item["uid"]) or {}
+        current = int(profile.get("quota_bytes") or cfg.CONFIG["quota_bytes"])
+        # If another temporary adjustment is still active for this user, keep
+        # its original revert target so chains always restore the real base.
+        revert_bytes = current
+        for older in list_quota_requests():
+            if (older.get("uid") == item["uid"]
+                    and older.get("status") == "approved"
+                    and not older.get("reverted")
+                    and older.get("expire_at")):
+                revert_bytes = int(older.get("revert_bytes", current))
+                older["status"] = "superseded"
+                older["reverted"] = True
+                _write_json(_qreq_path(older["id"]), older)
+                break
+        item["revert_bytes"] = revert_bytes
+        item["permanent"] = not bool(duration_seconds)
+        item["expire_at"] = (_now() + int(duration_seconds)
+                             if duration_seconds else None)
+        item["reverted"] = False
         set_quota(item["uid"], item["request_bytes"], custom=True)
+    _write_json(_qreq_path(rid), item)
+    return item
+
+
+def list_due_quota_reverts(now: float | None = None) -> list[dict]:
+    """Approved temporary adjustments whose deadline has passed."""
+    now = now if now is not None else _now()
+    out = []
+    for q in list_quota_requests():
+        if (q.get("status") == "approved" and not q.get("reverted")
+                and q.get("expire_at") and q["expire_at"] <= now):
+            out.append(q)
+    return out
+
+
+def revert_quota_request(rid: str) -> dict | None:
+    """Restore the quota captured before a temporary adjustment."""
+    item = get_quota_request(rid)
+    if not item or item.get("status") != "approved" or item.get("reverted"):
+        return None
+    target = int(item.get("revert_bytes", cfg.CONFIG["quota_bytes"]))
+    profile = get_user(item["uid"])
+    if profile:
+        profile["quota_bytes"] = target
+        # Restoring the factory base clears the "custom" marker so future
+        # base-quota migrations still apply to this account.
+        profile["quota_custom"] = target != int(cfg.CONFIG["quota_bytes"])
+        _write_json(user_dir(item["uid"]) / "profile.json", profile)
+    item["status"] = "expired"
+    item["reverted"] = True
+    item["reverted_at"] = _now()
     _write_json(_qreq_path(rid), item)
     return item
 
 
 def quota_requests_unread() -> int:
     return sum(1 for q in list_quota_requests("pending"))
+
+
+# --------------------------------------------------------------------------- #
+# site notifications / announcements — full history, admins manage it
+# --------------------------------------------------------------------------- #
+NOTICE_DIR = cfg.DATA_DIR / "notifications"
+
+
+def _notice_path(nid: str) -> Path:
+    return NOTICE_DIR / f"{nid}.json"
+
+
+def create_notice(title: str, body: str, author: str) -> dict:
+    NOTICE_DIR.mkdir(parents=True, exist_ok=True)
+    now = _now()
+    item = {
+        "id": uuid.uuid4().hex[:12],
+        "title": title.strip()[:200],
+        "body": body.strip()[:5000],
+        "author": (author or "").strip()[:120],
+        "created_at": now,
+        "updated_at": now,
+    }
+    _write_json(_notice_path(item["id"]), item)
+    return item
+
+
+def get_notice(nid: str) -> dict | None:
+    return _read_json(_notice_path(nid), None)
+
+
+def list_notices() -> list[dict]:
+    if not NOTICE_DIR.exists():
+        return []
+    out = []
+    for p in NOTICE_DIR.glob("*.json"):
+        item = _read_json(p, None)
+        if item:
+            out.append(item)
+    out.sort(key=lambda x: x.get("updated_at") or x.get("created_at") or 0,
+             reverse=True)
+    return out
+
+
+def update_notice(nid: str, title: str, body: str) -> dict | None:
+    item = get_notice(nid)
+    if not item:
+        return None
+    item["title"] = title.strip()[:200]
+    item["body"] = body.strip()[:5000]
+    item["updated_at"] = _now()
+    _write_json(_notice_path(nid), item)
+    return item
+
+
+def delete_notice(nid: str) -> bool:
+    p = _notice_path(nid)
+    if p.exists():
+        p.unlink()
+        return True
+    return False
+
+
+# --------------------------------------------------------------------------- #
+# per-user service notifications (e.g. admin replies delivered in-app)
+# --------------------------------------------------------------------------- #
+USER_NOTICE_DIR = cfg.DATA_DIR / "user_notifications"
+
+
+def _user_notice_dir(uid: str) -> Path:
+    d = USER_NOTICE_DIR / uid
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def create_user_notice(uid: str, title: str, body: str,
+                       author: str = "管理员", kind: str = "admin_reply",
+                       ref_id: str = "") -> dict:
+    item = {
+        "id": uuid.uuid4().hex[:12],
+        "uid": uid,
+        "title": title.strip()[:200],
+        "body": body.strip()[:5000],
+        "author": (author or "管理员").strip()[:120],
+        "kind": kind,
+        "ref_id": ref_id,
+        "read": False,
+        "created_at": _now(),
+    }
+    _write_json(_user_notice_dir(uid) / f"{item['id']}.json", item)
+    return item
+
+
+def list_user_notices(uid: str) -> list[dict]:
+    d = _user_notice_dir(uid)
+    out = [it for p in d.glob("*.json")
+           if (it := _read_json(p, None))]
+    out.sort(key=lambda x: x.get("created_at", 0), reverse=True)
+    return out
+
+
+def unread_user_notices(uid: str) -> int:
+    return sum(1 for n in list_user_notices(uid) if not n.get("read"))
+
+
+def mark_user_notices_read(uid: str) -> None:
+    for n in list_user_notices(uid):
+        if not n.get("read"):
+            n["read"] = True
+            _write_json(_user_notice_dir(uid) / f"{n['id']}.json", n)
+
+
+# --------------------------------------------------------------------------- #
+# quick-reply templates (admin manages them)
+# --------------------------------------------------------------------------- #
+TEMPLATE_FILE = cfg.DATA_DIR / "reply_templates.json"
+
+
+def list_reply_templates() -> list[dict]:
+    return _read_json(TEMPLATE_FILE, []) or []
+
+
+def save_reply_templates(items: list[dict]) -> None:
+    cleaned = []
+    for t in items:
+        title = (t.get("title") or "").strip()[:100]
+        body = (t.get("body") or "").strip()[:4000]
+        if title or body:
+            cleaned.append({
+                "id": t.get("id") or uuid.uuid4().hex[:10],
+                "title": title, "body": body,
+                "created_at": t.get("created_at") or _now(),
+            })
+    _write_json(TEMPLATE_FILE, cleaned)
+
+
+def add_reply_template(title: str, body: str) -> dict:
+    items = list_reply_templates()
+    item = {"id": uuid.uuid4().hex[:10], "title": title.strip()[:100],
+            "body": body.strip()[:4000], "created_at": _now()}
+    items.append(item)
+    save_reply_templates(items)
+    return item
+
+
+def delete_reply_template(tid: str) -> bool:
+    items = list_reply_templates()
+    nxt = [t for t in items if t.get("id") != tid]
+    if len(nxt) == len(items):
+        return False
+    save_reply_templates(nxt)
+    return True
+
+
+# --------------------------------------------------------------------------- #
+# login security state — server-side timing only (survives client refresh)
+# --------------------------------------------------------------------------- #
+AUTH_STATE_DIR = cfg.DATA_DIR / "auth_state"
+
+
+def _auth_state_path(email: str) -> Path:
+    AUTH_STATE_DIR.mkdir(parents=True, exist_ok=True)
+    import hashlib
+    key = hashlib.sha256(email.lower().encode("utf-8")).hexdigest()[:24]
+    return AUTH_STATE_DIR / f"{key}.json"
+
+
+def get_auth_state(email: str) -> dict:
+    return _read_json(_auth_state_path(email), {}) or {}
+
+
+def set_auth_state(email: str, state: dict) -> None:
+    _write_json(_auth_state_path(email), state)
+
+
+def reset_auth_state(email: str) -> None:
+    p = _auth_state_path(email)
+    if p.exists():
+        p.unlink()
+
+
+# --------------------------------------------------------------------------- #
+# account unfreeze requests with auto-scored usage-trace questionnaire
+# --------------------------------------------------------------------------- #
+UNFREEZE_DIR = cfg.DATA_DIR / "unfreeze"
+
+
+def _unfreeze_path(rid: str) -> Path:
+    return UNFREEZE_DIR / f"{rid}.json"
+
+
+def create_unfreeze(email: str, uid: str, reason: str, answers: dict,
+                    score: float, matched: list, missed: list) -> dict:
+    UNFREEZE_DIR.mkdir(parents=True, exist_ok=True)
+    # one open request per account: supersede older open ones
+    for old in list_unfreeze():
+        if old.get("email", "").lower() == email.lower() and old.get("status") == "open":
+            old["status"] = "superseded"
+            _write_json(_unfreeze_path(old["id"]), old)
+    item = {
+        "id": uuid.uuid4().hex[:12],
+        "email": email,
+        "uid": uid,
+        "reason": reason.strip()[:1000],
+        "answers": {k: str(v)[:300] for k, v in (answers or {}).items()},
+        "score": round(score, 1),
+        "matched": matched,
+        "missed": missed,
+        "status": "open",            # open | approved | denied | pin_unlocked
+        "pin": "",
+        "pin_sent_at": None,
+        "created_at": _now(),
+        "decided_at": None,
+        "decided_by": "",
+    }
+    _write_json(_unfreeze_path(item["id"]), item)
+    return item
+
+
+def get_unfreeze(rid: str) -> dict | None:
+    return _read_json(_unfreeze_path(rid), None)
+
+
+def list_unfreeze() -> list[dict]:
+    if not UNFREEZE_DIR.exists():
+        return []
+    out = [it for p in UNFREEZE_DIR.glob("*.json")
+           if (it := _read_json(p, None))]
+    out.sort(key=lambda x: (x.get("status") != "open", -x.get("created_at", 0)))
+    return out
+
+
+def unfreeze_pending() -> int:
+    return sum(1 for q in list_unfreeze() if q.get("status") == "open")
+
+
+def save_unfreeze(item: dict) -> None:
+    _write_json(_unfreeze_path(item["id"]), item)
+
+
+def open_unfreeze_for_email(email: str) -> dict | None:
+    for q in list_unfreeze():
+        if q.get("email", "").lower() == email.lower() and q.get("status") == "open":
+            return q
+    return None
