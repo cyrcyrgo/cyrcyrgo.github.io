@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agent, agents, auth, config as cfg, github_sync, llm, mcp_client, metrics, store, tools, tunnel
+from . import agent, agents, auth, config as cfg, engine, github_sync, llm, mcp_client, metrics, store, tools, tunnel
 
 app = FastAPI(title="YJS LLM Agent", version="1.0")
 app.add_middleware(
@@ -1572,7 +1572,7 @@ async def health():
         "ok": True,
         "model": cfg.CONFIG["model"],
         "models": cfg.CONFIG.get("models", []),
-        "ollama": await llm.health(),
+        "engine": await llm.health(),
         "tunnel": tunnel.TUNNEL.url,
         "tunnel_pushed": tunnel.TUNNEL.pushed,
         "quota_bytes": cfg.CONFIG["quota_bytes"],
@@ -1616,18 +1616,6 @@ def _user_visible_models(user: dict) -> tuple[list[dict], set[str]]:
 async def list_models(user: dict = Depends(current_user)):
     """Return models the current user may use + their saved preference."""
     models, known_names = _user_visible_models(user)
-    try:
-        ollama = await llm.health()
-        known_cfg = {m["name"]: m for m in cfg.CONFIG.get("models", [])}
-        is_admin = store.is_admin(user)
-        for m in ollama.get("models", []):
-            if m not in known_cfg:
-                models.append({"name": m, "display": m, "provider": "ollama",
-                               "enabled": True, "desc": "(未在配置中登记)"})
-            elif not is_admin and not known_cfg[m].get("enabled", True):
-                pass   # non-admin: don't re-surface disabled via Ollama
-    except Exception:
-        pass
     default = cfg.CONFIG["model"]
     if known_names and default not in known_names:
         default = models[0]["name"] if models else default
@@ -1718,9 +1706,9 @@ async def admin_unlock(body: AdminUnlockIn, user: dict = Depends(require_admin))
 async def admin_overview(user: dict = Depends(require_admin_gate)):
     """Live dashboard payload: per-model token usage, VRAM residency, calls."""
     snap = metrics.snapshot()
-    ollama = await llm.health()
+    eng = await llm.health()
     ps = await llm.ps()
-    installed = set(ollama.get("models") or [])
+    installed = set(eng.get("models") or [])
     loaded = {m["name"] for m in ps.get("models", [])}
     live = metrics.live_models()
 
@@ -1728,7 +1716,7 @@ async def admin_overview(user: dict = Depends(require_admin_gate)):
     for m in cfg.CONFIG.get("models", []):
         catalog[m["name"]] = {
             "name": m["name"], "display": m.get("display"), "tier": m.get("tier"),
-            "enabled": m.get("enabled", True), "provider": m.get("provider", "ollama"),
+            "enabled": m.get("enabled", True), "provider": m.get("provider", "local"),
             "is_builtin": m["name"] in cfg.DEFAULT_MODELS_NAMES,
             "base_url": m.get("base_url", ""), "context_len": m.get("context_len", 8192),
             "desc": m.get("desc", ""), "has_key": bool(m.get("api_key_ref")),
@@ -1769,7 +1757,7 @@ async def admin_overview(user: dict = Depends(require_admin_gate)):
         "users_total": store.total_users(),
         "feedback_unread": store.feedback_unread(),
         "vram": ps.get("models", []),
-        "ollama_ok": ollama.get("ok", False),
+        "engine_ok": eng.get("ok", False),
     }
 
 
@@ -2082,8 +2070,8 @@ async def admin_run_test(body: AdminModelRunTestIn,
                          user: dict = Depends(require_admin_gate)):
     """Actually generate a few tokens with the model and report timing.
 
-    Local Ollama models are timed through the native API (including cold-start
-    load duration); external API models reuse the lightweight provider probe.
+    Local models are timed through the llama.cpp engine (the cold-start load is
+    excluded); external API models reuse the lightweight provider probe.
     This is the "检查本地部署模型是否能正常运行 / 长时间不输出" health check.
     """
     name = (body.name or "").strip()
@@ -2512,94 +2500,55 @@ async def admin_broadcast(body: BroadcastIn, user: dict = Depends(require_admin_
 
 
 # --------------------------------------------------------------------------- #
-# host power + Ollama remote control
+# host power + local engine (llama.cpp) remote control
 # --------------------------------------------------------------------------- #
-import shutil  # noqa: E402
-import subprocess  # noqa: E402
 import sys  # noqa: E402
-_OLLAMA_PROC: subprocess.Popen | None = None
 
 
-def _ollama_exe() -> str | None:
-    exe = cfg.BIN_DIR / "ollama" / ("ollama.exe" if os.name == "nt" else "ollama")
-    return str(exe) if exe.exists() else shutil.which("ollama")
-
-
-async def _ollama_alive() -> bool:
-    try:
-        async with httpx.AsyncClient(timeout=3) as c:
-            r = await c.get(cfg.CONFIG.get("ollama_url", "http://127.0.0.1:11434")
-                            + "/api/tags")
-            return r.status_code == 200
-    except Exception:  # noqa: BLE001
-        return False
-
-
-def _start_ollama_blocking() -> None:
-    global _OLLAMA_PROC
-    exe = _ollama_exe()
-    if not exe:
-        raise RuntimeError("未找到 ollama 程序")
-    env = os.environ.copy()
-    env["OLLAMA_HOST"] = "127.0.0.1:11434"
-    env.setdefault("OLLAMA_MODELS", str(cfg.ROOT / "models"))
-    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-    _OLLAMA_PROC = subprocess.Popen([exe, "serve"], env=env,
-                                    stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL,
-                                    creationflags=flags)
-
-
-def _stop_ollama_blocking() -> None:
-    global _OLLAMA_PROC
-    if _OLLAMA_PROC and _OLLAMA_PROC.poll() is None:
-        _OLLAMA_PROC.terminate()
-        try:
-            _OLLAMA_PROC.wait(timeout=8)
-        except Exception:  # noqa: BLE001
-            _OLLAMA_PROC.kill()
-    _OLLAMA_PROC = None
-    if os.name == "nt":
-        # Also stop a desktop-launched ollama.exe / the tray serve process.
-        subprocess.run(["taskkill", "/IM", "ollama.exe", "/F"],
-                       capture_output=True, timeout=20)
-    else:
-        subprocess.run(["pkill", "-f", "ollama serve"],
-                       capture_output=True, timeout=20)
+@app.post("/api/warmup")
+async def warmup():
+    """Fire-and-forget preload of the default local model (used by the desktop
+    launcher so the first user message is not a cold start)."""
+    name = cfg.CONFIG.get("default_model") or cfg.CONFIG["model"]
+    if name in engine.installed():
+        asyncio.create_task(engine.preload(name))
+        return {"ok": True, "warming": name}
+    return {"ok": True, "warming": None}
 
 
 @app.get("/api/admin/system")
 async def admin_system_status(user: dict = Depends(require_admin_gate)):
+    st = engine.status()
+    running = st.get("running", [])
     return {"ok": True, "platform": sys.platform,
-            "ollama_running": await _ollama_alive(),
-            "ollama_path": _ollama_exe() or "",
+            "engine_running": bool(running),
+            "engine_path": st.get("engine_path", ""),
+            "engine_models": [r["name"] for r in running],
+            "engine_count": len(running),
             "tunnel": tunnel.TUNNEL.url,
             "tunnel_pushed": tunnel.TUNNEL.pushed}
 
 
-class OllamaCtlIn(BaseModel):
+class EngineCtlIn(BaseModel):
     action: str            # start | stop | restart
 
 
-@app.post("/api/admin/system/ollama")
-async def admin_ollama_ctl(body: OllamaCtlIn, user: dict = Depends(require_admin_gate)):
+@app.post("/api/admin/system/engine")
+async def admin_engine_ctl(body: EngineCtlIn, user: dict = Depends(require_admin_gate)):
     action = (body.action or "").strip().lower()
     if action not in ("start", "stop", "restart"):
         raise HTTPException(400, "action 必须是 start / stop / restart")
     if action in ("stop", "restart"):
-        await asyncio.to_thread(_stop_ollama_blocking)
+        await engine.stop_all()
         await asyncio.sleep(1)
     if action in ("start", "restart"):
-        if await _ollama_alive():
-            return {"ok": True, "ollama_running": True, "note": "已在运行"}
-        await asyncio.to_thread(_start_ollama_blocking)
-        # Wait up to ~20 s for the API to come up.
-        for _ in range(20):
-            await asyncio.sleep(1)
-            if await _ollama_alive():
-                return {"ok": True, "ollama_running": True}
-        raise HTTPException(400, "Ollama 启动超时，请查看本机日志")
-    return {"ok": True, "ollama_running": await _ollama_alive()}
+        name = cfg.CONFIG.get("default_model") or cfg.CONFIG["model"]
+        try:
+            await engine.ensure(name)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(400, f"推理引擎启动失败：{exc}") from exc
+        return {"ok": True, "engine_running": True}
+    return {"ok": True, "engine_running": bool(engine.status().get("running"))}
 
 
 class ShutdownIn(BaseModel):
