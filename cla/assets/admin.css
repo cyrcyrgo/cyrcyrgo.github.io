@@ -317,6 +317,12 @@ main { padding: 20px 24px; max-width: 1500px; margin: 0 auto; }
 /* hide every sibling of the heading while collapsed (buttons inside h3 stay) */
 .panel.collapsed > *:not(h3) { display: none !important; }
 
+/* module visibility toolbar + overview cards living inside a panel */
+.panel-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  flex-wrap: wrap; }
+.panel-toolbar .muted { margin-right: auto; }
+.panel > .cards { margin-bottom: 0; }
+
 /* growing lists never push the page forever: capped height + scroll */
 .nt-history, .fb-list, .uf-list, .qreq-list { max-height: 520px; overflow-y: auto;
   padding-right: 4px; }
