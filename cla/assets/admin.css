@@ -252,7 +252,7 @@ main { padding: 20px 24px; max-width: 1500px; margin: 0 auto; }
   .settings-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* ---------- host power / ollama controls ---------- */
+/* ---------- host power / engine controls ---------- */
 .power-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: 14px; flex-wrap: wrap; padding: 10px 0;
