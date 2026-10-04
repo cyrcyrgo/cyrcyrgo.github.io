@@ -252,6 +252,52 @@ main { padding: 20px 24px; max-width: 1500px; margin: 0 auto; }
   .settings-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* ---------- host power / ollama controls ---------- */
+.power-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; padding: 10px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.power-row:last-of-type { border-bottom: none; }
+.power-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.power-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.power-actions input {
+  background: var(--bg); border: 1px solid var(--line); color: var(--text);
+  border-radius: 6px; padding: 6px 8px; font-size: 13px;
+}
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.badge.err { background: rgba(239,68,68,.18); color: var(--err); }
+
+/* ---------- user toolbar (search) ---------- */
+.user-toolbar {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+}
+.user-toolbar input[type="search"] {
+  flex: 0 1 320px; background: var(--bg); border: 1px solid var(--line);
+  color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none;
+}
+.user-toolbar input[type="search"]:focus { border-color: var(--accent); }
+
+/* ---------- quota requests ---------- */
+.qreq-list { display: flex; flex-direction: column; gap: 8px; }
+.qreq-item {
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 12px 14px;
+}
+.qreq-item.pending { border-color: rgba(245,158,11,.5); }
+.qreq-item.approved { opacity: .85; }
+.qreq-main { margin: 8px 0; font-size: 13px; line-height: 1.6; }
+.qreq-acts { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ---------- wide modal (letter) ---------- */
+.modal-box.wide { width: 520px; max-width: calc(100vw - 32px); }
+.modal-box textarea {
+  width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--text);
+  border-radius: 6px; padding: 9px 11px; font-size: 13px; outline: none;
+  font-family: inherit; line-height: 1.6;
+}
+.modal-box textarea:focus { border-color: var(--accent); }
+
 /* toast */
 #toast {
   position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%);
