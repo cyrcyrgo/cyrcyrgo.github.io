@@ -6,6 +6,7 @@ import io
 import json
 import os
 import random
+import re
 import threading
 import time
 import uuid
@@ -117,6 +118,7 @@ async def verify(body: VerifyIn, request: Request):
             raise HTTPException(403, "暂不允许注册")
         user = store.create_user(email)
     store.touch_login(user["uid"], _client_ip(request))
+    _flush_unfreeze_notice(user)
     token = auth.make_token(user["uid"], email)
     return {"ok": True, "token": token, "user": _public_user(user)}
 
@@ -208,6 +210,7 @@ async def password_login(body: PasswordLoginIn, request: Request):
 
     store.reset_auth_state(email)
     store.touch_login(user["uid"], _client_ip(request))
+    _flush_unfreeze_notice(user)
     token = auth.make_token(user["uid"], email)
     return {"ok": True, "token": token, "user": _public_user(user)}
 
@@ -228,6 +231,23 @@ def _client_ip(request: Request) -> str:
 def _frozen_state(email: str) -> dict | None:
     st = store.get_auth_state((email or "").lower())
     return st if st.get("hard_locked") else None
+
+
+def _flush_unfreeze_notice(user: dict) -> None:
+    """Deliver a queued "account unfrozen" notice on the next login (once)."""
+    uid = user.get("uid")
+    if not uid:
+        return
+    pend = store.take_pending_unfreeze_notice(uid)
+    if not pend:
+        return
+    when = time.strftime("%Y-%m-%d %H:%M",
+                         time.localtime(pend.get("at") or time.time()))
+    store.create_user_notice(
+        uid, "账号已解冻",
+        f"你的账号已于 {when} 完成安全解冻，现已恢复正常使用。"
+        "如非本人操作，请立即修改登录密码。",
+        author=(pend.get("by") or "管理员"), kind="unfreeze")
 
 
 # --------------------------------------------------------------- unfreeze -- #
@@ -368,23 +388,159 @@ def _unfreeze_options(user: dict) -> dict:
     return opts
 
 
-def _score_unfreeze(user: dict, answers: dict) -> tuple[float, list, list]:
-    """Grade selected choices against the real server-side traces."""
+def _pick_quiz_model() -> str:
+    """Prefer the small local 0.8B model for quiz generation."""
+    for m in cfg.CONFIG.get("models", []):
+        name = m.get("name") or ""
+        if m.get("enabled") and "0.8b" in name.lower():
+            return name
+    return cfg.CONFIG.get("model") or "qwen3.5:0.8b"
+
+
+def _parse_json_array(text: str) -> list | None:
+    """Best-effort extraction of the first JSON array from a model reply."""
+    if not text:
+        return None
+    s = text.strip()
+    if s.startswith("```"):
+        s = re.sub(r"^```[a-zA-Z]*\s*", "", s)
+        s = re.sub(r"```\s*$", "", s).strip()
+    try:
+        data = json.loads(s)
+        return data if isinstance(data, list) else None
+    except Exception:
+        pass
+    m = re.search(r"\[.*\]", s, re.S)
+    if not m:
+        return None
+    try:
+        data = json.loads(m.group(0))
+        return data if isinstance(data, list) else None
+    except Exception:
+        return None
+
+
+def _fallback_quiz(user: dict) -> dict:
+    """Deterministic questionnaire used when the local model is unavailable."""
     truth = _unfreeze_truth(user)
+    options = _unfreeze_options(user)
+    qs = []
+    for q in UNFREEZE_QUESTIONS:
+        real = truth[q["key"]]
+        correct = real if isinstance(real, list) else [str(real)]
+        qs.append({
+            "key": q["key"], "label": q["label"], "weight": float(q["weight"]),
+            "options": [str(o) for o in options[q["key"]]],
+            "correct": [str(c) for c in correct],
+        })
+    return {"source": "fallback", "questions": qs}
+
+
+async def _build_llm_quiz(user: dict) -> dict | None:
+    """Ask the local 0.8B model to author a usage-trace quiz from real data.
+
+    Only the model's question text + options survive; the correct option is
+    kept server-side (never sent to the browser). Returns ``None`` when the
+    model is unreachable or the reply fails validation, so callers fall back to
+    the deterministic quiz.
+    """
+    truth = _unfreeze_truth(user)
+    files = truth["file_name"] if isinstance(truth["file_name"], list) else []
+    profile = (
+        f"- 账号昵称：{truth['name']}\n"
+        f"- 账号注册月份：{truth['register_month']}\n"
+        f"- 最近一次登录时间：{truth['last_login_days']}\n"
+        f"- 历史对话数量级：{truth['conversation_count']}\n"
+        f"- 最常用的模型：{truth['model']}\n"
+        f"- 我的文件中的文件：{('、'.join(files) if files else '（还没有上传过任何文件）')}\n"
+    )
+    prompt = (
+        "你是账号安全系统的出题器。请根据下面的【真实资料】生成 6 道用于"
+        "验证账号主人的中文选择题，正确答案必须取自资料中的真实信息。\n\n"
+        f"【真实资料】\n{profile}\n"
+        "请严格按以下 6 个方面各出 1 道题，共 6 道，题目不得重复：\n"
+        "1) 账号昵称；2) 注册月份；3) 最近一次登录时间；"
+        "4) 历史对话数量；5) 最常用的模型；6) 我的文件中的一个文件。\n"
+        "出题要求：\n"
+        "1. 每道题 4 个选项，其中恰好 1 个是正确答案，其余 3 个是明显不同的干扰项。\n"
+        "2. 问题自然、口语化，贴近真实使用场景，不要直接照抄资料格式。\n"
+        "3. 只输出一个 JSON 数组，禁止输出解释、Markdown 或代码围栏。\n"
+        "4. 每个元素的格式严格为："
+        '{"label":"问题文本","options":["选项1","选项2","选项3","选项4"],'
+        '"correct_answer":"正确选项的原文"}。\n'
+        "5. correct_answer 必须与 options 中的某一项完全一致。\n"
+        "现在只输出 JSON 数组本身。"
+    )
+    qs = []
+    for _attempt in range(3):
+        text = await llm.raw_chat(_pick_quiz_model(), prompt + " /no_think",
+                                  max_tokens=900, temperature=0.6)
+        arr = _parse_json_array(text)
+        if not arr:
+            continue
+        qs, seen_labels = [], set()
+        for i, raw in enumerate(arr):
+            if not isinstance(raw, dict):
+                continue
+            label = str(raw.get("label") or "").strip()
+            opts = [str(o).strip() for o in (raw.get("options") or [])
+                    if str(o).strip()]
+            # de-duplicate options while preserving order
+            seen, uniq = set(), []
+            for o in opts:
+                if o not in seen:
+                    seen.add(o)
+                    uniq.append(o)
+            correct = str(raw.get("correct_answer") or "").strip()
+            if not label or len(uniq) < 2 or correct not in uniq:
+                continue
+            if label in seen_labels:      # 0.8B tends to repeat: drop clones
+                continue
+            seen_labels.add(label)
+            qs.append({"key": f"uq{i}", "label": label, "weight": 0.0,
+                       "options": uniq, "correct": [correct]})
+        if len(qs) >= 4:
+            break
+    if len(qs) < 4:
+        return None
+    weight = round(100.0 / len(qs), 2)
+    for q in qs:
+        q["weight"] = weight
+    return {"source": "llm", "questions": qs}
+
+
+async def _quiz_for_state(user: dict, st: dict) -> dict:
+    """Return the frozen quiz for this freeze episode, generating it once."""
+    fid = st.get("freeze_id", "")
+    cached = st.get("unfreeze_quiz")
+    if cached and cached.get("freeze_id") == fid and cached.get("quiz", {}).get("questions"):
+        return cached["quiz"]
+    quiz = None
+    try:
+        quiz = await _build_llm_quiz(user)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[security] 0.8b quiz generation failed: {exc}")
+    if not quiz:
+        quiz = _fallback_quiz(user)
+    st["unfreeze_quiz"] = {"freeze_id": fid, "quiz": quiz}
+    store.set_auth_state(user.get("email", ""), st)
+    return quiz
+
+
+def _score_quiz(quiz: dict, answers: dict) -> tuple[float, list, list]:
+    """Grade submitted choices against the server-sealed correct options."""
+    qs = quiz.get("questions") or []
+    total = sum(float(q.get("weight") or 0) for q in qs) or 1.0
     matched, missed = [], []
     gained = 0.0
-    for q in UNFREEZE_QUESTIONS:
-        key = q["key"]
-        val = (answers.get(key) or "").strip()
-        real = truth[key]
-        if isinstance(real, list):
-            ok = bool(val) and val in real
-        else:
-            ok = bool(val) and val.lower() == str(real).lower()
-        (matched if ok else missed).append(q["label"])
+    for q in qs:
+        val = (answers.get(q["key"]) or "").strip()
+        correct = [str(c).lower() for c in (q.get("correct") or [])]
+        ok = bool(val) and val.lower() in correct
+        (matched if ok else missed).append(q.get("label", ""))
         if ok:
-            gained += q["weight"]
-    return gained, matched, missed
+            gained += float(q.get("weight") or 0)
+    return round(gained / total * 100, 1), matched, missed
 
 
 class UnfreezeCheckIn(BaseModel):
@@ -411,11 +567,14 @@ async def unfreeze_questions(email: str = ""):
     if existing:
         return {"ok": True, "questions": [], "submitted": True,
                 "request": existing, "pass_score": UNFREEZE_PASS_SCORE}
-    options = _unfreeze_options(user)
-    qs = [{**q, "options": options[q["key"]]} for q in UNFREEZE_QUESTIONS]
+    # The 0.8B model authors the quiz from this account's real traces; generated
+    # once per freeze episode and cached, so refreshing cannot reroll questions.
+    quiz = await _quiz_for_state(user, st)
+    qs = [{"key": q["key"], "label": q["label"], "weight": q["weight"],
+           "options": q["options"]} for q in quiz["questions"]]
     random.shuffle(qs)
     return {"ok": True, "questions": qs, "submitted": False,
-            "pass_score": UNFREEZE_PASS_SCORE}
+            "pass_score": UNFREEZE_PASS_SCORE, "source": quiz.get("source", "")}
 
 
 @app.post("/api/auth/unfreeze/check")
@@ -457,9 +616,10 @@ async def unfreeze_request(body: UnfreezeIn):
     if len((body.reason or "").strip()) < 5:
         raise HTTPException(400, "请填写解冻原因（至少 5 个字）")
     answers = body.answers or {}
-    if any(not (answers.get(q["key"]) or "").strip() for q in UNFREEZE_QUESTIONS):
+    quiz = await _quiz_for_state(user, st)
+    if any(not (answers.get(q["key"]) or "").strip() for q in quiz["questions"]):
         raise HTTPException(400, "请完成全部选择题后再提交")
-    score, matched, missed = _score_unfreeze(user, answers)
+    score, matched, missed = _score_quiz(quiz, answers)
     denied = score < UNFREEZE_PASS_SCORE
     item = store.create_unfreeze(email, user["uid"], body.reason, answers,
                                  score, matched, missed,
@@ -470,6 +630,10 @@ async def unfreeze_request(body: UnfreezeIn):
     store.set_auth_state(email, st)
     print(f"[security] unfreeze request {item['id']} for {email} score={score} "
           f"auto={'denied' if denied else 'admin-review'}")
+    if denied:
+        # Below 50 the system denies it: auto-email a fresh PIN to the mailbox
+        # manager so only the PIN route can unlock this account.
+        asyncio.create_task(_send_manager_pin(item["id"], "自助解冻未达标（系统评分低于 50）"))
     return {"ok": True, "request": item, "auto_denied": denied}
 
 
@@ -2317,9 +2481,65 @@ async def admin_delete_template(tid: str,
 # --------------------------------------------------------------------------- #
 # account unfreeze review (admin)
 # --------------------------------------------------------------------------- #
+def _manager_email() -> str:
+    """The mailbox manager = the configured SMTP sender account."""
+    return str((cfg.CONFIG.get("smtp") or {}).get("user") or "").strip()
+
+
+def _alloc_unique_pin() -> str:
+    """A fresh 6-digit PIN that no still-unverified record already holds."""
+    used = {str(i.get("pin")) for i in store.list_unfreeze()
+            if i.get("pin") and i.get("status") != "pin_unlocked"}
+    while True:
+        pin = f"{random.randint(0, 999999):06d}"
+        if pin not in used:
+            return pin
+
+
+async def _send_manager_pin(rid: str, reason: str) -> None:
+    """Assign a PIN and email it to the mailbox manager (not the user).
+
+    Runs in the background; failures are recorded on the record so the admin
+    dashboard can surface them, but never block the caller.
+    """
+    item = store.get_unfreeze(rid)
+    if not item:
+        return
+    pin = _alloc_unique_pin()
+    item["pin"] = pin
+    item["pin_sent_at"] = time.time()
+    item["pin_note"] = reason
+    to = _manager_email()
+    if not to:
+        item["pin_error"] = "未配置发件邮箱（SMTP 发件账号），无法通知邮箱管理者"
+        store.save_unfreeze(item)
+        print(f"[security] pin {pin} allocated for {item.get('email')} but SMTP user unset")
+        return
+    html = auth._wrap(
+        "YJS 高级解冻 PIN（邮箱管理者）",
+        "<div style='line-height:1.8;font-size:14px'>"
+        f"<p>账号 <b>{_esc(item.get('email', ''))}</b> 触发高级解冻。</p>"
+        f"<p>原因：{_esc(reason)}（系统评分 {item.get('score')} 分）</p>"
+        "<p>请在管理后台「账号安全 · 解冻申请」中输入以下 6 位 PIN 以解冻该账号：</p>"
+        f"<p style='font-size:34px;font-weight:700;letter-spacing:8px;color:#dc2626'>{pin}</p>"
+        "<p style='color:#888'>请勿向申请人泄露或转发本 PIN。</p></div>")
+    try:
+        await asyncio.to_thread(
+            auth.send_mail, to, f"[YJS] 高级解冻 PIN · {item.get('email', '')}", html)
+        item["pin_error"] = ""
+        print(f"[security] advanced-unfreeze PIN sent to manager for {item.get('email')}")
+    except Exception as exc:  # noqa: BLE001
+        item["pin_error"] = str(exc)[:200]
+        print(f"[security] PIN mail to manager failed: {exc}")
+    store.save_unfreeze(item)
+
+
 @app.get("/api/admin/unfreeze")
 async def admin_list_unfreeze(user: dict = Depends(require_admin_gate)):
     items = store.list_unfreeze()
+    # Never leak the PIN itself to the browser — the admin reads it from email.
+    for it in items:
+        it.pop("pin", None)
     return {"ok": True, "items": items,
             "pending": sum(1 for i in items if i.get("status") == "open"),
             "pass_score": UNFREEZE_PASS_SCORE}
@@ -2341,37 +2561,34 @@ async def admin_decide_unfreeze(rid: str, body: UnfreezeDecideIn,
         raise HTTPException(403, "安全评分不足 50%，系统已否决，仅可使用 PIN 高级解冻")
     if body.approve:
         item["status"] = "approved"
+        store.add_pending_unfreeze_notice(item["uid"],
+                                          str(admin.get("email", "")))
         store.reset_auth_state(item["email"])
     else:
         item["status"] = "denied"
     item["decided_at"] = time.time()
     item["decided_by"] = str(admin.get("email", ""))
     store.save_unfreeze(item)
-    return {"ok": True, "request": item}
+    if not body.approve:
+        # Admin refusal also escalates to the PIN route automatically.
+        asyncio.create_task(_send_manager_pin(item["id"], "管理员拒绝了自助解冻申请"))
+    out = dict(item)
+    out.pop("pin", None)
+    return {"ok": True, "request": out}
 
 
 @app.post("/api/admin/unfreeze/{rid}/send-pin")
 async def admin_send_unfreeze_pin(rid: str,
                                   admin: dict = Depends(require_admin_gate)):
+    """Resend (or manually trigger) a PIN to the mailbox manager."""
     item = store.get_unfreeze(rid)
-    if not item or item.get("status") != "open":
+    if not item or item.get("status") not in ("open", "denied"):
         raise HTTPException(404, "申请不存在或已处理")
-    pin = f"{random.randint(0, 999999):06d}"
-    item["pin"] = pin
-    item["pin_sent_at"] = time.time()
-    store.save_unfreeze(item)
-    html = auth._wrap(
-        "YJS 账号高级解冻 PIN",
-        "<div style='line-height:1.8;font-size:14px'>"
-        "<p>你的账号正在进行高级解冻。请将以下 6 位 PIN 码告知管理员完成验证：</p>"
-        f"<p style='font-size:34px;font-weight:700;letter-spacing:8px;color:#dc2626'>{pin}</p>"
-        "<p style='color:#888'>如非本人操作，请忽略此邮件，账号将保持冻结。</p></div>")
-    try:
-        await asyncio.to_thread(
-            auth.send_mail, item["email"], "[YJS] 账号高级解冻 PIN", html)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(400, f"PIN 邮件发送失败：{str(exc)[:200]}")
-    return {"ok": True, "message": "PIN 已发送至账号邮箱（PIN 仅在管理员侧校验时使用）"}
+    await _send_manager_pin(rid, item.get("pin_note") or "管理员手动重发 PIN")
+    item = store.get_unfreeze(rid)
+    if item and item.get("pin_error"):
+        raise HTTPException(400, f"PIN 邮件发送失败：{item['pin_error']}")
+    return {"ok": True, "message": "PIN 已发送至邮箱管理者（请查收配置的发件邮箱）"}
 
 
 class PinIn(BaseModel):
@@ -2382,10 +2599,10 @@ class PinIn(BaseModel):
 async def admin_verify_unfreeze_pin(rid: str, body: PinIn,
                                     admin: dict = Depends(require_admin_gate)):
     item = store.get_unfreeze(rid)
-    if not item or item.get("status") != "open":
+    if not item or item.get("status") not in ("open", "denied"):
         raise HTTPException(404, "申请不存在或已处理")
     if not item.get("pin"):
-        raise HTTPException(400, "尚未发送 PIN 邮件")
+        raise HTTPException(400, "尚未向邮箱管理者发送 PIN")
     if (body.pin or "").strip() != item["pin"]:
         raise HTTPException(400, "PIN 不正确")
     item["status"] = "pin_unlocked"
@@ -2393,8 +2610,11 @@ async def admin_verify_unfreeze_pin(rid: str, body: PinIn,
     item["decided_by"] = str(admin.get("email", ""))
     item["pin"] = ""
     store.save_unfreeze(item)
+    store.add_pending_unfreeze_notice(item["uid"], str(admin.get("email", "")))
     store.reset_auth_state(item["email"])
-    return {"ok": True, "request": item}
+    out = dict(item)
+    out.pop("pin", None)
+    return {"ok": True, "request": out}
 
 
 # --------------------------------------------------------------------------- #
