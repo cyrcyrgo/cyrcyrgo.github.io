@@ -8,6 +8,7 @@ import os
 import random
 import threading
 import time
+import uuid
 import zipfile
 from html import escape as _esc
 from pathlib import Path
@@ -55,6 +56,11 @@ async def current_user(request: Request,
     user = store.get_user(payload["uid"])
     if not user:
         raise HTTPException(401, "用户不存在")
+    # A hard freeze logs the account out EVERYWHERE immediately: every token
+    # (on every device, issued at any time) is rejected until the freeze is
+    # lifted server-side and the user logs in again.
+    if store.get_auth_state(user.get("email", "")).get("hard_locked"):
+        raise HTTPException(401, "账号已被安全冻结，请在解冻后重新登录")
     return user
 
 
@@ -175,7 +181,13 @@ async def password_login(body: PasswordLoginIn, request: Request):
         state["last_fail_at"] = now
         if fails >= PW_HARD_LOCK_FAILS:
             state["hard_locked"] = True
+            state["frozen_at"] = now
+            # one freeze episode = one allowed questionnaire submission
+            state["freeze_id"] = uuid.uuid4().hex
+            state["unfreeze_id"] = ""
             store.set_auth_state(email, state)
+            # requests left over from a previous freeze cannot be reused
+            store.supersede_open_unfreeze(email)
             print(f"[security] account hard-frozen after {fails} fails: {email}")
             raise HTTPException(423, {
                 "code": "hard_locked",
@@ -219,70 +231,159 @@ def _frozen_state(email: str) -> dict | None:
 
 
 # --------------------------------------------------------------- unfreeze -- #
+# Multiple-choice usage-trace questionnaire. Choices are generated SERVER-SIDE
+# from the account's real data plus plausible distractors; only the option
+# strings ever leave the server (never which one is correct).
 UNFREEZE_QUESTIONS = [
     {"key": "name", "label": "账号昵称（我的账户中显示的名称）", "weight": 20},
-    {"key": "register_month", "label": "注册时间（格式 2026-08，相差 1 个月内算对）", "weight": 15},
-    {"key": "last_login_days", "label": "最近一次登录距今天数（误差 2 天内算对）", "weight": 15},
-    {"key": "conversation_count", "label": "历史对话总数（误差 2 个以内算对）", "weight": 15},
-    {"key": "model", "label": "常用的模型名称", "weight": 15},
-    {"key": "file_name", "label": "我的文件中任意一个文件名（部分匹配即可）", "weight": 20},
+    {"key": "register_month", "label": "账号注册的月份", "weight": 15},
+    {"key": "last_login_days", "label": "你最近一次登录大概在什么时候", "weight": 15},
+    {"key": "conversation_count", "label": "账号里历史对话的数量级", "weight": 15},
+    {"key": "model", "label": "你最常用的模型", "weight": 15},
+    {"key": "file_name", "label": "你的「我的文件」里有哪个文件", "weight": 20},
 ]
+
+_DAY_BUCKETS = [
+    ("今天", lambda d: d <= 1),
+    ("2–3 天内", lambda d: 2 <= d <= 3),
+    ("4–7 天内", lambda d: 4 <= d <= 7),
+    ("8–30 天内", lambda d: 8 <= d <= 30),
+    ("1–3 个月内", lambda d: 31 <= d <= 90),
+    ("3 个月以上", lambda d: d > 90),
+]
+_CNT_BUCKETS = [
+    ("0 个（没有对话）", lambda n: n == 0),
+    ("1–5 个", lambda n: 1 <= n <= 5),
+    ("6–20 个", lambda n: 6 <= n <= 20),
+    ("21–50 个", lambda n: 21 <= n <= 50),
+    ("51–100 个", lambda n: 51 <= n <= 100),
+    ("100 个以上", lambda n: n > 100),
+]
+_NAME_DISTRACTORS = [
+    "小明", "阿杰", "测试用户", "云影", "星辰", "Alex", "小雨",
+    "管理员", "匿名用户", "路人甲", "木子", "晨曦",
+]
+_FILE_DISTRACTORS = [
+    "学习笔记.txt", "工作报告.docx", "数据统计.xlsx", "截图.png",
+    "简历.pdf", "未命名文档.doc", "会议记录.txt", "计划表.xlsx",
+]
+_NO_FILE_OPTION = "（我还没有上传过文件）"
+
+
+def _month_label(ts: float) -> str:
+    return time.strftime("%Y-%m", time.localtime(ts))
+
+
+def _month_offset(ts: float, delta: int) -> str:
+    lt = time.localtime(ts)
+    idx = (lt.tm_year * 12 + (lt.tm_mon - 1)) + delta
+    return f"{idx // 12:04d}-{idx % 12 + 1:02d}"
+
+
+def _day_bucket(days: float) -> str:
+    return next((lab for lab, f in _DAY_BUCKETS if f(days)), _DAY_BUCKETS[-1][0])
+
+
+def _cnt_bucket(n: int) -> str:
+    return next((lab for lab, f in _CNT_BUCKETS if f(n)), _CNT_BUCKETS[-1][0])
+
+
+def _shuffle_take(pool: list, n: int) -> list:
+    p = list(pool)
+    random.shuffle(p)
+    return p[:n]
+
+
+def _unfreeze_truth(user: dict) -> dict:
+    """The correct choice for every question, computed from server data."""
+    name = (user.get("name") or "").strip() or user.get("email", "").split("@")[0]
+    created = float(user.get("created_at") or time.time())
+    last = float(user.get("last_login") or created)
+    real_days = max(0.0, (time.time() - last) / 86400)
+    real_cnt = len(store.list_conversations(user["uid"]))
+    files = sorted({p.name for p in store.workspace(user["uid"]).glob("**/*")
+                    if p.is_file()})
+    return {
+        "name": name,
+        "register_month": _month_label(created),
+        "last_login_days": _day_bucket(real_days),
+        "conversation_count": _cnt_bucket(real_cnt),
+        "model": (user.get("model_preference") or cfg.CONFIG.get("model") or ""),
+        "file_name": _NO_FILE_OPTION if not files else files,  # any own file ok
+    }
+
+
+def _unfreeze_options(user: dict) -> dict:
+    """Build the shuffled choice list for each question."""
+    truth = _unfreeze_truth(user)
+    opts: dict[str, list] = {}
+
+    # name: real nickname + generic distractors (never leak other users)
+    name_pool = [n for n in _NAME_DISTRACTORS if n != truth["name"]]
+    names = [truth["name"]] + _shuffle_take(name_pool, 3)
+    random.shuffle(names)
+    opts["name"] = names
+
+    # register month: real month + 3 nearby/random months
+    offs = [d for d in range(-6, 7) if d != 0]
+    months = {truth["register_month"]}
+    for d in _shuffle_take(offs, 3):
+        months.add(_month_offset(float(user.get("created_at") or time.time()), d))
+    months = list(months)
+    random.shuffle(months)
+    opts["register_month"] = months
+
+    # buckets: every bucket is a possible choice
+    opts["last_login_days"] = [b[0] for b in _DAY_BUCKETS]
+    opts["conversation_count"] = [b[0] for b in _CNT_BUCKETS]
+
+    # model: preferred model + other enabled models
+    enabled = [m.get("name") for m in cfg.CONFIG.get("models", [])
+               if m.get("enabled") and m.get("name")]
+    real_model = truth["model"]
+    others = [m for m in enabled if m != real_model]
+    picks = [real_model] if real_model else []
+    for m in _shuffle_take(others, 3):
+        picks.append(m)
+    if real_model and len(picks) < 4:
+        for m in ["qwen3.5:0.8b", "qwen3.5:2b", "qwen3:4b", "qwen3:8b"]:
+            if m not in picks:
+                picks.append(m)
+            if len(picks) >= 4:
+                break
+    random.shuffle(picks)
+    opts["model"] = picks
+
+    # files: one of the user's own files + generic distractors; if the account
+    # has never uploaded anything, the correct choice says so explicitly
+    own = truth["file_name"]
+    if isinstance(own, list):
+        correct = random.choice(own)
+        pool = [f for f in _FILE_DISTRACTORS if f not in own]
+        files = [correct] + _shuffle_take(pool, 3)
+    else:
+        files = [own] + _shuffle_take(_FILE_DISTRACTORS, 3)
+    random.shuffle(files)
+    opts["file_name"] = files
+    return opts
 
 
 def _score_unfreeze(user: dict, answers: dict) -> tuple[float, list, list]:
-    """Compare the questionnaire against real server-side usage traces."""
+    """Grade selected choices against the real server-side traces."""
+    truth = _unfreeze_truth(user)
     matched, missed = [], []
     gained = 0.0
-
-    def grade(key: str, ok: bool):
-        nonlocal gained
-        q = next(q for q in UNFREEZE_QUESTIONS if q["key"] == key)
+    for q in UNFREEZE_QUESTIONS:
+        key = q["key"]
+        val = (answers.get(key) or "").strip()
+        real = truth[key]
+        if isinstance(real, list):
+            ok = bool(val) and val in real
+        else:
+            ok = bool(val) and val.lower() == str(real).lower()
         (matched if ok else missed).append(q["label"])
         if ok:
             gained += q["weight"]
-
-    val = (answers.get("name") or "").strip().lower()
-    real_name = (user.get("name") or "").strip().lower()
-    grade("name", bool(val) and bool(real_name)
-          and (val in real_name or real_name in val))
-
-    val = (answers.get("register_month") or "").strip()[:7]
-    real = time.strftime("%Y-%m", time.localtime(user.get("created_at") or time.time()))
-    okm = False
-    if len(val) == 7:
-        try:
-            vt = time.strptime(val + "-01", "%Y-%m-%d")
-            rt = time.strptime(real + "-01", "%Y-%m-%d")
-            okm = abs((vt.tm_year - rt.tm_year) * 12 + vt.tm_mon - rt.tm_mon) <= 1
-        except Exception:  # noqa: BLE001
-            okm = False
-    grade("register_month", okm)
-
-    try:
-        days = float((answers.get("last_login_days") or "").strip())
-        last = user.get("last_login") or user.get("created_at") or time.time()
-        real_days = max(0.0, (time.time() - float(last)) / 86400)
-        grade("last_login_days", abs(days - real_days) <= 2)
-    except Exception:  # noqa: BLE001
-        grade("last_login_days", False)
-
-    try:
-        cnt = float((answers.get("conversation_count") or "").strip())
-        real_cnt = len(store.list_conversations(user["uid"]))
-        grade("conversation_count", abs(cnt - real_cnt) <= 2)
-    except Exception:  # noqa: BLE001
-        grade("conversation_count", False)
-
-    val = (answers.get("model") or "").strip().lower()
-    real_model = (user.get("model_preference") or cfg.CONFIG.get("model") or "").lower()
-    grade("model", bool(val) and bool(real_model)
-          and (val in real_model or real_model in val))
-
-    val = (answers.get("file_name") or "").strip().lower()
-    names = [p.name.lower() for p in store.workspace(user["uid"]).glob("**/*")
-             if p.is_file()]
-    grade("file_name", bool(val) and any(val in n or n in val for n in names))
-
     return gained, matched, missed
 
 
@@ -290,9 +391,30 @@ class UnfreezeCheckIn(BaseModel):
     email: str
 
 
+def _unfreeze_request_for_state(st: dict) -> dict | None:
+    rid = st.get("unfreeze_id")
+    return store.get_unfreeze(rid) if rid else None
+
+
 @app.get("/api/auth/unfreeze/questions")
-async def unfreeze_questions():
-    return {"ok": True, "questions": UNFREEZE_QUESTIONS,
+async def unfreeze_questions(email: str = ""):
+    email = (email or "").strip().lower()
+    user = store.get_user_by_email(email) if email else None
+    if not user:
+        raise HTTPException(404, "该邮箱尚未注册")
+    st = store.get_auth_state(email)
+    if not st.get("hard_locked"):
+        raise HTTPException(400, "该账号当前未被冻结")
+    # Only ONE questionnaire submission per freeze: once submitted, choices are
+    # never shown again and cannot be re-fetched for a second guessing round.
+    existing = _unfreeze_request_for_state(st)
+    if existing:
+        return {"ok": True, "questions": [], "submitted": True,
+                "request": existing, "pass_score": UNFREEZE_PASS_SCORE}
+    options = _unfreeze_options(user)
+    qs = [{**q, "options": options[q["key"]]} for q in UNFREEZE_QUESTIONS]
+    random.shuffle(qs)
+    return {"ok": True, "questions": qs, "submitted": False,
             "pass_score": UNFREEZE_PASS_SCORE}
 
 
@@ -303,7 +425,8 @@ async def unfreeze_check(body: UnfreezeCheckIn):
     return {
         "ok": True,
         "hard_locked": bool(st.get("hard_locked")),
-        "request": store.open_unfreeze_for_email(email),
+        "submitted": bool(st.get("unfreeze_id")),
+        "request": _unfreeze_request_for_state(st),
     }
 
 
@@ -319,29 +442,45 @@ async def unfreeze_request(body: UnfreezeIn):
     user = store.get_user_by_email(email)
     if not user:
         raise HTTPException(404, "该邮箱尚未注册")
-    if not store.get_auth_state(email).get("hard_locked"):
+    st = store.get_auth_state(email)
+    if not st.get("hard_locked"):
         raise HTTPException(400, "该账号当前未被冻结，无需申请解冻")
+    # Hard rule: exactly one submission per freeze episode. A denied (<50)
+    # questionnaire can never be retried this freeze — only the PIN route can
+    # still unlock the account.
+    if st.get("unfreeze_id"):
+        raise HTTPException(400, {
+            "code": "already_submitted",
+            "message": "本次冻结仅可提交一次解冻申请；系统评分不足时，"
+                       "只能等待管理员发送高级解冻 PIN 邮件",
+        })
     if len((body.reason or "").strip()) < 5:
         raise HTTPException(400, "请填写解冻原因（至少 5 个字）")
-    existing = store.open_unfreeze_for_email(email)
-    if existing:
-        return {"ok": True, "request": existing,
-                "message": "已有一条待处理的解冻申请"}
-    score, matched, missed = _score_unfreeze(user, body.answers or {})
-    item = store.create_unfreeze(email, user["uid"], body.reason,
-                                 body.answers or {}, score, matched, missed)
+    answers = body.answers or {}
+    if any(not (answers.get(q["key"]) or "").strip() for q in UNFREEZE_QUESTIONS):
+        raise HTTPException(400, "请完成全部选择题后再提交")
+    score, matched, missed = _score_unfreeze(user, answers)
+    denied = score < UNFREEZE_PASS_SCORE
+    item = store.create_unfreeze(email, user["uid"], body.reason, answers,
+                                 score, matched, missed,
+                                 freeze_id=st.get("freeze_id", ""),
+                                 auto_denied=denied)
+    # lock the one-shot on THIS freeze episode
+    st["unfreeze_id"] = item["id"]
+    store.set_auth_state(email, st)
     print(f"[security] unfreeze request {item['id']} for {email} score={score} "
-          f"auto={'denied' if score < UNFREEZE_PASS_SCORE else 'admin-review'}")
-    return {"ok": True, "request": item,
-            "auto_denied": score < UNFREEZE_PASS_SCORE}
+          f"auto={'denied' if denied else 'admin-review'}")
+    return {"ok": True, "request": item, "auto_denied": denied}
 
 
 @app.post("/api/auth/unfreeze/status")
 async def unfreeze_status(body: UnfreezeCheckIn):
     email = body.email.strip().lower()
+    st = store.get_auth_state(email)
     return {"ok": True,
-            "hard_locked": bool(store.get_auth_state(email).get("hard_locked")),
-            "request": store.open_unfreeze_for_email(email)}
+            "hard_locked": bool(st.get("hard_locked")),
+            "submitted": bool(st.get("unfreeze_id")),
+            "request": _unfreeze_request_for_state(st)}
 
 
 class SetPasswordIn(BaseModel):
