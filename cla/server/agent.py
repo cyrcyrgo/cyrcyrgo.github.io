@@ -129,7 +129,7 @@ async def _run_agent_inner(uid: str, cid: str, emit: Emit,
     if usage["full"]:
         await emit({
             "type": "error",
-            "error": "你的 1GB 存储空间已满，无法开启新的对话任务。请先清理文件后重试。",
+            "error": "你的云存储空间已满，无法开启新的对话任务。请先清理文件，或在「我的账户」中申请扩容。",
         })
         return
 
