@@ -1187,51 +1187,49 @@ async def admin_reset_metrics(user: dict = Depends(require_admin_gate)):
 
 
 # --------------------------------------------------------------------------- #
-# mail service (admin): Microsoft Graph sender settings + broadcast to all
+# mail service (admin): SMTP sender settings + broadcast to all
 # --------------------------------------------------------------------------- #
-class GraphIn(BaseModel):
-    tenant_id: str | None = None         # common | consumers | organizations | GUID
-    client_id: str | None = None         # Azure app registration Application ID
-    client_secret: str | None = None     # empty = keep the stored one (optional)
-    refresh_token: str | None = None     # empty = keep; delegated OAuth token
-    user: str | None = None              # sender mailbox
+class SmtpIn(BaseModel):
+    host: str | None = None
+    port: int | None = None
+    protocol: str | None = None       # ssl | starttls
+    user: str | None = None           # sender mailbox
+    auth_code: str | None = None      # empty = keep the stored code
     from_name: str | None = None
 
 
 @app.get("/api/admin/email")
 async def admin_get_email(user: dict = Depends(require_admin_gate)):
-    g = cfg.CONFIG.get("msgraph") or {}
+    s = cfg.CONFIG.get("smtp") or {}
     return {
         "ok": True,
-        "tenant_id": g.get("tenant_id") or "common",
-        "client_id": g.get("client_id", ""),
-        "user": g.get("user", ""),
-        "from_name": g.get("from_name", ""),
-        "has_client_secret": bool(g.get("client_secret")),
-        "has_refresh_token": bool(g.get("refresh_token")),
+        "host": s.get("host", ""),
+        "port": int(s.get("port") or 465),
+        "protocol": s.get("protocol") or "ssl",
+        "user": s.get("user", ""),
+        "from_name": s.get("from_name", ""),
+        "has_auth_code": bool(s.get("auth_code")),
         "users_total": store.total_users(),
     }
 
 
 @app.post("/api/admin/email")
-async def admin_set_email(body: GraphIn, user: dict = Depends(require_admin_gate)):
-    g = cfg.CONFIG.setdefault("msgraph", {})
-    if body.tenant_id is not None:
-        g["tenant_id"] = body.tenant_id.strip() or "common"
-    if body.client_id is not None:
-        g["client_id"] = body.client_id.strip()
-    if body.client_secret:
-        g["client_secret"] = body.client_secret.strip()
-    if body.refresh_token:
-        g["refresh_token"] = body.refresh_token.strip()
+async def admin_set_email(body: SmtpIn, user: dict = Depends(require_admin_gate)):
+    s = cfg.CONFIG.setdefault("smtp", {})
+    if body.host is not None:
+        s["host"] = body.host.strip()
+    if body.port:
+        s["port"] = int(body.port)
+    if body.protocol is not None:
+        s["protocol"] = body.protocol.strip() or "ssl"
     if body.user is not None:
-        g["user"] = body.user.strip()
+        s["user"] = body.user.strip()
+    if body.auth_code:
+        s["auth_code"] = body.auth_code.strip()
     if body.from_name is not None:
-        g["from_name"] = body.from_name.strip() or "YJS LLM Agent"
+        s["from_name"] = body.from_name.strip() or "YJS Cloud LLM Agent"
     cfg.save(cfg.CONFIG)
-    return {"ok": True,
-            "has_client_secret": bool(g.get("client_secret")),
-            "has_refresh_token": bool(g.get("refresh_token"))}
+    return {"ok": True, "has_auth_code": bool(s.get("auth_code"))}
 
 
 class TestMailIn(BaseModel):
@@ -1240,10 +1238,10 @@ class TestMailIn(BaseModel):
 
 @app.post("/api/admin/email/test")
 async def admin_test_email(body: TestMailIn, user: dict = Depends(require_admin_gate)):
-    """Mint a Graph token and send one message to prove the setup works."""
+    """Log in to the SMTP server and send one message to prove the setup."""
     to = (body.to or "").strip() or user["email"]
-    html = auth._wrap("邮件配置测试（Microsoft Graph）",
-                      "<p>如果你收到这封邮件，说明后台的 Microsoft Graph 发件配置正确。</p>")
+    html = auth._wrap("邮件配置测试（SMTP）",
+                      "<p>如果你收到这封邮件，说明后台的 SMTP 发件配置正确。</p>")
     try:
         await asyncio.to_thread(auth.send_mail, to, "YJS 邮件配置测试", html)
     except Exception as exc:  # noqa: BLE001
