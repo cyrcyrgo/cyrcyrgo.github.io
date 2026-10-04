@@ -771,11 +771,60 @@ async def _quiz_for_state(user: dict, st: dict) -> dict:
     return quiz
 
 
-def _score_quiz(quiz: dict, answers: dict) -> tuple[float, list, list]:
+async def _llm_judge_text(question: str, reference: list, answer: str) -> bool | None:
+    """Let the small local model decide whether *answer* matches the reference.
+
+    Identity questions are open-ended, so exact string matching rejects valid
+    paraphrases. Returns True/False, or ``None`` when the model is unavailable
+    or its reply is unintelligible — the caller then falls back to the
+    deterministic tolerant match.
+    """
+    ref = "；".join(str(c) for c in reference if str(c).strip())
+    if not ref:
+        return None
+    # A few-shot prompt is used because the 0.8B model will otherwise rubber
+    # stamp every answer as correct. The examples teach it to both accept
+    # paraphrases / format variants and reject unrelated content.
+    prompt = (
+        "判断用户回答与参考答案是否指向同一内容（允许大小写、空格、简繁体、"
+        "同义说法、日期或数字格式差异）。\n"
+        "示例：\n"
+        "参考答案：云影；用户回答：小明 -> {\"correct\":false}\n"
+        "参考答案：云影；用户回答：我的昵称是云影 -> {\"correct\":true}\n"
+        "参考答案：云影；用户回答：不知道 -> {\"correct\":false}\n"
+        "参考答案：2–3 天内；用户回答：两三天前 -> {\"correct\":true}\n"
+        "参考答案：4–7 天内；用户回答：两三天前 -> {\"correct\":false}\n"
+        "参考答案：2026-03；用户回答：去年八月 -> {\"correct\":false}\n"
+        "只输出 JSON，不要解释。\n"
+        f"验证题：{question}\n参考答案：{ref}；用户回答：{answer} -> /no_think"
+    )
+    try:
+        text = await llm.raw_chat(_pick_quiz_model(), prompt,
+                                  max_tokens=32, temperature=0.0)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[security] unfreeze text grading failed: {exc}")
+        return None
+    obj = _parse_json_obj(text)
+    if obj and "correct" in obj:
+        val = obj.get("correct")
+        if isinstance(val, bool):
+            return val
+        return str(val).strip().lower() in ("true", "1", "yes", "正确", "对")
+    # Tolerate a bare true/false or 对/错 reply.
+    low = (text or "").strip().lower()
+    if "true" in low or "正确" in low:
+        return True
+    if "false" in low or "错误" in low or "不对" in low:
+        return False
+    return None
+
+
+async def _score_quiz(quiz: dict, answers: dict) -> tuple[float, list, list]:
     """Grade submitted answers against the server-sealed correct values.
 
-    Choice questions match the selected option; text questions use tolerant
-    free-text comparison against the server reference answer.
+    Choice questions match the selected option exactly; open identity text
+    questions are understood and judged by the small local model, falling back
+    to tolerant free-text comparison when the model is unavailable.
     """
     qs = quiz.get("questions") or []
     total = sum(float(q.get("weight") or 0) for q in qs) or 1.0
@@ -785,7 +834,11 @@ def _score_quiz(quiz: dict, answers: dict) -> tuple[float, list, list]:
         val = (answers.get(q["key"]) or "").strip()
         correct = q.get("correct") or []
         if q.get("type") == "text":
-            ok = _text_correct(val, correct)
+            if not val:
+                ok = False
+            else:
+                verdict = await _llm_judge_text(q.get("label", ""), correct, val)
+                ok = _text_correct(val, correct) if verdict is None else verdict
         else:
             ok = bool(val) and val.lower() in [str(c).lower() for c in correct]
         (matched if ok else missed).append(q.get("label", ""))
@@ -871,7 +924,7 @@ async def unfreeze_request(body: UnfreezeIn):
     quiz = await _quiz_for_state(user, st)
     if any(not (answers.get(q["key"]) or "").strip() for q in quiz["questions"]):
         raise HTTPException(400, "请完成全部选择题后再提交")
-    score, matched, missed = _score_quiz(quiz, answers)
+    score, matched, missed = await _score_quiz(quiz, answers)
     denied = score < UNFREEZE_PASS_SCORE
     item = store.create_unfreeze(email, user["uid"], body.reason, answers,
                                  score, matched, missed,
