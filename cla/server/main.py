@@ -279,6 +279,24 @@ _CNT_BUCKETS = [
     ("51–100 个", lambda n: 51 <= n <= 100),
     ("100 个以上", lambda n: n > 100),
 ]
+# Cloud-space allowance tiers (the real answer is the account's quota_bytes).
+_QUOTA_BUCKETS = [
+    ("50 MB（基础云空间）", 50),
+    ("100 MB", 100),
+    ("500 MB", 500),
+    ("1 GB", 1024),
+    ("2 GB", 2048),
+    ("5 GB 或更多", 5120),
+]
+# How many files live in the workspace.
+_FILE_CNT_BUCKETS = [
+    ("0 个（还没有文件）", lambda n: n == 0),
+    ("1–3 个", lambda n: 1 <= n <= 3),
+    ("4–10 个", lambda n: 4 <= n <= 10),
+    ("11–30 个", lambda n: 11 <= n <= 30),
+    ("31–100 个", lambda n: 31 <= n <= 100),
+    ("100 个以上", lambda n: n > 100),
+]
 _NAME_DISTRACTORS = [
     "小明", "阿杰", "测试用户", "云影", "星辰", "Alex", "小雨",
     "管理员", "匿名用户", "路人甲", "木子", "晨曦",
@@ -288,6 +306,8 @@ _FILE_DISTRACTORS = [
     "简历.pdf", "未命名文档.doc", "会议记录.txt", "计划表.xlsx",
 ]
 _NO_FILE_OPTION = "（我还没有上传过文件）"
+_UNFREEZE_TOTAL_QUESTIONS = 20
+_UNFREEZE_AI_QUESTIONS = 8
 
 
 def _month_label(ts: float) -> str:
@@ -314,22 +334,51 @@ def _shuffle_take(pool: list, n: int) -> list:
     return p[:n]
 
 
+def _quota_bucket(quota_bytes: int) -> str:
+    mb = int(round((quota_bytes or 0) / (1024 * 1024)))
+    if mb <= 50:
+        return _QUOTA_BUCKETS[0][0]
+    for i in range(1, len(_QUOTA_BUCKETS)):
+        prev_mb, cur_mb = _QUOTA_BUCKETS[i - 1][1], _QUOTA_BUCKETS[i][1]
+        if prev_mb < mb <= cur_mb:
+            return _QUOTA_BUCKETS[i][0]
+    return _QUOTA_BUCKETS[-1][0]
+
+
+def _file_cnt_bucket(n: int) -> str:
+    return next((lab for lab, f in _FILE_CNT_BUCKETS if f(n)),
+                _FILE_CNT_BUCKETS[-1][0])
+
+
 def _unfreeze_truth(user: dict) -> dict:
     """The correct choice for every question, computed from server data."""
-    name = (user.get("name") or "").strip() or user.get("email", "").split("@")[0]
+    email = user.get("email", "")
+    name = (user.get("name") or "").strip() or email.split("@")[0]
     created = float(user.get("created_at") or time.time())
     last = float(user.get("last_login") or created)
     real_days = max(0.0, (time.time() - last) / 86400)
-    real_cnt = len(store.list_conversations(user["uid"]))
+    convs = store.list_conversations(user["uid"])
+    real_cnt = len(convs)
+    titles = [c.get("title", "") for c in convs if (c.get("title") or "").strip()]
     files = sorted({p.name for p in store.workspace(user["uid"]).glob("**/*")
                     if p.is_file()})
+    quota = int(user.get("quota_bytes") or cfg.CONFIG.get("quota_bytes") or 0)
     return {
         "name": name,
+        "email_local": email.split("@")[0],
+        "email_domain": email.split("@")[1] if "@" in email else "",
         "register_month": _month_label(created),
+        "register_date": time.strftime("%Y-%m-%d", time.localtime(created)),
         "last_login_days": _day_bucket(real_days),
         "conversation_count": _cnt_bucket(real_cnt),
         "model": (user.get("model_preference") or cfg.CONFIG.get("model") or ""),
         "file_name": _NO_FILE_OPTION if not files else files,  # any own file ok
+        "file_count": _file_cnt_bucket(len(files)),
+        "file_count_n": len(files),
+        "conv_titles": titles,
+        "quota": _quota_bucket(quota),
+        "created": created,
+        "last": last,
     }
 
 
@@ -420,93 +469,288 @@ def _parse_json_array(text: str) -> list | None:
         return None
 
 
-def _fallback_quiz(user: dict) -> dict:
-    """Deterministic questionnaire used when the local model is unavailable."""
-    truth = _unfreeze_truth(user)
-    options = _unfreeze_options(user)
-    qs = []
-    for q in UNFREEZE_QUESTIONS:
-        real = truth[q["key"]]
-        correct = real if isinstance(real, list) else [str(real)]
-        qs.append({
-            "key": q["key"], "label": q["label"], "weight": float(q["weight"]),
-            "options": [str(o) for o in options[q["key"]]],
-            "correct": [str(c) for c in correct],
-        })
-    return {"source": "fallback", "questions": qs}
+def _norm_answer(s: str) -> str:
+    """Normalise free text for tolerant comparison (spaces / punctuation / case)."""
+    s = str(s or "").strip().lower()
+    s = re.sub(r"[\s　·.,，。、:：;；!！?？()（）\[\]【】'\"`~@#$%^&*_+\-=/\\|<>]+",
+               "", s)
+    return s
 
 
-async def _build_llm_quiz(user: dict) -> dict | None:
-    """Ask the local 0.8B model to author a usage-trace quiz from real data.
-
-    Only the model's question text + options survive; the correct option is
-    kept server-side (never sent to the browser). Returns ``None`` when the
-    model is unreachable or the reply fails validation, so callers fall back to
-    the deterministic quiz.
-    """
-    truth = _unfreeze_truth(user)
-    files = truth["file_name"] if isinstance(truth["file_name"], list) else []
-    profile = (
-        f"- 账号昵称：{truth['name']}\n"
-        f"- 账号注册月份：{truth['register_month']}\n"
-        f"- 最近一次登录时间：{truth['last_login_days']}\n"
-        f"- 历史对话数量级：{truth['conversation_count']}\n"
-        f"- 最常用的模型：{truth['model']}\n"
-        f"- 我的文件中的文件：{('、'.join(files) if files else '（还没有上传过任何文件）')}\n"
-    )
-    prompt = (
-        "你是账号安全系统的出题器。请根据下面的【真实资料】生成 6 道用于"
-        "验证账号主人的中文选择题，正确答案必须取自资料中的真实信息。\n\n"
-        f"【真实资料】\n{profile}\n"
-        "请严格按以下 6 个方面各出 1 道题，共 6 道，题目不得重复：\n"
-        "1) 账号昵称；2) 注册月份；3) 最近一次登录时间；"
-        "4) 历史对话数量；5) 最常用的模型；6) 我的文件中的一个文件。\n"
-        "出题要求：\n"
-        "1. 每道题 4 个选项，其中恰好 1 个是正确答案，其余 3 个是明显不同的干扰项。\n"
-        "2. 问题自然、口语化，贴近真实使用场景，不要直接照抄资料格式。\n"
-        "3. 只输出一个 JSON 数组，禁止输出解释、Markdown 或代码围栏。\n"
-        "4. 每个元素的格式严格为："
-        '{"label":"问题文本","options":["选项1","选项2","选项3","选项4"],'
-        '"correct_answer":"正确选项的原文"}。\n'
-        "5. correct_answer 必须与 options 中的某一项完全一致。\n"
-        "现在只输出 JSON 数组本身。"
-    )
-    qs = []
-    for _attempt in range(3):
-        text = await llm.raw_chat(_pick_quiz_model(), prompt + " /no_think",
-                                  max_tokens=900, temperature=0.6)
-        arr = _parse_json_array(text)
-        if not arr:
+def _text_correct(val: str, correct: list) -> bool:
+    v = _norm_answer(val)
+    if not v:
+        return False
+    for c in correct:
+        cv = _norm_answer(c)
+        if not cv:
             continue
-        qs, seen_labels = [], set()
-        for i, raw in enumerate(arr):
-            if not isinstance(raw, dict):
-                continue
-            label = str(raw.get("label") or "").strip()
-            opts = [str(o).strip() for o in (raw.get("options") or [])
-                    if str(o).strip()]
-            # de-duplicate options while preserving order
-            seen, uniq = set(), []
-            for o in opts:
-                if o not in seen:
-                    seen.add(o)
-                    uniq.append(o)
-            correct = str(raw.get("correct_answer") or "").strip()
-            if not label or len(uniq) < 2 or correct not in uniq:
-                continue
-            if label in seen_labels:      # 0.8B tends to repeat: drop clones
-                continue
-            seen_labels.add(label)
-            qs.append({"key": f"uq{i}", "label": label, "weight": 0.0,
-                       "options": uniq, "correct": [correct]})
-        if len(qs) >= 4:
-            break
-    if len(qs) < 4:
-        return None
-    weight = round(100.0 / len(qs), 2)
+        if v == cv or (len(v) >= 2 and (cv in v or v in cv)):
+            return True
+    return False
+
+
+def _mcq(key: str, label: str, options: list, correct: list) -> dict:
+    return {"key": key, "label": label, "type": "choice", "weight": 0.0,
+            "options": [str(o) for o in options],
+            "correct": [str(c) for c in correct]}
+
+
+def _text_q(key: str, label: str, correct: list) -> dict:
+    return {"key": key, "label": label, "type": "text", "weight": 0.0,
+            "options": [], "correct": [str(c) for c in correct]}
+
+
+def _enabled_model_names() -> list:
+    return [m.get("name") for m in cfg.CONFIG.get("models", [])
+            if m.get("enabled") and m.get("name")]
+
+
+# --------------------------------------------------------------------------- #
+# Fixed (system-authored) multiple-choice questions about deterministic params.
+# Returns ONE distinct pool; callers shuffle + slice so keys never duplicate.
+# --------------------------------------------------------------------------- #
+def _system_quiz(user: dict, truth: dict) -> list[dict]:
+    options = _unfreeze_options(user)
+    qs: list[dict] = []
+
+    enabled = _enabled_model_names()
+    real_model = truth["model"]
+
+    # most-used / default model
+    others = [m for m in enabled if m != real_model]
+    model_opts = ([real_model] if real_model else []) + _shuffle_take(others, 4)
+    if len(model_opts) < 4:
+        for m in ["qwen3.5:0.8b", "qwen3.5:2b", "qwen3:4b", "qwen3:8b"]:
+            if m not in model_opts:
+                model_opts.append(m)
+    if real_model and len(set(model_opts)) >= 2:
+        random.shuffle(model_opts)
+        qs.append(_mcq("s_model_1", "在你使用过的模型中，哪一个是你最常用 / 默认的模型？",
+                       model_opts, [real_model]))
+
+    # the smallest local model on this service
+    if enabled:
+        small = next((m for m in enabled if "0.8b" in m.lower()), None)
+        if small:
+            opts = [small] + _shuffle_take([m for m in enabled if m != small], 3)
+            random.shuffle(opts)
+            qs.append(_mcq("s_small_model", "本机最小、最轻量的本地模型是下面哪一个？",
+                           opts, [small]))
+
+    # whether the account uses an external API model as default
+    qs.append(_mcq("s_model_kind", "关于你默认使用的模型，下面哪个描述正确？",
+                   ["它是本机运行的本地模型", "它是云端 API 模型",
+                    "它是第三方付费模型", "没有默认模型"],
+                   ["它是云端 API 模型" if llm.api_credentials(real_model)
+                    else "它是本机运行的本地模型"]))
+
+    # cloud-space allowance
+    qs.append(_mcq("s_quota", "你的账号当前配置的云空间容量是多少？",
+                   [b[0] for b in _QUOTA_BUCKETS], [truth["quota"]]))
+
+    # number of files
+    qs.append(_mcq("s_file_cnt", "你的「我的文件」里大约有多少个文件？",
+                   [b[0] for b in _FILE_CNT_BUCKETS], [truth["file_count"]]))
+
+    # files that belong to this account
+    own = truth["file_name"]
+    if isinstance(own, list) and own:
+        for gi in range(2):
+            correct = random.choice(own)
+            pool = [f for f in _FILE_DISTRACTORS if f not in own]
+            opts = [correct] + _shuffle_take(pool, 3)
+            if len(set(opts)) >= 2:
+                random.shuffle(opts)
+                qs.append(_mcq(f"s_file_{gi}", "下面哪个文件名确实出现在你的「我的文件」中？",
+                               opts, [correct]))
+    else:
+        opts = [_NO_FILE_OPTION] + _shuffle_take(_FILE_DISTRACTORS, 3)
+        random.shuffle(opts)
+        qs.append(_mcq("s_file_0", "关于你的「我的文件」，下面哪个说法是正确的？",
+                       opts, [_NO_FILE_OPTION]))
+
+    # conversation count bucket
+    qs.append(_mcq("s_conv_cnt", "你的账号里历史对话的数量级是多少？",
+                   [b[0] for b in _CNT_BUCKETS], [truth["conversation_count"]]))
+
+    # a real conversation title
+    titles = truth["conv_titles"]
+    if titles:
+        real_title = random.choice(titles)
+        fake = ["你好", "测试一下", "帮我写代码", "翻译一段话", "总结文档",
+                "制作表格", "闲聊", "学习计划"]
+        opts = [real_title] + _shuffle_take([f for f in fake if f != real_title], 3)
+        if len(set(opts)) >= 2:
+            random.shuffle(opts)
+            qs.append(_mcq("s_conv_title", "下面哪个是你曾经创建过的对话标题？",
+                           opts, [real_title]))
+
+    # last login bucket
+    qs.append(_mcq("s_last_login", "你最近一次登录大概在什么时候？",
+                   [b[0] for b in _DAY_BUCKETS], [truth["last_login_days"]]))
+
+    # register month
+    qs.append(_mcq("s_reg_month", "你的账号是在哪个月份注册的？",
+                   options["register_month"], [truth["register_month"]]))
+
+    # weekday of registration
+    wk = "星期" + "一二三四五六日"[time.localtime(truth["created"]).tm_wday]
+    wk_opts = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+    random.shuffle(wk_opts)
+    qs.append(_mcq("s_reg_weekday", "你的账号注册那天是星期几？", wk_opts, [wk]))
+
+    # register year
+    yr = time.strftime("%Y", time.localtime(truth["created"]))
+    cur = int(yr)
+    yr_opts = [str(y) for y in (cur, cur - 1, cur + 1, cur - 2)]
+    random.shuffle(yr_opts)
+    qs.append(_mcq("s_reg_year", "你的账号是在哪一年注册的？", yr_opts, [yr]))
+
+    # email provider domain (always available)
+    domain = truth["email_domain"]
+    if domain:
+        dom_pool = ["hotmail.com", "outlook.com", "qq.com", "163.com",
+                    "gmail.com", "126.com", "foxmail.com"]
+        opts = [domain] + [d for d in dom_pool if d != domain][:3]
+        random.shuffle(opts)
+        qs.append(_mcq("s_email_domain", "你的登录邮箱是在哪个邮箱服务商（@ 后面的域名）注册的？",
+                       opts, [domain]))
+
+    return qs
+
+
+# --------------------------------------------------------------------------- #
+# AI-authored open identity questions. The model only rewrites question text
+# using the provided facts; the reference answers come from server data and
+# are graded server-side (free text, tolerant match).
+# --------------------------------------------------------------------------- #
+def _identity_facts(truth: dict) -> list[dict]:
+    local, domain = truth["email_local"], truth["email_domain"]
+    facts = [
+        {"answer": truth["name"],
+         "fact": f"账号昵称为「{truth['name']}」"},
+        {"answer": local,
+         "fact": f"登录邮箱 @ 符号前面的用户名是「{local}」"},
+        {"answer": truth["register_date"],
+         "fact": f"账号注册日期是 {truth['register_date']}（注册月份 {truth['register_month']}）"},
+        {"answer": truth["register_month"],
+         "fact": f"账号注册月份是 {truth['register_month']}"},
+        {"answer": truth["last_login_days"],
+         "fact": f"最近一次登录距今的时间档是「{truth['last_login_days']}」"},
+        {"answer": truth["conversation_count"],
+         "fact": f"历史对话数量档是「{truth['conversation_count']}」"},
+        {"answer": truth["file_count"],
+         "fact": f"工作区文件数量档是「{truth['file_count']}」"},
+        {"answer": truth["model"],
+         "fact": f"最常用模型是「{truth['model']}」"},
+    ]
+    if domain:
+        facts.append({"answer": domain, "fact": f"登录邮箱的域名（@ 后面）是「{domain}」"})
+    titles = truth["conv_titles"]
+    if titles:
+        facts.append({"answer": titles[0],
+                      "fact": f"最近的一个对话标题是「{titles[0]}」"})
+    return facts
+
+
+def _parse_json_obj(text: str) -> dict | None:
+    s = (text or "").strip()
+    if s.startswith("```"):
+        s = re.sub(r"^```[a-zA-Z]*\s*", "", s)
+        s = re.sub(r"```\s*$", "", s).strip()
+    try:
+        d = json.loads(s)
+        return d if isinstance(d, dict) else None
+    except Exception:
+        m = re.search(r"\{.*\}", s, re.S)
+        if m:
+            try:
+                d = json.loads(m.group(0))
+                return d if isinstance(d, dict) else None
+            except Exception:
+                return None
+    return None
+
+
+async def _ai_identity_quiz(truth: dict, n: int) -> list[dict]:
+    facts = _identity_facts(truth)
+    chosen = facts[:n]
+    qs: list[dict] = []
+    for i, fc in enumerate(chosen):
+        prompt = (
+            "你是账号安全出题器。请把下面一条真实资料，改写成一句自然、口语化、"
+            "需要用户用文字作答的中文验证题（不要给选项，不要在题目里泄露答案，"
+            "答案必须能直接用资料里的值填写）。\n"
+            f"资料：{fc['fact']}\n"
+            '只输出 JSON 对象：{"label":"问题文本"}，禁止其它内容。 /no_think'
+        )
+        label = ""
+        for _ in range(2):
+            try:
+                text = await llm.raw_chat(_pick_quiz_model(), prompt,
+                                          max_tokens=200, temperature=0.7)
+                obj = _parse_json_obj(text)
+                if obj and str(obj.get("label") or "").strip():
+                    label = str(obj["label"]).strip()
+                    break
+            except Exception:  # noqa: BLE001
+                break
+        if not label:
+            # deterministic wording if the small model fails on this item
+            label = f"请根据你的真实情况填写：{fc['fact'].split('是')[0]}是什么？"
+        qs.append(_text_q(f"a_id_{i}", label, [fc["answer"]]))
+    return qs
+
+
+async def _build_quiz(user: dict) -> dict:
+    """Build the 20-question quiz: AI identity + fixed system questions."""
+    truth = _unfreeze_truth(user)
+    pool = _system_quiz(user, truth)
+    random.shuffle(pool)
+    need_sys = _UNFREEZE_TOTAL_QUESTIONS - _UNFREEZE_AI_QUESTIONS
+    sys_qs = pool[:need_sys]
+    spare = pool[need_sys:]
+    ai_qs: list[dict] = []
+    try:
+        ai_qs = await _ai_identity_quiz(truth, _UNFREEZE_AI_QUESTIONS)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[security] ai identity questions failed: {exc}")
+    # keep exactly the AI count; pad failures with spare system questions
+    if len(ai_qs) < _UNFREEZE_AI_QUESTIONS:
+        ai_qs += spare[:_UNFREEZE_AI_QUESTIONS - len(ai_qs)]
+    ai_qs = ai_qs[:_UNFREEZE_AI_QUESTIONS]
+    qs = ai_qs + sys_qs
+    qs = qs[:_UNFREEZE_TOTAL_QUESTIONS]
+    weight = round(100.0 / max(len(qs), 1), 3)
     for q in qs:
         q["weight"] = weight
-    return {"source": "llm", "questions": qs}
+    random.shuffle(qs)
+    n_ai = sum(1 for q in qs if q["key"].startswith("a_id_"))
+    source = "ai+system" if n_ai else "system"
+    return {"source": source, "questions": qs}
+
+
+def _fallback_quiz(user: dict) -> dict:
+    """All-system deterministic quiz (used if the combined build fails)."""
+    truth = _unfreeze_truth(user)
+    qs = _system_quiz(user, truth)
+    if len(qs) < _UNFREEZE_TOTAL_QUESTIONS:
+        options = _unfreeze_options(user)
+        for q in UNFREEZE_QUESTIONS:
+            if any(x["key"].startswith("s_") and x.get("correct") ==
+                   ([str(truth[q["key"]])] if not isinstance(truth[q["key"]], list)
+                    else [str(c) for c in truth[q["key"]]]) for x in qs):
+                continue
+            real = truth[q["key"]]
+            correct = real if isinstance(real, list) else [str(real)]
+            qs.append(_mcq(f"fb_{q['key']}", q["label"], options[q["key"]], correct))
+    random.shuffle(qs)
+    qs = qs[:_UNFREEZE_TOTAL_QUESTIONS]
+    weight = round(100.0 / max(len(qs), 1), 3)
+    for q in qs:
+        q["weight"] = weight
+    return {"source": "fallback", "questions": qs}
 
 
 async def _quiz_for_state(user: dict, st: dict) -> dict:
@@ -517,10 +761,10 @@ async def _quiz_for_state(user: dict, st: dict) -> dict:
         return cached["quiz"]
     quiz = None
     try:
-        quiz = await _build_llm_quiz(user)
+        quiz = await _build_quiz(user)
     except Exception as exc:  # noqa: BLE001
-        print(f"[security] 0.8b quiz generation failed: {exc}")
-    if not quiz:
+        print(f"[security] quiz generation failed: {exc}")
+    if not quiz or not quiz.get("questions"):
         quiz = _fallback_quiz(user)
     st["unfreeze_quiz"] = {"freeze_id": fid, "quiz": quiz}
     store.set_auth_state(user.get("email", ""), st)
@@ -528,15 +772,22 @@ async def _quiz_for_state(user: dict, st: dict) -> dict:
 
 
 def _score_quiz(quiz: dict, answers: dict) -> tuple[float, list, list]:
-    """Grade submitted choices against the server-sealed correct options."""
+    """Grade submitted answers against the server-sealed correct values.
+
+    Choice questions match the selected option; text questions use tolerant
+    free-text comparison against the server reference answer.
+    """
     qs = quiz.get("questions") or []
     total = sum(float(q.get("weight") or 0) for q in qs) or 1.0
     matched, missed = [], []
     gained = 0.0
     for q in qs:
         val = (answers.get(q["key"]) or "").strip()
-        correct = [str(c).lower() for c in (q.get("correct") or [])]
-        ok = bool(val) and val.lower() in correct
+        correct = q.get("correct") or []
+        if q.get("type") == "text":
+            ok = _text_correct(val, correct)
+        else:
+            ok = bool(val) and val.lower() in [str(c).lower() for c in correct]
         (matched if ok else missed).append(q.get("label", ""))
         if ok:
             gained += float(q.get("weight") or 0)
@@ -571,7 +822,8 @@ async def unfreeze_questions(email: str = ""):
     # once per freeze episode and cached, so refreshing cannot reroll questions.
     quiz = await _quiz_for_state(user, st)
     qs = [{"key": q["key"], "label": q["label"], "weight": q["weight"],
-           "options": q["options"]} for q in quiz["questions"]]
+           "type": q.get("type", "choice"), "options": q["options"]}
+          for q in quiz["questions"]]
     random.shuffle(qs)
     return {"ok": True, "questions": qs, "submitted": False,
             "pass_score": UNFREEZE_PASS_SCORE, "source": quiz.get("source", "")}
@@ -1715,7 +1967,7 @@ async def admin_get_settings(user: dict = Depends(require_admin_gate)):
         "allow_model_add": bool(cfg.CONFIG.get("allow_model_add", True)),
         "announcement": cfg.CONFIG.get("announcement", "") or "",
         "default_model": cfg.CONFIG.get("default_model") or cfg.CONFIG.get("model"),
-        "max_tool_calls_per_step": int(cfg.CONFIG.get("max_tool_calls_per_step") or 8),
+        "max_tool_calls_per_step": int(cfg.CONFIG.get("max_tool_calls_per_step") or 500),
         "models": [
             {"name": m["name"], "display": m.get("display") or m["name"],
              "enabled": m.get("enabled", True)}
@@ -1736,7 +1988,7 @@ async def admin_set_settings(body: AdminSettingsIn,
     if body.announcement is not None:
         cfg.CONFIG["announcement"] = body.announcement.strip()[:500]
     if body.max_tool_calls_per_step is not None:
-        cfg.CONFIG["max_tool_calls_per_step"] = max(1, min(int(body.max_tool_calls_per_step), 50))
+        cfg.CONFIG["max_tool_calls_per_step"] = max(1, min(int(body.max_tool_calls_per_step), 500))
     if body.default_model is not None:
         names = {m["name"] for m in cfg.CONFIG.get("models", [])}
         if body.default_model and body.default_model not in names:
