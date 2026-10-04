@@ -120,7 +120,7 @@ async def execute(name: str, args: dict, ctx: ToolContext) -> dict:
 def _quota_guard(ctx: ToolContext) -> str | None:
     u = store.usage(ctx.uid)
     if u["full"]:
-        return "用户存储空间已满（1GB），请先清理文件后再写入。"
+        return "用户云存储空间已满，请先清理文件，或在「我的账户」中申请扩容。"
     return None
 
 
@@ -362,6 +362,100 @@ async def http_request(ctx: ToolContext, url: str, method: str = "GET",
             "headers": dict(r.headers),
             "body": _truncate(text),
         }
+
+
+# --------------------------------------------------------------------------- #
+# web search (Bing)
+# --------------------------------------------------------------------------- #
+def _strip_tags(html_text: str) -> str:
+    import re
+    text = re.sub(r"<[^>]+>", "", html_text)
+    import html as _html
+    return _html.unescape(text).strip()
+
+
+def _parse_bing(html_text: str, limit: int) -> list[dict]:
+    """Extract organic results from a Bing SERPs HTML page."""
+    import re
+    results: list[dict] = []
+    # Each organic result lives inside <li class="b_algo"> ... </li>
+    for block in re.findall(r'<li\b[^>]*class="[^"]*\bb_algo\b[^"]*"[^>]*>(.*?)</li>',
+                            html_text, flags=re.S | re.I):
+        m_link = re.search(r'<h2[^>]*>\s*<a[^>]*href="(https?://[^"]+)"[^>]*>(.*?)</a>',
+                           block, flags=re.S | re.I)
+        if not m_link:
+            continue
+        url = m_link.group(1)
+        title = _strip_tags(m_link.group(2))
+        snippet = ""
+        m_cap = re.search(r'<div\b[^>]*class="[^"]*\bb_caption\b[^"]*"[^>]*>(.*)',
+                          block, flags=re.S | re.I)
+        cap = m_cap.group(1) if m_cap else block
+        m_p = re.search(r'<p\b[^>]*>(.*?)</p>', cap, flags=re.S | re.I)
+        if m_p:
+            snippet = _strip_tags(m_p.group(1))
+        results.append({"title": title[:300], "url": url, "snippet": snippet[:600]})
+        if len(results) >= limit:
+            break
+    return results
+
+
+@tool(
+    "web_search",
+    "使用 Bing 搜索互联网，返回标题、链接和摘要。需要最新信息、实时新闻、"
+    "查资料、了解用户未提供的外部事实时优先使用；拿到链接后可用 http_request 读取正文。",
+    {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "搜索关键词，建议简洁精准"},
+            "count": {"type": "integer", "description": "返回结果数量，默认 8，最大 10"},
+        },
+        "required": ["query"],
+    },
+)
+async def web_search(ctx: ToolContext, query: str, count: int = 8):
+    query = (query or "").strip()
+    if not query:
+        return {"ok": False, "error": "query 不能为空"}
+    count = max(1, min(int(count or 8), 10))
+    headers = {
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 Edg/124.0"),
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Accept": "text/html,application/xhtml+xml",
+    }
+    url = "https://www.bing.com/search"
+    params = {"q": query, "count": str(count + 4), "setlang": "zh-CN",
+              "ensearch": "0"}
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as c:
+            r = await c.get(url, params=params, headers=headers)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"Bing 请求失败：{exc}"}
+    if r.status_code != 200:
+        return {"ok": False, "error": f"Bing 返回 HTTP {r.status_code}"}
+    results = _parse_bing(r.text, count)
+    if not results:
+        # Bing sometimes serves a consent/JS page; try the global endpoint once.
+        try:
+            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as c:
+                r2 = await c.get("https://cn.bing.com/search",
+                                 params={"q": query, "setlang": "zh-CN"},
+                                 headers=headers)
+                results = _parse_bing(r2.text, count)
+        except Exception:  # noqa: BLE001
+            pass
+    lines = [f"## Bing 搜索：{query}（{len(results)} 条结果）"]
+    for i, item in enumerate(results, 1):
+        lines.append(f"\n{i}. {item['title']}\n   {item['url']}")
+        if item["snippet"]:
+            lines.append(f"   {item['snippet']}")
+    return {
+        "ok": bool(results),
+        "results": results,
+        "text": _truncate("\n".join(lines), 12000),
+        "error": None if results else "未解析到搜索结果，可能被 Bing 反爬拦截，可稍后重试或用 browser 工具",
+    }
 
 
 # --------------------------------------------------------------------------- #
