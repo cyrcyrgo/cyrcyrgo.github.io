@@ -5,30 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS 管理后台</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%99%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/admin.css?v=20261003l" />
+<link rel="stylesheet" href="assets/admin.css?v=20261003m" />
 </head>
 <body>
 
 <header class="topbar">
   <div class="brand">YJS <span>管理后台</span></div>
   <div class="who">
-    <span id="who">—</span>
-    <span class="pill" id="conn">连接中…</span>
+    <span id="who">�?/span>
+    <span class="pill" id="conn">连接中�?/span>
     <a class="btn ghost" id="btn-back" href="./">返回对话</a>
-    <button class="btn ghost" id="btn-logout">退出</button>
+    <button class="btn ghost" id="btn-logout">退�?/button>
   </div>
 </header>
 
 <div id="deny" class="deny hidden">
-  <div id="deny-msg">需要管理员权限，请用管理员账号登录。</div>
-  <div style="margin-top:12px"><a class="btn ghost" id="deny-back" href="./">返回对话页</a></div>
+  <div id="deny-msg">需要管理员权限，请用管理员账号登录�?/div>
+  <div style="margin-top:12px"><a class="btn ghost" id="deny-back" href="./">返回对话�?/a></div>
 </div>
 
-<!-- 管理密码锁 -->
+<!-- 管理密码�?-->
 <div id="lock" class="lock hidden">
   <div class="lock-box">
     <div class="lock-icon">🔒</div>
-    <h2>管理后台已加密</h2>
+    <h2>管理后台已加�?/h2>
     <p class="muted">请输入管理密码后继续</p>
     <input id="lock-pw" type="password" placeholder="管理密码" autocomplete="current-password" />
     <button class="btn" id="lock-ok">解锁</button>
@@ -44,24 +44,24 @@
     <div class="stat"><div class="k">注册用户</div><div class="v" id="s-users">0</div><div class="s">账号总数</div></div>
     <div class="stat"><div class="k">累计调用</div><div class="v" id="s-calls">0</div><div class="s">模型请求次数</div></div>
     <div class="stat hl"><div class="k">累计 Token</div><div class="v" id="s-tokens">0</div><div class="s" id="s-token-split">输入 0 · 输出 0</div></div>
-    <div class="stat"><div class="k">今日 Token</div><div class="v" id="s-today">0</div><div class="s" id="s-today-calls">今日调用 0 次</div></div>
-    <div class="stat"><div class="k">实时活跃</div><div class="v" id="s-live">0</div><div class="s">正在生成的调用</div></div>
-    <div class="stat"><div class="k">Ollama</div><div class="v" id="s-ollama">—</div><div class="s" id="s-vram">显存占用 —</div></div>
+    <div class="stat"><div class="k">今日 Token</div><div class="v" id="s-today">0</div><div class="s" id="s-today-calls">今日调用 0 �?/div></div>
+    <div class="stat"><div class="k">实时活跃</div><div class="v" id="s-live">0</div><div class="s">正在生成的调�?/div></div>
+    <div class="stat"><div class="k">Ollama</div><div class="v" id="s-ollama">�?/div><div class="s" id="s-vram">显存占用 �?/div></div>
   </section>
 
   <!-- 系统权限 -->
   <section class="panel">
-    <h3>系统权限设置 <span class="hint">· 全局开关 / 注册 / 模型新增 / 默认模型 / 公告</span></h3>
+    <h3>系统权限设置 <span class="hint">· 全局开�?/ 注册 / 模型新增 / 默认模型 / 公告</span></h3>
     <div class="settings-grid">
       <label class="switch-row"><input type="checkbox" id="set-ai" />
         <span class="sw-label">全局 AI 调用</span>
-        <span class="hint">关闭后所有账号暂停模型调用</span></label>
+        <span class="hint">关闭后所有账号暂停模型调�?/span></label>
       <label class="switch-row"><input type="checkbox" id="set-register" />
         <span class="sw-label">开放新用户注册</span>
         <span class="hint">关闭后新邮箱无法注册</span></label>
       <label class="switch-row"><input type="checkbox" id="set-addmodel" />
         <span class="sw-label">允许新增模型</span>
-        <span class="hint">关闭后无法添加 API 模型</span></label>
+        <span class="hint">关闭后无法添�?API 模型</span></label>
       <div class="set-field">
         <span class="sw-label">默认模型</span>
         <select id="set-default"></select>
@@ -69,74 +69,76 @@
       <div class="set-field">
         <span class="sw-label">每轮工具调用上限</span>
         <input id="set-toolcalls" type="number" min="1" max="50" step="1" value="8" />
-        <span class="hint">Agent 单步最多执行多少个工具（1–50）</span>
+        <span class="hint">Agent 单步最多执行多少个工具�?�?0�?/span>
       </div>
       <div class="set-field wide">
-        <span class="sw-label">站点公告（显示在对话页顶部，留空隐藏）</span>
-        <input id="set-announce" placeholder="例如：系统将于今晚 23:00 维护，请提前保存文件" />
+        <span class="sw-label">站点公告（显示在对话页顶部，留空隐藏�?/span>
+        <input id="set-announce" placeholder="例如：系统将于今�?23:00 维护，请提前保存文件" />
       </div>
     </div>
     <div class="set-actions"><button class="btn" id="btn-save-settings">保存设置</button></div>
   </section>
 
-  <!-- MCP 工具服务器 -->
+  <!-- MCP 工具服务�?-->
   <section class="panel">
-    <h3>MCP 工具服务器 <span class="hint">· 为 Agent 添加 stdio 协议 MCP 工具</span>
-      <button class="btn" id="btn-add-mcp" style="float:right;padding:4px 14px">+ 添加 MCP 服务器</button>
+    <h3>MCP 工具服务�?<span class="hint">· �?Agent 添加 stdio 协议 MCP 工具</span>
+      <button class="btn" id="btn-add-mcp" style="float:right;padding:4px 14px">+ 添加 MCP 服务�?/button>
     </h3>
     <div class="table-wrap">
       <table class="tbl" id="tbl-mcp">
         <thead><tr>
-          <th>名称</th><th>启动命令</th><th>环境变量</th><th>工具检测</th><th>操作</th>
+          <th>名称</th><th>启动命令</th><th>环境变量</th><th>工具检�?/th><th>操作</th>
         </tr></thead>
         <tbody></tbody>
       </table>
     </div>
   </section>
 
-  <!-- 邮件服务（Microsoft Graph） -->
+  <!-- 邮件服务（SMTP�?-->
   <section class="panel">
-    <h3>邮件服务 <span class="hint">· Microsoft Graph API 发件（OAuth2）与全体群发</span></h3>
+    <h3>邮件服务 <span class="hint">· SMTP 发件与全体群�?/span></h3>
     <div class="muted" style="margin-bottom:10px;line-height:1.7">
-      微软已停用邮箱的 SMTP 基本认证，现统一通过 Microsoft Graph 发送。请先在
-      <a href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noopener">Azure 应用注册</a>
-      创建应用（重定向 URI 选「公共客户端/native」，如 http://localhost），
-      为其授予委托权限 <b>Mail.Send</b> 与 <b>offline_access</b>，再用 OAuth 授权流程取得 refresh_token。
+      填写 SMTP 服务器与邮箱授权码（非登录密码，需在邮箱服务商后台开�?SMTP/IMAP 并生成授权码）�?
+      常用：QQ 邮箱 smtp.qq.com:465（SSL）�?63 邮箱 smtp.163.com:465�?
+      Outlook/Hotmail 建议 smtp-mail.outlook.com:587（STARTTLS）�?
     </div>
-    <div id="mail-status" class="muted" style="margin-bottom:12px">加载中…</div>
+    <div id="mail-status" class="muted" style="margin-bottom:12px">加载中�?/div>
     <div class="settings-grid">
       <div class="set-field">
+        <span class="sw-label">SMTP 服务�?/span>
+        <input id="mail-host" placeholder="smtp.qq.com / smtp-mail.outlook.com" autocomplete="off" />
+      </div>
+      <div class="set-field">
+        <span class="sw-label">端口</span>
+        <input id="mail-port" type="number" value="465" min="1" max="65535" />
+      </div>
+      <div class="set-field">
+        <span class="sw-label">加密方式</span>
+        <select id="mail-protocol">
+          <option value="ssl">SSL（端�?465�?/option>
+          <option value="starttls">STARTTLS（端�?587�?/option>
+        </select>
+      </div>
+      <div class="set-field">
         <span class="sw-label">发件邮箱地址</span>
-        <input id="mail-user" placeholder="you@outlook.com / you@hotmail.com" autocomplete="off" />
-      </div>
-      <div class="set-field">
-        <span class="sw-label">租户 ID（可留空，默认 common）</span>
-        <input id="mail-tenant" placeholder="common / consumers / 组织租户 GUID" autocomplete="off" />
-      </div>
-      <div class="set-field">
-        <span class="sw-label">客户端 ID（Application client_id）</span>
-        <input id="mail-clientid" placeholder="Azure 应用注册的应用程序(客户端) ID" autocomplete="off" />
-      </div>
-      <div class="set-field">
-        <span class="sw-label">客户端密钥（可选，公共客户端留空）</span>
-        <input id="mail-secret" type="password" placeholder="已配置则留空不修改" autocomplete="new-password" />
+        <input id="mail-user" placeholder="you@example.com" autocomplete="off" />
       </div>
       <div class="set-field wide">
-        <span class="sw-label">刷新令牌 refresh_token（委托权限 Mail.Send + offline_access）</span>
-        <textarea id="mail-refresh" rows="2" placeholder="粘贴 OAuth 授权后取得的 refresh_token；已配置则留空不修改" autocomplete="off"></textarea>
+        <span class="sw-label">SMTP 授权�?/ 应用专用密码</span>
+        <input id="mail-code" type="password" placeholder="已配置则留空不修�? autocomplete="new-password" />
       </div>
       <div class="set-field">
         <span class="sw-label">发件人显示名</span>
-        <input id="mail-fromname" placeholder="YJS LLM Agent" autocomplete="off" />
+        <input id="mail-fromname" placeholder="YJS Cloud LLM Agent" autocomplete="off" />
       </div>
     </div>
     <div class="set-actions">
       <span id="mail-msg" class="muted inline-msg"></span>
-      <button class="btn ghost" id="btn-test-mail">发测试邮件给我</button>
+      <button class="btn ghost" id="btn-test-mail">发测试邮件给�?/button>
       <button class="btn" id="btn-save-mail">保存邮箱设置</button>
     </div>
 
-    <h3 style="margin-top:22px">群发邮件通知 <span class="hint">· 发送给全部已注册用户</span></h3>
+    <h3 style="margin-top:22px">群发邮件通知 <span class="hint">· 发送给全部已注册用�?/span></h3>
     <div class="settings-grid">
       <div class="set-field wide">
         <span class="sw-label">邮件主题</span>
@@ -144,20 +146,20 @@
       </div>
       <div class="set-field wide">
         <span class="sw-label">邮件正文（支持多行）</span>
-        <textarea id="bc-body" rows="5" placeholder="写给全体用户的内容…"></textarea>
+        <textarea id="bc-body" rows="5" placeholder="写给全体用户的内容�?></textarea>
       </div>
     </div>
     <div class="set-actions">
       <span id="bc-msg" class="muted inline-msg"></span>
       <button class="btn ghost" id="btn-broadcast-me">仅发给我（预览）</button>
-      <button class="btn" id="btn-broadcast">群发给全体用户</button>
+      <button class="btn" id="btn-broadcast">群发给全体用�?/button>
     </div>
   </section>
 
   <!-- 全站通知 -->
   <section class="panel">
-    <h3>全站通知 <span class="hint">· 显示在对话页顶部；发布后同步到 GitHub 仓库</span></h3>
-    <div id="nt-status" class="muted" style="margin-bottom:12px">加载中…</div>
+    <h3>全站通知 <span class="hint">· 显示在对话页顶部；发布后同步�?GitHub 仓库</span></h3>
+    <div id="nt-status" class="muted" style="margin-bottom:12px">加载中�?/div>
     <div class="settings-grid">
       <div class="set-field wide">
         <span class="sw-label">通知标题</span>
@@ -165,7 +167,7 @@
       </div>
       <div class="set-field wide">
         <span class="sw-label">通知内容</span>
-        <textarea id="nt-body" rows="5" placeholder="写给全体用户的内容…"></textarea>
+        <textarea id="nt-body" rows="5" placeholder="写给全体用户的内容�?></textarea>
       </div>
     </div>
     <div class="set-actions">
@@ -178,10 +180,10 @@
   <!-- GitHub 仓库 -->
   <section class="panel">
     <h3>GitHub 仓库 <span class="hint">· token 密文存储 / 仓库管理密码解锁 / 发布</span></h3>
-    <div id="gh-status" class="muted" style="margin-bottom:12px">加载中…</div>
+    <div id="gh-status" class="muted" style="margin-bottom:12px">加载中�?/div>
     <div class="settings-grid">
       <div class="set-field">
-        <span class="sw-label">仓库（owner/repo）</span>
+        <span class="sw-label">仓库（owner/repo�?/span>
         <input id="gh-repo" placeholder="cyrcyrgo/cyrcyrgo.github.io" autocomplete="off" />
       </div>
       <div class="set-field">
@@ -193,11 +195,11 @@
         <input id="gh-prefix" placeholder="cla" autocomplete="off" />
       </div>
       <div class="set-field">
-        <span class="sw-label">仓库管理密码（解锁 / 设置）</span>
-        <input id="gh-pw" type="password" placeholder="至少 6 位" autocomplete="new-password" />
+        <span class="sw-label">仓库管理密码（解�?/ 设置�?/span>
+        <input id="gh-pw" type="password" placeholder="至少 6 �? autocomplete="new-password" />
       </div>
       <div class="set-field">
-        <span class="sw-label">GitHub Token（更新时填写）</span>
+        <span class="sw-label">GitHub Token（更新时填写�?/span>
         <input id="gh-token" type="password" placeholder="ghp_... 留空则不修改" autocomplete="new-password" />
       </div>
     </div>
@@ -207,13 +209,13 @@
       <button class="btn ghost" id="btn-gh-setpw">设置密码</button>
       <button class="btn ghost" id="btn-gh-test">测试连接</button>
       <button class="btn ghost" id="btn-gh-save">保存仓库信息</button>
-      <button class="btn" id="btn-gh-publish">发布到仓库</button>
+      <button class="btn" id="btn-gh-publish">发布到仓�?/button>
     </div>
   </section>
 
   <!-- 用户反馈 -->
   <section class="panel">
-    <h3>用户反馈 <span class="hint">· 来自用户端「我 → 向作者反馈」</span>
+    <h3>用户反馈 <span class="hint">· 来自用户端「我 �?向作者反馈�?/span>
       <span id="fb-unread" class="badge tier" style="float:right;display:none"></span>
     </h3>
     <div id="fb-list" class="fb-list"></div>
@@ -222,17 +224,17 @@
   <div class="grid2">
     <!-- 模型 -->
     <section class="panel">
-      <h3>模型实时状态 <span class="hint">· 每 2 秒刷新</span>
+      <h3>模型实时状�?<span class="hint">· �?2 秒刷�?/span>
         <button class="btn" id="btn-add-model" style="float:right;padding:4px 14px">+ 新增 API 模型</button>
       </h3>
       <div class="table-wrap">
         <table class="tbl" id="tbl-models">
           <thead>
             <tr>
-              <th>模型</th><th>档位</th><th>启用</th><th>状态</th>
+              <th>模型</th><th>档位</th><th>启用</th><th>状�?/th>
               <th class="num">调用</th><th class="num">输入 tok</th>
-              <th class="num">输出 tok</th><th class="num">总 tok</th>
-              <th>最近使用</th><th>操作</th>
+              <th class="num">输出 tok</th><th class="num">�?tok</th>
+              <th>最近使�?/th><th>操作</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -242,16 +244,16 @@
 
     <!-- 实时活跃 -->
     <section class="panel">
-      <h3>正在进行的调用</h3>
+      <h3>正在进行的调�?/h3>
       <div id="live-list" class="live-list"><div class="muted">暂无进行中的调用</div></div>
       <h3 style="margin-top:18px">今日 Token 趋势</h3>
       <div id="days" class="days"></div>
     </section>
   </div>
 
-  <!-- 最近日志 -->
+  <!-- 最近日�?-->
   <section class="panel">
-    <h3>最近调用日志 <span class="hint">· 最新 40 条</span></h3>
+    <h3>最近调用日�?<span class="hint">· 最�?40 �?/span></h3>
     <div class="table-wrap">
       <table class="tbl" id="tbl-recent">
         <thead><tr>
@@ -269,9 +271,9 @@
     <div class="table-wrap">
       <table class="tbl" id="tbl-users">
         <thead><tr>
-          <th>邮箱</th><th>注册时间</th><th>最近登录</th>
+          <th>邮箱</th><th>注册时间</th><th>最近登�?/th>
           <th class="num">对话</th><th class="num">Token</th>
-          <th>云空间</th><th>密码</th><th>角色</th>
+          <th>云空�?/th><th>密码</th><th>角色</th>
           <th>模型权限</th><th>操作</th>
         </tr></thead>
         <tbody></tbody>
@@ -303,6 +305,6 @@
   </div>
 </div>
 
-<script src="assets/admin.js?v=20261003l"></script>
+<script src="assets/admin.js?v=20261003m"></script>
 </body>
 </html>
