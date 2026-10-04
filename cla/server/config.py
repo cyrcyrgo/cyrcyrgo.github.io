@@ -75,9 +75,9 @@ def decrypt_secret(blob: dict | None, material: str) -> str | None:
 DEFAULTS: dict = {
     "host": "127.0.0.1",
     "port": 8787,
-    "model": "qwen3.5:9b",
+    "model": "qwen3.5:0.8b",
     "ollama_url": "http://127.0.0.1:11434",
-    "quota_bytes": 1073741824,          # 1 GB per user
+    "quota_bytes": 50 * 1024 * 1024,        # 50 MB base cloud space per user
     "max_agent_steps": 24,
     "max_tool_calls_per_step": 8,       # cap tool calls executed in one agent step
     "code_timeout": 120,
@@ -138,10 +138,6 @@ DEFAULT_MODELS = [
      "tier": "中级中速", "size_mb": 4500, "enabled": True,
      "provider": "ollama", "base_url": "", "context_len": 8192,
      "desc": "8B参数 Q4量化 约4.5GB显存，质量与速度平衡"},
-    {"name": "qwen3.5:9b", "display": "高级 · Qwen3.5 9B",
-     "tier": "高级", "size_mb": 6600, "enabled": True,
-     "provider": "ollama", "base_url": "", "context_len": 8192,
-     "desc": "9.7B参数 Q4量化 约6.6GB显存，推理最强，复杂任务首选"},
 ]
 
 DEFAULT_MODELS_NAMES = {m["name"] for m in DEFAULT_MODELS}
@@ -206,6 +202,7 @@ def load() -> dict:
             save(cfg)
     _migrate_github_token(cfg)
     _migrate_mail(cfg)
+    _migrate_base_quota(cfg)
     for d in (DATA_DIR, USERS_DIR, RUNTIME_DIR, BIN_DIR):
         d.mkdir(parents=True, exist_ok=True)
     return cfg
@@ -235,6 +232,22 @@ def _migrate_mail(cfg: dict) -> None:
     s.setdefault("auth_code", "")
     if changed and LOCAL_CONFIG.exists():
         save(cfg)
+
+
+_OLD_DEFAULT_QUOTA = 1024 * 1024 * 1024       # the original 1 GB base quota
+
+
+def _migrate_base_quota(cfg: dict) -> None:
+    """The base cloud space was lowered from 1 GB to 50 MB.
+
+    Only rewrite the local config value when it still equals the factory
+    default — an admin-chosen custom global quota is left untouched.
+    Per-user profiles are migrated separately in ``store.migrate_quotas``.
+    """
+    if int(cfg.get("quota_bytes") or 0) == _OLD_DEFAULT_QUOTA:
+        cfg["quota_bytes"] = DEFAULTS["quota_bytes"]
+        if LOCAL_CONFIG.exists():
+            save(cfg)
 
 
 def set_github_token(conf: dict, token: str, repo_password: str | None = None) -> None:
