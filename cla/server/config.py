@@ -76,7 +76,14 @@ DEFAULTS: dict = {
     "host": "127.0.0.1",
     "port": 8787,
     "model": "qwen3.5:0.8b",
-    "ollama_url": "http://127.0.0.1:11434",
+    # Local inference is served by llama.cpp (llama-server). Each model gets its
+    # own port = base_port + its index in ``models`` and is started on demand.
+    "engine": {
+        "base_port": 18081,
+        "max_resident": 1,       # instances kept in VRAM at once (single GPU)
+        "idle_timeout": 1800,    # seconds before an idle instance is stopped
+        "load_timeout": 240,     # seconds to wait for a cold model load
+    },
     "quota_bytes": 50 * 1024 * 1024,        # 50 MB base cloud space per user
     "max_agent_steps": 24,
     "max_tool_calls_per_step": 500,      # cap tool calls executed in one agent step
@@ -119,24 +126,29 @@ DEFAULTS: dict = {
 }
 
 
-# Default Ollama-builtin models. ``_merge_models`` backfills new fields into
+# Default on-device models. Each ``file`` points at the GGUF blob that
+# llama-server loads directly. ``_merge_models`` backfills new fields into
 # admin-tweaked entries in config.local.json and appends API-backed extras.
 DEFAULT_MODELS = [
     {"name": "qwen3.5:0.8b", "display": "Flash版高速 · Qwen3.5 0.8B",
      "tier": "Flash版高速", "size_mb": 500, "enabled": True,
-     "provider": "ollama", "base_url": "", "context_len": 8192,
+     "provider": "local", "base_url": "", "context_len": 8192,
+     "file": "models/blobs/sha256-afb707b6b8fac6e475acc42bc8380fc0b8d2e0e4190be5a969fbf62fcc897db5",
      "desc": "0.8B参数 极致轻量 几乎零显存，极速响应，适合一句话任务"},
     {"name": "qwen3.5:2b", "display": "超高速 · Qwen3.5 2B",
      "tier": "超高速", "size_mb": 1200, "enabled": True,
-     "provider": "ollama", "base_url": "", "context_len": 8192,
+     "provider": "local", "base_url": "", "context_len": 8192,
+     "file": "models/blobs/sha256-3e4cb14174460404e7a233e531675303b2fbf7749c02f91864fe311ab6344e4f",
      "desc": "2B参数 Q4量化 约1.2GB显存，极快响应，简单任务首选"},
     {"name": "qwen3:4b", "display": "高速 · Qwen3 4B",
      "tier": "高速", "size_mb": 2500, "enabled": True,
-     "provider": "ollama", "base_url": "", "context_len": 8192,
+     "provider": "local", "base_url": "", "context_len": 8192,
+     "file": "models/blobs/sha256-b709d81508a078a686961de6ca07a953b895d9b286c46e17f00fb267f4f2d297",
      "desc": "4B参数 Q4量化 约2.5GB显存，响应最快，轻量任务"},
     {"name": "qwen3:8b", "display": "中级中速 · Qwen3 8B",
      "tier": "中级中速", "size_mb": 4500, "enabled": True,
-     "provider": "ollama", "base_url": "", "context_len": 8192,
+     "provider": "local", "base_url": "", "context_len": 8192,
+     "file": "models/blobs/sha256-a3de86cd1c132c822487ededd47a324c50491393e6565cd14bafa40d0b8e686f",
      "desc": "8B参数 Q4量化 约4.5GB显存，质量与速度平衡"},
 ]
 
@@ -164,15 +176,16 @@ def _merge_models(defaults: list, custom: list) -> list:
             merged.update(idx[base["name"]])
             idx.pop(base["name"])
         merged.setdefault("enabled", True)
-        merged.setdefault("provider", "ollama")
+        merged.setdefault("provider", "local")
         merged.setdefault("base_url", "")
         merged.setdefault("api_key_ref", "")
         merged.setdefault("context_len", 8192)
+        merged.setdefault("file", "")
         out.append(merged)
     for extra in idx.values():
         m = dict(extra)
         m.setdefault("enabled", True)
-        m.setdefault("provider", "openai" if m.get("base_url") else "ollama")
+        m.setdefault("provider", "openai" if m.get("base_url") else "local")
         m.setdefault("context_len", 8192)
         m.setdefault("size_mb", 0)
         m.setdefault("display", m["name"])
@@ -203,6 +216,7 @@ def load() -> dict:
     _migrate_github_token(cfg)
     _migrate_mail(cfg)
     _migrate_base_quota(cfg)
+    _migrate_engine(cfg)
     for d in (DATA_DIR, USERS_DIR, RUNTIME_DIR, BIN_DIR):
         d.mkdir(parents=True, exist_ok=True)
     return cfg
@@ -248,6 +262,21 @@ def _migrate_base_quota(cfg: dict) -> None:
         cfg["quota_bytes"] = DEFAULTS["quota_bytes"]
         if LOCAL_CONFIG.exists():
             save(cfg)
+
+
+def _migrate_engine(cfg: dict) -> None:
+    """Local inference moved from Ollama to llama.cpp.
+
+    Drop the obsolete ``ollama_url`` and relabel any ``provider: "ollama"``
+    entries as ``"local"`` so the UI and llm client route them correctly.
+    """
+    changed = "ollama_url" in cfg and cfg.pop("ollama_url", None) is not None
+    for m in cfg.get("models", []):
+        if isinstance(m, dict) and m.get("provider") == "ollama":
+            m["provider"] = "local"
+            changed = True
+    if changed and LOCAL_CONFIG.exists():
+        save(cfg)
 
 
 def set_github_token(conf: dict, token: str, repo_password: str | None = None) -> None:
@@ -305,7 +334,7 @@ def save(cfg: dict) -> None:
                    "mcp_servers", "models", "api_keys", "admin",
                    "allow_register", "ai_enabled", "allow_model_add",
                    "announcement", "default_model", "max_tool_calls_per_step",
-                   "notification")
+                   "notification", "engine")
     payload = {k: cfg[k] for k in secret_keys if k in cfg}
     # Never persist the GitHub token in the clear: only its encrypted form
     # (github.token_secret) belongs on disk. The plaintext copy stays in memory
