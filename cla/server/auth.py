@@ -33,8 +33,12 @@ def _smtp() -> dict:
     return s
 
 
-def send_mail(to: str, subject: str, html: str, text: str | None = None) -> None:
-    """Send one UTF-8 HTML mail over SMTP (SSL or STARTTLS)."""
+def send_mail(to: str, subject: str, html: str, text: str | None = None,
+              attachments: list[tuple[str, bytes]] | None = None) -> None:
+    """Send one UTF-8 HTML mail over SMTP (SSL or STARTTLS).
+
+    ``attachments`` is an optional list of ``(filename, bytes)``.
+    """
     s = _smtp()
     host = str(s["host"]).strip()
     port = int(s.get("port") or 465)
@@ -49,6 +53,12 @@ def send_mail(to: str, subject: str, html: str, text: str | None = None) -> None
     msg["Subject"] = subject
     msg.set_content(text or "请使用支持 HTML 的客户端查看本邮件。")
     msg.add_alternative(html, subtype="html")
+
+    import mimetypes
+    for fname, blob in attachments or []:
+        ctype, _ = mimetypes.guess_type(fname)
+        maintype, subtype = (ctype.split("/", 1) if ctype else ("application", "octet-stream"))
+        msg.add_attachment(blob, maintype=maintype, subtype=subtype, filename=fname)
 
     if protocol == "starttls":
         with smtplib.SMTP(host, port, timeout=30) as server:
