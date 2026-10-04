@@ -7,6 +7,7 @@
   let ADMIN_TOKEN = sessionStorage.getItem("yjs_admin_token") || "";
   let ME = null;
   let timer = null;
+  let auxTimer = null;
   let drawerUid = null;
 
   /* The dashboard is opened both as http://host/admin and as
@@ -458,13 +459,26 @@
   }
 
   let lastUsersSig = "";
+  let userFilter = "";
+  function filterUsers(users) {
+    const q = userFilter.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter((u) =>
+      (u.email || "").toLowerCase().includes(q) ||
+      (u.name || "").toLowerCase().includes(q) ||
+      (u.uid || "").toLowerCase().includes(q));
+  }
   function renderUsers(users) {
     window.__users = users;
-    const sig = JSON.stringify(users);
+    const shown = filterUsers(users);
+    const sig = JSON.stringify(shown) + "|" + userFilter;
     if (sig === lastUsersSig) return;   // unchanged → keep DOM (and click handlers) intact
     lastUsersSig = sig;
+    const cnt = $("user-count");
+    if (cnt) cnt.textContent = userFilter
+      ? `显示 ${shown.length} / 共 ${users.length} 人` : `共 ${users.length} 人`;
     const tb = $("tbl-users").querySelector("tbody");
-    tb.innerHTML = users.map((u) => {
+    tb.innerHTML = shown.map((u) => {
       const pct = u.usage ? Math.min(u.usage.percent, 100) : 0;
       const ma = u.model_allowed;
       let permLabel = `<span class="badge yes">全部模型</span>`;
@@ -490,18 +504,19 @@
         </td>
         <td style="white-space:nowrap">
           <button class="btn ghost" data-act="convs">对话</button>
+          <button class="btn ghost" data-act="letter">✉ 发信</button>
           <button class="btn ghost" data-act="pwd">密码</button>
           <button class="btn ghost" data-act="quota">配额</button>
           <button class="btn ghost" data-act="role">${u.is_admin ? "取消管理员" : "设为管理员"}</button>
           <button class="btn danger" data-act="del">删除</button>
         </td>
       </tr>`;
-    }).join("") || `<tr><td colspan="10" class="muted">暂无用户</td></tr>`;
+    }).join("") || `<tr><td colspan="10" class="muted">${userFilter ? "没有匹配的用户" : "暂无用户"}</td></tr>`;
 
     tb.querySelectorAll("button[data-act]").forEach((btn) => {
       const tr = btn.closest("tr");
       const idx = Array.from(tb.children).indexOf(tr);
-      const u = users[idx];
+      const u = shown[idx];
       if (!u) return;
       const act = btn.dataset.act;
       if (act === "convs") btn.onclick = () => openUserConversations(u.uid, u.email);
@@ -527,15 +542,16 @@
         });
       else if (act === "quota") btn.onclick = () => openModal(
         "限制云空间 · " + u.email,
-        `当前配额 ${fmtSize(u.quota_bytes)}，已用 ${fmtSize(u.usage && u.usage.used)}。请输入新的配额（GB）`,
-        (u.quota_bytes / 1073741824).toFixed(2), "例如 1 或 0.5",
+        `当前配额 ${fmtSize(u.quota_bytes)}，已用 ${fmtSize(u.usage && u.usage.used)}。请输入新的配额（MB）`,
+        String(Math.round((u.quota_bytes || 0) / 1048576)), "例如 50 / 500 / 2048",
         async (v) => {
-          const gb = parseFloat(v);
-          if (!isFinite(gb) || gb < 0) throw new Error("请输入合法的 GB 数值");
+          const mb = parseInt(v, 10);
+          if (!isFinite(mb) || mb < 0) throw new Error("请输入合法的 MB 数值");
           await api(`/api/admin/users/${u.uid}/quota`,
-            { method: "POST", body: JSON.stringify({ quota_bytes: Math.round(gb * 1073741824) }) });
+            { method: "POST", body: JSON.stringify({ quota_bytes: mb * 1048576 }) });
           toast("配额已更新", "ok"); await refresh();
         });
+      else if (act === "letter") btn.onclick = () => openLetterModal(u);
       else if (act === "role") btn.onclick = async () => {
         const grant = !u.is_admin;
         if (!confirm(grant ? `确定把 ${u.email} 设为管理员？对方将能打开管理后台。`
@@ -629,7 +645,8 @@
   // Pause the 2s auto-refresh while a modal / drawer is open: rebuilding the
   // table under the cursor mid-click is what makes row buttons feel "dead".
   function anyOverlayOpen() {
-    const ids = ["modal", "drawer", "mp-modal", "am-modal", "em-modal", "mcp-modal"];
+    const ids = ["modal", "drawer", "mp-modal", "am-modal", "em-modal", "mcp-modal",
+                 "letter-modal"];
     return ids.some((id) => {
       const el = document.getElementById(id);
       if (!el) return false;
@@ -1089,6 +1106,9 @@
     const box = $("fb-list");
     if (!items.length) { box.innerHTML = `<div class="muted">暂无用户反馈</div>`; return; }
     const statusText = { new: "未读", read: "已读", done: "已处理" };
+    const mailBadge = { sent: `<span class="badge yes" title="已通过 SMTP 转发至 YJS-CLA@hotmail.com">✉ 已转发</span>`,
+      failed: `<span class="badge no" title="SMTP 转发失败，服务器已记录错误">✉ 转发失败</span>`,
+      skipped: `<span class="badge user">✉ 未转发</span>` };
     box.innerHTML = items.map((f) => `
       <div class="fb-item ${f.status === "new" ? "new" : ""}" data-id="${escapeHtml(f.id)}">
         <div class="fb-head">
@@ -1097,6 +1117,7 @@
           <span class="badge tier">${escapeHtml(f.category || "其他")}</span>
           <span class="muted">${fmtTime(f.created_at)}</span>
           <span class="badge ${f.status === "new" ? "yes" : "user"}">${statusText[f.status] || "已读"}</span>
+          ${mailBadge[f.email_status] || ""}
         </div>
         <div class="fb-body">${escapeHtml(f.content)}</div>
         <div class="fb-acts">
@@ -1284,9 +1305,150 @@
     finally { btn.disabled = false; }
   });
 
+  /* ---------------------------------------------------- user search */
+  on("user-search", "input", (e) => {
+    userFilter = e.target.value || "";
+    lastUsersSig = "";
+    renderUsers(window.__users || []);
+  });
+
+  /* ---------------------------------------------------- letter to one user */
+  let letterUid = null;
+  function openLetterModal(u) {
+    letterUid = u.uid;
+    $("letter-to").textContent = `收件人：${u.name ? u.name + " · " : ""}${u.email}`;
+    $("letter-subject").value = "";
+    $("letter-body").value = "";
+    $("letter-msg").textContent = "";
+    $("letter-modal").classList.remove("hidden");
+    setTimeout(() => $("letter-subject").focus(), 30);
+  }
+  function closeLetter() { $("letter-modal").classList.add("hidden"); letterUid = null; }
+  on("letter-cancel", "click", closeLetter);
+  on("letter-modal", "click", (e) => { if (e.target === $("letter-modal")) closeLetter(); });
+  on("letter-ok", "click", async () => {
+    if (!letterUid) return;
+    const subject = $("letter-subject").value.trim();
+    const body = $("letter-body").value.trim();
+    const msg = $("letter-msg");
+    if (!subject) { msg.textContent = "请填写主题"; return; }
+    if (!body) { msg.textContent = "请填写正文"; return; }
+    const btn = $("letter-ok"); btn.disabled = true; msg.textContent = "发送中…";
+    try {
+      await api(`/api/admin/users/${letterUid}/email`, {
+        method: "POST", body: JSON.stringify({ subject, body }),
+      });
+      toast("信件已通过 SMTP 发出", "ok");
+      closeLetter();
+    } catch (e) { msg.textContent = "✗ " + e.message; }
+    finally { btn.disabled = false; }
+  });
+
+  /* ---------------------------------------------------- quota requests */
+  async function loadQuotaRequests() {
+    try {
+      const d = await api("/api/admin/quota-requests");
+      renderQuotaRequests(d.requests || []);
+      const badge = $("qreq-unread");
+      const n = d.pending || 0;
+      badge.style.display = n ? "inline-block" : "none";
+      badge.textContent = n + " 条待审批";
+    } catch (_) { /* 401 handled elsewhere */ }
+  }
+  function renderQuotaRequests(items) {
+    const box = $("qreq-list");
+    if (!items.length) { box.innerHTML = `<div class="muted">暂无扩容申请</div>`; return; }
+    const stMap = { pending: ["待审批", "tier"], approved: ["已通过", "yes"],
+                    rejected: ["已拒绝", "no"] };
+    box.innerHTML = items.map((r) => {
+      const [stText, stCls] = stMap[r.status] || [r.status, "user"];
+      const reqMb = Math.round(r.request_bytes / 1048576);
+      const curMb = Math.round((r.current_bytes || 0) / 1048576);
+      return `<div class="qreq-item ${r.status}" data-id="${escapeHtml(r.id)}">
+        <div class="fb-head">
+          <span class="fb-who">${escapeHtml(r.name || r.email || r.uid)}</span>
+          <span class="muted">${escapeHtml(r.email || "")}</span>
+          <span class="badge ${stCls}">${stText}</span>
+          <span class="muted">${fmtTime(r.created_at)}</span>
+        </div>
+        <div class="qreq-main">
+          申请 <b>${reqMb} MB</b>（当前 ${curMb} MB）
+          <div class="muted" style="margin-top:4px;white-space:pre-wrap">理由：${escapeHtml(r.reason || "")}</div>
+          ${r.note ? `<div class="muted" style="margin-top:4px">管理员备注：${escapeHtml(r.note)}</div>` : ""}
+          ${r.decided_at ? `<div class="muted" style="margin-top:4px">处理时间：${fmtTime(r.decided_at)}</div>` : ""}
+        </div>
+        ${r.status === "pending" ? `<div class="qreq-acts">
+          <button class="btn" data-act="approve">✓ 批准（调至 ${reqMb} MB）</button>
+          <button class="btn danger" data-act="reject">拒绝</button>
+        </div>` : ""}
+      </div>`;
+    }).join("");
+    box.querySelectorAll(".qreq-item").forEach((el) => {
+      const id = el.dataset.id;
+      el.querySelectorAll("button[data-act]").forEach((btn) => {
+        btn.onclick = () => {
+          const approve = btn.dataset.act === "approve";
+          openModal(
+            approve ? "批准扩容申请" : "拒绝扩容申请",
+            approve ? "可填写备注（会通过邮件通知用户，留空也可）"
+                    : "建议填写拒绝原因（会通过邮件通知用户，留空也可）",
+            "", "备注（可选）",
+            async (note) => {
+              await api(`/api/admin/quota-requests/${encodeURIComponent(id)}/decide`, {
+                method: "POST", body: JSON.stringify({ approve, note: note || "" }),
+              });
+              toast(approve ? "已批准，配额已调整" : "已拒绝", "ok");
+              await Promise.all([loadQuotaRequests(), refresh()]);
+            });
+        };
+      });
+    });
+  }
+
+  /* ---------------------------------------------------- host + ollama */
+  async function loadSystemStatus() {
+    try {
+      const d = await api("/api/admin/system");
+      const st = $("sys-ollama-state");
+      st.textContent = d.ollama_running ? "● 运行中" : "○ 已停止";
+      st.className = "badge " + (d.ollama_running ? "yes" : "no");
+      $("btn-ollama-start").disabled = !!d.ollama_running;
+      $("btn-ollama-stop").disabled = !d.ollama_running;
+      const t = $("sys-tunnel");
+      t.textContent = "内网穿透：" + (d.tunnel || "未建立") +
+        (d.tunnel_pushed ? "（已推送配置）" : "（配置未推送）");
+    } catch (_) {}
+  }
+  async function ollamaCtl(action, btn) {
+    const msg = $("sys-msg");
+    btn.disabled = true;
+    msg.textContent = action === "stop" ? "正在停止…" : "正在启动，最多等待 20 秒…";
+    try {
+      const d = await api("/api/admin/system/ollama", {
+        method: "POST", body: JSON.stringify({ action }),
+      });
+      msg.textContent = d.note || (d.ollama_running ? "✓ Ollama 正在运行" : "✓ 已停止");
+      await loadSystemStatus();
+    } catch (e) { msg.textContent = "✗ " + e.message; }
+    finally { btn.disabled = false; }
+  }
+  on("btn-ollama-start", "click", (e) => ollamaCtl("start", e.target));
+  on("btn-ollama-stop", "click", (e) => ollamaCtl("stop", e.target));
+  on("btn-ollama-restart", "click", (e) => ollamaCtl("restart", e.target));
+  on("btn-shutdown", "click", () => {
+    const delay = parseInt($("shutdown-delay").value, 10) || 5;
+    if (!confirm(`确定 ${delay} 秒后关闭服务器主机？\n关机后本站、内网穿透将全部下线，需要人工重新开机！`)) return;
+    if (!confirm("再次确认：真的要关机吗？此操作无法远程撤销。")) return;
+    api("/api/admin/system/shutdown", {
+      method: "POST", body: JSON.stringify({ delay }),
+    }).then((d) => toast(d.message || "关机指令已下发", "ok"))
+      .catch((e) => toast(e.message, "err"));
+  });
+
   /* ---------------------------------------------------------------- boot */
   async function start() {
     clearInterval(timer);
+    clearInterval(auxTimer);
     const who = $("who"); if (who) who.textContent = ME.email + "（管理员）";
     const main = $("main"); if (main) main.classList.remove("hidden");
     await loadSettings();
@@ -1294,9 +1456,16 @@
     await loadMail();
     await loadNotice();
     await loadFeedback();
+    await loadQuotaRequests();
     await loadGithub();
+    await loadSystemStatus();
     await refresh();
     timer = setInterval(refresh, 2000);
+    auxTimer = setInterval(() => {
+      if (anyOverlayOpen()) return;
+      loadQuotaRequests();
+      loadSystemStatus();
+    }, 6000);
   }
 
   (async function boot() {
@@ -1325,8 +1494,17 @@
     }
     await start();
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) { clearInterval(timer); timer = null; }
-      else if (!timer) { refresh(); timer = setInterval(refresh, 2000); }
+      if (document.hidden) {
+        clearInterval(timer); timer = null;
+        clearInterval(auxTimer); auxTimer = null;
+      }
+      else if (!timer) {
+        refresh(); timer = setInterval(refresh, 2000);
+        auxTimer = setInterval(() => {
+          if (anyOverlayOpen()) return;
+          loadQuotaRequests(); loadSystemStatus();
+        }, 6000);
+      }
     });
   })();
 })();
