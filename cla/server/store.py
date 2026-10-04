@@ -331,14 +331,41 @@ def is_admin(user: dict | None) -> bool:
     return oldest.get("uid") == user.get("uid")
 
 
-def set_quota(uid: str, quota_bytes: int) -> bool:
+def set_quota(uid: str, quota_bytes: int, custom: bool = True) -> bool:
+    """Set a user's quota. ``custom=True`` marks it as an explicit admin
+    decision (or an approved application), so base-quota migrations skip it."""
     path = user_dir(uid) / "profile.json"
     profile = _read_json(path, None)
     if not profile:
         return False
     profile["quota_bytes"] = max(int(quota_bytes), 0)
+    if custom:
+        profile["quota_custom"] = True
     _write_json(path, profile)
     return True
+
+
+_OLD_DEFAULT_QUOTA = 1024 * 1024 * 1024
+
+
+def migrate_quotas(base_quota: int) -> int:
+    """One-time migration: bring every non-customized account from the old
+    1 GB default down to the new base quota. Returns how many profiles changed."""
+    changed = 0
+    idx = load_index()
+    for entry in idx.values():
+        uid = entry.get("uid")
+        if not uid:
+            continue
+        p = user_dir(uid) / "profile.json"
+        profile = _read_json(p, None)
+        if not profile or profile.get("quota_custom"):
+            continue
+        if int(profile.get("quota_bytes") or 0) == _OLD_DEFAULT_QUOTA:
+            profile["quota_bytes"] = int(base_quota)
+            _write_json(p, profile)
+            changed += 1
+    return changed
 
 
 def set_password_hash(uid: str, password_hash: str | None) -> bool:
@@ -540,3 +567,89 @@ def delete_feedback(fid: str) -> bool:
 
 def feedback_unread() -> int:
     return sum(1 for f in list_feedback() if f.get("status") == "new")
+
+
+def update_feedback_email(fid: str, status: str, error: str = "") -> bool:
+    """Record whether the feedback was forwarded to the author mailbox."""
+    p = _feedback_path(fid)
+    item = _read_json(p, None)
+    if not item:
+        return False
+    item["email_status"] = status          # sent | failed | skipped
+    item["email_error"] = error[:300]
+    _write_json(p, item)
+    return True
+
+
+# --------------------------------------------------------------------------- #
+# cloud-space expansion requests (user applies -> admin approves/rejects)
+# --------------------------------------------------------------------------- #
+QUOTA_REQ_DIR = cfg.DATA_DIR / "quota_requests"
+
+
+def _qreq_path(rid: str) -> Path:
+    return QUOTA_REQ_DIR / f"{rid}.json"
+
+
+def create_quota_request(uid: str, request_bytes: int, reason: str) -> dict:
+    QUOTA_REQ_DIR.mkdir(parents=True, exist_ok=True)
+    profile = get_user(uid) or {}
+    # Only one pending request per user: supersede the previous pending one.
+    for item in list_quota_requests():
+        if item.get("uid") == uid and item.get("status") == "pending":
+            _qreq_path(item["id"]).unlink(missing_ok=True)
+    rid = uuid.uuid4().hex[:12]
+    item = {
+        "id": rid,
+        "uid": uid,
+        "email": profile.get("email", ""),
+        "name": profile.get("name", ""),
+        "request_bytes": int(request_bytes),
+        "current_bytes": int(profile.get("quota_bytes") or cfg.CONFIG["quota_bytes"]),
+        "reason": reason.strip()[:1000],
+        "status": "pending",               # pending | approved | rejected
+        "created_at": _now(),
+        "decided_at": None,
+        "note": "",
+    }
+    _write_json(_qreq_path(rid), item)
+    return item
+
+
+def get_quota_request(rid: str) -> dict | None:
+    return _read_json(_qreq_path(rid), None)
+
+
+def list_quota_requests(status: str | None = None) -> list[dict]:
+    if not QUOTA_REQ_DIR.exists():
+        return []
+    out = []
+    for p in QUOTA_REQ_DIR.glob("*.json"):
+        item = _read_json(p, None)
+        if item and (status is None or item.get("status") == status):
+            out.append(item)
+    out.sort(key=lambda x: (x.get("status") != "pending",
+                            -(x.get("created_at") or 0)))
+    return out
+
+
+def latest_quota_request(uid: str) -> dict | None:
+    items = [q for q in list_quota_requests() if q.get("uid") == uid]
+    return items[0] if items else None
+
+
+def decide_quota_request(rid: str, approve: bool, note: str = "") -> dict | None:
+    item = get_quota_request(rid)
+    if not item or item.get("status") != "pending":
+        return None
+    item["status"] = "approved" if approve else "rejected"
+    item["decided_at"] = _now()
+    item["note"] = (note or "").strip()[:300]
+    if approve:
+        set_quota(item["uid"], item["request_bytes"], custom=True)
+    _write_json(_qreq_path(rid), item)
+    return item
+
+
+def quota_requests_unread() -> int:
+    return sum(1 for q in list_quota_requests("pending"))
