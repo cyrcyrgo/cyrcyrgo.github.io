@@ -33,6 +33,7 @@ class Tunnel:
         self.pushed: bool = False
         self.proc: subprocess.Popen | None = None
         self._task: asyncio.Task | None = None
+        self._heartbeat: asyncio.Task | None = None
 
     # ------------------------------------------------------------------ #
     def binary(self) -> str | None:
@@ -71,6 +72,22 @@ class Tunnel:
         )
         print(f"[tunnel] cpolar started for port {port}")
         self._task = asyncio.create_task(self._watch())
+        self._heartbeat = asyncio.create_task(self._heartbeat_loop())
+
+    async def _heartbeat_loop(self) -> None:
+        """Re-push the known URL every 10 min.
+
+        The URL only changes on restart, but the boot-time push can be lost
+        to a transient network/GitHub failure; without this the Pages
+        frontend would keep a dead tunnel address until the next reboot.
+        """
+        while True:
+            await asyncio.sleep(600)
+            if self.url:
+                try:
+                    await github_sync.push_runtime_config(self.url)
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[tunnel] heartbeat push failed: {exc}")
 
     async def _watch(self) -> None:
         if not self.proc or not self.proc.stdout:
@@ -114,6 +131,8 @@ class Tunnel:
     def stop(self) -> None:
         if self._task:
             self._task.cancel()
+        if self._heartbeat:
+            self._heartbeat.cancel()
         if self.proc:
             self.proc.terminate()
 
