@@ -1,7 +1,7 @@
 # YJS LLM Agent
 
 一个运行在本机的自主 AI 智能体：用邮箱验证码登录，创建对话并下发任务，
-本地模型（Ollama + `qwen3.5:9b`）驱动 Agent 直接操作这台电脑 —— 读写/删除文件、
+本地模型（llama.cpp + 本机 GGUF 模型）驱动 Agent 直接操作这台电脑 —— 读写/删除文件、
 执行 Python / Node.js / PowerShell、发送 HTTP 请求、控制浏览器、调用 MCP 服务器，
 最后把产出文件与汇报返回给用户。
 
@@ -9,7 +9,7 @@
 
 ```
 浏览器 (GitHub Pages 前端)  ──HTTPS──▶  ngrok 隧道  ──▶  本机 FastAPI 后端
-                                                          ├─ Ollama qwen3.5:9b
+                                                          ├─ llama.cpp 本地推理引擎
                                                           ├─ Agent 工具集
                                                           └─ D:\yjs\data\users\<用户>  (1GB 配额)
 ```
@@ -34,10 +34,7 @@ D:\yjs
 ## 启动
 
 ```powershell
-# 1) 安装 Ollama 并拉取模型
-ollama pull qwen3.5:9b
-
-# 2) 启动服务
+# 1) 启动服务（后端会自动加载本机 GGUF 模型）
 .\start.ps1
 ```
 
