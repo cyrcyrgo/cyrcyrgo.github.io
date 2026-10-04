@@ -1,11 +1,11 @@
-/* YJS offline shell â€?service worker.
+/* YJS offline shell â€” service worker.
  *
  * Scope: the /cla/ folder on GitHub Pages (or "/" when run locally).
  * Caches the page shell + vendored inference engine/wasm so the local-mode
  * UI opens with NO internet. API calls and cross-origin weight downloads
  * are never intercepted.
  */
-const VERSION = "yjs-shell-v20261003m";
+const VERSION = "yjs-shell-v20261003n";
 const BASE = self.registration.scope;
 
 const PRECACHE = [
