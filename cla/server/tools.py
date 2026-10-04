@@ -463,28 +463,74 @@ async def web_search(ctx: ToolContext, query: str, count: int = 8):
 # --------------------------------------------------------------------------- #
 @tool(
     "browser",
-    "浏览器自动化。action 取值：goto | click | type | press | get_text | get_html | "
-    "screenshot | wait | back | close。返回页面文本或截图路径。",
+    "无头浏览器自动化。action 取值：goto | current | click | type | press | get_text | "
+    "get_attr | query_all | get_html | evaluate | wait_for | screenshot | wait | back | close。"
+    "selector 为 CSS 选择器；evaluate 时用 script 传页面内 JS；get_attr 时 text 传属性名；"
+    "wait_for 用 timeout_ms 等待元素出现。返回页面文本/属性/执行结果或截图路径。",
     {
         "type": "object",
         "properties": {
             "action": {"type": "string"},
             "url": {"type": "string"},
             "selector": {"type": "string"},
-            "text": {"type": "string"},
-            "wait_ms": {"type": "integer", "description": "默认 800"},
+            "text": {"type": "string", "description": "type 输入文本 / press 按键 / get_attr 属性名"},
+            "wait_ms": {"type": "integer", "description": "动作后等待毫秒，默认 800"},
+            "script": {"type": "string", "description": "evaluate：在页面内执行的 JavaScript"},
+            "timeout_ms": {"type": "integer", "description": "wait_for 超时毫秒，默认 15000"},
         },
         "required": ["action"],
     },
     sensitive=True,
 )
 async def browser_tool(ctx: ToolContext, action: str, url: str = "", selector: str = "",
-                       text: str = "", wait_ms: int = 800):
+                       text: str = "", wait_ms: int = 800,
+                       script: str = "", timeout_ms: int = 15000):
     from . import browser_tools
 
     return await browser_tools.run_action(
-        ctx, action=action, url=url, selector=selector, text=text, wait_ms=wait_ms
+        ctx, action=action, url=url, selector=selector, text=text,
+        wait_ms=wait_ms, script=script, timeout_ms=timeout_ms,
     )
+
+
+# --------------------------------------------------------------------------- #
+# date / time
+# --------------------------------------------------------------------------- #
+@tool(
+    "get_time",
+    "获取当前日期和时间（服务器本机时区）。需要知道现在几点、今天星期几、"
+    "当前日期、时间戳，或做时间相关计算时使用。",
+    {
+        "type": "object",
+        "properties": {
+            "format": {"type": "string",
+                       "description": "strftime 格式，可选，默认返回常用完整信息"},
+        },
+    },
+)
+async def get_time(ctx: ToolContext, format: str = ""):
+    now = time.time()
+    lt = time.localtime(now)
+    tz_name = time.strftime("%Z", lt) or "本地时间"
+    offset = -time.timezone if lt.tm_isdst <= 0 else -time.altzone
+    tz_hh, tz_mm = divmod(abs(offset) // 60, 60)
+    tz_str = f"UTC{'+' if offset >= 0 else '-'}{tz_hh:02d}:{tz_mm:02d}"
+    result = {
+        "ok": True,
+        "datetime": time.strftime("%Y-%m-%d %H:%M:%S", lt),
+        "date": time.strftime("%Y-%m-%d", lt),
+        "time": time.strftime("%H:%M:%S", lt),
+        "weekday": "星期" + "一二三四五六日"[lt.tm_wday],
+        "iso": time.strftime("%Y-%m-%dT%H:%M:%S", lt),
+        "timestamp": int(now),
+        "timezone": f"{tz_name}（{tz_str}）",
+    }
+    if format.strip():
+        try:
+            result["formatted"] = time.strftime(format.strip(), lt)
+        except Exception as exc:  # noqa: BLE001
+            result["formatted_error"] = str(exc)
+    return result
 
 
 # --------------------------------------------------------------------------- #
