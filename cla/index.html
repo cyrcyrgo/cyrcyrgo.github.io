@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS Cloud LLM Agent</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A4%96%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/style.css?v=20261003o" />
+<link rel="stylesheet" href="assets/style.css?v=20261003p" />
 </head>
 <body>
 
@@ -37,6 +37,46 @@
                autocomplete="current-password" />
       </div>
       <button id="btn-pwd-login" style="width:100%;padding:12px">登录</button>
+      <div class="forgot-row">
+        <a href="javascript:void(0)" id="btn-forgot">忘记密码？</a>
+        <span class="forgot-sep">·</span>
+        <a href="javascript:void(0)" id="btn-go-unfreeze">账号解冻</a>
+      </div>
+    </div>
+
+    <div id="pane-unfreeze" class="hidden">
+      <div class="unfreeze-banner">🔒 账号因连续密码错误被安全冻结，请完成使用痕迹核验</div>
+      <div class="field">
+        <input id="uf-email" type="email" placeholder="被冻结的邮箱地址" autocomplete="email" />
+      </div>
+      <div class="field">
+        <textarea id="uf-reason" rows="2" placeholder="解冻原因（至少 5 个字）"></textarea>
+      </div>
+      <div id="uf-questions" class="uf-questions"></div>
+      <button id="btn-uf-submit" style="width:100%;padding:12px">提交解冻申请</button>
+      <div id="uf-result" class="msg"></div>
+      <div class="forgot-row">
+        <a href="javascript:void(0)" id="btn-uf-back">← 返回登录</a>
+      </div>
+    </div>
+
+    <div id="pane-reset" class="hidden">
+      <div class="field">
+        <input id="reset-email" type="email" placeholder="注册邮箱地址" autocomplete="email" />
+      </div>
+      <div class="field row">
+        <input id="reset-code" placeholder="6 位邮箱验证码" inputmode="numeric" maxlength="6" />
+        <button id="btn-reset-send" class="ghost" style="flex:0 0 130px">获取验证码</button>
+      </div>
+      <div class="field">
+        <input id="reset-password" type="password" placeholder="新密码（至少 6 位）"
+               autocomplete="new-password" />
+      </div>
+      <button id="btn-reset-ok" style="width:100%;padding:12px">重置密码并登录</button>
+      <div id="reset-msg" class="msg"></div>
+      <div class="forgot-row">
+        <a href="javascript:void(0)" id="btn-reset-back">← 返回登录</a>
+      </div>
     </div>
 
     <div id="login-msg" class="msg"></div>
@@ -66,6 +106,9 @@
     <input id="conv-search" class="conv-search" placeholder="搜索对话…" autocomplete="off" />
     <div class="conv-list" id="conv-list"></div>
     <div class="sidebar-foot">
+      <button id="btn-notifications" class="ghost" style="flex:1">
+        🔔 服务通知<span id="nt-badge" class="nt-badge hidden">0</span>
+      </button>
       <button id="btn-files" class="ghost" style="flex:1">我的文件</button>
       <button id="btn-logout" class="ghost">退出</button>
     </div>
@@ -113,6 +156,14 @@
       </div>
     </div>
   </main>
+</div>
+
+<div id="notifications-panel" class="drawer hidden">
+  <div class="drawer-head">
+    <h3>🔔 服务通知</h3>
+    <div><button id="btn-close-notifications" class="ghost">关闭</button></div>
+  </div>
+  <div id="nt-list" class="nt-list"><div class="muted" style="padding:16px">加载中…</div></div>
 </div>
 
 <div id="files-panel" class="drawer wide-drawer hidden">
@@ -198,17 +249,17 @@
   </div>
 
   <div class="me-block">
-    <div class="me-title">申请扩大云空间 <span class="me-hint">· 基础空间 50MB，可向管理员申请扩容</span></div>
+    <div class="me-title">申请调整云空间 <span class="me-hint">· 基础空间 50MB，可申请扩大或缩小，管理员可设临时期限</span></div>
     <div id="qreq-status" class="qreq-status"></div>
     <div class="me-field row">
       <input id="qreq-size" type="number" min="1" max="51200" placeholder="期望空间（MB），如 500" style="flex:1" />
-      <span class="me-hint" style="flex:0 0 auto;padding-top:8px">MB（最大 51200）</span>
+      <span class="me-hint" style="flex:0 0 auto;padding-top:8px">MB（1 ~ 51200）</span>
     </div>
     <div class="me-field">
-      <textarea id="qreq-reason" rows="3" placeholder="申请理由（至少 5 个字）：用途、需要多大空间…"></textarea>
+      <textarea id="qreq-reason" rows="3" placeholder="申请理由（至少 5 个字）：扩大或缩小的用途、期望大小…"></textarea>
     </div>
     <div class="me-inline">
-      <button id="btn-qreq-submit">提交扩容申请</button>
+      <button id="btn-qreq-submit">提交调整申请</button>
       <span class="me-msg" id="qreq-msg"></span>
     </div>
   </div>
@@ -228,6 +279,9 @@
 
   <div class="me-block">
     <div class="me-title">登录密码</div>
+    <div class="me-field" id="me-oldpw-field">
+      <input id="me-pw0" type="password" placeholder="旧密码" autocomplete="current-password" />
+    </div>
     <div class="me-field">
       <input id="me-pw1" type="password" placeholder="新密码（至少 6 位）" autocomplete="new-password" />
     </div>
@@ -241,7 +295,7 @@
   </div>
 
   <div class="me-block">
-    <div class="me-title">向作者反馈</div>
+    <div class="me-title">使用意见 / 反馈</div>
     <div class="me-field">
       <select id="me-fb-cat">
         <option value="功能建议">功能建议</option>
@@ -253,11 +307,23 @@
     <div class="me-field">
       <textarea id="me-fb-text" rows="4" placeholder="描述你的建议或遇到的问题…"></textarea>
     </div>
+    <div class="me-field fb-target">
+      <label><input type="radio" name="fb-target" value="admin" checked />
+        发送到管理员后台（可查看回信、可撤销）</label>
+      <label><input type="radio" name="fb-target" value="email" />
+        发送到官方邮箱 YJS-CLA@hotmail.com（仅收取，不回访、不可撤销）</label>
+    </div>
     <div class="me-inline">
       <button id="btn-me-feedback">提交反馈</button>
       <span class="me-msg" id="me-fb-msg"></span>
     </div>
-    <div class="me-hint">意见会先提交到服务器，再由服务器通过邮件转发给管理员 YJS-CLA@hotmail.com。</div>
+    <div class="me-hint">同一账号两次反馈至少间隔 3 分钟（服务器计时）。</div>
+
+    <div class="my-fb-head">
+      <span class="me-title" style="margin:0">我发送的反馈</span>
+      <button class="ghost" id="btn-myfb-refresh" type="button">刷新</button>
+    </div>
+    <div id="my-fb-list" class="my-fb-list"><div class="me-hint">点击刷新查看</div></div>
   </div>
 </div>
 
@@ -312,7 +378,7 @@
   </div>
 </div>
 
-<script src="assets/app.js?v=20261003o"></script>
-<script src="assets/local.js?v=20261003o"></script>
+<script src="assets/app.js?v=20261003p"></script>
+<script src="assets/local.js?v=20261003p"></script>
 </body>
 </html>
