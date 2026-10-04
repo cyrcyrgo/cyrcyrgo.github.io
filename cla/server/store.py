@@ -872,6 +872,33 @@ def unread_user_notices(uid: str) -> int:
     return sum(1 for n in list_user_notices(uid) if not n.get("read"))
 
 
+def add_pending_unfreeze_notice(uid: str, by: str = "") -> None:
+    """Queue a "account unfrozen" notice to be delivered on the next login."""
+    p = user_dir(uid) / "profile.json"
+    prof = _read_json(p, None)
+    if not prof:
+        return
+    pend = prof.get("pending_notices") or []
+    pend.append({"kind": "unfreeze", "by": (by or "")[:120], "at": _now()})
+    prof["pending_notices"] = pend[-10:]
+    _write_json(p, prof)
+
+
+def take_pending_unfreeze_notice(uid: str) -> dict | None:
+    """Pop the oldest queued unfreeze notice (delivered exactly once)."""
+    p = user_dir(uid) / "profile.json"
+    prof = _read_json(p, None)
+    if not prof:
+        return None
+    pend = prof.get("pending_notices") or []
+    if not pend:
+        return None
+    item = pend.pop(0)
+    prof["pending_notices"] = pend
+    _write_json(p, prof)
+    return item
+
+
 def mark_user_notices_read(uid: str) -> None:
     for n in list_user_notices(uid):
         if not n.get("read"):
