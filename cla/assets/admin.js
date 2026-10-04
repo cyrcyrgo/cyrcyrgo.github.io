@@ -880,7 +880,7 @@
       $("set-ai").checked = !!st.ai_enabled;
       $("set-register").checked = !!st.allow_register;
       $("set-addmodel").checked = !!st.allow_model_add;
-      $("set-toolcalls").value = st.max_tool_calls_per_step || 8;
+      $("set-toolcalls").value = st.max_tool_calls_per_step || 500;
       $("set-default").innerHTML = (st.models || []).map((m) =>
         `<option value="${escapeHtml(m.name)}" ${m.name === st.default_model ? "selected" : ""}>
            ${escapeHtml(m.display || m.name)}${m.enabled ? "" : "（已暂停）"}</option>`).join("");
@@ -895,7 +895,7 @@
           allow_register: $("set-register").checked,
           allow_model_add: $("set-addmodel").checked,
           default_model: $("set-default").value || "",
-          max_tool_calls_per_step: parseInt($("set-toolcalls").value, 10) || 8,
+          max_tool_calls_per_step: parseInt($("set-toolcalls").value, 10) || 500,
         }),
       });
       toast("系统设置已保存", "ok");
