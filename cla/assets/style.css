@@ -333,6 +333,73 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); }
 .model-select, .mode-select { transition: border-color .15s, box-shadow .15s; }
 .model-select:hover, .mode-select:hover { border-color: var(--accent); }
 
+/* ---------- login: forgot password ---------- */
+.forgot-row { margin-top: 10px; text-align: center; }
+.forgot-row a { color: var(--accent); font-size: 13px; text-decoration: none; }
+.forgot-row a:hover { text-decoration: underline; }
+.forgot-sep { color: var(--muted); margin: 0 8px; }
+.unfreeze-banner {
+  background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
+  border-radius: 8px; padding: 9px 11px; font-size: 12.5px; line-height: 1.6;
+  margin-bottom: 10px;
+}
+.uf-questions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.uf-q label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 3px; }
+.uf-q input { width: 100%; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 7px; background: var(--panel); color: var(--text); box-sizing: border-box; }
+
+/* ---------- feedback routing + history ---------- */
+.fb-target { display: flex; flex-direction: column; gap: 6px; }
+.fb-target label { font-size: 12.5px; color: var(--muted); display: flex; gap: 6px;
+  align-items: flex-start; cursor: pointer; }
+.my-fb-head { display: flex; justify-content: space-between; align-items: center;
+  margin-top: 14px; margin-bottom: 8px; }
+.my-fb-list { display: flex; flex-direction: column; gap: 8px; }
+.myfb-item { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px;
+  background: var(--panel-2); }
+.myfb-head { display: flex; flex-wrap: wrap; gap: 7px; align-items: center;
+  font-size: 11.5px; margin-bottom: 5px; }
+.myfb-tag { padding: 1px 8px; border-radius: 999px; font-size: 11px; }
+.myfb-tag.mail { background: #fef3c7; color: #92400e; }
+.myfb-tag.admin { background: #dbeafe; color: #1e40af; }
+.myfb-cat { color: var(--text); font-weight: 600; }
+.myfb-body { font-size: 12.5px; line-height: 1.7; white-space: pre-wrap;
+  word-break: break-word; }
+.myfb-reply { margin-top: 6px; padding: 7px 9px; background: #f0fdf4;
+  border-radius: 6px; font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; }
+.myfb-revoke { margin-top: 6px; font-size: 12px; padding: 3px 10px; }
+
+/* ---------- personal notice scope tag ---------- */
+.nt-scope { display: inline-block; margin-right: 6px; padding: 0 7px;
+  border-radius: 999px; font-size: 10.5px; font-weight: 600;
+  background: #ede9fe; color: #6d28d9; vertical-align: 1px; }
+
+/* ---------- sidebar service notifications ---------- */
+.nt-badge {
+  display: inline-block; min-width: 17px; height: 17px; line-height: 17px;
+  padding: 0 5px; margin-left: 5px; border-radius: 999px;
+  background: #ef4444; color: #fff; font-size: 11px; text-align: center;
+}
+.nt-list { display: flex; flex-direction: column; gap: 9px; }
+.nt-card {
+  padding: 11px 13px; background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 9px; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.nt-card:hover { border-color: var(--accent); }
+.nt-card.unread { border-left: 3px solid var(--accent); }
+.nt-card.unread .nt-card-title { color: var(--accent); }
+.nt-card-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.nt-card-title { font-weight: 600; font-size: 13.5px; }
+.nt-time { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.nt-card-preview { color: var(--muted); font-size: 12.5px; margin-top: 5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-back { margin-bottom: 12px; }
+.nt-detail-title { margin: 0 0 10px; font-size: 17px; }
+.nt-detail-meta { color: var(--muted); font-size: 12.5px; line-height: 1.9;
+  padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.nt-detail-body { font-size: 13.5px; line-height: 1.85; white-space: pre-wrap;
+  word-break: break-word; }
+
 /* ---------- preview drawer ---------- */
 .preview-iframe {
   width: 100%; height: calc(100vh - 100px); border: none; border-radius: 8px;
