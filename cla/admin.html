@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS 管理后台</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%99%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/admin.css?v=20261003t" />
+<link rel="stylesheet" href="assets/admin.css?v=20261003u" />
 </head>
 <body>
 
@@ -55,22 +55,22 @@
       <div class="stat hl"><div class="k">累计 Token</div><div class="v" id="s-tokens">0</div><div class="s" id="s-token-split">输入 0 · 输出 0</div></div>
       <div class="stat"><div class="k">今日 Token</div><div class="v" id="s-today">0</div><div class="s" id="s-today-calls">今日调用 0 次</div></div>
       <div class="stat"><div class="k">实时活跃</div><div class="v" id="s-live">0</div><div class="s">正在生成的调用</div></div>
-      <div class="stat"><div class="k">Ollama</div><div class="v" id="s-ollama">—</div><div class="s" id="s-vram">显存占用 —</div></div>
+      <div class="stat"><div class="k">推理引擎</div><div class="v" id="s-engine">—</div><div class="s" id="s-vram">显存占用 —</div></div>
     </section>
   </section>
 
-  <!-- 主机与 Ollama 远程控制 -->
+  <!-- 主机与本地推理引擎远程控制 -->
   <section class="panel">
-    <h3>主机与引擎 <span class="hint">· 远程开关 Ollama / 关闭服务器主机</span></h3>
+    <h3>主机与引擎 <span class="hint">· 远程开关本地推理引擎 / 关闭服务器主机</span></h3>
     <div class="power-row">
       <div class="power-item">
-        <span class="sw-label">Ollama 引擎</span>
-        <span id="sys-ollama-state" class="badge">检测中…</span>
+        <span class="sw-label">llama.cpp 引擎</span>
+        <span id="sys-engine-state" class="badge">检测中…</span>
       </div>
       <div class="power-actions">
-        <button class="btn ghost" id="btn-ollama-start">启动 Ollama</button>
-        <button class="btn ghost" id="btn-ollama-restart">重启 Ollama</button>
-        <button class="btn danger" id="btn-ollama-stop">停止 Ollama</button>
+        <button class="btn ghost" id="btn-engine-start">启动引擎</button>
+        <button class="btn ghost" id="btn-engine-restart">重启引擎</button>
+        <button class="btn danger" id="btn-engine-stop">停止引擎</button>
         <span id="sys-msg" class="muted inline-msg"></span>
       </div>
     </div>
@@ -443,6 +443,6 @@
   </div>
 </div>
 
-<script src="assets/admin.js?v=20261003t"></script>
+<script src="assets/admin.js?v=20261003u"></script>
 </body>
 </html>
