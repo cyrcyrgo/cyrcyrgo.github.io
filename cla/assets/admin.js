@@ -318,9 +318,9 @@
     $("s-today-calls").textContent = `今日调用 ${fmtNum(today.calls)} 次`;
     $("s-live").textContent = fmtNum((ov.live || []).length);
 
-    const el = $("s-ollama");
-    el.textContent = ov.ollama_ok ? "在线" : "离线";
-    el.style.color = ov.ollama_ok ? "var(--ok)" : "var(--err)";
+    const el = $("s-engine");
+    el.textContent = ov.engine_ok ? "在线" : "离线";
+    el.style.color = ov.engine_ok ? "var(--ok)" : "var(--err)";
     const vram = (ov.vram || []).reduce((a, m) => a + (m.vram || 0), 0);
     $("s-vram").textContent = vram ? "已加载 " + fmtSize(vram) : "无模型常驻";
 
@@ -1700,36 +1700,36 @@
   on("qdecide-approve", "click", () => submitQuotaDecision(true));
   on("qdecide-reject", "click", () => submitQuotaDecision(false));
 
-  /* ---------------------------------------------------- host + ollama */
+  /* ---------------------------------------------------- host + engine */
   async function loadSystemStatus() {
     try {
       const d = await api("/api/admin/system");
-      const st = $("sys-ollama-state");
-      st.textContent = d.ollama_running ? "● 运行中" : "○ 已停止";
-      st.className = "badge " + (d.ollama_running ? "yes" : "no");
-      $("btn-ollama-start").disabled = !!d.ollama_running;
-      $("btn-ollama-stop").disabled = !d.ollama_running;
+      const st = $("sys-engine-state");
+      st.textContent = d.engine_running ? "● 运行中" : "○ 已停止";
+      st.className = "badge " + (d.engine_running ? "yes" : "no");
+      $("btn-engine-start").disabled = !!d.engine_running;
+      $("btn-engine-stop").disabled = !d.engine_running;
       const t = $("sys-tunnel");
       t.textContent = "内网穿透：" + (d.tunnel || "未建立") +
         (d.tunnel_pushed ? "（已推送配置）" : "（配置未推送）");
     } catch (_) {}
   }
-  async function ollamaCtl(action, btn) {
+  async function engineCtl(action, btn) {
     const msg = $("sys-msg");
     btn.disabled = true;
-    msg.textContent = action === "stop" ? "正在停止…" : "正在启动，最多等待 20 秒…";
+    msg.textContent = action === "stop" ? "正在停止…" : "正在启动，最长等待一次模型加载…";
     try {
-      const d = await api("/api/admin/system/ollama", {
+      const d = await api("/api/admin/system/engine", {
         method: "POST", body: JSON.stringify({ action }),
       });
-      msg.textContent = d.note || (d.ollama_running ? "✓ Ollama 正在运行" : "✓ 已停止");
+      msg.textContent = d.note || (d.engine_running ? "✓ 本地推理引擎正在运行" : "✓ 已停止");
       await loadSystemStatus();
     } catch (e) { msg.textContent = "✗ " + e.message; }
     finally { btn.disabled = false; }
   }
-  on("btn-ollama-start", "click", (e) => ollamaCtl("start", e.target));
-  on("btn-ollama-stop", "click", (e) => ollamaCtl("stop", e.target));
-  on("btn-ollama-restart", "click", (e) => ollamaCtl("restart", e.target));
+  on("btn-engine-start", "click", (e) => engineCtl("start", e.target));
+  on("btn-engine-stop", "click", (e) => engineCtl("stop", e.target));
+  on("btn-engine-restart", "click", (e) => engineCtl("restart", e.target));
   on("btn-shutdown", "click", () => {
     const delay = parseInt($("shutdown-delay").value, 10) || 5;
     if (!confirm(`确定 ${delay} 秒后关闭服务器主机？\n关机后本站、内网穿透将全部下线，需要人工重新开机！`)) return;
