@@ -408,10 +408,9 @@
     const sc = r ? r.score : "?";
     if (r && r.auto_denied) {
       setUfMsg(`系统评分 ${sc} 分（低于 50 分），已自动否决，本次冻结无法再次提交申请。`
-        + `管理员无法直接审批，只能向你的邮箱发送高级解冻 PIN，`
-        + `请联系管理员并留意邮件中的 6 位 PIN。`, "err");
+        + `系统已自动向邮箱管理者发送 6 位高级解冻 PIN，请直接联系管理员完成高级解冻。`, "err");
     } else if (r && (r.status === "denied")) {
-      setUfMsg("管理员已拒绝本次解冻申请。本次冻结无法再次提交，请联系管理员使用 PIN 高级解冻。", "err");
+      setUfMsg("管理员已拒绝本次解冻申请。本次冻结无法再次提交，系统已自动向邮箱管理者发送高级解冻 PIN，请联系管理员完成高级解冻。", "err");
     } else {
       setUfMsg(`申请已提交（系统评分 ${sc} 分，达到 50 分），请等待管理员审批，结果会在此自动刷新。`, "ok");
     }
@@ -466,7 +465,7 @@
         }
         if (d.submitted && !ufSubmitted && r) showUfSubmitted(r);
         if (r && r.status === "denied" && ufSubmitted) {
-          setUfMsg("管理员已拒绝本次解冻申请。本次冻结无法再次提交，请联系管理员使用 PIN 高级解冻。", "err");
+          setUfMsg("管理员已拒绝本次解冻申请。本次冻结无法再次提交，系统已自动向邮箱管理者发送高级解冻 PIN，请联系管理员完成高级解冻。", "err");
         }
       } catch (_) {}
     };
