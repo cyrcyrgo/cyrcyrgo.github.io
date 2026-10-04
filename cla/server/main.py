@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import os
+import threading
 import time
+import zipfile
 from html import escape as _esc
 from pathlib import Path
 
@@ -126,7 +129,9 @@ def _public_user(user: dict) -> dict:
 
 @app.get("/api/me")
 async def me(user: dict = Depends(current_user)):
-    return {"ok": True, "user": _public_user(user)}
+    data = _public_user(user)
+    data["quota_request"] = store.latest_quota_request(user["uid"])
+    return {"ok": True, "user": data}
 
 
 class PasswordLoginIn(BaseModel):
@@ -269,18 +274,85 @@ async def change_my_email(body: EmailChangeIn, user: dict = Depends(current_user
             "user": _public_user(updated)}
 
 
+# --------------------------------------------------------------------------- #
+# cloud-space expansion requests (user side)
+# --------------------------------------------------------------------------- #
+MAX_QUOTA_REQUEST_MB = 51200          # cap an application at 50 GB
+
+
+class QuotaRequestIn(BaseModel):
+    size_mb: int
+    reason: str
+
+
+@app.get("/api/quota/request")
+async def my_quota_request(user: dict = Depends(current_user)):
+    return {"ok": True, "request": store.latest_quota_request(user["uid"]),
+            "base_quota": cfg.CONFIG["quota_bytes"]}
+
+
+@app.post("/api/quota/request")
+async def apply_quota(body: QuotaRequestIn, user: dict = Depends(current_user)):
+    size_mb = int(body.size_mb or 0)
+    reason = (body.reason or "").strip()
+    if size_mb <= 0:
+        raise HTTPException(400, "请填写申请的空间大小")
+    if size_mb > MAX_QUOTA_REQUEST_MB:
+        raise HTTPException(400, f"单次申请不能超过 {MAX_QUOTA_REQUEST_MB // 1024}GB")
+    if len(reason) < 5:
+        raise HTTPException(400, "请填写至少 5 个字的申请理由")
+    current = int((store.get_user(user["uid"]) or {}).get("quota_bytes")
+                  or cfg.CONFIG["quota_bytes"])
+    if size_mb * 1024 * 1024 <= current:
+        raise HTTPException(400, "申请大小需要大于当前云空间")
+    item = store.create_quota_request(user["uid"], size_mb * 1024 * 1024, reason)
+    return {"ok": True, "request": item}
+
+
 class FeedbackIn(BaseModel):
     category: str = "其他"
     content: str
 
 
+# User feedback is stored locally AND forwarded to this mailbox over SMTP.
+FEEDBACK_RECIPIENT = "YJS-CLA@hotmail.com"
+
+
+async def _forward_feedback_mail(item: dict) -> None:
+    """Best-effort SMTP forward of a feedback item to the author mailbox."""
+    subject = f"[YJS 用户反馈] {item.get('category') or '其他'} · {item.get('email')}"
+    rows = [
+        ("提交人", _esc(f"{item.get('name') or '（未命名）'} <{item.get('email')}>")),
+        ("分类", item.get("category") or "其他"),
+        ("时间", time.strftime("%Y-%m-%d %H:%M:%S",
+                               time.localtime(item.get("created_at") or time.time()))),
+    ]
+    table = "".join(
+        f"<tr><td style='padding:4px 14px 4px 0;color:#666'>{_esc(k)}</td>"
+        f"<td style='padding:4px 0'>{v}</td></tr>" for k, v in rows)
+    html = auth._wrap("新的用户使用意见",
+                      "<table style='font-size:14px'>" + table + "</table>"
+                      "<div style='margin-top:14px;padding:12px 14px;"
+                      "background:#f6f8fb;border-radius:8px;line-height:1.7;white-space:pre-wrap'>"
+                      + _esc(item.get("content") or "") + "</div>")
+    try:
+        await asyncio.to_thread(auth.send_mail, FEEDBACK_RECIPIENT, subject, html)
+        store.update_feedback_email(item["id"], "sent")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[feedback] forward failed: {exc}")
+        store.update_feedback_email(item["id"], "failed", str(exc))
+
+
 @app.post("/api/feedback")
 async def submit_feedback(body: FeedbackIn, user: dict = Depends(current_user)):
-    """「向作者反馈」—— stored server-side for the admin to review."""
+    """「使用意见」—— stored server-side, then forwarded to the author via SMTP."""
     content = (body.content or "").strip()
     if len(content) < 2:
         raise HTTPException(400, "请填写反馈内容")
     item = store.add_feedback(user["uid"], user.get("email", ""), body.category, content)
+    # Forward to the author mailbox in the background; never block or fail the
+    # user's submission when SMTP is unconfigured / temporarily down.
+    asyncio.create_task(_forward_feedback_mail(item))
     return {"ok": True, "id": item["id"]}
 
 
@@ -296,7 +368,7 @@ async def list_conversations(user: dict = Depends(current_user)):
 async def create_conversation(user: dict = Depends(current_user)):
     usage = store.usage(user["uid"])
     if usage["full"]:
-        raise HTTPException(403, "存储空间已满（1GB），请清理文件后再开启新对话")
+        raise HTTPException(403, "存储空间已满，请清理文件后再开启新对话")
     return {"ok": True, "conversation": store.create_conversation(user["uid"])}
 
 
@@ -318,6 +390,24 @@ async def delete_conversation(cid: str, user: dict = Depends(current_user)):
 _RUNNING: set = set()
 # Per-uid active model during a running chat (for SSE model event).
 _active_model: dict[str, str] = {}
+# Conversations that currently have an agent run in progress
+# (uid, cid) -> monotonic start time. Survives client disconnects; a second
+# message is rejected until the first run finishes, preventing interleaving.
+_RUNNING_CONV: dict[tuple[str, str], float] = {}
+
+
+@app.get("/api/conversations/{cid}/status")
+async def conversation_status(cid: str, user: dict = Depends(current_user)):
+    conv = store.get_conversation(user["uid"], cid)
+    if not conv:
+        raise HTTPException(404, "对话不存在")
+    started = _RUNNING_CONV.get((user["uid"], cid))
+    return {
+        "ok": True,
+        "running": started is not None,
+        "elapsed": int(time.monotonic() - started) if started else 0,
+        "messages": len(conv.get("messages", [])),
+    }
 
 
 @app.post("/api/conversations/{cid}/chat")
@@ -325,6 +415,9 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
     uid = user["uid"]
     if not store.get_conversation(uid, cid):
         raise HTTPException(404, "对话不存在")
+    run_key = (uid, cid)
+    if run_key in _RUNNING_CONV:
+        raise HTTPException(409, "上一个任务还在执行中，请等它完成后再发送（断线也没关系，完成后会自动保存）")
     # Global master switch: an admin can suspend every model call at once.
     if not cfg.CONFIG.get("ai_enabled", True):
         raise HTTPException(403, "管理员已暂停全部模型调用，请稍后再试")
@@ -376,10 +469,15 @@ async def chat(cid: str, body: ChatIn, user: dict = Depends(current_user)):
         # Notify the UI which model is about to run, so it updates the chip.
         await emit({"type": "model", "model": resolved_model})
         await emit({"type": "mode", "mode": resolved_mode})
+        _RUNNING_CONV[run_key] = time.monotonic()
         task = asyncio.create_task(agent.run_agent(uid, cid, emit, model=resolved_model,
                                                    mode=resolved_mode, agent_id=body.agent))
         _RUNNING.add(task)
         task.add_done_callback(_RUNNING.discard)
+        # The lock is tied to the AGENT task, not this SSE stream: closing the
+        # browser does not cancel the run, and the lock clears only when the
+        # agent itself finishes (its result is already saved to disk).
+        task.add_done_callback(lambda _t: _RUNNING_CONV.pop(run_key, None))
         idle = 0
         try:
             while True:
@@ -494,6 +592,135 @@ async def preview_file(path: str, user: dict = Depends(current_user)):
 async def clear_files(user: dict = Depends(current_user)):
     store.delete_all_files(user["uid"])
     return {"ok": True, "usage": store.usage(user["uid"])}
+
+
+# --------------------------------------------------------------------------- #
+# batch file operations (multi-select in 我的文件)
+# --------------------------------------------------------------------------- #
+MAX_BATCH_FILES = 20
+MAX_MAIL_ATTACHMENT_BYTES = 25 * 1024 * 1024
+
+
+def _safe_workspace_file(uid: str, rel: str):
+    """Resolve a user-supplied relative path inside their workspace."""
+    rel = (rel or "").strip().replace("\\", "/")
+    parts = [p for p in rel.split("/") if p not in ("", ".")]
+    if not parts or any(p == ".." for p in parts):
+        raise HTTPException(400, "非法路径")
+    root = store.workspace(uid).resolve()
+    target = (root / "/".join(parts)).resolve()
+    if root not in target.parents and target != root:
+        raise HTTPException(403, "非法路径")
+    if not target.is_file():
+        raise HTTPException(404, "文件不存在：" + rel)
+    return target
+
+
+class BatchFilesIn(BaseModel):
+    paths: list[str]
+
+
+@app.post("/api/files/batch-delete")
+async def batch_delete_files(body: BatchFilesIn, user: dict = Depends(current_user)):
+    paths = (body.paths or [])[:MAX_BATCH_FILES]
+    deleted, failed = [], []
+    for rel in paths:
+        try:
+            target = _safe_workspace_file(user["uid"], rel)
+            rel_posix = target.relative_to(store.workspace(user["uid"]).resolve()).as_posix()
+            if store.delete_file(user["uid"], rel_posix):
+                deleted.append(rel_posix)
+            else:
+                failed.append(rel)
+        except HTTPException as exc:
+            failed.append(f"{rel}（{exc.detail}）")
+    return {"ok": True, "deleted": deleted, "failed": failed,
+            "usage": store.usage(user["uid"])}
+
+
+@app.get("/api/files/batch-download")
+async def batch_download_files(paths: list[str] = Query(default=[]),
+                               user: dict = Depends(current_user)):
+    paths = paths[:MAX_BATCH_FILES]
+    if not paths:
+        raise HTTPException(400, "请先勾选文件")
+    targets = [_safe_workspace_file(user["uid"], p) for p in paths]
+    if len(targets) == 1:
+        return FileResponse(targets[0], filename=targets[0].name)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        used_names: set[str] = set()
+        for t in targets:
+            name = t.name
+            base, dot, ext = name.rpartition(".")
+            n = name
+            i = 1
+            while n in used_names:
+                n = f"{base}({i}){dot}{ext}" if dot else f"{name}({i})"
+                i += 1
+            used_names.add(n)
+            zf.write(t, n)
+    buf.seek(0)
+    return StreamingResponse(
+        buf, media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="yjs-files-{stamp}.zip"'})
+
+
+class EmailFilesIn(BaseModel):
+    paths: list[str]
+    as_zip: bool = False
+
+
+@app.post("/api/files/email")
+async def email_files(body: EmailFilesIn, user: dict = Depends(current_user)):
+    """Email selected files to the user's own mailbox as attachments."""
+    paths = (body.paths or [])[:MAX_BATCH_FILES]
+    if not paths:
+        raise HTTPException(400, "请先勾选文件")
+    to = (user.get("email") or "").strip()
+    if not to:
+        raise HTTPException(400, "当前账号没有邮箱地址")
+    targets = [_safe_workspace_file(user["uid"], p) for p in paths]
+    total = sum(t.stat().st_size for t in targets)
+    if total > MAX_MAIL_ATTACHMENT_BYTES:
+        raise HTTPException(413, f"附件总大小 {total // 1024 // 1024}MB 超过 "
+                                f"{MAX_MAIL_ATTACHMENT_BYTES // 1024 // 1024}MB 限制")
+
+    attachments: list[tuple[str, bytes]] = []
+    if body.as_zip or len(targets) > 1:
+        stamp = time.strftime("%Y%m%d-%HM%S")
+        zbuf = io.BytesIO()
+        with zipfile.ZipFile(zbuf, "w", zipfile.ZIP_DEFLATED) as zf:
+            used: set[str] = set()
+            for t in targets:
+                n = t.name
+                i = 1
+                while n in used:
+                    stem, dot, ext = t.name.rpartition(".")
+                    n = f"{stem}({i}){dot}{ext}" if dot else f"{t.name}({i})"
+                    i += 1
+                used.add(n)
+                zf.write(t, n)
+        attachments.append((f"yjs-files-{stamp}.zip", zbuf.getvalue()))
+        mode = "ZIP 压缩包"
+    else:
+        t = targets[0]
+        attachments.append((t.name, t.read_bytes()))
+        mode = "原文件"
+
+    file_list = "".join(f"<li>{_esc(t.name)} · {t.stat().st_size // 1024} KB</li>"
+                        for t in targets)
+    html = auth._wrap(
+        "你的 YJS 云空间文件",
+        f"<p>你在 YJS Cloud LLM Agent 中选择的 {len(targets)} 个文件"
+        f"（{mode}）已作为附件发送到本邮箱。</p><ul>{file_list}</ul>")
+    try:
+        await asyncio.to_thread(auth.send_mail, to, "YJS 云空间文件", html,
+                                attachments=attachments)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, f"发送失败：{exc}") from exc
+    return {"ok": True, "to": to, "count": len(targets), "mode": mode}
 
 
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024          # 100 MB per uploaded file
@@ -820,6 +1047,78 @@ async def admin_set_quota(uid: str, body: AdminQuotaIn,
         raise HTTPException(404, "用户不存在")
     store.set_quota(uid, body.quota_bytes)
     return {"ok": True, "usage": store.usage(uid)}
+
+
+class AdminUserMailIn(BaseModel):
+    subject: str
+    body: str
+
+
+@app.post("/api/admin/users/{uid}/email")
+async def admin_mail_user(uid: str, body: AdminUserMailIn,
+                          admin: dict = Depends(require_admin_gate)):
+    """Send a letter from the administrator to one user's mailbox."""
+    target = store.get_user(uid)
+    if not target:
+        raise HTTPException(404, "用户不存在")
+    to = (target.get("email") or "").strip()
+    if not to:
+        raise HTTPException(400, "该用户没有邮箱地址")
+    subject = (body.subject or "").strip()[:120]
+    content = (body.body or "").strip()
+    if not subject:
+        raise HTTPException(400, "请填写邮件主题")
+    if not content:
+        raise HTTPException(400, "请填写邮件内容")
+    html = auth._wrap(_esc(subject),
+                      "<div style='line-height:1.8;white-space:pre-wrap'>"
+                      + _esc(content) + "</div>")
+    try:
+        await asyncio.to_thread(auth.send_mail, to, f"[YJS 管理员来信] {subject}", html)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, f"发送失败：{exc}") from exc
+    return {"ok": True, "to": to}
+
+
+# --------------------------------------------------------------------------- #
+# cloud-space expansion requests (admin review)
+# --------------------------------------------------------------------------- #
+@app.get("/api/admin/quota-requests")
+async def admin_quota_requests(user: dict = Depends(require_admin_gate)):
+    return {"ok": True, "requests": store.list_quota_requests(),
+            "pending": store.quota_requests_unread()}
+
+
+class QuotaDecisionIn(BaseModel):
+    approve: bool
+    note: str = ""
+
+
+@app.post("/api/admin/quota-requests/{rid}/decide")
+async def admin_decide_quota(rid: str, body: QuotaDecisionIn,
+                             admin: dict = Depends(require_admin_gate)):
+    item = store.decide_quota_request(rid, body.approve, body.note)
+    if not item:
+        raise HTTPException(404, "申请不存在或已处理")
+    # Best-effort email notification to the applicant.
+    target = store.get_user(item["uid"])
+    if target and target.get("email"):
+        mb = item["request_bytes"] // 1024 // 1024
+        if body.approve:
+            txt = f"你的云空间扩容申请已通过，当前云空间已调整为 {mb} MB。"
+        else:
+            txt = "你的云空间扩容申请未通过。"
+        if body.note.strip():
+            txt += "\n管理员备注：" + body.note.strip()
+        html = auth._wrap("云空间扩容申请结果",
+                          "<div style='line-height:1.8;white-space:pre-wrap'>"
+                          + _esc(txt) + "</div>")
+        try:
+            await asyncio.to_thread(auth.send_mail, target["email"],
+                                    "[YJS] 云空间扩容申请结果", html)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[quota] notify failed: {exc}")
+    return {"ok": True, "request": item, "usage": store.usage(item["uid"])}
 
 
 class AdminModelToggleIn(BaseModel):
@@ -1283,6 +1582,121 @@ async def admin_broadcast(body: BroadcastIn, user: dict = Depends(require_admin_
 
 
 # --------------------------------------------------------------------------- #
+# host power + Ollama remote control
+# --------------------------------------------------------------------------- #
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+_OLLAMA_PROC: subprocess.Popen | None = None
+
+
+def _ollama_exe() -> str | None:
+    exe = cfg.BIN_DIR / "ollama" / ("ollama.exe" if os.name == "nt" else "ollama")
+    return str(exe) if exe.exists() else shutil.which("ollama")
+
+
+async def _ollama_alive() -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=3) as c:
+            r = await c.get(cfg.CONFIG.get("ollama_url", "http://127.0.0.1:11434")
+                            + "/api/tags")
+            return r.status_code == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _start_ollama_blocking() -> None:
+    global _OLLAMA_PROC
+    exe = _ollama_exe()
+    if not exe:
+        raise RuntimeError("未找到 ollama 程序")
+    env = os.environ.copy()
+    env["OLLAMA_HOST"] = "127.0.0.1:11434"
+    env.setdefault("OLLAMA_MODELS", str(cfg.ROOT / "models"))
+    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    _OLLAMA_PROC = subprocess.Popen([exe, "serve"], env=env,
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL,
+                                    creationflags=flags)
+
+
+def _stop_ollama_blocking() -> None:
+    global _OLLAMA_PROC
+    if _OLLAMA_PROC and _OLLAMA_PROC.poll() is None:
+        _OLLAMA_PROC.terminate()
+        try:
+            _OLLAMA_PROC.wait(timeout=8)
+        except Exception:  # noqa: BLE001
+            _OLLAMA_PROC.kill()
+    _OLLAMA_PROC = None
+    if os.name == "nt":
+        # Also stop a desktop-launched ollama.exe / the tray serve process.
+        subprocess.run(["taskkill", "/IM", "ollama.exe", "/F"],
+                       capture_output=True, timeout=20)
+    else:
+        subprocess.run(["pkill", "-f", "ollama serve"],
+                       capture_output=True, timeout=20)
+
+
+@app.get("/api/admin/system")
+async def admin_system_status(user: dict = Depends(require_admin_gate)):
+    return {"ok": True, "platform": sys.platform,
+            "ollama_running": await _ollama_alive(),
+            "ollama_path": _ollama_exe() or "",
+            "tunnel": tunnel.TUNNEL.url,
+            "tunnel_pushed": tunnel.TUNNEL.pushed}
+
+
+class OllamaCtlIn(BaseModel):
+    action: str            # start | stop | restart
+
+
+@app.post("/api/admin/system/ollama")
+async def admin_ollama_ctl(body: OllamaCtlIn, user: dict = Depends(require_admin_gate)):
+    action = (body.action or "").strip().lower()
+    if action not in ("start", "stop", "restart"):
+        raise HTTPException(400, "action 必须是 start / stop / restart")
+    if action in ("stop", "restart"):
+        await asyncio.to_thread(_stop_ollama_blocking)
+        await asyncio.sleep(1)
+    if action in ("start", "restart"):
+        if await _ollama_alive():
+            return {"ok": True, "ollama_running": True, "note": "已在运行"}
+        await asyncio.to_thread(_start_ollama_blocking)
+        # Wait up to ~20 s for the API to come up.
+        for _ in range(20):
+            await asyncio.sleep(1)
+            if await _ollama_alive():
+                return {"ok": True, "ollama_running": True}
+        raise HTTPException(400, "Ollama 启动超时，请查看本机日志")
+    return {"ok": True, "ollama_running": await _ollama_alive()}
+
+
+class ShutdownIn(BaseModel):
+    delay: int = 3        # seconds before power-off
+
+
+@app.post("/api/admin/system/shutdown")
+async def admin_shutdown(body: ShutdownIn, user: dict = Depends(require_admin_gate)):
+    """Power off the host machine (the one-click launcher box)."""
+    delay = max(1, min(int(body.delay or 3), 120))
+
+    def _do_poweroff() -> None:
+        import time as _t
+        _t.sleep(delay)
+        try:
+            if os.name == "nt":
+                os.system(f'shutdown /s /t 0 /c "YJS admin requested shutdown"')
+            else:
+                os.system("sudo shutdown -h now || shutdown -h now")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[system] shutdown failed: {exc}")
+
+    threading.Thread(target=_do_poweroff, daemon=True).start()
+    return {"ok": True, "delay": delay, "message": f"主机将在 {delay} 秒后关机"}
+
+
+# --------------------------------------------------------------------------- #
 # user feedback (admin review)
 # --------------------------------------------------------------------------- #
 @app.get("/api/admin/feedback")
@@ -1731,6 +2145,13 @@ async def _startup():
     port = cfg.CONFIG["port"]
     print(f"[yjs] local server: http://127.0.0.1:{port}")
     print(f"[yjs] model: {cfg.CONFIG['model']}")
+    try:
+        n = store.migrate_quotas(cfg.CONFIG["quota_bytes"])
+        if n:
+            print(f"[yjs] migrated base cloud quota for {n} user(s) -> "
+                  f"{cfg.CONFIG['quota_bytes'] // 1024 // 1024} MB")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[yjs] quota migration failed: {exc}")
     tunnel.TUNNEL.start(port)
 
 
