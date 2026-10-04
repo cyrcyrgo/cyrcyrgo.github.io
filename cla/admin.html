@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS 管理后台</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%99%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/admin.css?v=20261003r" />
+<link rel="stylesheet" href="assets/admin.css?v=20261003s" />
 </head>
 <body>
 
@@ -39,14 +39,24 @@
 
 <main id="main" class="hidden">
 
+  <!-- 模块显示控制 -->
+  <div class="panel-toolbar">
+    <span class="muted">模块显示</span>
+    <button class="btn ghost" id="btn-expand-all">全部展开</button>
+    <button class="btn ghost" id="btn-collapse-all">全部收起</button>
+  </div>
+
   <!-- 概览 -->
-  <section class="cards">
-    <div class="stat"><div class="k">注册用户</div><div class="v" id="s-users">0</div><div class="s">账号总数</div></div>
-    <div class="stat"><div class="k">累计调用</div><div class="v" id="s-calls">0</div><div class="s">模型请求次数</div></div>
-    <div class="stat hl"><div class="k">累计 Token</div><div class="v" id="s-tokens">0</div><div class="s" id="s-token-split">输入 0 · 输出 0</div></div>
-    <div class="stat"><div class="k">今日 Token</div><div class="v" id="s-today">0</div><div class="s" id="s-today-calls">今日调用 0 次</div></div>
-    <div class="stat"><div class="k">实时活跃</div><div class="v" id="s-live">0</div><div class="s">正在生成的调用</div></div>
-    <div class="stat"><div class="k">Ollama</div><div class="v" id="s-ollama">—</div><div class="s" id="s-vram">显存占用 —</div></div>
+  <section class="panel" data-collapse="overview">
+    <h3>概览 <span class="hint">· 关键指标</span></h3>
+    <section class="cards">
+      <div class="stat"><div class="k">注册用户</div><div class="v" id="s-users">0</div><div class="s">账号总数</div></div>
+      <div class="stat"><div class="k">累计调用</div><div class="v" id="s-calls">0</div><div class="s">模型请求次数</div></div>
+      <div class="stat hl"><div class="k">累计 Token</div><div class="v" id="s-tokens">0</div><div class="s" id="s-token-split">输入 0 · 输出 0</div></div>
+      <div class="stat"><div class="k">今日 Token</div><div class="v" id="s-today">0</div><div class="s" id="s-today-calls">今日调用 0 次</div></div>
+      <div class="stat"><div class="k">实时活跃</div><div class="v" id="s-live">0</div><div class="s">正在生成的调用</div></div>
+      <div class="stat"><div class="k">Ollama</div><div class="v" id="s-ollama">—</div><div class="s" id="s-vram">显存占用 —</div></div>
+    </section>
   </section>
 
   <!-- 主机与 Ollama 远程控制 -->
@@ -433,6 +443,6 @@
   </div>
 </div>
 
-<script src="assets/admin.js?v=20261003r"></script>
+<script src="assets/admin.js?v=20261003s"></script>
 </body>
 </html>
