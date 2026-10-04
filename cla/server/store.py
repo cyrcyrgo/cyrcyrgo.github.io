@@ -958,24 +958,35 @@ def _unfreeze_path(rid: str) -> Path:
     return UNFREEZE_DIR / f"{rid}.json"
 
 
+def supersede_open_unfreeze(email: str) -> None:
+    """Mark every still-open request of this account as superseded.
+
+    Called when a NEW freeze episode starts, so a request from a previous
+    freeze can never be reused or counted as the one allowed submission of the
+    current freeze.
+    """
+    for q in list_unfreeze():
+        if q.get("email", "").lower() == email.lower() and q.get("status") == "open":
+            q["status"] = "superseded"
+            _write_json(_unfreeze_path(q["id"]), q)
+
+
 def create_unfreeze(email: str, uid: str, reason: str, answers: dict,
-                    score: float, matched: list, missed: list) -> dict:
+                    score: float, matched: list, missed: list,
+                    freeze_id: str = "", auto_denied: bool = False) -> dict:
     UNFREEZE_DIR.mkdir(parents=True, exist_ok=True)
-    # one open request per account: supersede older open ones
-    for old in list_unfreeze():
-        if old.get("email", "").lower() == email.lower() and old.get("status") == "open":
-            old["status"] = "superseded"
-            _write_json(_unfreeze_path(old["id"]), old)
     item = {
         "id": uuid.uuid4().hex[:12],
         "email": email,
         "uid": uid,
+        "freeze_id": freeze_id,
         "reason": reason.strip()[:1000],
         "answers": {k: str(v)[:300] for k, v in (answers or {}).items()},
         "score": round(score, 1),
         "matched": matched,
         "missed": missed,
-        "status": "open",            # open | approved | denied | pin_unlocked
+        "auto_denied": bool(auto_denied),
+        "status": "open",            # open | approved | denied | pin_unlocked | superseded
         "pin": "",
         "pin_sent_at": None,
         "created_at": _now(),
