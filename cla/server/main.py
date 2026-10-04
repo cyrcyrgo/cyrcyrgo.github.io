@@ -5,6 +5,7 @@ import asyncio
 import io
 import json
 import os
+import random
 import threading
 import time
 import zipfile
@@ -98,16 +99,18 @@ async def send_code(body: SendCodeIn):
 
 
 @app.post("/api/auth/verify")
-async def verify(body: VerifyIn):
+async def verify(body: VerifyIn, request: Request):
     email = body.email.strip().lower()
     if not auth.verify_code(email, body.code):
         raise HTTPException(400, "验证码错误或已过期")
+    if _frozen_state(email):
+        raise HTTPException(423, "账号已被安全冻结，请先完成账号解冻申请")
     user = store.get_user_by_email(email)
     if not user:
         if not cfg.CONFIG["allow_register"]:
             raise HTTPException(403, "暂不允许注册")
         user = store.create_user(email)
-    store.touch_login(user["uid"])
+    store.touch_login(user["uid"], _client_ip(request))
     token = auth.make_token(user["uid"], email)
     return {"ok": True, "token": token, "user": _public_user(user)}
 
@@ -140,24 +143,224 @@ class PasswordLoginIn(BaseModel):
 
 
 @app.post("/api/auth/login")
-async def password_login(body: PasswordLoginIn):
-    """Alternative login: email + password (set by the user or an admin)."""
+async def password_login(body: PasswordLoginIn, request: Request):
+    """Email + password login with server-side brute-force protection.
+
+    - 3 wrong attempts  -> 30s soft lock (any client/device, server timed)
+    - 4th wrong attempt -> hard freeze; an unfreeze request is required
+    """
     email = body.email.strip().lower()
+    state = store.get_auth_state(email)
+    now = time.time()
+
+    if state.get("hard_locked"):
+        raise HTTPException(423, {
+            "code": "hard_locked",
+            "message": "密码连续错误，账号已被安全冻结，请发起账号解冻申请",
+        })
+    locked_until = float(state.get("locked_until") or 0)
+    if locked_until > now:
+        raise HTTPException(429, {
+            "code": "soft_locked",
+            "wait": int(locked_until - now) + 1,
+            "message": f"密码错误次数过多，请 {int(locked_until - now) + 1} 秒后再试",
+        })
+
     user = store.get_user_by_email(email)
-    if not user or not auth.check_password(body.password, user.get("password_hash")):
-        raise HTTPException(400, "邮箱或密码错误")
-    store.touch_login(user["uid"])
+    valid = bool(user) and auth.check_password(body.password,
+                                               user.get("password_hash"))
+    if not valid:
+        fails = int(state.get("fails") or 0) + 1
+        state["fails"] = fails
+        state["last_fail_at"] = now
+        if fails >= PW_HARD_LOCK_FAILS:
+            state["hard_locked"] = True
+            store.set_auth_state(email, state)
+            print(f"[security] account hard-frozen after {fails} fails: {email}")
+            raise HTTPException(423, {
+                "code": "hard_locked",
+                "message": "第 4 次密码错误，账号已被安全冻结，请发起账号解冻申请",
+            })
+        if fails >= PW_SOFT_LOCK_FAILS:
+            state["locked_until"] = now + PW_SOFT_LOCK_SECONDS
+            store.set_auth_state(email, state)
+            raise HTTPException(429, {
+                "code": "soft_locked",
+                "wait": PW_SOFT_LOCK_SECONDS,
+                "message": f"已连续错误 {fails} 次，请 {PW_SOFT_LOCK_SECONDS} 秒后再试；"
+                           "再错一次账号将被冻结",
+            })
+        store.set_auth_state(email, state)
+        left = PW_SOFT_LOCK_FAILS - fails
+        raise HTTPException(400, f"邮箱或密码错误（还可尝试 {left} 次）")
+
+    store.reset_auth_state(email)
+    store.touch_login(user["uid"], _client_ip(request))
     token = auth.make_token(user["uid"], email)
     return {"ok": True, "token": token, "user": _public_user(user)}
 
 
+PW_SOFT_LOCK_FAILS = 3
+PW_SOFT_LOCK_SECONDS = 30
+PW_HARD_LOCK_FAILS = 4
+UNFREEZE_PASS_SCORE = 50.0
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()[:64]
+    return (request.client.host if request.client else "")[:64]
+
+
+def _frozen_state(email: str) -> dict | None:
+    st = store.get_auth_state((email or "").lower())
+    return st if st.get("hard_locked") else None
+
+
+# --------------------------------------------------------------- unfreeze -- #
+UNFREEZE_QUESTIONS = [
+    {"key": "name", "label": "账号昵称（我的账户中显示的名称）", "weight": 20},
+    {"key": "register_month", "label": "注册时间（格式 2026-08，相差 1 个月内算对）", "weight": 15},
+    {"key": "last_login_days", "label": "最近一次登录距今天数（误差 2 天内算对）", "weight": 15},
+    {"key": "conversation_count", "label": "历史对话总数（误差 2 个以内算对）", "weight": 15},
+    {"key": "model", "label": "常用的模型名称", "weight": 15},
+    {"key": "file_name", "label": "我的文件中任意一个文件名（部分匹配即可）", "weight": 20},
+]
+
+
+def _score_unfreeze(user: dict, answers: dict) -> tuple[float, list, list]:
+    """Compare the questionnaire against real server-side usage traces."""
+    matched, missed = [], []
+    gained = 0.0
+
+    def grade(key: str, ok: bool):
+        nonlocal gained
+        q = next(q for q in UNFREEZE_QUESTIONS if q["key"] == key)
+        (matched if ok else missed).append(q["label"])
+        if ok:
+            gained += q["weight"]
+
+    val = (answers.get("name") or "").strip().lower()
+    real_name = (user.get("name") or "").strip().lower()
+    grade("name", bool(val) and bool(real_name)
+          and (val in real_name or real_name in val))
+
+    val = (answers.get("register_month") or "").strip()[:7]
+    real = time.strftime("%Y-%m", time.localtime(user.get("created_at") or time.time()))
+    okm = False
+    if len(val) == 7:
+        try:
+            vt = time.strptime(val + "-01", "%Y-%m-%d")
+            rt = time.strptime(real + "-01", "%Y-%m-%d")
+            okm = abs((vt.tm_year - rt.tm_year) * 12 + vt.tm_mon - rt.tm_mon) <= 1
+        except Exception:  # noqa: BLE001
+            okm = False
+    grade("register_month", okm)
+
+    try:
+        days = float((answers.get("last_login_days") or "").strip())
+        last = user.get("last_login") or user.get("created_at") or time.time()
+        real_days = max(0.0, (time.time() - float(last)) / 86400)
+        grade("last_login_days", abs(days - real_days) <= 2)
+    except Exception:  # noqa: BLE001
+        grade("last_login_days", False)
+
+    try:
+        cnt = float((answers.get("conversation_count") or "").strip())
+        real_cnt = len(store.list_conversations(user["uid"]))
+        grade("conversation_count", abs(cnt - real_cnt) <= 2)
+    except Exception:  # noqa: BLE001
+        grade("conversation_count", False)
+
+    val = (answers.get("model") or "").strip().lower()
+    real_model = (user.get("model_preference") or cfg.CONFIG.get("model") or "").lower()
+    grade("model", bool(val) and bool(real_model)
+          and (val in real_model or real_model in val))
+
+    val = (answers.get("file_name") or "").strip().lower()
+    names = [p.name.lower() for p in store.workspace(user["uid"]).glob("**/*")
+             if p.is_file()]
+    grade("file_name", bool(val) and any(val in n or n in val for n in names))
+
+    return gained, matched, missed
+
+
+class UnfreezeCheckIn(BaseModel):
+    email: str
+
+
+@app.get("/api/auth/unfreeze/questions")
+async def unfreeze_questions():
+    return {"ok": True, "questions": UNFREEZE_QUESTIONS,
+            "pass_score": UNFREEZE_PASS_SCORE}
+
+
+@app.post("/api/auth/unfreeze/check")
+async def unfreeze_check(body: UnfreezeCheckIn):
+    email = body.email.strip().lower()
+    st = store.get_auth_state(email)
+    return {
+        "ok": True,
+        "hard_locked": bool(st.get("hard_locked")),
+        "request": store.open_unfreeze_for_email(email),
+    }
+
+
+class UnfreezeIn(BaseModel):
+    email: str
+    reason: str
+    answers: dict = {}
+
+
+@app.post("/api/auth/unfreeze/request")
+async def unfreeze_request(body: UnfreezeIn):
+    email = body.email.strip().lower()
+    user = store.get_user_by_email(email)
+    if not user:
+        raise HTTPException(404, "该邮箱尚未注册")
+    if not store.get_auth_state(email).get("hard_locked"):
+        raise HTTPException(400, "该账号当前未被冻结，无需申请解冻")
+    if len((body.reason or "").strip()) < 5:
+        raise HTTPException(400, "请填写解冻原因（至少 5 个字）")
+    existing = store.open_unfreeze_for_email(email)
+    if existing:
+        return {"ok": True, "request": existing,
+                "message": "已有一条待处理的解冻申请"}
+    score, matched, missed = _score_unfreeze(user, body.answers or {})
+    item = store.create_unfreeze(email, user["uid"], body.reason,
+                                 body.answers or {}, score, matched, missed)
+    print(f"[security] unfreeze request {item['id']} for {email} score={score} "
+          f"auto={'denied' if score < UNFREEZE_PASS_SCORE else 'admin-review'}")
+    return {"ok": True, "request": item,
+            "auto_denied": score < UNFREEZE_PASS_SCORE}
+
+
+@app.post("/api/auth/unfreeze/status")
+async def unfreeze_status(body: UnfreezeCheckIn):
+    email = body.email.strip().lower()
+    return {"ok": True,
+            "hard_locked": bool(store.get_auth_state(email).get("hard_locked")),
+            "request": store.open_unfreeze_for_email(email)}
+
+
 class SetPasswordIn(BaseModel):
     password: str
+    old_password: str = ""
 
 
 @app.post("/api/auth/password")
 async def set_own_password(body: SetPasswordIn, user: dict = Depends(current_user)):
-    """Let a signed-in user set/change their own password."""
+    """Let a signed-in user set/change their own password.
+
+    Accounts that already have a password must verify it before replacing it.
+    Code-only accounts (password never set) may create one directly.
+    """
+    if user.get("password_hash"):
+        if not body.old_password:
+            raise HTTPException(400, "请先输入旧密码")
+        if not auth.check_password(body.old_password, user["password_hash"]):
+            raise HTTPException(400, "旧密码不正确")
     ok, msg = auth.valid_password(body.password)
     if not ok:
         raise HTTPException(400, msg)
@@ -179,6 +382,8 @@ async def send_reset_code(body: ResetSendIn):
         # Same wording as a normal "sent" reply on purpose? We keep it explicit:
         # registration is closed by default, so no reset target exists.
         raise HTTPException(404, "该邮箱尚未注册")
+    if _frozen_state(email):
+        raise HTTPException(423, "账号已被安全冻结，无法通过重置密码解锁，请先申请解冻")
     ok, wait = auth.can_send(email)
     if not ok:
         raise HTTPException(429, f"请 {wait} 秒后再试")
@@ -201,6 +406,8 @@ async def reset_password(body: ResetPasswordIn):
     email = body.email.strip().lower()
     if not auth.verify_code(email, body.code, purpose="reset"):
         raise HTTPException(400, "验证码错误或已过期")
+    if _frozen_state(email):
+        raise HTTPException(423, "账号已被安全冻结，请先完成账号解冻申请")
     user = store.get_user_by_email(email)
     if not user:
         raise HTTPException(404, "该邮箱尚未注册")
@@ -275,9 +482,10 @@ async def change_my_email(body: EmailChangeIn, user: dict = Depends(current_user
 
 
 # --------------------------------------------------------------------------- #
-# cloud-space expansion requests (user side)
+# cloud-space ADJUSTMENT requests — grow OR shrink (user side)
 # --------------------------------------------------------------------------- #
 MAX_QUOTA_REQUEST_MB = 51200          # cap an application at 50 GB
+MIN_QUOTA_REQUEST_MB = 1
 
 
 class QuotaRequestIn(BaseModel):
@@ -295,16 +503,16 @@ async def my_quota_request(user: dict = Depends(current_user)):
 async def apply_quota(body: QuotaRequestIn, user: dict = Depends(current_user)):
     size_mb = int(body.size_mb or 0)
     reason = (body.reason or "").strip()
-    if size_mb <= 0:
-        raise HTTPException(400, "请填写申请的空间大小")
+    if size_mb < MIN_QUOTA_REQUEST_MB:
+        raise HTTPException(400, "请填写申请的空间大小（至少 1MB）")
     if size_mb > MAX_QUOTA_REQUEST_MB:
         raise HTTPException(400, f"单次申请不能超过 {MAX_QUOTA_REQUEST_MB // 1024}GB")
     if len(reason) < 5:
         raise HTTPException(400, "请填写至少 5 个字的申请理由")
     current = int((store.get_user(user["uid"]) or {}).get("quota_bytes")
                   or cfg.CONFIG["quota_bytes"])
-    if size_mb * 1024 * 1024 <= current:
-        raise HTTPException(400, "申请大小需要大于当前云空间")
+    if size_mb * 1024 * 1024 == current:
+        raise HTTPException(400, "申请大小与当前云空间相同，无需调整")
     item = store.create_quota_request(user["uid"], size_mb * 1024 * 1024, reason)
     return {"ok": True, "request": item}
 
@@ -312,10 +520,14 @@ async def apply_quota(body: QuotaRequestIn, user: dict = Depends(current_user)):
 class FeedbackIn(BaseModel):
     category: str = "其他"
     content: str
+    # email -> delivered to the author mailbox only (no admin inbox, no reply)
+    # admin -> stored for the admin console only (no email)
+    target: str = "admin"
 
 
-# User feedback is stored locally AND forwarded to this mailbox over SMTP.
+# User feedback choosing the mailbox route is forwarded here over SMTP.
 FEEDBACK_RECIPIENT = "YJS-CLA@hotmail.com"
+FEEDBACK_MIN_INTERVAL = 180          # seconds between submissions, server-timed
 
 
 async def _forward_feedback_mail(item: dict) -> None:
@@ -345,15 +557,34 @@ async def _forward_feedback_mail(item: dict) -> None:
 
 @app.post("/api/feedback")
 async def submit_feedback(body: FeedbackIn, user: dict = Depends(current_user)):
-    """「使用意见」—— stored server-side, then forwarded to the author via SMTP."""
+    """使用意见 — choose mailbox (one-way) or the admin inbox."""
     content = (body.content or "").strip()
     if len(content) < 2:
         raise HTTPException(400, "请填写反馈内容")
-    item = store.add_feedback(user["uid"], user.get("email", ""), body.category, content)
-    # Forward to the author mailbox in the background; never block or fail the
-    # user's submission when SMTP is unconfigured / temporarily down.
-    asyncio.create_task(_forward_feedback_mail(item))
-    return {"ok": True, "id": item["id"]}
+    target = body.target if body.target in ("email", "admin") else "admin"
+    last = store.last_feedback_time(user["uid"])
+    wait = int(FEEDBACK_MIN_INTERVAL - (time.time() - last))
+    if wait > 0:
+        raise HTTPException(429, f"两次反馈需间隔 3 分钟，请 {wait} 秒后再试")
+    item = store.add_feedback(user["uid"], user.get("email", ""),
+                              body.category, content, target)
+    if target == "email":
+        # Mailbox route: delivered to the author mailbox only, never tracked
+        # in the admin inbox. Best-effort in the background.
+        asyncio.create_task(_forward_feedback_mail(item))
+    return {"ok": True, "id": item["id"], "target": target}
+
+
+@app.get("/api/feedback/mine")
+async def my_feedback(user: dict = Depends(current_user)):
+    return {"ok": True, "items": store.list_feedback_for_user(user["uid"])}
+
+
+@app.post("/api/feedback/{fid}/revoke")
+async def revoke_my_feedback(fid: str, user: dict = Depends(current_user)):
+    if not store.revoke_feedback(fid, user["uid"]):
+        raise HTTPException(400, "该反馈无法撤销（发送到邮箱的反馈不支持撤销）")
+    return {"ok": True}
 
 
 # --------------------------------------------------------------------------- #
@@ -1092,12 +1323,26 @@ async def admin_quota_requests(user: dict = Depends(require_admin_gate)):
 class QuotaDecisionIn(BaseModel):
     approve: bool
     note: str = ""
+    # Temporary-adjustment lifetime in seconds. 0 / None = permanent.
+    # Bounds (validated below): 30 seconds .. ~3 months (93 days).
+    duration_seconds: int | None = None
+
+
+MIN_QUOTA_TEMP_SECONDS = 30
+MAX_QUOTA_TEMP_SECONDS = 93 * 24 * 3600
 
 
 @app.post("/api/admin/quota-requests/{rid}/decide")
 async def admin_decide_quota(rid: str, body: QuotaDecisionIn,
                              admin: dict = Depends(require_admin_gate)):
-    item = store.decide_quota_request(rid, body.approve, body.note)
+    duration = body.duration_seconds
+    if body.approve and duration:
+        if duration < MIN_QUOTA_TEMP_SECONDS:
+            raise HTTPException(400, f"临时调整期限最短 {MIN_QUOTA_TEMP_SECONDS} 秒")
+        if duration > MAX_QUOTA_TEMP_SECONDS:
+            raise HTTPException(400, "临时调整期限最长三个月（93 天）")
+    item = store.decide_quota_request(rid, body.approve, body.note,
+                                      duration if duration else None)
     if not item:
         raise HTTPException(404, "申请不存在或已处理")
     # Best-effort email notification to the applicant.
@@ -1105,17 +1350,25 @@ async def admin_decide_quota(rid: str, body: QuotaDecisionIn,
     if target and target.get("email"):
         mb = item["request_bytes"] // 1024 // 1024
         if body.approve:
-            txt = f"你的云空间扩容申请已通过，当前云空间已调整为 {mb} MB。"
+            if item.get("expire_at"):
+                deadline = time.strftime(
+                    "%Y-%m-%d %H:%M:%S",
+                    time.localtime(item["expire_at"]))
+                txt = (f"你的云空间调整申请已通过，当前云空间已调整为 {mb} MB。\n"
+                       f"该调整为临时调整，将于 {deadline} 自动恢复为 "
+                       f"{item.get('revert_bytes', 0) // 1024 // 1024} MB。")
+            else:
+                txt = (f"你的云空间调整申请已通过，当前云空间已永久调整为 {mb} MB。")
         else:
-            txt = "你的云空间扩容申请未通过。"
+            txt = "你的云空间调整申请未通过。"
         if body.note.strip():
             txt += "\n管理员备注：" + body.note.strip()
-        html = auth._wrap("云空间扩容申请结果",
+        html = auth._wrap("云空间调整申请结果",
                           "<div style='line-height:1.8;white-space:pre-wrap'>"
                           + _esc(txt) + "</div>")
         try:
             await asyncio.to_thread(auth.send_mail, target["email"],
-                                    "[YJS] 云空间扩容申请结果", html)
+                                    "[YJS] 云空间调整申请结果", html)
         except Exception as exc:  # noqa: BLE001
             print(f"[quota] notify failed: {exc}")
     return {"ok": True, "request": item, "usage": store.usage(item["uid"])}
@@ -1408,32 +1661,73 @@ async def admin_set_role(uid: str, body: AdminRoleIn,
 
 
 # --------------------------------------------------------------------------- #
-# site-wide notice: stored locally + published to the GitHub repository
+# site notifications: FULL HISTORY stored locally + published to the repo
 # --------------------------------------------------------------------------- #
 NOTICE_FILE = cfg.ROOT / "notification.json"
 
 
-def _notice() -> dict:
-    n = cfg.CONFIG.get("notification") or {}
+def _notices_payload() -> dict:
+    items = store.list_notices()
+    latest = items[0] if items else {}
+    # Keep legacy top-level fields for any old cached client; the new app reads
+    # the "notifications" array.
     return {
-        "title": n.get("title", "") or "",
-        "body": n.get("body", "") or "",
-        "updated_at": n.get("updated_at", "") or "",
-        "author": n.get("author", "") or "",
+        "version": 2,
+        "notifications": items,
+        "title": latest.get("title", ""),
+        "body": latest.get("body", ""),
+        "updated_at": latest.get("updated_at", ""),
+        "author": latest.get("author", ""),
     }
 
 
-@app.get("/api/admin/notification")
-async def admin_get_notification(user: dict = Depends(require_admin_gate)):
+def _write_public_notices() -> None:
+    NOTICE_FILE.write_text(
+        json.dumps(_notices_payload(), ensure_ascii=False, indent=2),
+        encoding="utf-8")
+
+
+async def _push_notices(commit_msg: str) -> None:
+    """Upload the whole (history-retaining) notification.json to the repo."""
+    _write_public_notices()
+    await github_sync.put_file(
+        "notification.json", NOTICE_FILE.read_bytes(), commit_msg)
+
+
+def _notice_repo_info() -> dict:
     gh = _github_cfg()
     prefix = (gh.get("path_prefix") or "").strip("/")
     return {
-        "ok": True,
-        **_notice(),
         "repo": gh.get("repo", ""),
         "branch": gh.get("branch", "main"),
         "repo_file": f"{prefix}/notification.json" if prefix else "notification.json",
         "has_token": bool(gh.get("token")),
+    }
+
+
+@app.get("/api/notifications")
+async def list_site_notifications(user: dict = Depends(current_user)):
+    """Global service notices (history) + the user's personal notifications."""
+    return {
+        "ok": True,
+        "notifications": store.list_notices(),
+        "personal": store.list_user_notices(user["uid"]),
+        "personal_unread": store.unread_user_notices(user["uid"]),
+    }
+
+
+@app.post("/api/notifications/read")
+async def mark_notifications_read(user: dict = Depends(current_user)):
+    store.mark_user_notices_read(user["uid"])
+    return {"ok": True}
+
+
+@app.get("/api/admin/notifications")
+async def admin_list_notifications(user: dict = Depends(require_admin_gate)):
+    return {
+        "ok": True,
+        "notifications": store.list_notices(),
+        **_notice_repo_info(),
         "unlocked": _repo_unlocked(user["uid"]),
     }
 
@@ -1441,42 +1735,123 @@ async def admin_get_notification(user: dict = Depends(require_admin_gate)):
 class NoticeIn(BaseModel):
     title: str = ""
     body: str = ""
-    publish: bool = True
+    publish: bool = True          # also push the whole history to GitHub
 
 
-@app.post("/api/admin/notification")
-async def admin_set_notification(body: NoticeIn,
-                                 user: dict = Depends(require_admin_gate)):
-    """Save the notice locally and (optionally) push it to the repo."""
-    title = (body.title or "").strip()[:200]
-    text = (body.body or "").strip()[:2000]
+class NoticeEditIn(NoticeIn):
+    id: str | None = None
+
+
+@app.post("/api/admin/notifications")
+async def admin_create_notification(body: NoticeIn,
+                                    user: dict = Depends(require_admin_gate)):
+    """Create a notification; publishing pushes history (old ones are kept)."""
+    title = (body.title or "").strip()
+    text = (body.body or "").strip()
     if not title and not text:
         raise HTTPException(400, "请填写通知标题或内容")
-    notice = {
-        "title": title,
-        "body": text,
-        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "author": str(user.get("email", "")),
-    }
-    cfg.CONFIG["notification"] = notice
-    cfg.CONFIG["announcement"] = ((title + "：" + text) if title and text else (title or text))[:500]
-    cfg.save(cfg.CONFIG)
-    NOTICE_FILE.write_text(json.dumps(notice, ensure_ascii=False, indent=2),
-                           encoding="utf-8")
+    item = store.create_notice(title, text, str(user.get("email", "")))
 
     pushed, err = False, ""
     if body.publish:
         try:
             _require_repo_unlocked(user["uid"])
-            await github_sync.put_file(
-                "notification.json", NOTICE_FILE.read_bytes(),
-                f"chore: publish site notice ({title or 'notice'})")
+            await _push_notices(f"chore: publish notification ({title or 'notice'})")
             pushed = True
         except HTTPException as exc:
             err = str(exc.detail)
         except Exception as exc:  # noqa: BLE001
             err = str(exc)[:200]
-    return {"ok": True, "pushed": pushed, "error": err, "notice": notice}
+    else:
+        _write_public_notices()
+    return {"ok": True, "notification": item, "pushed": pushed, "error": err}
+
+
+@app.post("/api/admin/notifications/{nid}")
+async def admin_update_notification(nid: str, body: NoticeIn,
+                                    user: dict = Depends(require_admin_gate)):
+    title = (body.title or "").strip()
+    text = (body.body or "").strip()
+    if not title and not text:
+        raise HTTPException(400, "请填写通知标题或内容")
+    item = store.update_notice(nid, title, text)
+    if not item:
+        raise HTTPException(404, "公告不存在")
+    pushed, err = False, ""
+    if body.publish:
+        try:
+            _require_repo_unlocked(user["uid"])
+            await _push_notices(f"chore: update notification {nid}")
+            pushed = True
+        except HTTPException as exc:
+            err = str(exc.detail)
+        except Exception as exc:  # noqa: BLE001
+            err = str(exc)[:200]
+    else:
+        _write_public_notices()
+    return {"ok": True, "notification": item, "pushed": pushed, "error": err}
+
+
+@app.delete("/api/admin/notifications/{nid}")
+async def admin_delete_notification(nid: str,
+                                    publish: bool = True,
+                                    user: dict = Depends(require_admin_gate)):
+    if not store.get_notice(nid):
+        raise HTTPException(404, "公告不存在")
+    store.delete_notice(nid)
+    pushed, err = False, ""
+    if publish:
+        try:
+            _require_repo_unlocked(user["uid"])
+            await _push_notices(f"chore: delete notification {nid}")
+            pushed = True
+        except HTTPException as exc:
+            err = str(exc.detail)
+        except Exception as exc:  # noqa: BLE001
+            err = str(exc)[:200]
+    else:
+        _write_public_notices()
+    return {"ok": True, "pushed": pushed, "error": err}
+
+
+@app.post("/api/admin/notifications-republish")
+async def admin_republish_notifications(user: dict = Depends(require_admin_gate)):
+    """Force-push the complete local history to the GitHub repo."""
+    try:
+        _require_repo_unlocked(user["uid"])
+        await _push_notices("chore: republish notification history")
+        return {"ok": True, "pushed": True}
+    except HTTPException as exc:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, str(exc)[:200])
+
+
+def migrate_legacy_notice() -> int:
+    """Import the pre-history single notice once, if the store is empty."""
+    legacy = cfg.CONFIG.get("notification") or {}
+    title, body = legacy.get("title", "") or "", legacy.get("body", "") or ""
+    if (not title and not body) or store.list_notices():
+        return 0
+    item = store.create_notice(title, body, str(legacy.get("author", "") or "admin"))
+    if legacy.get("updated_at"):
+        item["created_at"] = item["updated_at"] = _parse_legacy_time(
+            legacy.get("updated_at"))
+        from server import store as _store
+        _store._write_json(_store._notice_path(item["id"]), item)
+    _write_public_notices()
+    cfg.CONFIG["announcement"] = ""
+    cfg.save(cfg.CONFIG)
+    return 1
+
+
+def _parse_legacy_time(value) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return time.mktime(time.strptime(str(value)[:19], "%Y-%m-%dT%H:%M:%S"))
+    except Exception:  # noqa: BLE001
+        return time.time()
 
 
 @app.post("/api/admin/metrics/reset")
@@ -1701,9 +2076,13 @@ async def admin_shutdown(body: ShutdownIn, user: dict = Depends(require_admin_ga
 # --------------------------------------------------------------------------- #
 @app.get("/api/admin/feedback")
 async def admin_list_feedback(user: dict = Depends(require_admin_gate)):
-    items = store.list_feedback()
+    # The admin inbox shows backend-routed feedback only. Email-routed items
+    # are one-way deliveries and never appear here.
+    items = [i for i in store.list_feedback()
+             if i.get("target") != "email" and not i.get("revoked")]
     return {"ok": True, "items": items,
-            "unread": sum(1 for i in items if i.get("status") == "new")}
+            "unread": sum(1 for i in items if i.get("status") == "new"),
+            "templates": store.list_reply_templates()}
 
 
 class FeedbackStatusIn(BaseModel):
@@ -1721,6 +2100,162 @@ async def admin_feedback_status(fid: str, body: FeedbackStatusIn,
 @app.delete("/api/admin/feedback/{fid}")
 async def admin_feedback_delete(fid: str, user: dict = Depends(require_admin_gate)):
     return {"ok": store.delete_feedback(fid)}
+
+
+class ReplyIn(BaseModel):
+    content: str
+    via_email: bool = True
+    via_notice: bool = False
+
+
+@app.post("/api/admin/feedback/{fid}/reply")
+async def admin_reply_feedback(fid: str, body: ReplyIn,
+                               admin: dict = Depends(require_admin_gate)):
+    """Quick reply: to the user's mailbox, in-app notifications, or both."""
+    item = store.get_feedback(fid) if hasattr(store, "get_feedback") else None
+    if item is None:
+        matches = [f for f in store.list_feedback() if f.get("id") == fid]
+        item = matches[0] if matches else None
+    if not item or item.get("target") == "email":
+        raise HTTPException(404, "反馈不存在")
+    content = (body.content or "").strip()
+    if len(content) < 1:
+        raise HTTPException(400, "回信内容不能为空")
+    if not body.via_email and not body.via_notice:
+        raise HTTPException(400, "请选择至少一种回信方式")
+    author = str(admin.get("email", "管理员"))
+    reply = store.add_feedback_reply(fid, content, body.via_email,
+                                     body.via_notice, author)
+
+    mail_err = ""
+    if body.via_email:
+        to = item.get("email")
+        if not to:
+            mail_err = "用户没有邮箱地址"
+        else:
+            html = auth._wrap(
+                "管理员对你的使用意见的回复",
+                "<div style='line-height:1.8;font-size:14px'>"
+                "<p>你此前提交的意见：</p>"
+                "<div style='padding:10px 12px;background:#f6f8fb;border-radius:8px;"
+                "white-space:pre-wrap;color:#555'>" + _esc(item.get("content", "")) + "</div>"
+                "<p style='margin-top:14px'>管理员回复：</p>"
+                "<div style='padding:10px 12px;background:#eef6ff;border-radius:8px;"
+                "white-space:pre-wrap'>" + _esc(content) + "</div></div>")
+            try:
+                await asyncio.to_thread(
+                    auth.send_mail, to, "[YJS] 管理员回复了你的使用意见", html)
+            except Exception as exc:  # noqa: BLE001
+                mail_err = str(exc)[:200]
+                print(f"[feedback] reply mail failed: {exc}")
+    if body.via_notice:
+        store.create_user_notice(
+            item["uid"], "管理员回复了你的使用意见", content,
+            author=author, kind="feedback_reply", ref_id=fid)
+    return {"ok": True, "reply": reply, "mail_error": mail_err}
+
+
+class TemplateIn(BaseModel):
+    title: str
+    body: str = ""
+
+
+@app.post("/api/admin/reply-templates")
+async def admin_add_template(body: TemplateIn,
+                             user: dict = Depends(require_admin_gate)):
+    title = (body.title or "").strip()
+    if not title:
+        raise HTTPException(400, "模板名称不能为空")
+    return {"ok": True, "template": store.add_reply_template(title, body.body)}
+
+
+@app.delete("/api/admin/reply-templates/{tid}")
+async def admin_delete_template(tid: str,
+                                user: dict = Depends(require_admin_gate)):
+    return {"ok": store.delete_reply_template(tid)}
+
+
+# --------------------------------------------------------------------------- #
+# account unfreeze review (admin)
+# --------------------------------------------------------------------------- #
+@app.get("/api/admin/unfreeze")
+async def admin_list_unfreeze(user: dict = Depends(require_admin_gate)):
+    items = store.list_unfreeze()
+    return {"ok": True, "items": items,
+            "pending": sum(1 for i in items if i.get("status") == "open"),
+            "pass_score": UNFREEZE_PASS_SCORE}
+
+
+class UnfreezeDecideIn(BaseModel):
+    approve: bool
+
+
+@app.post("/api/admin/unfreeze/{rid}/decide")
+async def admin_decide_unfreeze(rid: str, body: UnfreezeDecideIn,
+                                admin: dict = Depends(require_admin_gate)):
+    item = store.get_unfreeze(rid)
+    if not item or item.get("status") != "open":
+        raise HTTPException(404, "申请不存在或已处理")
+    # Below 50% the system has already denied it; admins cannot approve it —
+    # only the PIN-verified advanced route can unlock the account.
+    if body.approve and float(item.get("score") or 0) < UNFREEZE_PASS_SCORE:
+        raise HTTPException(403, "安全评分不足 50%，系统已否决，仅可使用 PIN 高级解冻")
+    if body.approve:
+        item["status"] = "approved"
+        store.reset_auth_state(item["email"])
+    else:
+        item["status"] = "denied"
+    item["decided_at"] = time.time()
+    item["decided_by"] = str(admin.get("email", ""))
+    store.save_unfreeze(item)
+    return {"ok": True, "request": item}
+
+
+@app.post("/api/admin/unfreeze/{rid}/send-pin")
+async def admin_send_unfreeze_pin(rid: str,
+                                  admin: dict = Depends(require_admin_gate)):
+    item = store.get_unfreeze(rid)
+    if not item or item.get("status") != "open":
+        raise HTTPException(404, "申请不存在或已处理")
+    pin = f"{random.randint(0, 999999):06d}"
+    item["pin"] = pin
+    item["pin_sent_at"] = time.time()
+    store.save_unfreeze(item)
+    html = auth._wrap(
+        "YJS 账号高级解冻 PIN",
+        "<div style='line-height:1.8;font-size:14px'>"
+        "<p>你的账号正在进行高级解冻。请将以下 6 位 PIN 码告知管理员完成验证：</p>"
+        f"<p style='font-size:34px;font-weight:700;letter-spacing:8px;color:#dc2626'>{pin}</p>"
+        "<p style='color:#888'>如非本人操作，请忽略此邮件，账号将保持冻结。</p></div>")
+    try:
+        await asyncio.to_thread(
+            auth.send_mail, item["email"], "[YJS] 账号高级解冻 PIN", html)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, f"PIN 邮件发送失败：{str(exc)[:200]}")
+    return {"ok": True, "message": "PIN 已发送至账号邮箱（PIN 仅在管理员侧校验时使用）"}
+
+
+class PinIn(BaseModel):
+    pin: str
+
+
+@app.post("/api/admin/unfreeze/{rid}/verify-pin")
+async def admin_verify_unfreeze_pin(rid: str, body: PinIn,
+                                    admin: dict = Depends(require_admin_gate)):
+    item = store.get_unfreeze(rid)
+    if not item or item.get("status") != "open":
+        raise HTTPException(404, "申请不存在或已处理")
+    if not item.get("pin"):
+        raise HTTPException(400, "尚未发送 PIN 邮件")
+    if (body.pin or "").strip() != item["pin"]:
+        raise HTTPException(400, "PIN 不正确")
+    item["status"] = "pin_unlocked"
+    item["decided_at"] = time.time()
+    item["decided_by"] = str(admin.get("email", ""))
+    item["pin"] = ""
+    store.save_unfreeze(item)
+    store.reset_auth_state(item["email"])
+    return {"ok": True, "request": item}
 
 
 # --------------------------------------------------------------------------- #
@@ -2123,10 +2658,13 @@ async def service_worker():
 
 @app.get("/notification.json")
 async def public_notice():
-    """Same file the admin publishes to the repo; served locally too."""
+    """History file the admin publishes to the repo; served locally too."""
     if NOTICE_FILE.exists():
-        return JSONResponse(json.loads(NOTICE_FILE.read_text(encoding="utf-8")))
-    return JSONResponse({"title": "", "body": ""})
+        try:
+            return JSONResponse(json.loads(NOTICE_FILE.read_text(encoding="utf-8")))
+        except Exception:  # noqa: BLE001
+            pass
+    return JSONResponse(_notices_payload())
 
 
 @app.get("/config.json")
@@ -2138,6 +2676,36 @@ async def public_config():
 
 if (cfg.ROOT / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(cfg.ROOT / "assets")), name="assets")
+
+
+async def _quota_expiry_worker() -> None:
+    """Restore temporary quota adjustments when their deadline passes."""
+    while True:
+        try:
+            due = store.list_due_quota_reverts()
+            for q in due:
+                reverted = store.revert_quota_request(q["id"])
+                if not reverted:
+                    continue
+                target = store.get_user(q["uid"])
+                mb_to = int(reverted.get("revert_bytes", 0)) // 1024 // 1024
+                mb_from = int(q.get("request_bytes", 0)) // 1024 // 1024
+                print(f"[quota] temp adjustment expired for {q.get('email') or q['uid']}: "
+                      f"{mb_from}MB -> {mb_to}MB")
+                if target and target.get("email"):
+                    txt = (f"你的临时云空间调整（{mb_from} MB）已到期，"
+                           f"云空间已自动恢复为 {mb_to} MB。")
+                    html = auth._wrap("云空间临时调整已到期",
+                                      "<div style='line-height:1.8'>" + _esc(txt) + "</div>")
+                    try:
+                        await asyncio.to_thread(
+                            auth.send_mail, target["email"],
+                            "[YJS] 云空间临时调整已到期", html)
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"[quota] expiry mail failed: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[quota] expiry worker error: {exc}")
+        await asyncio.sleep(15)
 
 
 @app.on_event("startup")
@@ -2152,6 +2720,18 @@ async def _startup():
                   f"{cfg.CONFIG['quota_bytes'] // 1024 // 1024} MB")
     except Exception as exc:  # noqa: BLE001
         print(f"[yjs] quota migration failed: {exc}")
+    try:
+        m = migrate_legacy_notice()
+        if m:
+            print("[yjs] imported the previous single notice into history")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[yjs] notice migration failed: {exc}")
+    # Always make sure the public history file exists on disk.
+    try:
+        _write_public_notices()
+    except Exception:  # noqa: BLE001
+        pass
+    asyncio.create_task(_quota_expiry_worker())
     tunnel.TUNNEL.start(port)
 
 
