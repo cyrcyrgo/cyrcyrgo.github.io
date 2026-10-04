@@ -73,17 +73,81 @@
   }
 
   /* ---------------------------------------------------------------- api */
+  /* Latest tunnel URL: the one-click launcher rotates the cpolar domain on
+     every boot and pushes config.json to the repo. Pages/raw can lag ~1 min,
+     so query mirrors in parallel, require /api/health, retry and keep watch. */
+  const CFG_RAW =
+    "https://raw.githubusercontent.com/cyrcyrgo/cyrcyrgo.github.io/main/cla/config.json";
+
+  function cfgUrls() {
+    const dir = location.pathname.replace(/[^/]*$/, "");
+    const bust = Date.now();
+    return [
+      dir + "config.json?t=" + bust,
+      CFG_RAW + "?t=" + bust,
+      "https://gh-proxy.com/" + CFG_RAW + "?t=" + bust,
+      "https://ghfast.top/" + CFG_RAW + "?t=" + bust,
+    ];
+  }
+
+  async function readTunnelUrl(timeoutMs = 7000) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const settled = await Promise.allSettled(cfgUrls().map((u) =>
+        fetch(u, { cache: "no-store", signal: ctrl.signal }).then(async (r) => {
+          if (!r.ok) throw new Error("http " + r.status);
+          const c = await r.json();
+          return c.api_url ? String(c.api_url).replace(/\/+$/, "") : "";
+        })));
+      for (const s of settled) {
+        if (s.status === "fulfilled" && s.value) return s.value;
+      }
+      return "";
+    } finally { clearTimeout(timer); }
+  }
+
+  async function pingTunnel(base, timeoutMs = 5000) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const r = await fetch(base + "/api/health?t=" + Date.now(), {
+        cache: "no-store", signal: ctrl.signal,
+        headers: { "ngrok-skip-browser-warning": "true" },
+      });
+      return r.ok;
+    } catch (_) { return false; }
+    finally { clearTimeout(timer); }
+  }
+
+  async function waitForTunnel(maxMs = 120000) {
+    const deadline = Date.now() + maxMs;
+    let last = "";
+    while (Date.now() < deadline) {
+      const u = await readTunnelUrl();
+      if (u) {
+        last = u;
+        if (await pingTunnel(u)) return u;
+      }
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+    return last;
+  }
+
   async function resolveApi() {
     const override = localStorage.getItem("yjs_api_override");
-    if (override) API = override.replace(/\/$/, "");
-    else if (["127.0.0.1", "localhost"].includes(location.hostname)) API = location.origin;
-    else {
-      try {
-        const r = await fetch("config.json?t=" + Date.now(), { cache: "no-store" });
-        if (r.ok) { const c = await r.json(); if (c.api_url) API = c.api_url.replace(/\/$/, ""); }
-      } catch (_) {}
-      if (!API) API = location.origin;
+    if (override) { API = override.replace(/\/$/, ""); return; }
+    if (["127.0.0.1", "localhost"].includes(location.hostname)) {
+      API = location.origin;
+      return;
     }
+    API = (await waitForTunnel()) || location.origin;
+    // Survive a tunnel rotation while the dashboard stays open.
+    setInterval(async () => {
+      if (localStorage.getItem("yjs_api_override")) return;
+      const u = await readTunnelUrl();
+      if (u && u !== API && await pingTunnel(u)) API = u;
+    }, 5 * 60 * 1000);
   }
   async function api(path, opts = {}) {
     const headers = Object.assign(
