@@ -145,17 +145,44 @@
   }
 
   /* ------------------------------------------------------------- engine */
+  // The tunnel URL rotates on every one-click launcher reboot and is pushed
+  // to config.json; read all mirrors in parallel (raw/proxies refresh faster
+  // than Pages). Local mode must never block, so this is ONE quick round.
+  const CFG_RAW =
+    "https://raw.githubusercontent.com/cyrcyrgo/cyrcyrgo.github.io/main/cla/config.json";
+
+  async function readTunnelUrl(timeoutMs = 7000) {
+    const bust = Date.now();
+    const urls = [
+      APP_DIR + "config.json?t=" + bust,
+      CFG_RAW + "?t=" + bust,
+      "https://gh-proxy.com/" + CFG_RAW + "?t=" + bust,
+      "https://ghfast.top/" + CFG_RAW + "?t=" + bust,
+    ];
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const settled = await Promise.allSettled(urls.map((u) =>
+        fetch(u, { cache: "no-store", signal: ctrl.signal }).then(async (r) => {
+          if (!r.ok) throw new Error("http " + r.status);
+          const c = await r.json();
+          return c.api_url ? String(c.api_url).replace(/\/+$/, "") : "";
+        })));
+      for (const s of settled) {
+        if (s.status === "fulfilled" && s.value) return s.value;
+      }
+      return "";
+    } catch (_) {
+      return "";
+    } finally { clearTimeout(timer); }
+  }
+
   async function resolveApi() {
     const override = localStorage.getItem("yjs_api_override");
     if (override) return override.replace(/\/+$/, "");
-    try {
-      const r = await fetch(APP_DIR + "config.json?t=" + Date.now(), { cache: "no-store" });
-      if (r.ok) {
-        const c = await r.json();
-        if (c.api_url) return String(c.api_url).replace(/\/+$/, "");
-      }
-    } catch (_) { /* fall through */ }
-    return location.origin;
+    if (["127.0.0.1", "localhost"].includes(location.hostname)) return location.origin;
+    const u = await readTunnelUrl();
+    return u || location.origin;
   }
 
   // Requests to the tunnel must carry the ngrok free-tier bypass header,
@@ -332,13 +359,7 @@
   async function probeRelaySource() {
     try {
       let apiBase = localStorage.getItem("yjs_api_override");
-      if (!apiBase) {
-        const r = await fetch(APP_DIR + "config.json?t=" + Date.now(), { cache: "no-store" });
-        if (r.ok) {
-          const c = await r.json();
-          if (c.api_url) apiBase = String(c.api_url);
-        }
-      }
+      if (!apiBase) apiBase = await readTunnelUrl();
       if (!apiBase) return null;
       apiBase = apiBase.replace(/\/+$/, "");
       const ctrl = new AbortController();
