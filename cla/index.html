@@ -5,17 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS Cloud LLM Agent</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A4%96%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/style.css?v=20261003m" />
+<link rel="stylesheet" href="assets/style.css?v=20261003n" />
 </head>
 <body>
 
 <div id="login">
   <div class="card">
     <h1>YJS <span style="color:#22d3ee">Cloud LLM Agent</span></h1>
-    <p class="sub">邮箱验证�?/ 密码登录 · 本机 Agent 智能�?/p>
+    <p class="sub">邮箱验证码 / 密码登录 · 本机 Agent 智能体</p>
 
     <div class="tabs">
-      <button id="tab-code" class="on" type="button">验证码登�?/button>
+      <button id="tab-code" class="on" type="button">验证码登录</button>
       <button id="tab-pwd" type="button">密码登录</button>
     </div>
 
@@ -26,7 +26,7 @@
     <div id="pane-code">
       <div class="field row">
         <input id="login-code" placeholder="6 位验证码" inputmode="numeric" maxlength="6" />
-        <button id="btn-send" class="ghost" style="flex:0 0 130px">获取验证�?/button>
+        <button id="btn-send" class="ghost" style="flex:0 0 130px">获取验证码</button>
       </div>
       <button id="btn-verify" style="width:100%;padding:12px">登录 / 注册</button>
     </div>
@@ -41,19 +41,20 @@
 
     <div id="login-msg" class="msg"></div>
     <div class="settings">
-      <div>后端地址�?span id="api-label">检测中�?/span></div>
+      <div>后端地址：<span id="api-label">检测中…</span></div>
       <input id="api-input" placeholder="手动填写后端地址" />
     </div>
     <div class="local-entry">
-      <button id="btn-local" class="ghost" style="width:100%">�?本地使用（离�?· 无需登录�?/button>
+      <button id="btn-local" class="ghost" style="width:100%">⚡ 本地使用（离线 · 无需登录）</button>
       <div class="local-hint">
-        服务器不可用时也能用：模型在本机浏览器内运行，服务器不保留任何信息，无需注册登录�?      </div>
+        服务器不可用时也能用：模型在本机浏览器内运行，服务器不保留任何信息，无需注册登录。
+      </div>
     </div>
   </div>
 </div>
 
 <div id="app" class="hidden">
-  <button id="sidebar-toggle" class="sidebar-toggle" title="收展对话�?>�?/button>
+  <button id="sidebar-toggle" class="sidebar-toggle" title="收展对话栏">☰</button>
   <aside class="sidebar" id="sidebar">
     <div class="brand">YJS <span>Agent</span></div>
     <div class="userbox">
@@ -62,16 +63,16 @@
       <div class="quota" id="quota-bar"><i style="width:0%"></i></div>
     </div>
     <button id="btn-new" style="width:100%">+ 新建对话</button>
-    <input id="conv-search" class="conv-search" placeholder="搜索对话�? autocomplete="off" />
+    <input id="conv-search" class="conv-search" placeholder="搜索对话…" autocomplete="off" />
     <div class="conv-list" id="conv-list"></div>
     <div class="sidebar-foot">
       <button id="btn-files" class="ghost" style="flex:1">我的文件</button>
-      <button id="btn-logout" class="ghost">退�?/button>
+      <button id="btn-logout" class="ghost">退出</button>
     </div>
     <div class="sidebar-foot">
       <button id="btn-me" class="ghost me-btn" style="flex:1">
         <span class="me-mini" id="me-mini-avatar">👤</span>
-        <span class="me-mini-name" id="me-mini-name">�?/span>
+        <span class="me-mini-name" id="me-mini-name">我</span>
       </button>
     </div>
   </aside>
@@ -83,34 +84,35 @@
       <span id="agent-tag" class="tag mode" style="display:none"></span>
       <span id="model-tag" class="tag ok" style="display:none"></span>
       <span id="mode-tag" class="tag mode" style="display:none"></span>
-      <button id="btn-export" class="ghost head-btn hidden" title="导出当前对话�?Markdown">导出</button>
-      <button id="btn-settings" class="ghost head-btn" title="账户设置">�?设置</button>
+      <button id="btn-export" class="ghost head-btn hidden" title="导出当前对话为 Markdown">导出</button>
+      <button id="btn-settings" class="ghost head-btn" title="账户设置">⚙ 设置</button>
     </div>
     <div class="messages" id="messages">
       <div class="empty">
-        在左侧新建一个对话，然后描述你的任务�?br />
-        对话框中可切换模型与工作模式：快�?/ 思�?/ 工作 / 专家�?      </div>
+        在左侧新建一个对话，然后描述你的任务。<br />
+        对话框中可切换模型与工作模式：快速 / 思考 / 工作 / 专家。
+      </div>
     </div>
     <div class="composer">
       <div class="templates" id="templates"></div>
-      <textarea id="chat-input" placeholder="描述任务…（Enter 发送，Shift+Enter 换行�?></textarea>
+      <textarea id="chat-input" placeholder="描述任务…（Enter 发送，Shift+Enter 换行）"></textarea>
       <div class="comp-row">
         <div class="composer-controls">
-          <select id="agent-select" class="agent-select" title="选择领域智能�?>
-            <option value="">加载中�?/option>
+          <select id="agent-select" class="agent-select" title="选择领域智能体">
+            <option value="">加载中…</option>
           </select>
           <select id="model-select" class="model-select" title="选择模型">
-            <option value="">加载中�?/option>
+            <option value="">加载中…</option>
           </select>
           <select id="mode-select" class="mode-select" title="工作模式">
             <option value="work">工作模式 · Agent 执行</option>
-            <option value="expert">专家模式 · 思�?+ 多步工具</option>
-            <option value="think">思考模�?· 深度分析</option>
-            <option value="fast">快速模�?· 直接输出</option>
+            <option value="expert">专家模式 · 思考 + 多步工具</option>
+            <option value="think">思考模式 · 深度分析</option>
+            <option value="fast">快速模式 · 直接输出</option>
           </select>
-          <span class="char-count" id="char-count">0 �?/span>
+          <span class="char-count" id="char-count">0 字</span>
         </div>
-        <button id="btn-send-msg" class="send">发�?/button>
+        <button id="btn-send-msg" class="send">发送</button>
       </div>
     </div>
   </main>
@@ -155,7 +157,7 @@
     </div>
     <div class="me-field">
       <label>昵称</label>
-      <input id="me-name" maxlength="32" placeholder="给自己起个名�? />
+      <input id="me-name" maxlength="32" placeholder="给自己起个名字" />
     </div>
     <div class="me-inline">
       <button id="btn-save-profile">保存资料</button>
@@ -166,7 +168,7 @@
   <div class="me-block">
     <div class="me-title">账户信息</div>
     <div class="me-kv"><span>登录邮箱</span><b id="me-email">--</b></div>
-    <div class="me-kv"><span>云空�?/span><b id="me-quota">--</b></div>
+    <div class="me-kv"><span>云空间</span><b id="me-quota">--</b></div>
   </div>
 
   <div class="me-block">
@@ -174,7 +176,7 @@
     <div class="me-field"><input id="me-new-email" type="email" placeholder="新邮箱地址" /></div>
     <div class="me-field row">
       <input id="me-email-code" placeholder="6 位验证码" inputmode="numeric" maxlength="6" />
-      <button id="btn-me-send-code" class="ghost" style="flex:0 0 120px">获取验证�?/button>
+      <button id="btn-me-send-code" class="ghost" style="flex:0 0 120px">获取验证码</button>
     </div>
     <div class="me-inline">
       <button id="btn-me-change-email">确认更改</button>
@@ -188,7 +190,7 @@
       <input id="me-pw1" type="password" placeholder="新密码（至少 6 位）" autocomplete="new-password" />
     </div>
     <div class="me-field">
-      <input id="me-pw2" type="password" placeholder="再次输入新密�? autocomplete="new-password" />
+      <input id="me-pw2" type="password" placeholder="再次输入新密码" autocomplete="new-password" />
     </div>
     <div class="me-inline">
       <button id="btn-me-save-pw">保存密码</button>
@@ -197,7 +199,7 @@
   </div>
 
   <div class="me-block">
-    <div class="me-title">向作者反�?/div>
+    <div class="me-title">向作者反馈</div>
     <div class="me-field">
       <select id="me-fb-cat">
         <option value="功能建议">功能建议</option>
@@ -207,13 +209,13 @@
       </select>
     </div>
     <div class="me-field">
-      <textarea id="me-fb-text" rows="4" placeholder="描述你的建议或遇到的问题�?></textarea>
+      <textarea id="me-fb-text" rows="4" placeholder="描述你的建议或遇到的问题…"></textarea>
     </div>
     <div class="me-inline">
       <button id="btn-me-feedback">提交反馈</button>
       <span class="me-msg" id="me-fb-msg"></span>
     </div>
-    <div class="me-hint">反馈会发送到服务器，管理员查看后台时会留意�?/div>
+    <div class="me-hint">反馈会发送到服务器，管理员查看后台时会留意。</div>
   </div>
 </div>
 
@@ -227,17 +229,18 @@
     </div>
     <div class="messages" id="local-messages">
       <div class="empty">
-        本地模型尚未加载�?br />
-        点击右上角「模型」选择并下载一个本地模型，之后即可离线自由对话�?      </div>
+        本地模型尚未加载。<br />
+        点击右上角「模型」选择并下载一个本地模型，之后即可离线自由对话。
+      </div>
     </div>
     <div class="composer">
-      <textarea id="local-input" placeholder="输入消息…（Enter 发送，Shift+Enter 换行�?></textarea>
+      <textarea id="local-input" placeholder="输入消息…（Enter 发送，Shift+Enter 换行）"></textarea>
       <div class="comp-row">
         <div class="composer-controls">
-          <span class="char-count" id="local-model-label">未加载模�?/span>
+          <span class="char-count" id="local-model-label">未加载模型</span>
           <button id="btn-local-clear" class="ghost" style="padding:6px 12px;font-size:12.5px">清空对话</button>
         </div>
-        <button id="btn-local-send" class="send">发�?/button>
+        <button id="btn-local-send" class="send">发送</button>
       </div>
     </div>
   </main>
@@ -248,23 +251,26 @@
     <h3>本地模型</h3>
     <p class="muted">
       模型在本机浏览器内运行（WebGPU）。首次使用经 GitHub 加速镜像下载权重并缓存到本浏览器，
-      之后断网也能直接打开页面离线对话，全程不经过服务器�?    </p>
+      之后断网也能直接打开页面离线对话，全程不经过服务器。
+    </p>
     <div id="local-gpu-note" class="local-note"></div>
     <div id="local-models" class="local-models"></div>
     <div class="me-field">
       <div class="me-hint">
-        首次下载通过 GitHub 加速镜像（�?gh-proxy.com）获取，文件保存在本浏览器缓存中�?        下载完成后即使断网也能离线对话，服务器不保留任何对话信息�?      </div>
+        首次下载通过 GitHub 加速镜像（如 gh-proxy.com）获取，文件保存在本浏览器缓存中；
+        下载完成后即使断网也能离线对话，服务器不保留任何对话信息。
+      </div>
     </div>
     <div id="local-progress" class="local-progress"></div>
     <div class="modal-foot">
       <button class="ghost" id="btn-local-close-setup">关闭</button>
       <button class="ghost hidden" id="btn-local-cancel">取消下载</button>
-      <button id="btn-local-load">下载并启�?/button>
+      <button id="btn-local-load">下载并启动</button>
     </div>
   </div>
 </div>
 
-<script src="assets/app.js?v=20261003m"></script>
-<script src="assets/local.js?v=20261003m"></script>
+<script src="assets/app.js?v=20261003n"></script>
+<script src="assets/local.js?v=20261003n"></script>
 </body>
 </html>
