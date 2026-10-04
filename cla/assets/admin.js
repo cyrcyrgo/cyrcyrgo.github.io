@@ -1256,10 +1256,24 @@
     box.innerHTML = items.map((u) => {
       const [stText, stCls] = stMap[u.status] || [u.status, "user"];
       const passed = (u.score || 0) >= 50;
+      const canPin = ["open", "denied"].includes(u.status);
       const answers = Object.entries(u.answers || {}).map(([k, v]) =>
         `<tr><td class="muted">${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`).join("");
       const matched = (u.matched || []).map((x) => `<li>✅ ${escapeHtml(x)}</li>`).join("");
       const missed = (u.missed || []).map((x) => `<li>❌ ${escapeHtml(x)}</li>`).join("");
+      let actions = "";
+      if (u.status === "open" && passed) {
+        actions = `<button class="btn" data-act="approve">✓ 评分达标，同意解冻</button>
+          <button class="btn danger" data-act="deny">取消申请</button>`;
+      } else if (canPin) {
+        actions = `<button class="btn ghost" data-act="verify">输入 PIN 验证解冻</button>
+          <button class="btn ghost" data-act="resend">重发 PIN 到邮箱管理者</button>
+          <span class="muted">${u.pin_sent_at
+            ? "系统已自动发送 6 位 PIN 至邮箱管理者，请在邮箱查收"
+            : "评分不足 50，系统已否决，正在自动发送 PIN 至邮箱管理者"}</span>
+          ${u.pin_error
+            ? `<span class="badge no">PIN 邮件发送失败：${escapeHtml(u.pin_error)}</span>` : ""}`;
+      }
       return `<div class="uf-item ${u.status}" data-id="${escapeHtml(u.id)}">
         <div class="fb-head">
           <span class="fb-who">${escapeHtml(u.email)}</span>
@@ -1274,14 +1288,7 @@
           <ul class="uf-score">${matched}${missed}</ul>
         </details>
         ${u.decided_at ? `<div class="muted" style="margin-top:6px">处理时间：${fmtTime(u.decided_at)} · 处理人：${escapeHtml(u.decided_by || "")}</div>` : ""}
-        ${u.status === "open" ? `<div class="qreq-acts">
-          ${passed ? `
-            <button class="btn" data-act="approve">✓ 评分达标，同意解冻</button>
-            <button class="btn danger" data-act="deny">取消申请</button>` : `
-            <button class="btn" data-act="pin">📧 发送高级解冻 PIN 邮件</button>
-            <button class="btn ghost" data-act="verify">输入 PIN 验证解冻</button>
-            <span class="muted">评分不足 50，系统已否决，管理员无法直接解冻</span>`}
-        </div>` : ""}
+        ${actions ? `<div class="qreq-acts">${actions}</div>` : ""}
       </div>`;
     }).join("");
     box.querySelectorAll(".uf-item").forEach((el) => {
@@ -1298,13 +1305,14 @@
         await api(`/api/admin/unfreeze/${encodeURIComponent(id)}/decide`, {
           method: "POST", body: JSON.stringify({ approve: act === "approve" }),
         });
-        toast(act === "approve" ? "已解冻账号" : "已拒绝申请", "ok");
-      } else if (act === "pin") {
-        if (!confirm("向该账号邮箱发送 6 位高级解冻 PIN？")) return;
+        toast(act === "approve" ? "已解冻账号"
+          : "已拒绝申请，系统已自动发送高级解冻 PIN 至邮箱管理者", "ok");
+      } else if (act === "resend") {
+        if (!confirm("向邮箱管理者重发 6 位高级解冻 PIN？")) return;
         await api(`/api/admin/unfreeze/${encodeURIComponent(id)}/send-pin`, { method: "POST" });
-        toast("PIN 邮件已发送，请等待用户提供 PIN", "ok");
+        toast("PIN 已重发至邮箱管理者，请查收发件邮箱", "ok");
       } else if (act === "verify") {
-        const pin = prompt("请输入用户从邮箱中获取的 6 位 PIN：");
+        const pin = prompt("请输入邮箱管理者收到的 6 位 PIN：");
         if (!pin) return;
         await api(`/api/admin/unfreeze/${encodeURIComponent(id)}/verify-pin`, {
           method: "POST", body: JSON.stringify({ pin: pin.trim() }),
@@ -1800,6 +1808,29 @@
         saveCollapsedStore(s);
       });
     }
+
+    // global "collapse all / expand all" control for every module
+    const applyAll = (collapse) => {
+      const s = readCollapsedStore();
+      document.querySelectorAll("#main section.panel").forEach((sec) => {
+        const key = sec.dataset.collapse;
+        if (!key) return;
+        sec.classList.toggle("collapsed", collapse);
+        if (collapse) s[key] = 1; else delete s[key];
+      });
+      const h2 = document.querySelector(".nt-history-head");
+      const l2 = $("nt-history");
+      if (h2 && l2) {
+        h2.classList.toggle("collapsed", collapse);
+        l2.classList.toggle("collapsed", collapse);
+        s["__notice_history__"] = collapse ? 1 : 0;
+      }
+      saveCollapsedStore(s);
+    };
+    const btnCollapseAll = $("btn-collapse-all");
+    const btnExpandAll = $("btn-expand-all");
+    if (btnCollapseAll) btnCollapseAll.onclick = () => applyAll(true);
+    if (btnExpandAll) btnExpandAll.onclick = () => applyAll(false);
   }
 
   /* ---------------------------------------------------------------- boot */
