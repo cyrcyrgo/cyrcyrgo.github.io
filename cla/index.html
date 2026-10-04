@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS Cloud LLM Agent</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A4%96%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/style.css?v=20261003n" />
+<link rel="stylesheet" href="assets/style.css?v=20261003o" />
 </head>
 <body>
 
@@ -81,7 +81,7 @@
     <div id="notice" class="notice hidden"></div>
     <div class="chat-head">
       <h2 id="chat-title">个人空间</h2>
-      <span id="agent-tag" class="tag mode" style="display:none"></span>
+      <span id="run-status" class="tag tier" style="display:none">⏳ 任务运行中</span>
       <span id="model-tag" class="tag ok" style="display:none"></span>
       <span id="mode-tag" class="tag mode" style="display:none"></span>
       <button id="btn-export" class="ghost head-btn hidden" title="导出当前对话为 Markdown">导出</button>
@@ -98,17 +98,14 @@
       <textarea id="chat-input" placeholder="描述任务…（Enter 发送，Shift+Enter 换行）"></textarea>
       <div class="comp-row">
         <div class="composer-controls">
-          <select id="agent-select" class="agent-select" title="选择领域智能体">
-            <option value="">加载中…</option>
-          </select>
           <select id="model-select" class="model-select" title="选择模型">
             <option value="">加载中…</option>
           </select>
           <select id="mode-select" class="mode-select" title="工作模式">
-            <option value="work">工作模式 · Agent 执行</option>
-            <option value="expert">专家模式 · 思考 + 多步工具</option>
-            <option value="think">思考模式 · 深度分析</option>
-            <option value="fast">快速模式 · 直接输出</option>
+            <option value="work">🛠 工作模式 · Agent 执行</option>
+            <option value="expert">🧠 专家模式 · 思考 + 多步工具</option>
+            <option value="think">🔍 思考模式 · 深度分析</option>
+            <option value="fast">⚡ 快速模式 · 直接输出</option>
           </select>
           <span class="char-count" id="char-count">0 字</span>
         </div>
@@ -118,7 +115,7 @@
   </main>
 </div>
 
-<div id="files-panel" class="drawer hidden">
+<div id="files-panel" class="drawer wide-drawer hidden">
   <div class="drawer-head">
     <h3>我的文件</h3>
     <div>
@@ -127,9 +124,38 @@
     </div>
   </div>
   <input id="upload-input" type="file" multiple style="display:none" />
-  <div id="files-usage" style="color:#8b98b4;font-size:12px;margin-bottom:10px"></div>
+  <div id="files-usage" class="files-usage-bar"></div>
+
+  <div id="files-batchbar" class="batchbar hidden">
+    <label class="batch-all"><input type="checkbox" id="files-checkall" /> 全选</label>
+    <span id="files-sel-count" class="muted">已选 0 项</span>
+    <span style="flex:1"></span>
+    <button id="btn-batch-download" class="ghost">⬇ 下载</button>
+    <button id="btn-batch-email" class="ghost">✉ 发送至邮箱</button>
+    <button id="btn-batch-delete" class="danger">删除</button>
+  </div>
+
   <div id="files-list"></div>
   <div class="foot"><button id="btn-clear-files" class="ghost">清空全部</button></div>
+</div>
+
+<!-- 发送文件到邮箱弹窗 -->
+<div id="file-mail-modal" class="modal hidden">
+  <div class="modal-box">
+    <h3>发送文件到我的邮箱</h3>
+    <p class="muted" id="file-mail-info">—</p>
+    <div class="me-field">
+      <label><input type="radio" name="mail-as" value="direct" /> 直接发送（多个文件时自动打包 ZIP）</label>
+    </div>
+    <div class="me-field">
+      <label><input type="radio" name="mail-as" value="zip" checked /> 打包成 ZIP 压缩包发送</label>
+    </div>
+    <div id="file-mail-msg" class="me-msg"></div>
+    <div class="modal-foot">
+      <button class="ghost" id="file-mail-cancel">取消</button>
+      <button id="file-mail-ok">发送</button>
+    </div>
+  </div>
 </div>
 
 <div id="preview-panel" class="drawer hidden">
@@ -169,6 +195,22 @@
     <div class="me-title">账户信息</div>
     <div class="me-kv"><span>登录邮箱</span><b id="me-email">--</b></div>
     <div class="me-kv"><span>云空间</span><b id="me-quota">--</b></div>
+  </div>
+
+  <div class="me-block">
+    <div class="me-title">申请扩大云空间 <span class="me-hint">· 基础空间 50MB，可向管理员申请扩容</span></div>
+    <div id="qreq-status" class="qreq-status"></div>
+    <div class="me-field row">
+      <input id="qreq-size" type="number" min="1" max="51200" placeholder="期望空间（MB），如 500" style="flex:1" />
+      <span class="me-hint" style="flex:0 0 auto;padding-top:8px">MB（最大 51200）</span>
+    </div>
+    <div class="me-field">
+      <textarea id="qreq-reason" rows="3" placeholder="申请理由（至少 5 个字）：用途、需要多大空间…"></textarea>
+    </div>
+    <div class="me-inline">
+      <button id="btn-qreq-submit">提交扩容申请</button>
+      <span class="me-msg" id="qreq-msg"></span>
+    </div>
   </div>
 
   <div class="me-block">
@@ -215,7 +257,7 @@
       <button id="btn-me-feedback">提交反馈</button>
       <span class="me-msg" id="me-fb-msg"></span>
     </div>
-    <div class="me-hint">反馈会发送到服务器，管理员查看后台时会留意。</div>
+    <div class="me-hint">意见会先提交到服务器，再由服务器通过邮件转发给管理员 YJS-CLA@hotmail.com。</div>
   </div>
 </div>
 
@@ -270,7 +312,7 @@
   </div>
 </div>
 
-<script src="assets/app.js?v=20261003n"></script>
-<script src="assets/local.js?v=20261003n"></script>
+<script src="assets/app.js?v=20261003o"></script>
+<script src="assets/local.js?v=20261003o"></script>
 </body>
 </html>
