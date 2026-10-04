@@ -1,15 +1,14 @@
-"""Email OTP authentication (Microsoft Graph) + JWT sessions."""
+"""Email OTP authentication (SMTP) + JWT sessions."""
 from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import os
 import random
+import smtplib
+import ssl
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
+from email.message import EmailMessage
 
 import jwt
 
@@ -20,147 +19,71 @@ _CODES: dict[str, dict] = {}
 
 ALGO = "HS256"
 
-LOGIN_BASE = "https://login.microsoftonline.com"
-GRAPH_BASE = "https://graph.microsoft.com/v1.0"
-GRAPH_SCOPE = "https://graph.microsoft.com/Mail.Send offline_access"
-
-# Cached access token for the running process: {"value", "exp", "rt"}.
-# Refresh tokens are long-lived; access tokens last ~1 hour.
-_token_cache: dict[str, object] = {"value": "", "exp": 0.0, "rt": ""}
-
 
 # --------------------------------------------------------------------------- #
-# Microsoft Graph mail (OAuth2 delegated flow)
+# SMTP mail
 # --------------------------------------------------------------------------- #
-_GRAPH_FIELDS = (("client_id", "客户端 ID"),
-                 ("refresh_token", "刷新令牌"),
-                 ("user", "发件邮箱"))
-
-
-def _graph() -> dict:
-    g = cfg.CONFIG["msgraph"]
-    missing = [label for name, label in _GRAPH_FIELDS
-               if not str(g.get(name) or "").strip()]
-    if missing:
-        raise RuntimeError(
-            "Microsoft Graph 未配置：请在后台「邮件服务」中填写"
-            + "、".join(missing))
-    return g
-
-
-def _http_json(url: str, *, data: bytes | None, headers: dict,
-               timeout: int = 30) -> tuple[int, str]:
-    req = urllib.request.Request(url, data=data, headers=headers, method="POST" if data is not None else "GET")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status, resp.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as exc:
-        return exc.code, exc.read().decode("utf-8", "replace")
-
-
-def _mint_token(g: dict, *, force: bool = False) -> str:
-    """Exchange the stored refresh token for a Graph access token (cached)."""
-    rt = str(g.get("refresh_token") or "").strip()
-    now = time.time()
-    if (not force and _token_cache["value"] and _token_cache["rt"] == rt
-            and now < float(_token_cache["exp"]) - 120):
-        return str(_token_cache["value"])
-
-    tenant = urllib.parse.quote(str(g.get("tenant_id") or "common").strip() or "common",
-                                safe="")
-    url = f"{LOGIN_BASE}/{tenant}/oauth2/v2.0/token"
-    fields = {
-        "client_id": str(g.get("client_id") or "").strip(),
-        "grant_type": "refresh_token",
-        "refresh_token": rt,
-        "scope": GRAPH_SCOPE,
-    }
-    if str(g.get("client_secret") or "").strip():
-        fields["client_secret"] = str(g["client_secret"]).strip()
-    body = urllib.parse.urlencode(fields).encode("utf-8")
-    status, raw = _http_json(
-        url, data=body,
-        headers={"Content-Type": "application/x-www-form-urlencoded"})
-    if status != 200:
-        detail = ""
-        try:
-            d = json.loads(raw)
-            detail = (d.get("error_description") or d.get("error") or
-                      json.dumps(d, ensure_ascii=False))
-        except Exception:  # noqa: BLE001
-            detail = raw[:300]
-        raise RuntimeError(f"获取 Graph 访问令牌失败（{status}）：{detail[:400]}")
-    d = json.loads(raw)
-    token = d.get("access_token") or ""
-    if not token:
-        raise RuntimeError("获取 Graph 访问令牌失败：响应中没有 access_token")
-    # Microsoft rotates refresh tokens; persist the new one immediately.
-    new_rt = d.get("refresh_token")
-    if new_rt and new_rt != rt:
-        g["refresh_token"] = new_rt
-        cfg.save(cfg.CONFIG)
-        rt = new_rt
-    _token_cache.update(value=token, exp=now + int(d.get("expires_in") or 3600), rt=rt)
-    return token
-
-
-def _graph_call(token: str, path: str, payload: dict | None = None) -> dict:
-    """Call Graph: a payload makes it a POST (sendMail), otherwise GET."""
-    url = GRAPH_BASE + path
-    headers = {"Authorization": "Bearer " + token}
-    data = None
-    if payload is not None:
-        data = json.dumps(payload).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-    status, raw = _http_json(url, data=data, headers=headers)
-    if not (200 <= status < 300):
-        detail = raw
-        try:
-            d = json.loads(raw)
-            detail = (d.get("error", {}) or {}).get("message") or json.dumps(
-                d, ensure_ascii=False)
-        except Exception:  # noqa: BLE001
-            pass
-        err = RuntimeError(f"Microsoft Graph 请求失败（{status}）：{detail[:400]}")
-        err.code = status  # type: ignore[attr-defined]
-        raise err
-    if not raw:
-        return {}
-    try:
-        return json.loads(raw)
-    except Exception:  # noqa: BLE001
-        return {}
+def _smtp() -> dict:
+    s = cfg.CONFIG["smtp"]
+    user = str(s.get("user") or "").strip()
+    auth_code = str(s.get("auth_code") or "").strip()
+    host = str(s.get("host") or "").strip()
+    if not (user and auth_code and host):
+        raise RuntimeError("SMTP 未配置：请在后台「邮件服务」中填写发件邮箱、授权码和服务器")
+    return s
 
 
 def send_mail(to: str, subject: str, html: str, text: str | None = None) -> None:
-    """Send one UTF-8 HTML mail through Microsoft Graph ``/sendMail``."""
-    g = _graph()
-    sender = str(g["user"]).strip()
-    message: dict = {
-        "subject": subject,
-        "body": {"contentType": "HTML", "content": html},
-        "toRecipients": [{"emailAddress": {"address": to.strip()}}],
-    }
-    name = str(g.get("from_name") or "").strip()
-    if name:
-        message["from"] = {"emailAddress": {"address": sender, "name": name}}
-    path = f"/users/{urllib.parse.quote(sender, safe='')}/sendMail"
-    payload = {"message": message, "saveToSentItems": True}
-    try:
-        _graph_call(_mint_token(g), path, payload)
-    except RuntimeError as exc:
-        # Access token rejected mid-flight — force one renewal and retry once.
-        if getattr(exc, "code", 0) in (401, 403):
-            _graph_call(_mint_token(g, force=True), path, payload)
-        else:
-            raise
+    """Send one UTF-8 HTML mail over SMTP (SSL or STARTTLS)."""
+    s = _smtp()
+    host = str(s["host"]).strip()
+    port = int(s.get("port") or 465)
+    user = str(s["user"]).strip()
+    auth_code = str(s["auth_code"]).strip()
+    protocol = str(s.get("protocol") or "ssl").strip().lower()
+
+    msg = EmailMessage()
+    name = str(s.get("from_name") or "").strip()
+    msg["From"] = f"{name} <{user}>" if name else user
+    msg["To"] = to.strip()
+    msg["Subject"] = subject
+    msg.set_content(text or "请使用支持 HTML 的客户端查看本邮件。")
+    msg.add_alternative(html, subtype="html")
+
+    if protocol == "starttls":
+        with smtplib.SMTP(host, port, timeout=30) as server:
+            server.ehlo()
+            server.starttls(context=ssl.create_default_context())
+            server.ehlo()
+            server.login(user, auth_code)
+            server.send_message(msg)
+    else:
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL(host, port, context=context, timeout=30) as server:
+            server.login(user, auth_code)
+            server.send_message(msg)
 
 
 def check_mail() -> str:
-    """Mint a fresh token and read the mailbox profile (admin "test" button)."""
-    g = _graph()
-    info = _graph_call(_mint_token(g, force=True), "/me")
-    return info.get("mail") or info.get("userPrincipalName") or str(g["user"]).strip()
+    """Open an SMTP connection to validate credentials (admin "test" button)."""
+    s = _smtp()
+    host = str(s["host"]).strip()
+    port = int(s.get("port") or 465)
+    user = str(s["user"]).strip()
+    auth_code = str(s["auth_code"]).strip()
+    protocol = str(s.get("protocol") or "ssl").strip().lower()
+    if protocol == "starttls":
+        with smtplib.SMTP(host, port, timeout=20) as server:
+            server.ehlo()
+            server.starttls(context=ssl.create_default_context())
+            server.ehlo()
+            server.login(user, auth_code)
+    else:
+        with smtplib.SMTP_SSL(host, port,
+                             context=ssl.create_default_context(),
+                             timeout=20) as server:
+            server.login(user, auth_code)
+    return user
 
 
 def _wrap(title: str, body_html: str) -> str:
@@ -183,7 +106,7 @@ def can_send(email: str) -> tuple[bool, int]:
 
 def send_code(email: str, purpose: str = "login") -> None:
     email = email.lower()
-    _graph()
+    _smtp()
     code = f"{random.randint(0, 999999):06d}"
     if cfg.CONFIG.get("debug_codes"):
         print(f"[auth] {purpose} code for {email} = {code}", flush=True)
