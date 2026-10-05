@@ -19,7 +19,28 @@ import httpx
 
 from . import config as cfg
 
-EXE = cfg.BIN_DIR / "llama" / ("llama-server.exe" if os.name == "nt" else "llama-server")
+EXE_DIR = cfg.BIN_DIR / "llama"
+EXE = EXE_DIR / ("llama-server.exe" if os.name == "nt" else "llama-server")
+LOG_DIR = cfg.RUNTIME_DIR / "engine"
+
+
+def _gpu_backend() -> tuple[str, str]:
+    """Locate the shipped GPU backend DLL and its directory.
+
+    The Windows llama.cpp build ships GPU backends in versioned subfolders
+    (Ollama layout) rather than next to the executable, so they are not
+    auto-discovered. Prefer CUDA 12, then CUDA 13, then Vulkan. Returns
+    ``("","")`` when no GPU backend is bundled (pure CPU fallback).
+    """
+    for rel in ("cuda_v12/ggml-cuda.dll", "cuda_v13/ggml-cuda.dll",
+                "vulkan/ggml-vulkan.dll", "ggml-cuda.dll", "ggml-vulkan.dll"):
+        p = EXE_DIR / rel
+        if p.exists():
+            return str(p), str(p.parent)
+    return "", ""
+
+
+GPU_BACKEND, GPU_BACKEND_DIR = _gpu_backend()
 
 DEFAULT_LOAD_TIMEOUT = 240     # seconds to wait for a cold model load
 DEFAULT_IDLE_TIMEOUT = 1800    # seconds a warm instance survives untouched
@@ -117,9 +138,18 @@ def _spawn(inst: _Instance) -> None:
         "--host", "127.0.0.1", "--port", str(inst.port),
         "-ngl", "99", "-c", str(inst.ctx), "--jinja",
     ]
+    env = os.environ.copy()
+    if GPU_BACKEND:
+        # Tell ggml exactly which GPU backend DLL to load, and make sure its
+        # sibling runtimes (cuBLAS / Vulkan loader) resolve from the same dir.
+        env["GGML_BACKEND_PATH"] = GPU_BACKEND
+        if GPU_BACKEND_DIR:
+            env["PATH"] = GPU_BACKEND_DIR + os.pathsep + env.get("PATH", "")
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log = open(LOG_DIR / f"engine-{inst.port}.log", "wb")
     inst.proc = subprocess.Popen(
-        args, cwd=str(EXE.parent),
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        args, cwd=str(EXE.parent), env=env,
+        stdout=log, stderr=subprocess.STDOUT,
         creationflags=flags,
     )
     inst.started_at = time.time()
@@ -243,11 +273,16 @@ def status() -> dict:
                 "idle_seconds": round(now - inst.last_used, 1) if inst.last_used else 0,
                 "model": str(inst.path),
             })
+    backend = "cpu"
+    if GPU_BACKEND:
+        backend = "cuda" if "cuda" in GPU_BACKEND.lower() else "vulkan"
     return {
         "ok": bool(running),
         "running": running,
         "installed": installed(),
         "engine_path": str(EXE) if EXE.exists() else "",
+        "gpu_backend": backend,
+        "gpu_backend_path": GPU_BACKEND,
     }
 
 
