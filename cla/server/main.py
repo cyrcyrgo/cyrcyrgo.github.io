@@ -2630,6 +2630,7 @@ async def admin_system_status(user: dict = Depends(require_admin_gate)):
     return {"ok": True, "platform": sys.platform,
             "engine_running": bool(running),
             "engine_path": st.get("engine_path", ""),
+            "gpu_backend": st.get("gpu_backend", "cpu"),
             "engine_models": [r["name"] for r in running],
             "engine_count": len(running),
             "tunnel": tunnel.TUNNEL.url,
