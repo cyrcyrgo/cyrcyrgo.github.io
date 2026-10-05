@@ -1705,7 +1705,9 @@
     try {
       const d = await api("/api/admin/system");
       const st = $("sys-engine-state");
-      st.textContent = d.engine_running ? "● 运行中" : "○ 已停止";
+      const be = d.gpu_backend ? " · " + (d.gpu_backend === "cuda" ? "CUDA GPU"
+            : d.gpu_backend === "vulkan" ? "Vulkan GPU" : "CPU") : "";
+      st.textContent = (d.engine_running ? "● 运行中" : "○ 已停止") + be;
       st.className = "badge " + (d.engine_running ? "yes" : "no");
       $("btn-engine-start").disabled = !!d.engine_running;
       $("btn-engine-stop").disabled = !d.engine_running;
