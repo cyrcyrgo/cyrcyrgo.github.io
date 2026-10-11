@@ -28,6 +28,75 @@
   const escapeHtml = (s) => (s || "").replace(/[&<>"]/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+  /* ------------------------------------------- rich-text body editor ------ *
+   * contenteditable box with:
+   *   Ctrl+B          -> bold (document.execCommand, works in all browsers)
+   *   Ctrl+Shift+B    -> native browser color picker (<input type=color>)
+   * Serializes innerHTML; the backend re-sanitizes, so only bold/font color
+   * survive. Attach via enhanceRichBox(id) after the element exists.
+   */
+  function setupRichBox(id) {
+    const box = $(id);
+    if (!box || box.dataset.richReady) return;
+    box.dataset.richReady = "1";
+    box.contentEditable = "true";
+    box.spellcheck = false;
+
+    // Native color picker, shown programmatically on Ctrl+Shift+B.
+    const picker = document.createElement("input");
+    picker.type = "color";
+    picker.style.cssText = "position:absolute;width:1px;height:1px;opacity:0";
+    document.body.appendChild(picker);
+    box._colorPicker = picker;
+    picker.addEventListener("input", () => {
+      box.focus();
+      document.execCommand("styleWithCSS", false, "true");
+      document.execCommand("foreColor", false, picker.value);
+    });
+
+    box.addEventListener("keydown", (e) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const key = (e.key || "").toLowerCase();
+      if (key === "b" && !e.shiftKey) {
+        e.preventDefault();
+        box.focus();
+        document.execCommand("bold");
+      } else if (key === "b" && e.shiftKey) {
+        e.preventDefault();
+        box.focus();
+        // Save / restore selection around the picker click (focus leaves box).
+        const sel = window.getSelection();
+        let range = null;
+        if (sel && sel.rangeCount) range = sel.getRangeAt(0).cloneRange();
+        picker.onclick = () => { if (range) { sel.removeAllRanges(); sel.addRange(range); } };
+        if (document.queryCommandValue) {
+          const cur = document.queryCommandValue("foreColor");
+          if (cur && /^#?[0-9a-f]{6}$/i.test(cur)) picker.value = cur;
+        }
+        picker.click();
+      }
+    });
+
+    // Paste as plain text (formatting is intentionally only via shortcuts).
+    box.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const text = ((e.clipboardData || window.clipboardData) || {}).getData
+        ? (e.clipboardData || window.clipboardData).getData("text/plain") : "";
+      document.execCommand("insertText", false, text);
+    });
+  }
+  const richHTML = (id) => { const el = $(id); return el ? el.innerHTML.trim() : ""; };
+  const richText = (id) => {
+    const el = $(id);
+    if (!el) return "";
+    const div = document.createElement("div");
+    div.innerHTML = el.innerHTML;
+    return (div.textContent || "").trim();
+  };
+  const setRichHTML = (id, html) => { const el = $(id); if (el) el.innerHTML = html || ""; };
+  const clearRich = (id) => { const el = $(id); if (el) el.innerHTML = ""; };
+
   function fmtNum(n) {
     n = Number(n || 0);
     if (n < 1000) return String(n);
@@ -874,6 +943,7 @@
   }
 
   /* system permission settings */
+  let __prevSettings = null;
   async function loadSettings() {
     try {
       const st = await api("/api/admin/settings");
@@ -884,22 +954,109 @@
       $("set-default").innerHTML = (st.models || []).map((m) =>
         `<option value="${escapeHtml(m.name)}" ${m.name === st.default_model ? "selected" : ""}>
            ${escapeHtml(m.display || m.name)}${m.enabled ? "" : "（已暂停）"}</option>`).join("");
+      __prevSettings = {
+        ai_enabled: !!st.ai_enabled,
+        allow_register: !!st.allow_register,
+        allow_model_add: !!st.allow_model_add,
+        default_model: st.default_model || "",
+        max_tool_calls_per_step: st.max_tool_calls_per_step || 500,
+      };
     } catch (_) { /* 401 handled by refresh() */ }
   }
   on("btn-save-settings", "click", async () => {
+    const payload = {
+      ai_enabled: $("set-ai").checked,
+      allow_register: $("set-register").checked,
+      allow_model_add: $("set-addmodel").checked,
+      default_model: $("set-default").value || "",
+      max_tool_calls_per_step: parseInt($("set-toolcalls").value, 10) || 500,
+    };
+    // Diff against loaded values for the notification summary.
+    const labels = {
+      ai_enabled: "AI 开关", allow_register: "允许注册", allow_model_add: "允许添加模型",
+      default_model: "默认模型", max_tool_calls_per_step: "每轮工具调用上限",
+    };
+    const changes = [];
+    const prev = __prevSettings || {};
+    Object.keys(labels).forEach((k) => {
+      if (String(prev[k] ?? "") !== String(payload[k] ?? "")) {
+        changes.push(`${labels[k]}：${prev[k] ?? "—"} → ${payload[k] ?? "—"}`);
+      }
+    });
     try {
       await api("/api/admin/settings", {
         method: "POST",
+        body: JSON.stringify(payload),
+      });
+      __prevSettings = { ...payload };
+      toast("系统设置已保存", "ok");
+      openChangeNotice(changes);
+    } catch (e) { toast(e.message, "err"); }
+  });
+
+  /* ----------------------------------- settings-change notification modal -- */
+  let __chgChanges = [];
+  function openChangeNotice(changes) {
+    __chgChanges = Array.isArray(changes) ? changes : [];
+    const sum = $("chg-summary");
+    sum.innerHTML = __chgChanges.length
+      ? "本次变更：<br>• " + __chgChanges.map(escapeHtml).join("<br>• ")
+      : "设置已保存。";
+    const modal = $("chg-modal");
+    $("chg-msg").textContent = "";
+    $("chg-pw").value = "";
+    $("chg-pw-wrap").classList.add("hidden");
+    const none = modal.querySelector('input[name="chg-scope"][value="none"]');
+    if (none) none.checked = true;
+    modal.classList.remove("hidden");
+  }
+  function closeChangeNotice() { $("chg-modal").classList.add("hidden"); }
+  on("chg-cancel", "click", closeChangeNotice);
+  on("chg-modal", "click", (e) => { if (e.target === $("chg-modal")) closeChangeNotice(); });
+  document.querySelectorAll('input[name="chg-scope"]').forEach((r) => {
+    r.addEventListener("change", () => {
+      const scope = (document.querySelector('input[name="chg-scope"]:checked') || {}).value;
+      $("chg-pw-wrap").classList.toggle("hidden", scope !== "all");
+      $("chg-msg").textContent = "";
+    });
+  });
+  on("chg-ok", "click", async () => {
+    const scope = (document.querySelector('input[name="chg-scope"]:checked') || {}).value || "none";
+    const msg = $("chg-msg");
+    if (scope === "none") { closeChangeNotice(); return; }
+    const changeText = __chgChanges.length
+      ? "管理员更新了以下设置：\n• " + __chgChanges.join("\n• ")
+      : "管理员更新了系统设置。";
+    let password = "";
+    if (scope === "all") {
+      password = $("chg-pw").value;
+      if (!password) { msg.textContent = "全体通知需输入管理员密码"; return; }
+    } else if (scope === "me") {
+      // Personal notification needs a second confirmation.
+      if (!confirm("确认向【你的个人邮箱 + 个人服务通知】发送本次变更通知？")) return;
+    }
+    const btn = $("chg-ok"); btn.disabled = true;
+    msg.textContent = scope === "all" ? "正在向全体用户投递…" : "正在发送…";
+    try {
+      const d = await api("/api/admin/settings/notify", {
+        method: "POST",
         body: JSON.stringify({
-          ai_enabled: $("set-ai").checked,
-          allow_register: $("set-register").checked,
-          allow_model_add: $("set-addmodel").checked,
-          default_model: $("set-default").value || "",
-          max_tool_calls_per_step: parseInt($("set-toolcalls").value, 10) || 500,
+          scope, password,
+          title: "系统设置已更新",
+          body: changeText,
+          changes: __chgChanges,
         }),
       });
-      toast("系统设置已保存", "ok");
-    } catch (e) { toast(e.message, "err"); }
+      if (scope === "none") { closeChangeNotice(); return; }
+      const fail = (d.mail_failed || []).length;
+      msg.textContent = `✓ 已发送服务通知 ${d.notice_count} 条、邮件 ${d.mail_sent} 封`
+        + (fail ? `，邮件失败 ${fail}` : "");
+      toast("通知已发送", fail ? "err" : "ok");
+      setTimeout(closeChangeNotice, 1200);
+    } catch (e) {
+      msg.textContent = "✗ " + e.message;
+      if (e.status === 403) $("chg-pw").focus();
+    } finally { btn.disabled = false; }
   });
 
   /* ---------------------------------------------------------------- MCP */
@@ -1048,6 +1205,7 @@
       const okCode = (d && d.has_auth_code) || typed !== "";
       msg.textContent = okCode ? "✓ 已保存（授权码已加密存入本机配置）" : "✓ 已保存";
       toast("发件邮箱设置已保存", "ok");
+      openChangeNotice(["SMTP 邮件服务配置"]);
     } catch (e) {
       if (e.status === 401) { showLock(); return; }
       msg.textContent = "✗ 保存失败：" + e.message;
@@ -1072,7 +1230,8 @@
   async function sendBroadcast(onlyMe) {
     const msg = $("bc-msg");
     const subject = $("bc-subject").value.trim();
-    const body = $("bc-body").value.trim();
+    const body = richText("bc-body");
+    const body_html = richHTML("bc-body");
     if (!subject || !body) { msg.textContent = "请先填写邮件主题与正文"; return; }
     if (!onlyMe && !confirm("确定向【全体已注册用户】发送这封邮件？")) return;
     const btns = [$("btn-broadcast"), $("btn-broadcast-me")];
@@ -1081,7 +1240,7 @@
     try {
       const d = await api("/api/admin/email/broadcast", {
         method: "POST",
-        body: JSON.stringify({ subject, body, only_me: !!onlyMe }),
+        body: JSON.stringify({ subject, body, body_html, only_me: !!onlyMe }),
       });
       const fail = (d.failed || []).length;
       msg.textContent = `✓ 发送成功 ${d.sent}/${d.total}` + (fail ? `，失败 ${fail}` : "");
@@ -1169,7 +1328,7 @@
   function openReply(fid, f) {
     replyFid = fid;
     $("reply-to").textContent = `回复给：${f ? escapeHtml(f.name || f.email || "") + " <" + escapeHtml(f.email || "") + ">" : ""}`;
-    $("reply-body").value = "";
+    clearRich("reply-body");
     $("reply-via-email").checked = true;
     $("reply-via-notice").checked = false;
     $("reply-msg").textContent = "";
@@ -1181,22 +1340,25 @@
   on("reply-modal", "click", (e) => { if (e.target === $("reply-modal")) closeReply(); });
   on("reply-tpl-select", "change", () => {
     const t = replyTemplates.find((x) => x.id === $("reply-tpl-select").value);
-    const ta = $("reply-body");
     if (!t) return;
-    ta.value = t.body || "";
-    ta.focus();
+    // Templates may store rich HTML (saved from the editor) or legacy plain text.
+    setRichHTML("reply-body",
+      t.body && /<(?:b|strong|span|br|div|p)[ >]/i.test(t.body)
+        ? t.body : escapeHtml(t.body || "").replace(/\n/g, "<br>"));
+    $("reply-body").focus();
     $("reply-msg").textContent = t.body
       ? "已载入模板，可修改后直接发送"
       : "该模板正文为空，请先填写回信内容";
   });
   on("btn-reply-tpl-save", "click", async () => {
-    const body = $("reply-body").value.trim();
+    const body = richText("reply-body");
+    const body_html = richHTML("reply-body");
     if (!body) return toast("请先在回信内容中填写要存为模板的正文", "err");
     const title = prompt("模板名称：", body.slice(0, 20));
     if (!title) return;
     try {
       const d = await api("/api/admin/reply-templates", {
-        method: "POST", body: JSON.stringify({ title, body }),
+        method: "POST", body: JSON.stringify({ title, body: body_html || body }),
       });
       replyTemplates.push(d.template);
       renderTemplateOptions();
@@ -1217,7 +1379,8 @@
   });
   on("reply-ok", "click", async () => {
     if (!replyFid) return;
-    const content = $("reply-body").value.trim();
+    const content = richText("reply-body");
+    const content_html = richHTML("reply-body");
     const viaEmail = $("reply-via-email").checked;
     const viaNotice = $("reply-via-notice").checked;
     if (!content) return $("reply-msg").textContent = "请填写回信内容";
@@ -1227,7 +1390,7 @@
     try {
       const d = await api(`/api/admin/feedback/${encodeURIComponent(replyFid)}/reply`, {
         method: "POST",
-        body: JSON.stringify({ content, via_email: viaEmail, via_notice: viaNotice }),
+        body: JSON.stringify({ content, content_html, via_email: viaEmail, via_notice: viaNotice }),
       });
       toast("回信已发送" + (d.mail_error ? "（邮件失败：" + d.mail_error + "）" : ""),
         d.mail_error ? "err" : "ok");
@@ -1564,7 +1727,7 @@
     letterUid = u.uid;
     $("letter-to").textContent = `收件人：${u.name ? u.name + " · " : ""}${u.email}`;
     $("letter-subject").value = "";
-    $("letter-body").value = "";
+    clearRich("letter-body");
     $("letter-msg").textContent = "";
     $("letter-modal").classList.remove("hidden");
     setTimeout(() => $("letter-subject").focus(), 30);
@@ -1575,14 +1738,15 @@
   on("letter-ok", "click", async () => {
     if (!letterUid) return;
     const subject = $("letter-subject").value.trim();
-    const body = $("letter-body").value.trim();
+    const body = richText("letter-body");
+    const body_html = richHTML("letter-body");
     const msg = $("letter-msg");
     if (!subject) { msg.textContent = "请填写主题"; return; }
     if (!body) { msg.textContent = "请填写正文"; return; }
     const btn = $("letter-ok"); btn.disabled = true; msg.textContent = "发送中…";
     try {
       await api(`/api/admin/users/${letterUid}/email`, {
-        method: "POST", body: JSON.stringify({ subject, body }),
+        method: "POST", body: JSON.stringify({ subject, body, body_html }),
       });
       toast("信件已通过 SMTP 发出", "ok");
       closeLetter();
@@ -1839,6 +2003,7 @@
   async function start() {
     clearInterval(timer);
     clearInterval(auxTimer);
+    ["bc-body", "letter-body", "reply-body"].forEach(setupRichBox);
     const who = $("who"); if (who) who.textContent = ME.email + "（管理员）";
     const main = $("main"); if (main) main.classList.remove("hidden");
     await loadSettings();
