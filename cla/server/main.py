@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agent, agents, auth, config as cfg, engine, github_sync, llm, mcp_client, metrics, richtext, store, tools, tunnel
+from . import agent, agents, auth, config as cfg, engine, github_sync, legal_docs, llm, mcp_client, metrics, richtext, store, tools, tunnel
 
 app = FastAPI(title="YJS LLM Agent", version="1.0")
 app.add_middleware(
@@ -136,6 +136,10 @@ def _public_user(user: dict) -> dict:
         "has_password": bool(user.get("password_hash")),
         "is_admin": store.is_admin(user),
         "usage": store.usage(user["uid"]),
+        "legal_version": legal_docs.LEGAL_VERSION,
+        "agreed_version": user.get("agreed_version") or "",
+        "agreed_at": user.get("agreed_at"),
+        "needs_agreement": not store.has_agreement_for(user["uid"], legal_docs.LEGAL_VERSION),
     }
 
 
@@ -144,6 +148,55 @@ async def me(user: dict = Depends(current_user)):
     data = _public_user(user)
     data["quota_request"] = store.latest_quota_request(user["uid"])
     return {"ok": True, "user": data}
+
+
+# --------------------------------------------------------------------------- #
+# legal documents (disclaimer + privacy consent)
+# --------------------------------------------------------------------------- #
+@app.get("/api/legal")
+async def get_legal():
+    """Public: full current document bundle + version (shown before consent)."""
+    return {"ok": True, **legal_docs.legal_payload()}
+
+
+class AgreementIn(BaseModel):
+    version: str
+    accepted: bool = False
+
+
+@app.post("/api/legal/agree")
+async def agree_legal(body: AgreementIn, request: Request,
+                      user: dict = Depends(current_user)):
+    """Record an active, explicit acceptance with a full audit trail."""
+    if not body.accepted:
+        raise HTTPException(400, "请先勾选「我已阅读并同意」")
+    if (body.version or "").strip() != legal_docs.LEGAL_VERSION:
+        raise HTTPException(409, "文档版本已更新，请重新阅读并同意最新版本")
+    import hashlib
+    doc_hashes = {
+        "disclaimer": hashlib.sha256(
+            legal_docs.DISCLAIMER_TEXT.encode("utf-8")).hexdigest(),
+        "privacy": hashlib.sha256(
+            legal_docs.PRIVACY_TEXT.encode("utf-8")).hexdigest(),
+    }
+    rec = store.record_agreement(
+        user["uid"], legal_docs.LEGAL_VERSION,
+        ip=_client_ip(request),
+        user_agent=request.headers.get("user-agent", ""),
+        doc_hashes=doc_hashes)
+    fresh = store.get_user(user["uid"])
+    return {"ok": True, "record": rec, "user": _public_user(fresh or user)}
+
+
+@app.get("/api/legal/status")
+async def legal_status(user: dict = Depends(current_user)):
+    return {
+        "ok": True,
+        "version": legal_docs.LEGAL_VERSION,
+        "needs_agreement": not store.has_agreement_for(
+            user["uid"], legal_docs.LEGAL_VERSION),
+        "latest": store.latest_agreement(user["uid"]),
+    }
 
 
 class PasswordLoginIn(BaseModel):
@@ -1955,17 +2008,21 @@ class AdminUserMailIn(BaseModel):
     subject: str
     body: str = ""
     body_html: str = ""
+    via_email: bool = True
+    via_notice: bool = False
 
 
 @app.post("/api/admin/users/{uid}/email")
 async def admin_mail_user(uid: str, body: AdminUserMailIn,
                           admin: dict = Depends(require_admin_gate)):
-    """Send a letter from the administrator to one user's mailbox."""
+    """Send a letter to one user via SMTP email and/or an in-app notice."""
     target = store.get_user(uid)
     if not target:
         raise HTTPException(404, "用户不存在")
+    if not body.via_email and not body.via_notice:
+        raise HTTPException(400, "请至少选择一种发送方式")
     to = (target.get("email") or "").strip()
-    if not to:
+    if body.via_email and not to:
         raise HTTPException(400, "该用户没有邮箱地址")
     subject = (body.subject or "").strip()[:120]
     frag, plain = _rich_body(body.body_html, body.body)
@@ -1973,13 +2030,23 @@ async def admin_mail_user(uid: str, body: AdminUserMailIn,
         raise HTTPException(400, "请填写邮件主题")
     if not plain:
         raise HTTPException(400, "请填写邮件内容")
-    html = auth._wrap(_esc(subject),
-                      "<div style='line-height:1.8'>" + frag + "</div>")
-    try:
-        await asyncio.to_thread(auth.send_mail, to, f"[YJS 管理员来信] {subject}", html)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(400, f"发送失败：{exc}") from exc
-    return {"ok": True, "to": to}
+    author = str(admin.get("email") or "管理员")
+    mail_err = ""
+    if body.via_email:
+        html = auth._wrap(_esc(subject),
+                          "<div style='line-height:1.8'>" + frag + "</div>")
+        try:
+            await asyncio.to_thread(auth.send_mail, to, f"[YJS 管理员来信] {subject}", html)
+        except Exception as exc:  # noqa: BLE001
+            mail_err = str(exc)[:200]
+    if body.via_notice:
+        store.create_user_notice(
+            uid, f"管理员来信：{subject}", frag,
+            author=author, kind="admin_letter", ref_id="")
+    if body.via_email and mail_err:
+        raise HTTPException(400, f"邮件发送失败：{mail_err}")
+    return {"ok": True, "to": to if body.via_email else "",
+            "via_email": body.via_email, "via_notice": body.via_notice}
 
 
 # --------------------------------------------------------------------------- #
@@ -2457,13 +2524,40 @@ async def list_site_notifications(user: dict = Depends(current_user)):
         "notifications": store.list_notices(),
         "personal": store.list_user_notices(user["uid"]),
         "personal_unread": store.unread_user_notices(user["uid"]),
+        "global_read": store.get_global_read_map(user["uid"]),
     }
 
 
 @app.post("/api/notifications/read")
 async def mark_notifications_read(user: dict = Depends(current_user)):
     store.mark_user_notices_read(user["uid"])
+    store.mark_all_global_read(user["uid"],
+                               [n.get("id") for n in store.list_notices() if n.get("id")])
     return {"ok": True}
+
+
+class NoticeReadIn(BaseModel):
+    scope: str            # "personal" | "global"
+    id: str
+    read: bool = True
+
+
+@app.post("/api/notifications/state")
+async def set_notification_state(body: NoticeReadIn,
+                                 user: dict = Depends(current_user)):
+    """Persist one notice's read/unread state to the cloud (multi-device sync)."""
+    nid = (body.id or "").strip()
+    if not nid:
+        raise HTTPException(400, "缺少通知 ID")
+    if body.scope == "personal":
+        if not store.set_user_notice_read(user["uid"], nid, body.read):
+            raise HTTPException(404, "通知不存在")
+    elif body.scope == "global":
+        store.set_global_notice_read(user["uid"], nid, body.read)
+    else:
+        raise HTTPException(400, "通知范围无效")
+    return {"ok": True,
+            "personal_unread": store.unread_user_notices(user["uid"])}
 
 
 @app.get("/api/admin/notifications")
