@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS Cloud LLM Agent</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A4%96%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/style.css?v=20261005b" />
+<link rel="stylesheet" href="assets/style.css?v=20261005c" />
 </head>
 <body>
 
@@ -378,7 +378,28 @@
   </div>
 </div>
 
-<script src="assets/app.js?v=20261005b"></script>
-<script src="assets/local.js?v=20261005b"></script>
+<!-- 强制法律文件签署遮罩：未主动勾选并确认前不可使用系统 -->
+<div id="legal-overlay" class="legal-overlay hidden">
+  <div class="legal-box">
+    <h2 id="legal-heading">📜 服务条款与隐私同意书</h2>
+    <div class="legal-meta muted">
+      版本号：<span id="legal-version">—</span> · 生效日期：<span id="legal-date">—</span>
+    </div>
+    <div id="legal-body" class="legal-body" tabindex="0"></div>
+    <label class="legal-agree">
+      <input type="checkbox" id="legal-check" />
+      <span>我已完整阅读并理解《<b id="legal-d-title">免责声明</b>》和《<b id="legal-p-title">隐私同意书</b>》，
+        并自愿同意全部条款。</span>
+    </label>
+    <div id="legal-msg" class="msg"></div>
+    <div class="modal-foot">
+      <button class="ghost" id="legal-logout">不同意并退出登录</button>
+      <button id="legal-ok" disabled>确认并继续</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js?v=20261005c"></script>
+<script src="assets/local.js?v=20261005c"></script>
 </body>
 </html>
