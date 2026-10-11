@@ -981,8 +981,9 @@
   /* ------------------------------------------------------------------ */
   /* service notifications (sidebar) — global history + personal replies  */
   /* ------------------------------------------------------------------ */
-  let NOTICES = [];           // global notices (read state in localStorage)
+  let NOTICES = [];           // global notices (read state synced from cloud)
   let PERSONAL = [];          // personal notices (read state server-side)
+  let GLOBAL_READ = {};       // {notice_id: ts} authoritative from server
   let ntDetailId = null;
 
   function readNoticeStore() {
@@ -1006,16 +1007,33 @@
       (b.updated_at || b.created_at || 0) - (a.updated_at || a.created_at || 0));
   }
   function updateNoticeBadge() {
-    const read = readNoticeStore();
-    const unread = NOTICES.filter((n) => !read[n.id]).length
+    const unread = NOTICES.filter((n) => !GLOBAL_READ[n.id]).length
       + PERSONAL.filter((n) => !n.read).length;
     const badge = $("nt-badge");
     badge.textContent = String(unread > 99 ? "99+" : unread);
     badge.classList.toggle("hidden", unread === 0);
   }
+  // Persist one notice's read/unread state to the cloud (multi-device sync).
+  async function syncNoticeState(scope, id, read) {
+    // Optimistic local update + cache, then confirm with the server.
+    if (scope === "global") {
+      if (read) GLOBAL_READ[id] = Date.now() / 1000; else delete GLOBAL_READ[id];
+    } else {
+      const n = PERSONAL.find((x) => x.id === id);
+      if (n) n.read = read;
+    }
+    saveRead(GLOBAL_READ);
+    updateNoticeBadge();
+    try {
+      await api("/api/notifications/state", {
+        method: "POST",
+        body: JSON.stringify({ scope, id, read }),
+      });
+    } catch (_) { /* will be reconciled on next loadNotifications */ }
+  }
   function renderNoticeList() {
     const box = $("nt-list");
-    const read = readNoticeStore();
+    const read = GLOBAL_READ;
     const items = allNoticeItems();
     if (!items.length) {
       box.innerHTML = `<div class="muted" style="padding:24px;text-align:center">暂无服务通知</div>`;
@@ -1074,17 +1092,7 @@
   }
   async function showNoticeDetail(id, scope) {
     ntDetailId = id + "|" + scope;
-    if (scope === "personal") {
-      // server-side read state
-      try { await api("/api/notifications/read", { method: "POST" }); } catch (_) {}
-      const n = PERSONAL.find((x) => x.id === id);
-      if (n) n.read = true;
-    } else {
-      const read = readNoticeStore();
-      read[id] = Date.now();
-      saveRead(read);
-    }
-    updateNoticeBadge();
+    await syncNoticeState(scope, id, true);
     renderNoticeDetail(id, scope);
   }
   function openNotifications() {
@@ -1100,9 +1108,13 @@
       const d = await api("/api/notifications");
       NOTICES = d.notifications || [];
       PERSONAL = d.personal || [];
+      // Align local read state with the cloud (multi-device / re-login).
+      GLOBAL_READ = d.global_read || {};
+      saveRead(GLOBAL_READ);
     } catch (_) {
       NOTICES = await fetchNoticeFile().catch(() => []);
       PERSONAL = [];
+      GLOBAL_READ = readNoticeStore() || {};
     }
     updateNoticeBadge();
     const panel = $("notifications-panel");
@@ -1125,7 +1137,76 @@
     await loadConversations();
     loadNotifications();
     setInterval(() => { if (TOKEN) loadNotifications(); }, 120000);
+    // Mandatory legal gate: block all interaction until explicitly signed.
+    if (user && user.needs_agreement) {
+      await openLegalGate();
+    }
   }
+
+  /* ------------------------------------------- mandatory legal agreement -- */
+  let __legalDocs = null;
+  function renderLegalSections(list) {
+    return (list || []).map((s) =>
+      `<h3>${escapeHtml(s.title || "")}</h3>${escapeHtml(s.body || "")}`).join("");
+  }
+  async function openLegalGate() {
+    const overlay = $("legal-overlay");
+    const msg = $("legal-msg");
+    msg.textContent = "";
+    const check = $("legal-check");
+    check.checked = false;
+    $("legal-ok").disabled = true;
+    try {
+      if (!__legalDocs) __legalDocs = await api("/api/legal");
+    } catch (e) { msg.textContent = "条款加载失败：" + e.message; }
+    const d = __legalDocs;
+    if (d) {
+      $("legal-version").textContent = d.version || "";
+      $("legal-date").textContent = d.effective_date || "";
+      $("legal-d-title").textContent = d.disclaimer_title || "免责声明";
+      $("legal-p-title").textContent = d.privacy_title || "隐私同意书";
+      $("legal-body").innerHTML =
+        `<h3>${escapeHtml(d.disclaimer_title || "")}</h3>` +
+        renderLegalSections(d.disclaimer) +
+        `<h3>${escapeHtml(d.privacy_title || "")}</h3>` +
+        renderLegalSections(d.privacy);
+      $("legal-body").scrollTop = 0;
+    }
+    overlay.classList.remove("hidden");
+  }
+  function closeLegalGate() { $("legal-overlay").classList.add("hidden"); }
+  on("legal-check", "change", (e) => {
+    // Confirm button is enabled ONLY by an active click; never pre-checked.
+    $("legal-ok").disabled = !e.target.checked;
+    if (e.target.checked) $("legal-msg").textContent = "";
+  });
+  on("legal-logout", "click", () => {
+    if (!confirm("不同意将无法使用系统，确定退出登录吗？")) return;
+    TOKEN = ""; localStorage.removeItem("yjs_token");
+    closeLegalGate();
+    location.reload();
+  });
+  on("legal-ok", "click", async () => {
+    const check = $("legal-check");
+    const msg = $("legal-msg");
+    if (!check.checked) { msg.textContent = "请先勾选「我已阅读并同意」"; return; }
+    const btn = $("legal-ok"); btn.disabled = true;
+    msg.style.color = "var(--muted)";
+    msg.textContent = "正在记录签署…";
+    try {
+      const d = await api("/api/legal/agree", {
+        method: "POST",
+        body: JSON.stringify({ version: __legalDocs ? __legalDocs.version : "", accepted: true }),
+      });
+      closeLegalGate();
+      if (d.user) renderMeCard(d.user);
+    } catch (e) {
+      msg.style.color = "var(--err)";
+      msg.textContent = "✗ " + e.message;
+      btn.disabled = !check.checked;
+      if (e.status === 409) { __legalDocs = null; openLegalGate(); }
+    }
+  });
 
   /* ------------------------------------------------------------------ */
   /* conversations  (delegated click so rebuilds never lose handlers)     */
