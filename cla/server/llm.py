@@ -157,6 +157,7 @@ async def health() -> dict:
         "models": st.get("installed", []),
         "running": st.get("running", []),
         "engine_path": st.get("engine_path", ""),
+        "gpu_backend": st.get("gpu_backend", "cpu"),
         "model": cfg.CONFIG["model"],
     }
 
