@@ -14,6 +14,7 @@ import zipfile
 from html import escape as _esc
 from pathlib import Path
 
+
 import uvicorn
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
@@ -22,7 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import agent, agents, auth, config as cfg, engine, github_sync, llm, mcp_client, metrics, store, tools, tunnel
+from . import agent, agents, auth, config as cfg, engine, github_sync, llm, mcp_client, metrics, richtext, store, tools, tunnel
 
 app = FastAPI(title="YJS LLM Agent", version="1.0")
 app.add_middleware(
@@ -1772,6 +1773,26 @@ def _admin_password_hash() -> str:
     return ((cfg.CONFIG.get("admin") or {}).get("password_hash") or "").strip()
 
 
+def _verify_admin_password(password: str) -> bool:
+    stored = _admin_password_hash()
+    return bool(stored) and auth.check_password(password or "", stored)
+
+
+def _rich_body(body_html: str, body_text: str = "") -> tuple[str, str]:
+    """Build ``(safe_html_fragment, plain_text)`` from an admin message body.
+
+    Accepts either sanitized rich HTML (bold / font color from the editor) or
+    legacy plain text (line breaks preserved).
+    """
+    html_frag = richtext.sanitize_html(body_html or "")
+    if not html_frag and body_text:
+        html_frag = _esc(body_text).replace("\n", "<br>")
+    if not html_frag:
+        html_frag = _esc((body_html or "").strip())
+    plain = richtext.to_plain_text(html_frag) or (body_text or "").strip()
+    return html_frag, plain
+
+
 async def require_admin_gate(request: Request,
                              user: dict = Depends(require_admin)) -> dict:
     """Admin endpoints additionally require the dashboard password.
@@ -1932,7 +1953,8 @@ async def admin_set_quota(uid: str, body: AdminQuotaIn,
 
 class AdminUserMailIn(BaseModel):
     subject: str
-    body: str
+    body: str = ""
+    body_html: str = ""
 
 
 @app.post("/api/admin/users/{uid}/email")
@@ -1946,14 +1968,13 @@ async def admin_mail_user(uid: str, body: AdminUserMailIn,
     if not to:
         raise HTTPException(400, "该用户没有邮箱地址")
     subject = (body.subject or "").strip()[:120]
-    content = (body.body or "").strip()
+    frag, plain = _rich_body(body.body_html, body.body)
     if not subject:
         raise HTTPException(400, "请填写邮件主题")
-    if not content:
+    if not plain:
         raise HTTPException(400, "请填写邮件内容")
     html = auth._wrap(_esc(subject),
-                      "<div style='line-height:1.8;white-space:pre-wrap'>"
-                      + _esc(content) + "</div>")
+                      "<div style='line-height:1.8'>" + frag + "</div>")
     try:
         await asyncio.to_thread(auth.send_mail, to, f"[YJS 管理员来信] {subject}", html)
     except Exception as exc:  # noqa: BLE001
@@ -2091,6 +2112,79 @@ async def admin_set_settings(body: AdminSettingsIn,
         cfg.CONFIG["default_model"] = body.default_model
     cfg.save(cfg.CONFIG)
     return {"ok": True}
+
+
+class SettingChangeNoticeIn(BaseModel):
+    """Notification attached to a settings save.
+
+    scope:
+      * none  - don't notify anyone
+      * me    - personal notice + mail to the saving admin (2nd confirm on UI)
+      * all   - service notice to every user + email to every user (needs the
+                admin password)
+    """
+    scope: str = "none"
+    password: str = ""
+    title: str = ""
+    body: str = ""
+    body_html: str = ""
+    changes: list[str] = []
+
+
+async def _send_setting_notices(scope: str, title: str, frag: str, plain: str,
+                                admin: dict) -> dict:
+    """Deliver a settings-change notice; return per-channel counts."""
+    author = str(admin.get("email") or "管理员")
+    mail_sent, mail_failed, notice_count = 0, [], 0
+    html = auth._wrap(_esc(title),
+                      "<div style='line-height:1.8'>" + frag + "</div>")
+    if scope == "me":
+        store.create_user_notice(admin["uid"], title, frag,
+                                 author=author, kind="setting_change")
+        notice_count = 1
+        if admin.get("email"):
+            try:
+                await asyncio.to_thread(
+                    auth.send_mail, admin["email"], f"[YJS] {title}", html)
+                mail_sent = 1
+            except Exception as exc:  # noqa: BLE001
+                mail_failed.append({"email": admin["email"], "error": str(exc)[:200]})
+    elif scope == "all":
+        for u in store.list_users():
+            uid = u.get("uid")
+            if uid:
+                store.create_user_notice(uid, title, frag,
+                                         author=author, kind="setting_change")
+                notice_count += 1
+            email = (u.get("email") or "").strip()
+            if email:
+                try:
+                    await asyncio.to_thread(
+                        auth.send_mail, email, f"[YJS] {title}", html)
+                    mail_sent += 1
+                except Exception as exc:  # noqa: BLE001
+                    mail_failed.append({"email": email, "error": str(exc)[:200]})
+    return {"notice_count": notice_count, "mail_sent": mail_sent,
+            "mail_failed": mail_failed}
+
+
+@app.post("/api/admin/settings/notify")
+async def admin_settings_notify(body: SettingChangeNoticeIn,
+                                user: dict = Depends(require_admin_gate)):
+    scope = (body.scope or "none").strip()
+    if scope not in ("none", "me", "all"):
+        raise HTTPException(400, "通知方式无效")
+    if scope == "none":
+        return {"ok": True, "scope": "none"}
+    frag, plain = _rich_body(body.body_html, body.body)
+    title = (body.title or "").strip()[:120] or "系统设置已更新"
+    if not plain:
+        raise HTTPException(400, "请填写通知内容")
+    # Global notification must be confirmed with the admin password.
+    if scope == "all" and not _verify_admin_password(body.password):
+        raise HTTPException(403, "管理员密码错误，无法发送全体通知")
+    result = await _send_setting_notices(scope, title, frag, plain, user)
+    return {"ok": True, "scope": scope, **result}
 
 
 class AdminModelEditIn(BaseModel):
@@ -2575,7 +2669,8 @@ async def admin_test_email(body: TestMailIn, user: dict = Depends(require_admin_
 
 class BroadcastIn(BaseModel):
     subject: str
-    body: str
+    body: str = ""                # legacy plain-text body
+    body_html: str = ""           # rich editor HTML (bold / font color)
     only_me: bool = False        # send only to the admin's own mailbox (dry run)
 
 
@@ -2583,10 +2678,10 @@ class BroadcastIn(BaseModel):
 async def admin_broadcast(body: BroadcastIn, user: dict = Depends(require_admin_gate)):
     """Send an announcement mail to every registered account."""
     subject = (body.subject or "").strip()[:120]
-    content = (body.body or "").strip()
+    frag, plain = _rich_body(body.body_html, body.body)
     if not subject:
         raise HTTPException(400, "请填写邮件主题")
-    if not content:
+    if not plain:
         raise HTTPException(400, "请填写邮件正文")
     targets = [u["email"] for u in store.list_users() if u.get("email")]
     if body.only_me:
@@ -2594,7 +2689,8 @@ async def admin_broadcast(body: BroadcastIn, user: dict = Depends(require_admin_
     targets = targets[:500]
     if not targets:
         raise HTTPException(400, "没有可发送的目标邮箱")
-    html = auth._wrap(_esc(subject), "<p>" + _esc(content).replace("\n", "<br>") + "</p>")
+    html = auth._wrap(_esc(subject),
+                      "<div style='line-height:1.8'>" + frag + "</div>")
     sent: list[str] = []
     failed: list[dict] = []
     for email in targets:
@@ -2715,7 +2811,8 @@ async def admin_feedback_delete(fid: str, user: dict = Depends(require_admin_gat
 
 
 class ReplyIn(BaseModel):
-    content: str
+    content: str = ""
+    content_html: str = ""
     via_email: bool = True
     via_notice: bool = False
 
@@ -2730,7 +2827,7 @@ async def admin_reply_feedback(fid: str, body: ReplyIn,
         item = matches[0] if matches else None
     if not item or item.get("target") == "email":
         raise HTTPException(404, "反馈不存在")
-    content = (body.content or "").strip()
+    frag, content = _rich_body(body.content_html, body.content)
     if len(content) < 1:
         raise HTTPException(400, "回信内容不能为空")
     if not body.via_email and not body.via_notice:
@@ -2752,8 +2849,8 @@ async def admin_reply_feedback(fid: str, body: ReplyIn,
                 "<div style='padding:10px 12px;background:#f6f8fb;border-radius:8px;"
                 "white-space:pre-wrap;color:#555'>" + _esc(item.get("content", "")) + "</div>"
                 "<p style='margin-top:14px'>管理员回复：</p>"
-                "<div style='padding:10px 12px;background:#eef6ff;border-radius:8px;"
-                "white-space:pre-wrap'>" + _esc(content) + "</div></div>")
+                "<div style='padding:10px 12px;background:#eef6ff;border-radius:8px'>"
+                + frag + "</div></div>")
             try:
                 await asyncio.to_thread(
                     auth.send_mail, to, "[YJS] 管理员回复了你的使用意见", html)
@@ -2762,7 +2859,7 @@ async def admin_reply_feedback(fid: str, body: ReplyIn,
                 print(f"[feedback] reply mail failed: {exc}")
     if body.via_notice:
         store.create_user_notice(
-            item["uid"], "管理员回复了你的使用意见", content,
+            item["uid"], "管理员回复了你的使用意见", frag,
             author=author, kind="feedback_reply", ref_id=fid)
     return {"ok": True, "reply": reply, "mail_error": mail_err}
 
