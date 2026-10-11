@@ -863,7 +863,7 @@ def create_user_notice(uid: str, title: str, body: str,
 def list_user_notices(uid: str) -> list[dict]:
     d = _user_notice_dir(uid)
     out = [it for p in d.glob("*.json")
-           if (it := _read_json(p, None))]
+           if p.name != "_global_read.json" and (it := _read_json(p, None))]
     out.sort(key=lambda x: x.get("created_at", 0), reverse=True)
     return out
 
@@ -904,6 +904,99 @@ def mark_user_notices_read(uid: str) -> None:
         if not n.get("read"):
             n["read"] = True
             _write_json(_user_notice_dir(uid) / f"{n['id']}.json", n)
+
+
+def set_user_notice_read(uid: str, nid: str, read: bool) -> bool:
+    """Toggle one personal notification's read state (cloud-persisted)."""
+    p = _user_notice_dir(uid) / f"{nid}.json"
+    n = _read_json(p, None)
+    if not n:
+        return False
+    if bool(n.get("read")) != bool(read):
+        n["read"] = bool(read)
+        n["read_at"] = _now() if read else None
+        _write_json(p, n)
+    return True
+
+
+# --------------------------------------------------------------------------- #
+# global (site-wide) notice read state — synced to the cloud per user so the
+# state is consistent across devices instead of living only in localStorage.
+# --------------------------------------------------------------------------- #
+def _global_read_path(uid: str) -> Path:
+    return _user_notice_dir(uid) / "_global_read.json"
+
+
+def get_global_read_map(uid: str) -> dict:
+    """{notice_id: read_timestamp} for site-wide notices."""
+    return _read_json(_global_read_path(uid), {}) or {}
+
+
+def set_global_notice_read(uid: str, nid: str, read: bool) -> None:
+    m = get_global_read_map(uid)
+    if read:
+        m[nid] = _now()
+    else:
+        m.pop(nid, None)
+    _write_json(_global_read_path(uid), m)
+
+
+def mark_all_global_read(uid: str, notice_ids: list[str]) -> None:
+    m = get_global_read_map(uid)
+    now = _now()
+    for nid in notice_ids:
+        m.setdefault(nid, now)
+    _write_json(_global_read_path(uid), m)
+
+
+# --------------------------------------------------------------------------- #
+# legal document agreements (audit-trail, append-only)
+# --------------------------------------------------------------------------- #
+AGREEMENT_DIR = cfg.DATA_DIR / "agreements"
+
+
+def _agreement_path(uid: str) -> Path:
+    return AGREEMENT_DIR / f"{uid}.json"
+
+
+def list_agreements(uid: str) -> list[dict]:
+    return _read_json(_agreement_path(uid), []) or []
+
+
+def latest_agreement(uid: str) -> dict | None:
+    items = list_agreements(uid)
+    return items[-1] if items else None
+
+
+def record_agreement(uid: str, version: str, ip: str = "",
+                     user_agent: str = "", doc_hashes: dict | None = None) -> dict:
+    """Append an immutable acceptance record (one file per user, append-only)."""
+    item = {
+        "id": uuid.uuid4().hex[:16],
+        "uid": uid,
+        "version": (version or "")[:40],
+        "accepted_at": _now(),
+        "ip": (ip or "")[:64],
+        "user_agent": (user_agent or "")[:400],
+        "doc_hashes": doc_hashes or {},
+        "method": "active_checkbox_confirm",
+    }
+    items = list_agreements(uid)
+    items.append(item)
+    _write_json(_agreement_path(uid), items)
+    # Minimal derived marker on the profile for fast gating; the audit list
+    # above remains the single source of truth.
+    p = user_dir(uid) / "profile.json"
+    prof = _read_json(p, None)
+    if prof is not None:
+        prof["agreed_version"] = item["version"]
+        prof["agreed_at"] = item["accepted_at"]
+        _write_json(p, prof)
+    return item
+
+
+def has_agreement_for(uid: str, version: str) -> bool:
+    return any((a.get("version") == version) for a in list_agreements(uid))
 
 
 # --------------------------------------------------------------------------- #
