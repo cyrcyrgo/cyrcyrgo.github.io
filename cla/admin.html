@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS 管理后台</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%99%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/admin.css?v=20261005a" />
+<link rel="stylesheet" href="assets/admin.css?v=20261005b" />
 </head>
 <body>
 
@@ -180,8 +180,8 @@
         <input id="bc-subject" placeholder="例如：系统升级通知" />
       </div>
       <div class="set-field wide">
-        <span class="sw-label">邮件正文（支持多行）</span>
-        <textarea id="bc-body" rows="5" placeholder="写给全体用户的内容…"></textarea>
+        <span class="sw-label">邮件正文（支持多行） · <span class="hint">Ctrl+B 加粗，Ctrl+Shift+B 字体颜色</span></span>
+        <div id="bc-body" class="rt-editor" data-placeholder="写给全体用户的内容…"></div>
       </div>
     </div>
     <div class="set-actions">
@@ -407,8 +407,9 @@
   <div class="modal-box wide">
     <h3>✉ 给用户发一封信</h3>
     <p class="muted" id="letter-to">—</p>
-    <input id="letter-subject" placeholder="邮件主题" style="margin-bottom:10px" />
-    <textarea id="letter-body" rows="7" placeholder="邮件正文…" style="width:100%;resize:vertical"></textarea>
+    <input id="letter-subject" placeholder="邮件主题" style="margin-bottom:8px" />
+    <p class="muted rt-hint">Ctrl+B 加粗 · Ctrl+Shift+B 字体颜色</p>
+    <div id="letter-body" class="rt-editor" data-placeholder="邮件正文…"></div>
     <div id="letter-msg" class="muted inline-msg" style="margin-top:8px"></div>
     <div class="modal-foot">
       <button class="btn ghost" id="letter-cancel">取消</button>
@@ -429,8 +430,9 @@
       <button class="btn ghost" id="btn-reply-tpl-save" type="button">＋ 存为模板</button>
       <button class="btn ghost" id="btn-reply-tpl-del" type="button">删除模板</button>
     </div>
-    <textarea id="reply-body" rows="6" placeholder="回信内容…"
-              style="width:100%;resize:vertical;margin:10px 0"></textarea>
+    <p class="muted rt-hint">Ctrl+B 加粗 · Ctrl+Shift+B 字体颜色</p>
+    <div id="reply-body" class="rt-editor" data-placeholder="回信内容…"
+         style="margin:6px 0 10px"></div>
     <div class="reply-via">
       <label><input type="checkbox" id="reply-via-email" checked /> 发送到用户邮箱（SMTP）</label>
       <label><input type="checkbox" id="reply-via-notice" /> 发送到用户账号的服务通知</label>
@@ -443,6 +445,32 @@
   </div>
 </div>
 
-<script src="assets/admin.js?v=20261005a"></script>
+<!-- 设置变更通知方式弹窗 -->
+<div id="chg-modal" class="modal hidden">
+  <div class="modal-box">
+    <h3>🔔 设置已更新，是否通知？</h3>
+    <div id="chg-summary" class="muted" style="margin:6px 0 12px;line-height:1.7"></div>
+    <div class="chg-opts">
+      <label class="chg-opt"><input type="radio" name="chg-scope" value="none" checked />
+        <span><b>无需通知</b><small class="muted">仅保存，不发送任何消息</small></span></label>
+      <label class="chg-opt"><input type="radio" name="chg-scope" value="me" />
+        <span><b>通知我（个人账号）</b><small class="muted">发至个人邮箱 + 个人服务通知，需二次确认</small></span></label>
+      <label class="chg-opt"><input type="radio" name="chg-scope" value="all" />
+        <span><b>通知全体</b><small class="muted">发全体邮箱 + 全体服务通知，需验证管理员密码</small></span></label>
+    </div>
+    <div id="chg-pw-wrap" class="hidden" style="margin-top:10px">
+      <span class="sw-label">管理员密码</span>
+      <input id="chg-pw" type="password" placeholder="请输入管理员密码" autocomplete="off"
+             style="width:100%;margin-top:4px" />
+    </div>
+    <div id="chg-msg" class="muted inline-msg" style="margin-top:8px"></div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="chg-cancel">关闭</button>
+      <button class="btn" id="chg-ok">确认</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/admin.js?v=20261005b"></script>
 </body>
 </html>
