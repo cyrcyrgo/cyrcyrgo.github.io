@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YJS 管理后台</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%99%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/admin.css?v=20261005b" />
+<link rel="stylesheet" href="assets/admin.css?v=20261005c" />
 </head>
 <body>
 
@@ -410,6 +410,10 @@
     <input id="letter-subject" placeholder="邮件主题" style="margin-bottom:8px" />
     <p class="muted rt-hint">Ctrl+B 加粗 · Ctrl+Shift+B 字体颜色</p>
     <div id="letter-body" class="rt-editor" data-placeholder="邮件正文…"></div>
+    <div class="reply-via" style="margin-top:8px">
+      <label><input type="checkbox" id="letter-via-email" checked /> 发送到用户邮箱（SMTP）</label>
+      <label><input type="checkbox" id="letter-via-notice" /> 发送到用户的服务通知</label>
+    </div>
     <div id="letter-msg" class="muted inline-msg" style="margin-top:8px"></div>
     <div class="modal-foot">
       <button class="btn ghost" id="letter-cancel">取消</button>
@@ -471,6 +475,6 @@
   </div>
 </div>
 
-<script src="assets/admin.js?v=20261005b"></script>
+<script src="assets/admin.js?v=20261005c"></script>
 </body>
 </html>
