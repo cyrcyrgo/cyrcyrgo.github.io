@@ -1030,12 +1030,28 @@
           <span class="nt-card-title">${tag}${escapeHtml(n.title || "（无标题）")}</span>
           <span class="nt-time">${fmtNtTime(n.updated_at || n.created_at)}</span>
         </div>
-        <div class="nt-card-preview">${escapeHtml((n.body || "").slice(0, 60))}…</div>
+        <div class="nt-card-preview">${escapeHtml(stripRich(n.body || "").slice(0, 60))}…</div>
       </div>`;
     }).join("");
     box.querySelectorAll(".nt-card").forEach((el) => {
       el.addEventListener("click", () => showNoticeDetail(el.dataset.id, el.dataset.scope));
     });
+  }
+  // Admin service notices may carry a tiny safe subset of inline HTML
+  // (bold / font color). Anything outside it is rendered literally.
+  function renderRichBody(raw) {
+    const esc = escapeHtml(raw || "");
+    return esc
+      .replace(/&lt;(\/?)(?:b|strong)(\s[^&]*?)?&gt;/gi, (_, close) => `<${close}b>`)
+      .replace(/&lt;br\s*\/?&gt;/gi, "<br>")
+      .replace(/&lt;span style="color:(#[0-9a-f]{3,8}|[a-zA-Z]{3,20})"&gt;/gi,
+        (_, c) => `<span style="color:${c}">`)
+      .replace(/&lt;\/span&gt;/gi, "</span>");
+  }
+  function stripRich(raw) {
+    const d = document.createElement("div");
+    d.innerHTML = renderRichBody(raw);
+    return d.textContent || "";
   }
   function renderNoticeDetail(id, scope) {
     const pool = scope === "personal" ? PERSONAL : NOTICES;
@@ -1052,7 +1068,7 @@
           <div>🕐 ${fmtNtTime(n.updated_at || n.created_at)}</div>
           <div>🛡 发布者：${escapeHtml(n.author || "管理员")}</div>
         </div>
-        <div class="nt-detail-body">${escapeHtml(n.body || "")}</div>
+        <div class="nt-detail-body">${scope === "personal" ? renderRichBody(n.body || "") : escapeHtml(n.body || "")}</div>
       </div>`;
     $("nt-back").addEventListener("click", () => { ntDetailId = null; renderNoticeList(); });
   }
