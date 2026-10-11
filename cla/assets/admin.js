@@ -1728,6 +1728,8 @@
     $("letter-to").textContent = `收件人：${u.name ? u.name + " · " : ""}${u.email}`;
     $("letter-subject").value = "";
     clearRich("letter-body");
+    $("letter-via-email").checked = true;
+    $("letter-via-notice").checked = false;
     $("letter-msg").textContent = "";
     $("letter-modal").classList.remove("hidden");
     setTimeout(() => $("letter-subject").focus(), 30);
@@ -1740,15 +1742,21 @@
     const subject = $("letter-subject").value.trim();
     const body = richText("letter-body");
     const body_html = richHTML("letter-body");
+    const viaEmail = $("letter-via-email").checked;
+    const viaNotice = $("letter-via-notice").checked;
     const msg = $("letter-msg");
     if (!subject) { msg.textContent = "请填写主题"; return; }
     if (!body) { msg.textContent = "请填写正文"; return; }
+    if (!viaEmail && !viaNotice) { msg.textContent = "请至少选择一种发送方式"; return; }
     const btn = $("letter-ok"); btn.disabled = true; msg.textContent = "发送中…";
     try {
       await api(`/api/admin/users/${letterUid}/email`, {
-        method: "POST", body: JSON.stringify({ subject, body, body_html }),
+        method: "POST", body: JSON.stringify({
+          subject, body, body_html, via_email: viaEmail, via_notice: viaNotice,
+        }),
       });
-      toast("信件已通过 SMTP 发出", "ok");
+      const ways = [viaEmail ? "邮箱" : "", viaNotice ? "服务通知" : ""].filter(Boolean).join(" + ");
+      toast("信件已发送（" + ways + "）", "ok");
       closeLetter();
     } catch (e) { msg.textContent = "✗ " + e.message; }
     finally { btn.disabled = false; }
