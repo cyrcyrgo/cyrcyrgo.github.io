@@ -445,18 +445,23 @@ body.intro-live .pill,body.intro-live .word,body.intro-live .tagline-wrap,
 body.intro-live .search-zone,body.intro-live .cue{animation-play-state:paused!important}
 .intro{position:fixed;inset:0;z-index:300;cursor:pointer;
   background:linear-gradient(180deg,#120c1e 0%,#0d1117 46%,#010409 100%);
-  transition:opacity .95s var(--ease),visibility .95s}
-.intro.done{opacity:0;visibility:hidden;pointer-events:none}
-.intro canvas{position:absolute;inset:0;width:100%;height:100%}
+  transition:background .9s var(--ease)}
+.intro.done{background:transparent;pointer-events:none}
+/* the meteor canvas outlives the veil: it holds, then dissipates over the homepage */
+.intro canvas{position:absolute;inset:0;width:100%;height:100%;opacity:1;
+  transition:opacity 1.7s var(--ease) .7s}
+.intro.done canvas{opacity:0}
 .intro-mark{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;
   font-family:var(--font-d);font-weight:600;letter-spacing:.44em;text-transform:uppercase;
   font-size:clamp(.66rem,1.8vw,.82rem);color:var(--txt-3);opacity:0;
   animation:fadeUp 1s var(--ease) .25s forwards}
+.intro.done .intro-mark{opacity:0!important;transition:opacity .55s ease}
 .intro-skip{position:absolute;right:clamp(16px,3vw,30px);bottom:clamp(16px,3vh,28px);z-index:3;
   padding:.58rem 1.2rem;border-radius:var(--pill);border:1px solid var(--line);cursor:pointer;
   background:var(--panel);color:var(--txt-2);font-size:.74rem;letter-spacing:.14em;
-  transition:background .4s ease,color .4s ease,border-color .4s ease,transform .5s var(--spring)}
+  transition:background .4s ease,color .4s ease,border-color .4s ease,transform .5s var(--spring),opacity .5s ease}
 .intro-skip:hover{background:var(--panel-2);color:var(--txt);border-color:var(--line-2);transform:translateY(-2px)}
+.intro.done .intro-skip{opacity:0}
 @media (prefers-reduced-motion:reduce){.intro{display:none}}
 </style>
 </head>
@@ -1360,10 +1365,17 @@ observeReveals();
 
 <script>
 /* ============ OPENING METEOR INTRO ============
-   white meteor · long trail · wide halo
-   rhythm: slow -> fast montage; decelerates into every turn / path change
-   total 5.38s = rise .9 | orbit 2.7 (quarters .95/.75/.55/.45)
-               | spiral .9 | burst .88 -> page reveal                        */
+   white meteor · long trail · big halo, rendered from LIVE MOTION.
+   - the halo is drawn in a frame rotated to the current heading and stretched
+     along it, with its centre pushed rearwards, so motion drags its glow behind
+     it (wind drag): heading up -> the bloom hangs below, etc.
+   - the trail is trimmed by arc length, which scales with speed (short tail when
+     crawling, long tail when racing).
+   - RHYTHM: one continuous speed law. It accelerates monotonically but keeps a
+     4-cycle ripple that eases through each turn; speed never approaches zero and
+     has no step change at any boundary, so slow passages glide instead of stalling.
+   trajectory 5.38s = rise .9 | orbit 2.7 | spiral 1.78 -> detonation,
+   then a .45s hold and a 1.45s reveal of the homepage. */
 (() => {
   const intro = document.getElementById('intro');
   if (!intro) return;
@@ -1385,106 +1397,245 @@ observeReveals();
   const TAU = Math.PI * 2;
   const rand = (a, b) => a + Math.random() * (b - a);
   const eOut = t => 1 - Math.pow(1 - t, 3);
-  const eIn  = t => t * t * t;
-  const eIOS = t => .5 - .5 * Math.cos(Math.PI * t);   // sine ease: slow at both ends
+  const clamp01 = p => p < 0 ? 0 : p > 1 ? 1 : p;
 
-  const T_RISE   = .9;                                   // slow rise from below
-  const Q        = [.95, .75, .55, .45];                 // quarter arcs: later = faster
-  const T_ORBIT  = Q[0] + Q[1] + Q[2] + Q[3];            // 2.7
-  const T_SPIRAL = .9;                                   // slow entry, hard acceleration
-  const T_BURST  = .88;
-  const T_END    = T_RISE + T_ORBIT + T_SPIRAL + T_BURST;   // 5.38
-  const T_FADE   = .95;
+  /* flow(): gentle ripple whose endpoints still travel at 72% -> no dead stop */
+  const K = .28;
+  const flow = p => p - K * Math.sin(TAU * p) / TAU;
+  const flowIn = p => p * (.95 + .05 * p);   // long dive, matched to the orbit's exit speed
 
-  const orbitAngle = t => {   // each quarter eases at both ends -> slows into every turn
-    let done = 0;
-    for (let i = 0; i < 4; i++) {
-      if (t <= Q[i]) return Math.PI / 2 + (i + eIOS(t / Q[i])) * (Math.PI / 2);
-      done += Q[i]; t -= Q[i];
+  /* One continuous law for the whole orbit. v(p) = (1 + A(2p-1)) * (1 - B cos8πp)
+     rises steadily slow->fast (A) while dipping through all four turn apexes (B).
+     Integrated and normalised once into a lookup table, so the angle mapping is
+     smooth everywhere and has no gear-shift between quarters. */
+  const ORB_N = 256, ORB_A = .68, ORB_B = .30;
+  const ORB_S = new Float64Array(ORB_N + 1);
+  {
+    const law = p => (1 + ORB_A * (2 * p - 1)) * (1 - ORB_B * Math.cos(8 * Math.PI * p));
+    let acc = 0;
+    for (let i = 1; i <= ORB_N; i++) {
+      const p0 = (i - 1) / ORB_N, p1 = i / ORB_N;
+      acc += (law(p0) + law(p1)) * .5 / ORB_N;
+      ORB_S[i] = acc;
     }
-    return Math.PI / 2 + TAU;
+    for (let i = 0; i <= ORB_N; i++) ORB_S[i] /= acc;
+  }
+  const orbMap = p => {
+    p = clamp01(p);
+    const f = p * ORB_N, i = Math.min(ORB_N - 1, f | 0);
+    return ORB_S[i] + (ORB_S[i + 1] - ORB_S[i]) * (f - i);
   };
 
-  let parts = [], trail = [], raf = 0, t0 = 0, prev = 0;
-  let exploded = false, finished = false, flash = 0;
+  const T_RISE   = .9;
+  const T_ORBIT  = 2.7;
+  const T_SPIRAL = 1.78;
+  const T_HOLD   = .45;                                     // hold before the reveal
+  const T_END    = T_RISE + T_ORBIT + T_SPIRAL;             // 5.38 = detonation
+  const T_FADE   = 2.4;                                       // matches the canvas dissolve
 
   const pos = t => {
-    if (t < T_RISE) {                                     // phase 1: gentle rise
-      const lift = eIOS(t / T_RISE);
+    if (t < T_RISE) {                                       // rise from off-screen, gliding
+      const lift = flow(clamp01(t / T_RISE));
       return { x: cx, y: (H + 90) + (cy + ry - (H + 90)) * lift };
     }
     const t2 = t - T_RISE;
-    if (t2 < T_ORBIT) {                                   // phase 2: full orbit
-      const ang = orbitAngle(t2);
+    if (t2 < T_ORBIT) {                                     // one smooth accelerating orbit
+      const ang = Math.PI / 2 + TAU * orbMap(t2 / T_ORBIT);
       return { x: cx + Math.cos(ang) * rx, y: cy + Math.sin(ang) * ry };
     }
-    const t3 = Math.min((t2 - T_ORBIT) / T_SPIRAL, 1);    // phase 3: spiral-in, eIn
-    const e = eIn(t3), shrink = 1 - e;
+    const t3 = clamp01((t2 - T_ORBIT) / T_SPIRAL);          // spiral in, leaves immediately
+    const e = flowIn(t3), shrink = 1 - e;
     const ang = Math.PI / 2 + TAU + e * Math.PI * 1.7;
     return { x: cx + Math.cos(ang) * rx * shrink, y: cy + Math.sin(ang) * ry * shrink, end: t3 >= 1 };
   };
 
+  let parts = [], trail = [], raf = 0, t0 = 0, prev = 0;
+  let exploded = false, finished = false, flash = 0, shake = 0;
+  let lastPos = null, dir = { x: 0, y: -1 };
+
+  /* the burst: a white core flare, layered shockwaves, a star-ray flare, fast
+     speed-streaked sparks, slow drifting embers, and a delayed secondary pop. */
   const burst = (x, y) => {
-    const n = W < 640 ? 84 : 150;
-    for (let i = 0; i < n; i++) {
-      const a = rand(0, TAU), sp = rand(70, 680) * (W < 640 ? .72 : 1);
-      parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-        life: rand(.5, 1.15), age: 0, r: rand(1, 2.8), white: Math.random() < .55 });
+    const small = W < 640, m = small ? .72 : 1;
+    flash = 1.6; shake = .34;
+
+    parts.push({ kind: 'core', x, y, age: 0, life: .90, R: small ? 260 : 420 });
+
+    parts.push({ kind: 'ring', x, y, age: 0,    life: 1.40, g: 1.0, w: 3.6 });
+    parts.push({ kind: 'ring', x, y, age: -.07, life: 1.60, g: .80, w: 2.4 });
+    parts.push({ kind: 'ring', x, y, age: -.22, life: 2.20, g: .34, w: 1.0 });
+    parts.push({ kind: 'ring', x, y, age: -.14, life: 1.85, g: .60, w: 1.6 });
+
+    const nr = small ? 6 : 8;
+    for (let i = 0; i < nr; i++) {
+      parts.push({ kind: 'ray', x, y, a: i / nr * TAU + rand(-.06, .06),
+        len: rand(.55, 1) * (small ? 280 : 540), age: 0, life: .90, w: rand(1.6, 4.0) });
     }
-    parts.push({ wave: 1, x, y, life: .9, age: 0 });
+
+    const ns = small ? 112 : 210;
+    for (let i = 0; i < ns; i++) {
+      const a = rand(0, TAU), sp = rand(130, 560) * m;
+      parts.push({ kind: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        age: 0, life: rand(1.80, 3.00), r: rand(.8, 2.2), white: Math.random() < .62 });
+    }
+
+    const ne = small ? 84 : 155;
+    for (let i = 0; i < ne; i++) {
+      const a = rand(0, TAU), sp = rand(20, 110) * m;
+      parts.push({ kind: 'ember', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - rand(10, 60),
+        age: 0, life: rand(2.6, 4.4), r: rand(1.2, 3.4), white: Math.random() < .45 });
+    }
+
+    const n2 = small ? 44 : 80;
+    for (let i = 0; i < n2; i++) {
+      const a = rand(0, TAU), sp = rand(110, 420) * m;
+      parts.push({ kind: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        age: -.16, life: rand(1.20, 2.00), r: rand(.7, 1.8), white: Math.random() < .7 });
+    }
   };
 
-  const meteor = (x, y) => {
-    const last = trail[trail.length - 1];
-    if (last) trail.push({ x: (last.x + x) / 2, y: (last.y + y) / 2 });  // 2x sampling: silky turns
-    trail.push({ x, y });
-    if (trail.length > 72) trail.splice(0, trail.length - 72);
+  /* directional halo: rotated to the heading, stretched along it, centre shifted
+     backwards -> the glow trails behind the motion like air resistance. */
+  const halo = (x, y, ang, stretch, back, R, stops) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(ang);
+    ctx.scale(stretch, 1);
+    const g = ctx.createRadialGradient(-back, 0, 0, -back, 0, R);
+    for (const st of stops) g.addColorStop(st[0], st[1]);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(-back, 0, R, 0, TAU); ctx.fill();
+    ctx.restore();
+  };
+
+  const meteor = (x, y, dt) => {
+    const px = lastPos ? lastPos.x : x, py = lastPos ? lastPos.y : y;
+    const dx = x - px, dy = y - py;
+    const dist = Math.hypot(dx, dy);
+    if (dist > .001) dir = { x: dx / dist, y: dy / dist };       // live heading
+    const spd = dt > 0 ? dist / dt : 0;
+
+    // sub-sample the frame's travel: fast frames stay unbroken, slow frames stay dense
+    const sub = Math.max(1, Math.min(8, Math.ceil(dist / 4)));
+    for (let i = 1; i <= sub; i++) trail.push({ x: px + dx * (i / sub), y: py + dy * (i / sub) });
+
+    // wind drag: tail length follows the current speed
+    const maxLen = 70 + Math.min(spd * .6, 320);
+    let acc = 0;
+    for (let i = trail.length - 1; i > 0; i--) {
+      acc += Math.hypot(trail[i].x - trail[i - 1].x, trail[i].y - trail[i - 1].y);
+      if (acc > maxLen) { trail.splice(0, i - 1); break; }
+    }
+    lastPos = { x, y };
+
+    const ang = Math.atan2(dir.y, dir.x);
+    const stretch = 1 + Math.min(spd / 950, 1) * 1.25;
+    const back = 10 * (stretch - 1) + 6;
+
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    for (let i = 1; i < trail.length; i++) {
-      const a = trail[i - 1], b = trail[i], k = i / trail.length;
-      ctx.strokeStyle = 'rgba(255,255,255,' + (k * .55).toFixed(3) + ')';
-      ctx.lineWidth = k * 5;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+
+    // ---- trail, arc-length normalised so its gradient rides the live speed
+    const n = trail.length;
+    if (n > 1) {
+      const seg = []; let total = 0;
+      for (let i = n - 1; i > 0; i--) {
+        seg[i] = Math.hypot(trail[i].x - trail[i - 1].x, trail[i].y - trail[i - 1].y);
+        total += seg[i];
+      }
+      let run = 0;
+      for (let i = n - 1; i > 0; i--) {
+        const a = trail[i - 1], b = trail[i];
+        const kk = Math.pow(Math.max(0, 1 - (run + seg[i] / 2) / (total || 1)), 1.35);
+        ctx.strokeStyle = 'rgba(255,255,255,' + (kk * .62).toFixed(3) + ')';
+        ctx.lineWidth = .6 + kk * 4.6;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        run += seg[i];
+      }
     }
-    const g = ctx.createRadialGradient(x, y, 0, x, y, 42);
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(.28, 'rgba(255,255,255,.9)');
-    g.addColorStop(.55, 'rgba(232,222,255,.32)');
-    g.addColorStop(1, 'rgba(214,186,255,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(x, y, 42, 0, TAU); ctx.fill();
-    const h = ctx.createRadialGradient(x, y, 0, x, y, 84);               // wide soft halo
-    h.addColorStop(0, 'rgba(255,255,255,.30)');
-    h.addColorStop(1, 'rgba(214,186,255,0)');
-    ctx.fillStyle = h;
-    ctx.beginPath(); ctx.arc(x, y, 84, 0, TAU); ctx.fill();
+
+    // ---- directional halo, leaning backwards
+    halo(x, y, ang, stretch, back, 104, [[0, 'rgba(255,255,255,.26)'], [1, 'rgba(255,255,255,0)']]);
+    halo(x, y, ang, stretch, back, 52, [[0, 'rgba(255,255,255,.55)'], [.45, 'rgba(255,255,255,.18)'], [1, 'rgba(255,255,255,0)']]);
+    halo(x, y, ang, stretch, back, 26, [[0, 'rgba(255,255,255,.95)'], [1, 'rgba(255,255,255,0)']]);
+
+    // ---- head: crisp, smeared slightly along the heading as it speeds up
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(ang);
+    ctx.scale(1 + Math.min(spd / 1800, 1) * .9, 1);
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(0, 0, 9.5, 0, TAU); ctx.fill();
+    ctx.restore();
+
     ctx.globalCompositeOperation = 'source-over';
   };
 
   const fx = dt => {
+    ctx.save();
+    if (shake > 0) {
+      shake = Math.max(0, shake - dt);
+      const amp = 10 * Math.pow(shake / .34, 2);
+      ctx.translate(rand(-amp, amp), rand(-amp, amp));
+    }
     ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
     parts = parts.filter(p => (p.age += dt) < p.life);
     for (const p of parts) {
-      const k = 1 - p.age / p.life;
-      if (p.wave) {
-        ctx.strokeStyle = 'rgba(255,255,255,' + (k * .42).toFixed(3) + ')';
-        ctx.lineWidth = .5 + 2.6 * k;
-        ctx.beginPath(); ctx.arc(p.x, p.y, eOut(p.age / p.life) * Math.max(W, H) * .5, 0, TAU); ctx.stroke();
-        continue;
+      if (p.age < 0) continue;
+      const t = p.age / p.life, k = 1 - t;
+
+      if (p.kind === 'core') {                       // white core flare, grows then fades
+        const grow = p.R * (.2 + eOut(Math.min(p.age / .20, 1)));
+        const a = Math.max(0, Math.pow(k, .72));
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, grow);
+        g.addColorStop(0, 'rgba(255,255,255,' + (a * .95) + ')');
+        g.addColorStop(.25, 'rgba(255,255,255,' + (a * .5) + ')');
+        g.addColorStop(.6, 'rgba(216,182,255,' + (a * .22) + ')');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(p.x, p.y, grow, 0, TAU); ctx.fill();
+
+      } else if (p.kind === 'ring') {                 // layered shockwaves
+        const r = eOut(p.age / p.life) * Math.max(W, H) * .40;
+        ctx.strokeStyle = 'rgba(255,255,255,' + (Math.pow(k, .8) * .62 * p.g) + ')';
+        ctx.lineWidth = .5 + p.w * k;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.stroke();
+
+      } else if (p.kind === 'ray') {                  // star-ray flare
+        const L = p.len * eOut(Math.min(p.age / .22, 1)), fade = Math.pow(k, .75);
+        const x2 = p.x + Math.cos(p.a) * L, y2 = p.y + Math.sin(p.a) * L;
+        const g = ctx.createLinearGradient(p.x, p.y, x2, y2);
+        g.addColorStop(0, 'rgba(255,255,255,' + (fade * .85) + ')');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.strokeStyle = g; ctx.lineWidth = p.w * fade;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(x2, y2); ctx.stroke();
+
+      } else if (p.kind === 'spark') {                // fast spark with a motion streak
+        p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .963; p.vy *= .963;
+        const tx = p.x - p.vx * .028, ty = p.y - p.vy * .028;
+        const col = p.white ? '255,255,255' : '214,180,255';
+        ctx.strokeStyle = 'rgba(' + col + ',' + (Math.pow(k, .72) * .95) + ')';
+        ctx.lineWidth = p.r * (.4 + k);
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(tx, ty); ctx.stroke();
+        ctx.fillStyle = 'rgba(' + col + ',' + (k * .9) + ')';
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (.5 + k * .7), 0, TAU); ctx.fill();
+
+      } else {                                        // drifting ember, sifting down
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        p.vx *= .99; p.vy = p.vy * .99 + 14 * dt;
+        const col = p.white ? '255,255,255' : '200,160,255';
+        ctx.fillStyle = 'rgba(' + col + ',' + Math.pow(k, .8) + ')';
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (.4 + k), 0, TAU); ctx.fill();
       }
-      p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .985; p.vy *= .985;
-      ctx.fillStyle = p.white
-        ? 'rgba(255,255,255,' + k.toFixed(3) + ')'
-        : 'hsla(268,92%,84%,' + k.toFixed(3) + ')';
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (.5 + k), 0, TAU); ctx.fill();
     }
     if (flash > 0) {
-      ctx.fillStyle = 'rgba(255,255,255,' + (flash * .15).toFixed(3) + ')';
+      ctx.fillStyle = 'rgba(255,255,255,' + (flash * .18) + ')';
       ctx.fillRect(0, 0, W, H);
-      flash = Math.max(0, flash - dt * 2.1);
+      flash = Math.max(0, flash - dt * 1.7);
     }
     ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
   };
 
   const frame = ts => {
@@ -1495,14 +1646,14 @@ observeReveals();
     if (!exploded) {
       const p = pos(Math.min(t, T_RISE + T_ORBIT + T_SPIRAL));
       if (p.end || t >= T_RISE + T_ORBIT + T_SPIRAL) { exploded = true; trail = []; flash = 1; burst(cx, cy); }
-      else meteor(p.x, p.y);
+      else meteor(p.x, p.y, dt);
     } else fx(dt);
-    if (t >= T_END && !finished) {          // reveal page; particles keep burning during fade
+    if (t >= T_END + T_HOLD && !finished) {
       finished = true;
       document.body.classList.remove('intro-live');
       intro.classList.add('done');
     }
-    if (t >= T_END + T_FADE) { cancelAnimationFrame(raf); intro.remove(); return; }
+    if (t >= T_END + T_HOLD + T_FADE) { cancelAnimationFrame(raf); intro.remove(); return; }
     raf = requestAnimationFrame(frame);
   };
 
@@ -1512,7 +1663,7 @@ observeReveals();
     cancelAnimationFrame(raf);
     document.body.classList.remove('intro-live');
     intro.classList.add('done');
-    setTimeout(() => intro.remove(), 1000);
+    setTimeout(() => intro.remove(), 2500);
   }, { once: true });
   raf = requestAnimationFrame(frame);
 })();
