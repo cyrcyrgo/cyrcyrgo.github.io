@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0d1117">
 <title>404 · 页面走丢了 | Welcome to my home</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='26' fill='%230d1117'/%3E%3Cpath d='M28 68V32l22 24 22-24v36' stroke='%2358a6ff' stroke-width='9' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='26' fill='%230d1117'/%3E%3Cpath d='M28 68V32l22 24 22-24v36' stroke='%23a371f7' stroke-width='9' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
 <style>
 :root{
-  --bg:#0b0e14;--line:rgba(255,255,255,.09);--line-2:rgba(255,255,255,.14);
-  --txt:#e8eef6;--txt-2:#a9b6c6;--txt-3:#6f7d8d;
-  --grad:linear-gradient(120deg,#79c0ff 0%,#bc8cff 42%,#ff9ecb 78%,#ffd591 100%);
+  --bg:#0d1117;--line:#30363d;--line-2:#3d444d;
+  --panel:#161b22;--panel-2:#1c2128;
+  --txt:#e6edf3;--txt-2:#8b949e;--txt-3:#6e7681;
+  --grad:linear-gradient(120deg,#6d3fc4 0%,#8b57e5 52%,#a371f7 100%);
+  --grad-cta:linear-gradient(180deg,#2ea043 0%,#238636 100%);
   --ease:cubic-bezier(.22,1,.36,1);--spring:cubic-bezier(.16,1.02,.3,1);--pill:999px;
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
@@ -19,10 +21,9 @@ body{font-family:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI","PingF
   color:var(--txt);background:var(--bg);display:flex;align-items:center;justify-content:center;
   text-align:center;padding:40px 22px;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 .bg{position:fixed;inset:0;z-index:-2;background:
-  radial-gradient(120% 90% at 12% -10%,rgba(88,166,255,.20),transparent 58%),
-  radial-gradient(100% 80% at 92% 4%,rgba(188,140,255,.17),transparent 55%),
-  radial-gradient(110% 90% at 50% 118%,rgba(255,143,177,.14),transparent 60%),
-  linear-gradient(180deg,#0b0e14,#0d1117 45%,#0a0d13)}
+  radial-gradient(118% 78% at 50% -16%,rgba(137,87,229,.30),transparent 60%),
+  radial-gradient(88% 52% at 88% 4%,rgba(163,113,247,.13),transparent 50%),
+  linear-gradient(180deg,#120c1e,#0d1117 44%,#010409)}
 .grid{position:fixed;inset:0;z-index:-2;opacity:.5;
   background-image:linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),
   linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);
@@ -34,9 +35,9 @@ body{font-family:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI","PingF
   animation:in 1.05s var(--ease) .1s forwards}
 @keyframes in{to{opacity:1;transform:none;filter:blur(0)}}
 .badge{display:inline-flex;align-items:center;gap:.55rem;padding:.52rem 1.1rem;border-radius:var(--pill);
-  background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--txt-2);
+  background:var(--panel,rgba(22,27,34,.9));border:1px solid var(--line);color:var(--txt-2);
   font-size:.76rem;letter-spacing:.16em;text-transform:uppercase}
-.badge i{width:7px;height:7px;border-radius:50%;background:#ff8fb1;box-shadow:0 0 0 4px rgba(255,143,177,.16)}
+.badge i{width:7px;height:7px;border-radius:50%;background:#d29922;box-shadow:0 0 0 4px rgba(210,153,34,.16)}
 .code{font-family:"Space Grotesk",ui-sans-serif,system-ui,sans-serif;font-size:clamp(5.2rem,20vw,9.5rem);
   font-weight:700;line-height:.92;letter-spacing:-.05em;background:var(--grad);background-size:220% 100%;
   -webkit-background-clip:text;background-clip:text;color:transparent;
@@ -48,11 +49,11 @@ p{color:var(--txt-2);font-size:clamp(.92rem,2.6vw,1.02rem);line-height:1.85;max-
 .link{margin-top:.85rem;display:inline-flex;align-items:center;gap:.72rem;padding:1rem 2.15rem;
   border-radius:var(--pill);border:0;cursor:pointer;text-decoration:none;
   font-family:"Space Grotesk",ui-sans-serif,system-ui,sans-serif;font-size:1.02rem;font-weight:600;
-  letter-spacing:.055em;color:#08121f;background:var(--grad);background-size:190% 100%;
-  box-shadow:0 16px 40px rgba(88,166,255,.30);
-  transition:transform .6s var(--spring),box-shadow .6s ease,filter .6s ease,background-position .9s var(--ease)}
-.link:hover{transform:translateY(-3px) scale(1.03);box-shadow:0 26px 58px rgba(88,166,255,.42);
-  filter:saturate(1.22) brightness(1.05);background-position:100% 0}
+  letter-spacing:.055em;color:#fff;background:var(--grad-cta);
+  box-shadow:0 1px 0 rgba(255,255,255,.10) inset,0 14px 34px rgba(35,134,54,.34);
+  transition:transform .6s var(--spring),box-shadow .6s ease,filter .6s ease}
+.link:hover{transform:translateY(-3px) scale(1.03);box-shadow:0 1px 0 rgba(255,255,255,.14) inset,0 24px 54px rgba(46,160,67,.42);
+  filter:brightness(1.08)}
 .link:active{transform:translateY(0) scale(.965)}
 .link svg{width:17px;height:17px;transition:transform .6s var(--spring)}
 .link:hover svg{transform:translateX(5px)}
