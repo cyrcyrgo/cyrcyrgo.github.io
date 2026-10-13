@@ -1,1125 +1,1329 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="description" content="个人前端作品集合导航页">
-  <title>工作室 · 项目向导</title>
-  <style>
-    :root {
-      --bg-0: #030304;
-      --bg-1: #08080a;
-      --glass-bg: rgba(255, 255, 255, 0.018);
-      --glass-border: rgba(255, 255, 255, 0.07);
-      --glass-highlight: rgba(255, 255, 255, 0.16);
-      --text-0: #f7f2e8;
-      --text-1: #b8b0a0;
-      --text-2: #6b6254;
-      --gold: #c9a227;
-      --gold-light: #f4e4bc;
-      --gold-dim: rgba(201, 162, 39, 0.12);
-      --gold-glow: rgba(201, 162, 39, 0.22);
-      --pearl: #e8e0d4;
-      --radius: 26px;
-      --radius-sm: 16px;
-      --transition: 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
-      --art-ease: cubic-bezier(0.16, 1, 0.3, 1);
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Welcome to my home — 个人前端作品集，汇集可直接在浏览器运行的独立应用与小工具。">
+<meta name="theme-color" content="#0d1117">
+<title>Welcome to my home · 个人作品集</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='26' fill='%230d1117'/%3E%3Cpath d='M28 68V32l22 24 22-24v36' stroke='%2358a6ff' stroke-width='9' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<style>
+/* ============================================================
+   Welcome to my home — GitHub-flavoured modernist art homepage
+   ============================================================ */
+:root{
+  --bg:#0b0e14;
+  --bg-2:#0d1117;
+  --panel:rgba(255,255,255,.035);
+  --panel-2:rgba(255,255,255,.055);
+  --line:rgba(255,255,255,.08);
+  --line-2:rgba(255,255,255,.13);
+  --txt:#e8eef6;
+  --txt-2:#a9b6c6;
+  --txt-3:#6f7d8d;
+  --blue:#58a6ff;
+  --violet:#bc8cff;
+  --teal:#4fd1c5;
+  --rose:#ff8fb1;
+  --amber:#f5c066;
+  --green:#56d364;
+  --grad:linear-gradient(120deg,#79c0ff 0%,#bc8cff 42%,#ff9ecb 78%,#ffd591 100%);
+  --grad-soft:linear-gradient(120deg,rgba(121,192,255,.16),rgba(188,140,255,.16),rgba(255,158,203,.12));
+  --r-xl:34px;
+  --r-lg:26px;
+  --r-md:20px;
+  --r-sm:14px;
+  --pill:999px;
+  --ease:cubic-bezier(.22,1,.36,1);
+  --ease-io:cubic-bezier(.65,0,.35,1);
+  --spring:cubic-bezier(.16,1.02,.3,1);
+  --shadow-1:0 1px 2px rgba(0,0,0,.35),0 8px 24px rgba(0,0,0,.28);
+  --shadow-2:0 24px 70px rgba(0,0,0,.45),0 4px 14px rgba(0,0,0,.3);
+  --font-d:"Space Grotesk","Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --font-b:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--font-b);
+  color:var(--txt);
+  background:var(--bg);
+  line-height:1.7;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+::selection{background:rgba(88,166,255,.32);color:#fff}
+img,svg{display:block;max-width:100%}
+button,input{font:inherit;color:inherit}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:12px}
 
-    *, *::before, *::after {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+/* ---------- ambient background : gradient + grid + glow ---------- */
+.bg-layer{position:fixed;inset:0;z-index:-3;background:
+  radial-gradient(120% 90% at 12% -10%,rgba(88,166,255,.20) 0%,transparent 58%),
+  radial-gradient(100% 80% at 92% 4%,rgba(188,140,255,.17) 0%,transparent 55%),
+  radial-gradient(110% 90% at 50% 118%,rgba(255,143,177,.14) 0%,transparent 60%),
+  linear-gradient(180deg,#0b0e14 0%,#0d1117 45%,#0a0d13 100%);
+}
+.bg-grid{position:fixed;inset:0;z-index:-3;opacity:.5;
+  background-image:
+    linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);
+  background-size:56px 56px;
+  -webkit-mask-image:radial-gradient(115% 85% at 50% 0%,#000 8%,rgba(0,0,0,.35) 52%,transparent 84%);
+  mask-image:radial-gradient(115% 85% at 50% 0%,#000 8%,rgba(0,0,0,.35) 52%,transparent 84%);
+}
+.bg-dots{position:fixed;inset:0;z-index:-3;opacity:.28;
+  background-image:radial-gradient(rgba(255,255,255,.16) 1px,transparent 1.2px);
+  background-size:22px 22px;
+  -webkit-mask-image:radial-gradient(90% 70% at 78% 22%,#000 0%,transparent 68%);
+  mask-image:radial-gradient(90% 70% at 78% 22%,#000 0%,transparent 68%);
+}
+.aurora{position:fixed;inset:-22vh -12vw;z-index:-2;pointer-events:none;filter:blur(72px);opacity:.62}
+.aurora i{position:absolute;display:block;border-radius:50%}
+.aurora i:nth-child(1){width:46vw;height:46vw;left:4%;top:6%;background:radial-gradient(circle,rgba(88,166,255,.42),transparent 68%);animation:drift1 26s var(--ease-io) infinite alternate}
+.aurora i:nth-child(2){width:40vw;height:40vw;right:2%;top:-4%;background:radial-gradient(circle,rgba(188,140,255,.38),transparent 68%);animation:drift2 32s var(--ease-io) infinite alternate}
+.aurora i:nth-child(3){width:52vw;height:52vw;left:26%;bottom:-22%;background:radial-gradient(circle,rgba(255,143,177,.3),transparent 68%);animation:drift3 38s var(--ease-io) infinite alternate}
+@keyframes drift1{to{transform:translate3d(7vw,5vh,0) scale(1.16)}}
+@keyframes drift2{to{transform:translate3d(-6vw,8vh,0) scale(1.1)}}
+@keyframes drift3{to{transform:translate3d(5vw,-7vh,0) scale(1.14)}}
+.grain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.038;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.pointer-glow{position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(520px circle at var(--mx,50%) var(--my,38%),rgba(121,192,255,.10),transparent 62%);
+  transition:opacity .6s ease}
 
-    html {
-      scroll-behavior: smooth;
-    }
+/* ---------- shared bits ---------- */
+.pill{display:inline-flex;align-items:center;gap:.55rem;padding:.52rem 1.05rem;border-radius:var(--pill);
+  background:var(--panel);border:1px solid var(--line);color:var(--txt-2);
+  font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(86,211,100,.16)}
+.grad-text{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;
+  background-size:220% 100%;animation:gradShift 14s var(--ease-io) infinite alternate}
+@keyframes gradShift{from{background-position:0% 50%}to{background-position:100% 50%}}
 
-    html, body {
-      min-height: 100%;
-      background: var(--bg-0);
-      color: var(--text-0);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-      line-height: 1.65;
-      overflow-x: hidden;
-    }
+/* reveal on scroll */
+.reveal{opacity:0;transform:translateY(30px);filter:blur(9px);
+  transition:opacity .95s var(--ease),transform .95s var(--ease),filter .95s var(--ease);
+  transition-delay:var(--d,0ms)}
+.reveal.in{opacity:1;transform:none;filter:blur(0)}
 
-    /* ---------- ambient aurora background ---------- */
-    .bg {
-      position: fixed;
-      inset: 0;
-      z-index: -4;
-      background:
-        radial-gradient(ellipse 80% 60% at 10% 20%, rgba(201, 162, 39, 0.11) 0%, transparent 50%),
-        radial-gradient(ellipse 70% 50% at 90% 15%, rgba(160, 140, 200, 0.08) 0%, transparent 45%),
-        radial-gradient(ellipse 60% 50% at 75% 85%, rgba(90, 180, 190, 0.06) 0%, transparent 40%),
-        radial-gradient(ellipse 50% 40% at 30% 60%, rgba(201, 162, 39, 0.04) 0%, transparent 35%),
-        var(--bg-0);
-      animation: aurora 22s ease-in-out infinite alternate;
-    }
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero{position:relative;min-height:100svh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  padding:clamp(84px,12vh,140px) 22px 132px}
+.hero-inner{width:min(1000px,100%);display:flex;flex-direction:column;align-items:center}
 
-    @keyframes aurora {
-      0% { filter: hue-rotate(-5deg) brightness(1); transform: scale(1) translateX(0); }
-      100% { filter: hue-rotate(8deg) brightness(1.1); transform: scale(1.06) translateX(-1%); }
-    }
+.hero .pill{opacity:0;animation:fadeUp 1.05s var(--ease) .12s forwards}
 
-    /* vignette */
-    .vignette {
-      position: fixed;
-      inset: 0;
-      z-index: -3;
-      background: radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.55) 85%, rgba(0,0,0,0.75) 100%);
-      pointer-events: none;
-    }
+.hero h1{
+  margin-top:30px;
+  font-family:var(--font-d);
+  font-weight:700;
+  font-size:clamp(2.85rem,10vw,7.35rem);
+  line-height:.98;
+  letter-spacing:-.042em;
+}
+.hero h1 .word{display:inline-block;opacity:0;transform:translateY(52px) rotate(3deg);filter:blur(12px);
+  animation:wordIn 1.35s var(--ease) forwards;animation-delay:var(--wd)}
+@keyframes wordIn{to{opacity:1;transform:none;filter:blur(0)}}
+.hero h1 .word.grad-text{animation:wordIn 1.35s var(--ease) forwards,gradShift 15s var(--ease-io) infinite alternate;
+  animation-delay:var(--wd),calc(var(--wd) + 1.2s)}
+.hero h1 .home{position:relative;display:inline-block;padding:0 .12em}
+.hero h1 .home::after{content:"";position:absolute;left:.06em;right:.06em;bottom:.02em;height:.13em;border-radius:var(--pill);
+  background:var(--grad);opacity:.85;transform:scaleX(0);transform-origin:left;
+  animation:underline 1.35s var(--ease) 1.15s forwards}
+@keyframes underline{to{transform:scaleX(1)}}
 
-    /* subtle grid */
-    .grid {
-      position: fixed;
-      inset: 0;
-      z-index: -3;
-      background-image:
-        linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
-      background-size: 64px 64px;
-      mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
-      -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
-      opacity: 0.6;
-    }
+/* tagline */
+.tagline-wrap{margin-top:30px;min-height:clamp(88px,13vw,124px);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:.85rem;opacity:0;animation:fadeUp 1.1s var(--ease) .95s forwards}
+.tagline{position:relative;height:clamp(62px,10vw,92px);width:100%;overflow:hidden;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 12%,#000 88%,transparent 100%);
+  mask-image:linear-gradient(90deg,transparent 0,#000 12%,#000 88%,transparent 100%)}
+.tagline span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-d);font-size:clamp(1.15rem,3.6vw,2.05rem);font-weight:400;
+  letter-spacing:-.012em;line-height:1.28;color:var(--txt-2);padding:0 2.2em;
+  opacity:0;transform:translateY(22px) scale(.97);filter:blur(8px);pointer-events:none;
+  transition:opacity .85s var(--ease),transform .85s var(--ease),filter .85s var(--ease)}
+.tagline span.on{opacity:1;transform:none;filter:blur(0)}
+.tagline span.out{opacity:0;transform:translateY(-22px) scale(1.03);filter:blur(8px)}
+.tagline em{font-style:normal;font-weight:600;color:var(--txt)}
+.tagline .en{letter-spacing:.008em}
+.tagline .cn{letter-spacing:.07em}
 
-    /* film grain */
-    .grain {
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-      opacity: 0.045;
-      pointer-events: none;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-      background-repeat: repeat;
-      background-size: 256px 256px;
-    }
+.shuffle{display:inline-flex;align-items:center;gap:.55rem;padding:.55rem 1.15rem .55rem 1rem;
+  border-radius:var(--pill);border:1px solid var(--line);background:var(--panel);
+  color:var(--txt-2);font-size:.82rem;letter-spacing:.045em;cursor:pointer;
+  transition:transform .5s var(--spring),background .45s ease,border-color .45s ease,color .45s ease}
+.shuffle:hover{background:var(--panel-2);border-color:var(--line-2);color:var(--txt);transform:translateY(-2px)}
+.shuffle:active{transform:translateY(0) scale(.96)}
+.shuffle svg{width:15px;height:15px;transition:transform .7s var(--ease)}
+.shuffle:hover svg{transform:rotate(180deg)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(26px);filter:blur(6px)}to{opacity:1;transform:none;filter:blur(0)}}
 
-    /* starfield canvas */
-    #stars {
-      position: fixed;
-      inset: 0;
-      z-index: -2;
-      pointer-events: none;
-    }
+/* ============================================================
+   SEARCH BAR (capsule)
+   ============================================================ */
+.search-zone{position:relative;width:min(720px,100%);margin-top:38px;
+  opacity:0;animation:fadeUp 1.15s var(--ease) 1.25s forwards}
+.search-box{position:relative;display:flex;align-items:center;gap:.55rem;
+  padding:9px 9px 9px 24px;border-radius:var(--pill);
+  background:rgba(255,255,255,.055);border:1px solid var(--line-2);
+  backdrop-filter:blur(22px) saturate(150%);-webkit-backdrop-filter:blur(22px) saturate(150%);
+  box-shadow:0 18px 50px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.10);
+  transition:box-shadow .65s var(--ease),border-color .65s ease,background .65s ease,transform .65s var(--spring)}
+.search-box::before{content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;
+  background:var(--grad);opacity:0;transition:opacity .65s ease;
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;
+  padding:1px}
+.search-box:focus-within{background:rgba(255,255,255,.075);transform:translateY(-2px);
+  box-shadow:0 26px 68px rgba(0,0,0,.44),0 0 0 6px rgba(88,166,255,.10),inset 0 1px 0 rgba(255,255,255,.14)}
+.search-box:focus-within::before{opacity:.75}
+.search-icon{width:19px;height:19px;flex:none;color:var(--txt-3);transition:color .5s ease}
+.search-box:focus-within .search-icon{color:var(--blue)}
+#searchInput{flex:1;min-width:0;background:transparent;border:0;outline:0;
+  font-size:clamp(.98rem,2.4vw,1.12rem);letter-spacing:.012em;padding:.85rem 0;color:var(--txt)}
+#searchInput::placeholder{color:var(--txt-3)}
+.search-go{flex:none;display:inline-flex;align-items:center;gap:.5rem;
+  padding:.92rem 1.72rem;border-radius:var(--pill);border:0;cursor:pointer;
+  font-family:var(--font-d);font-size:.94rem;font-weight:600;letter-spacing:.055em;
+  color:#08121f;background:var(--grad);background-size:180% 100%;
+  box-shadow:0 10px 26px rgba(88,166,255,.28);
+  transition:transform .55s var(--spring),box-shadow .55s ease,filter .55s ease,background-position .8s var(--ease)}
+.search-go:hover{transform:translateY(-2px) scale(1.035);box-shadow:0 18px 40px rgba(88,166,255,.38);
+  filter:saturate(1.25) brightness(1.05);background-position:100% 0}
+.search-go:active{transform:translateY(0) scale(.96)}
+.search-go svg{width:15px;height:15px}
 
-    /* cursor halo */
-    .halo {
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-      pointer-events: none;
-      background: radial-gradient(
-        500px circle at var(--x, 50%) var(--y, 50%),
-        rgba(201, 162, 39, 0.07),
-        transparent 45%
-      );
-      opacity: 0;
-      transition: opacity 0.8s ease;
-    }
-    .halo.active { opacity: 1; }
+.results{position:absolute;left:0;right:0;top:calc(100% + 14px);z-index:40;
+  border-radius:var(--r-lg);background:rgba(17,22,30,.90);border:1px solid var(--line-2);
+  backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);
+  box-shadow:var(--shadow-2);padding:10px;max-height:min(52vh,470px);overflow:auto;
+  opacity:0;visibility:hidden;transform:translateY(-12px) scale(.975);transform-origin:top center;
+  transition:opacity .45s var(--ease),transform .5s var(--spring),visibility .45s}
+.results.open{opacity:1;visibility:visible;transform:none}
+.results .hint{padding:16px 18px;color:var(--txt-3);font-size:.86rem;text-align:center}
+.res-item{display:flex;align-items:center;gap:.95rem;width:100%;text-align:left;cursor:pointer;
+  padding:.72rem .95rem;border-radius:var(--r-md);border:1px solid transparent;background:transparent;
+  transition:background .35s ease,border-color .35s ease,transform .45s var(--spring)}
+.res-item:hover,.res-item.active{background:rgba(88,166,255,.13);border-color:rgba(88,166,255,.24);transform:translateX(4px)}
+.res-ico{width:38px;height:38px;flex:none;border-radius:12px;display:grid;place-items:center;
+  background:var(--panel-2);border:1px solid var(--line);color:var(--acc,var(--blue))}
+.res-ico svg{width:19px;height:19px}
+.res-txt{flex:1;min-width:0}
+.res-txt b{display:block;font-size:.95rem;font-weight:600;letter-spacing:.005em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res-txt small{display:block;color:var(--txt-3);font-size:.78rem;letter-spacing:.02em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res-go{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+  background:rgba(255,255,255,.06);color:var(--txt-2);opacity:.55;transition:opacity .4s,transform .5s var(--spring)}
+.res-item:hover .res-go{opacity:1;transform:translateX(3px)}
+.res-go svg{width:13px;height:13px}
+mark{background:rgba(245,192,102,.28);color:inherit;border-radius:5px;padding:.06em .16em}
 
-    /* floating orbs */
-    .orbs {
-      position: fixed;
-      inset: 0;
-      z-index: -3;
-      pointer-events: none;
-      overflow: hidden;
-    }
-    .orb {
-      position: absolute;
-      border-radius: 50%;
-      filter: blur(100px);
-      opacity: 0.28;
-      animation: drift 28s ease-in-out infinite;
-    }
-    .orb-1 { width: 520px; height: 520px; left: -12%; top: 5%; background: rgba(201, 162, 39, 0.16); animation-delay: -8s; }
-    .orb-2 { width: 440px; height: 440px; right: -10%; top: 18%; background: rgba(150, 130, 200, 0.12); animation-delay: -16s; }
-    .orb-3 { width: 360px; height: 360px; left: 40%; bottom: -8%; background: rgba(90, 180, 190, 0.10); animation-delay: -24s; }
+/* ============================================================
+   SCROLL CUE  ( ^ )
+   ============================================================ */
+.cue{position:absolute;left:50%;bottom:clamp(26px,5vh,52px);transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;gap:.55rem;cursor:pointer;
+  background:transparent;border:0;padding:12px 18px;border-radius:var(--pill);
+  color:var(--txt-3);letter-spacing:.22em;font-size:.68rem;text-transform:uppercase;
+  opacity:0;animation:fadeUp 1.1s var(--ease) 1.75s forwards;
+  transition:color .5s ease,transform .6s var(--spring)}
+.cue:hover{color:var(--txt);transform:translateX(-50%) translateY(-4px)}
+.cue-mark{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid var(--line-2);background:rgba(255,255,255,.05);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  transition:border-color .55s ease,background .55s ease,box-shadow .55s ease}
+.cue:hover .cue-mark{border-color:rgba(88,166,255,.5);background:rgba(88,166,255,.14);
+  box-shadow:0 12px 34px rgba(88,166,255,.24)}
+.cue-mark span{font-size:1.45rem;line-height:1;font-weight:400;display:block;
+  animation:cueFloat 2.7s var(--ease-io) infinite}
+@keyframes cueFloat{0%,100%{transform:translateY(2px);opacity:.75}50%{transform:translateY(-4px);opacity:1}}
 
-    @keyframes drift {
-      0%, 100% { transform: translate(0, 0) scale(1); }
-      25% { transform: translate(50px, -40px) scale(1.08); }
-      50% { transform: translate(-30px, 50px) scale(0.94); }
-      75% { transform: translate(40px, 30px) scale(1.05); }
-    }
+/* ============================================================
+   PROJECTS
+   ============================================================ */
+.works{position:relative;padding:clamp(52px,9vh,104px) clamp(18px,5vw,52px) clamp(70px,10vh,120px)}
+.works-inner{width:min(1240px,100%);margin:0 auto}
+.sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:1.6rem;flex-wrap:wrap;margin-bottom:clamp(28px,5vh,52px)}
+.sec-head h2{font-family:var(--font-d);font-size:clamp(1.85rem,4.6vw,3.15rem);
+  font-weight:700;letter-spacing:-.032em;line-height:1.1}
+.sec-head p{color:var(--txt-2);font-size:clamp(.92rem,2.1vw,1.03rem);max-width:44ch;margin-top:.75rem}
+.sec-count{display:inline-flex;align-items:center;gap:.6rem;padding:.62rem 1.25rem;border-radius:var(--pill);
+  border:1px solid var(--line);background:var(--panel);color:var(--txt-2);font-size:.82rem;letter-spacing:.08em;white-space:nowrap}
+.sec-count b{font-family:var(--font-d);font-size:1.12rem;color:var(--txt);font-weight:700}
 
-    /* ---------- layout ---------- */
-    .wrap {
-      max-width: 1240px;
-      margin: 0 auto;
-      padding: 100px 32px 140px;
-    }
+.filters{display:flex;gap:.62rem;flex-wrap:wrap;margin-bottom:clamp(24px,4vh,38px)}
+.chip{padding:.62rem 1.28rem;border-radius:var(--pill);border:1px solid var(--line);
+  background:var(--panel);color:var(--txt-2);font-size:.86rem;cursor:pointer;letter-spacing:.025em;
+  transition:transform .5s var(--spring),color .4s ease,background .45s ease,border-color .45s ease,box-shadow .5s ease}
+.chip:hover{transform:translateY(-2px);color:var(--txt);border-color:var(--line-2);background:var(--panel-2)}
+.chip.on{color:#08121f;background:var(--grad);border-color:transparent;font-weight:600;
+  box-shadow:0 12px 30px rgba(88,166,255,.26)}
+.chip:active{transform:scale(.95)}
 
-    /* ---------- header ---------- */
-    header {
-      text-align: center;
-      margin-bottom: 90px;
-      position: relative;
-      opacity: 0;
-      animation: heroIn 1.4s var(--art-ease) 0.15s forwards;
-    }
+.grid{display:grid;gap:clamp(16px,2vw,24px);grid-template-columns:repeat(auto-fill,minmax(288px,1fr))}
+.card{position:relative;display:flex;flex-direction:column;gap:1.15rem;isolation:isolate;
+  padding:26px 26px 24px;border-radius:var(--r-xl);cursor:pointer;text-align:left;
+  background:linear-gradient(168deg,rgba(255,255,255,.055),rgba(255,255,255,.022));
+  border:1px solid var(--line);overflow:hidden;
+  transition:transform .75s var(--spring),border-color .6s ease,box-shadow .75s var(--ease),background .6s ease}
+.card::before{content:"";position:absolute;inset:0;z-index:-1;opacity:0;
+  background:radial-gradient(420px circle at var(--cx,50%) var(--cy,0%),var(--acc-soft,rgba(88,166,255,.18)),transparent 68%);
+  transition:opacity .7s ease}
+.card:hover{transform:translateY(-9px);border-color:var(--line-2);background:linear-gradient(168deg,rgba(255,255,255,.085),rgba(255,255,255,.03));
+  box-shadow:0 32px 66px rgba(0,0,0,.44),0 6px 20px rgba(0,0,0,.3)}
+.card:hover::before{opacity:1}
+.card:active{transform:translateY(-3px) scale(.985)}
+.card-top{display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.card-ico{width:56px;height:56px;border-radius:19px;display:grid;place-items:center;flex:none;
+  color:var(--acc,var(--blue));background:var(--acc-soft,rgba(88,166,255,.14));border:1px solid rgba(255,255,255,.10);
+  transition:transform .8s var(--spring),box-shadow .7s ease}
+.card:hover .card-ico{transform:translateY(-3px) rotate(-7deg) scale(1.06);box-shadow:0 16px 32px rgba(0,0,0,.32)}
+.card-ico svg{width:26px;height:26px}
+.card-arrow{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;flex:none;
+  color:var(--txt-3);border:1px solid var(--line);background:rgba(255,255,255,.03);
+  transition:color .5s ease,background .55s ease,border-color .55s ease,transform .7s var(--spring)}
+.card:hover .card-arrow{color:#08121f;background:var(--grad);border-color:transparent;transform:rotate(45deg) scale(1.08)}
+.card-arrow svg{width:15px;height:15px}
+.card h3{font-family:var(--font-d);font-size:1.19rem;font-weight:600;letter-spacing:-.014em;line-height:1.34}
+.card-body{display:flex;flex-direction:column;gap:.62rem;flex:1}
+.card .en{display:block;margin-top:.28rem;font-size:.79rem;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--acc,var(--blue));opacity:.82;font-weight:500}
+.card p{color:var(--txt-2);font-size:.925rem;line-height:1.72;flex:1}
+.tags{display:flex;flex-wrap:wrap;gap:.44rem;margin-top:.25rem}
+.tags span{padding:.34rem .82rem;border-radius:var(--pill);font-size:.745rem;letter-spacing:.045em;
+  color:var(--txt-2);background:rgba(255,255,255,.05);border:1px solid var(--line);white-space:nowrap;
+  transition:color .45s ease,border-color .45s ease,background .45s ease}
+.card:hover .tags span{color:var(--txt);border-color:var(--line-2);background:rgba(255,255,255,.085)}
+.card .go-label{position:absolute;right:24px;bottom:22px;font-size:.74rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--acc,var(--blue));opacity:0;transform:translateX(-10px);
+  transition:opacity .55s ease,transform .65s var(--spring)}
+.card:hover .go-label{opacity:.95;transform:none}
+.empty{padding:64px 20px;text-align:center;color:var(--txt-3);border-radius:var(--r-xl);
+  border:1px dashed var(--line-2);background:var(--panel)}
+/* ============================================================
+   DETAIL OVERLAY
+   ============================================================ */
+.overlay{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;
+  padding:clamp(12px,3vw,32px);opacity:0;visibility:hidden;
+  transition:opacity .6s var(--ease),visibility .6s}
+.overlay.open{opacity:1;visibility:visible}
+.overlay-bg{position:absolute;inset:0;background:rgba(5,8,13,.72);
+  backdrop-filter:blur(18px) saturate(130%);-webkit-backdrop-filter:blur(18px) saturate(130%)}
+.sheet{position:relative;width:min(880px,100%);max-height:min(90vh,880px);overflow:hidden;
+  display:flex;flex-direction:column;border-radius:var(--r-xl);
+  background:linear-gradient(172deg,rgba(255,255,255,.075),rgba(255,255,255,.028));
+  border:1px solid var(--line-2);box-shadow:var(--shadow-2);
+  transform:translateY(42px) scale(.945);opacity:0;filter:blur(10px);
+  transition:transform .8s var(--spring),opacity .62s var(--ease),filter .62s var(--ease)}
+.overlay.open .sheet{transform:none;opacity:1;filter:blur(0)}
+.sheet-glow{position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:inherit}
+.sheet-glow::before{content:"";position:absolute;width:520px;height:520px;left:-140px;top:-220px;border-radius:50%;
+  background:radial-gradient(circle,var(--acc-soft,rgba(88,166,255,.22)),transparent 66%);filter:blur(28px)}
+.sheet-scroll{overflow-y:auto;overscroll-behavior:contain;padding:clamp(28px,4.4vw,48px)}
+.sheet-scroll::-webkit-scrollbar{width:8px}
+.sheet-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:99px}
+.sheet-close{position:absolute;top:18px;right:18px;z-index:3;width:42px;height:42px;border-radius:50%;
+  display:grid;place-items:center;cursor:pointer;border:1px solid var(--line-2);
+  background:rgba(255,255,255,.06);color:var(--txt-2);
+  transition:transform .6s var(--spring),background .5s ease,color .5s ease,border-color .5s ease}
+.sheet-close:hover{transform:rotate(90deg) scale(1.06);background:rgba(255,255,255,.14);color:var(--txt);border-color:var(--line-2)}
+.sheet-close svg{width:15px;height:15px}
+.detail-head{display:flex;align-items:flex-start;gap:1.35rem;flex-wrap:wrap}
+.detail-ico{width:76px;height:76px;border-radius:25px;flex:none;display:grid;place-items:center;
+  color:var(--acc,var(--blue));background:var(--acc-soft,rgba(88,166,255,.15));border:1px solid rgba(255,255,255,.11);
+  box-shadow:0 18px 40px rgba(0,0,0,.30)}
+.detail-ico svg{width:35px;height:35px}
+.detail-title h3{font-family:var(--font-d);font-size:clamp(1.62rem,4vw,2.45rem);font-weight:700;
+  letter-spacing:-.032em;line-height:1.14}
+.detail-title .en{display:block;margin-top:.42rem;font-size:.82rem;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--acc,var(--blue));font-weight:500}
+.detail-cat{display:inline-flex;align-items:center;gap:.5rem;margin-top:.95rem;padding:.42rem 1.02rem;
+  border-radius:var(--pill);border:1px solid var(--line);background:rgba(255,255,255,.05);
+  color:var(--txt-2);font-size:.78rem;letter-spacing:.08em}
+.detail-lead{margin-top:1.65rem;font-size:clamp(1rem,2.3vw,1.155rem);line-height:1.86;color:var(--txt)}
+.detail-cols{display:grid;grid-template-columns:1.28fr .92fr;gap:1.55rem;margin-top:2rem}
+.detail-block h4{font-family:var(--font-d);font-size:.855rem;font-weight:600;letter-spacing:.19em;
+  text-transform:uppercase;color:var(--txt-3);margin-bottom:1.05rem}
+.feat{display:flex;flex-direction:column;gap:.72rem}
+.feat li{list-style:none;display:flex;align-items:flex-start;gap:.82rem;font-size:.955rem;color:var(--txt-2);line-height:1.66}
+.feat i{flex:none;width:21px;height:21px;margin-top:.28rem;border-radius:50%;display:grid;place-items:center;
+  background:var(--acc-soft,rgba(88,166,255,.16));border:1px solid rgba(255,255,255,.10)}
+.feat i svg{width:11px;height:11px;color:var(--acc,var(--blue))}
+.stack{display:flex;flex-wrap:wrap;gap:.52rem}
+.stack span{padding:.46rem 1.02rem;border-radius:var(--pill);font-size:.815rem;letter-spacing:.035em;
+  color:var(--txt-2);background:rgba(255,255,255,.055);border:1px solid var(--line)}
+.detail-meta{margin-top:1.65rem;padding:1.12rem 1.35rem;border-radius:var(--r-md);
+  background:rgba(255,255,255,.035);border:1px solid var(--line);
+  color:var(--txt-3);font-size:.855rem;letter-spacing:.035em;display:flex;gap:.66rem;align-items:flex-start}
+.detail-meta svg{width:15px;height:15px;flex:none;margin-top:.34rem;color:var(--acc,var(--blue))}
+.detail-foot{margin-top:clamp(26px,4vw,40px);padding-top:clamp(22px,3.2vw,30px);
+  border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:1.15rem;flex-wrap:wrap}
+.detail-path{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.815rem;
+  color:var(--txt-3);letter-spacing:.015em;background:rgba(255,255,255,.045);
+  padding:.55rem 1.08rem;border-radius:var(--pill);border:1px solid var(--line);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-go{display:inline-flex;align-items:center;gap:.72rem;padding:.98rem 2.05rem;border-radius:var(--pill);
+  border:0;cursor:pointer;font-family:var(--font-d);font-size:1.02rem;font-weight:600;letter-spacing:.055em;
+  color:#08121f;background:var(--grad);background-size:190% 100%;
+  box-shadow:0 16px 40px rgba(88,166,255,.30);position:relative;overflow:hidden;
+  transition:transform .6s var(--spring),box-shadow .6s ease,filter .6s ease,background-position .9s var(--ease)}
+.btn-go:hover{transform:translateY(-3px) scale(1.03);box-shadow:0 26px 58px rgba(88,166,255,.42);
+  filter:saturate(1.22) brightness(1.05);background-position:100% 0}
+.btn-go:active{transform:translateY(0) scale(.965)}
+.btn-go svg{width:17px;height:17px;transition:transform .6s var(--spring)}
+.btn-go:hover svg{transform:translateX(5px)}
 
-    .ornament-top {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 18px;
-      margin-bottom: 34px;
-      opacity: 0.6;
-    }
-    .ornament-top::before,
-    .ornament-top::after {
-      content: "";
-      width: 70px;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--gold), transparent);
-    }
-    .ornament-top svg {
-      width: 20px;
-      height: 20px;
-      stroke: var(--gold);
-      stroke-width: 1;
-      fill: none;
-    }
+/* ============================================================
+   FOOTER
+   ============================================================ */
+footer{position:relative;padding:0 22px clamp(56px,9vh,96px);text-align:center}
+.foot-line{width:min(1240px,100%);margin:0 auto;height:1px;background:linear-gradient(90deg,transparent,var(--line-2),transparent)}
+.foot-inner{width:min(1240px,100%);margin:clamp(38px,6vh,62px) auto 0;display:flex;flex-direction:column;
+  align-items:center;gap:1.15rem}
+.foot-mark{font-family:var(--font-d);font-size:clamp(1.28rem,3.4vw,1.92rem);font-weight:600;letter-spacing:-.022em}
+.foot-inner p{color:var(--txt-3);font-size:.885rem;letter-spacing:.045em}
+.foot-top{display:inline-flex;align-items:center;gap:.62rem;padding:.72rem 1.42rem;border-radius:var(--pill);
+  border:1px solid var(--line);background:var(--panel);color:var(--txt-2);cursor:pointer;font-size:.855rem;
+  transition:transform .55s var(--spring),color .45s ease,border-color .45s ease,background .45s ease}
+.foot-top:hover{transform:translateY(-3px);color:var(--txt);border-color:var(--line-2);background:var(--panel-2)}
+.foot-top svg{width:14px;height:14px;transition:transform .6s var(--spring)}
+.foot-top:hover svg{transform:translateY(-3px)}
 
-    .mark {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 22px;
-      border-radius: 50px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-1);
-      font-size: 11px;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      margin-bottom: 32px;
-      position: relative;
-    }
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width:820px){
+  .detail-cols{grid-template-columns:1fr;gap:1.35rem}
+  .hero{padding-bottom:158px}
+}
+@media (max-width:620px){
+  .search-box{padding-left:18px;gap:.35rem}
+  .search-go{padding:.88rem 1.28rem}
+  .search-go .go-text{display:none}
+  .search-go{gap:0;width:52px;height:52px;padding:0;justify-content:center;border-radius:50%}
+  .grid{grid-template-columns:1fr}
+  .card{padding:22px 21px 21px}
+  .sheet-scroll{padding:26px 21px}
+  .detail-foot{flex-direction:column;align-items:stretch}
+  .btn-go{justify-content:center}
+  .detail-path{max-width:100%}
+  .sec-head{flex-direction:column;align-items:flex-start}
+}
+@media (hover:none){
+  .card .go-label{opacity:.85;transform:none}
+  .pointer-glow{display:none}
+}
 
-    .mark::before {
-      content: "";
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: var(--gold);
-      box-shadow: 0 0 16px var(--gold);
-      animation: pulse 3s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 0.55; transform: scale(1); }
-      50% { opacity: 1; transform: scale(1.3); }
-    }
-
-    h1 {
-      font-size: clamp(44px, 9vw, 84px);
-      font-weight: 400;
-      letter-spacing: -0.02em;
-      line-height: 1.02;
-      margin-bottom: 26px;
-      font-family: Georgia, "Times New Roman", "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
-    }
-
-    h1 .gold {
-      display: block;
-      background: linear-gradient(
-        110deg,
-        #a67c00 0%,
-        #c9a227 18%,
-        #f4e4bc 35%,
-        #d4af37 52%,
-        #f4e4bc 68%,
-        #c9a227 85%,
-        #8a6d1b 100%
-      );
-      background-size: 250% auto;
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-      animation: foilShine 6s linear infinite;
-    }
-
-    @keyframes foilShine {
-      0% { background-position: 250% center; }
-      100% { background-position: -250% center; }
-    }
-
-    .subtitle {
-      color: var(--text-1);
-      font-size: 17px;
-      max-width: 480px;
-      margin: 0 auto;
-      line-height: 1.8;
-      font-weight: 300;
-      letter-spacing: 0.02em;
-    }
-
-    .divider {
-      width: 1px;
-      height: 80px;
-      background: linear-gradient(to bottom, transparent, var(--gold), transparent);
-      margin: 52px auto 0;
-      opacity: 0.45;
-    }
-
-    /* ---------- sections ---------- */
-    section {
-      margin-bottom: 84px;
-      opacity: 0;
-      transform: translateY(40px);
-      transition: opacity 1.1s var(--art-ease), transform 1.1s var(--art-ease);
-    }
-
-    section.revealed {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .section-head {
-      display: flex;
-      align-items: baseline;
-      gap: 18px;
-      margin-bottom: 34px;
-      padding: 0 8px;
-    }
-
-    .section-head h2 {
-      font-size: 24px;
-      font-weight: 400;
-      color: var(--text-0);
-      font-family: Georgia, "Times New Roman", "Noto Serif SC", serif;
-      letter-spacing: 0.04em;
-    }
-
-    .section-head p {
-      font-size: 12px;
-      color: var(--text-2);
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-    }
-
-    .section-head::before {
-      content: "";
-      flex: 1;
-      height: 1px;
-      background: linear-gradient(90deg, var(--glass-border) 0%, rgba(201,162,39,0.18) 50%, transparent 100%);
-      margin-left: auto;
-      min-width: 40px;
-    }
-
-    /* ---------- grid ---------- */
-    .grid-cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-      gap: 26px;
-      perspective: 1400px;
-    }
-
-    .card {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      min-height: 190px;
-      padding: 32px;
-      border-radius: var(--radius);
-      background:
-        linear-gradient(155deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.015) 50%, rgba(255,255,255,0.002) 100%);
-      border: 1px solid var(--glass-border);
-      backdrop-filter: blur(28px) saturate(200%);
-      -webkit-backdrop-filter: blur(28px) saturate(200%);
-      text-decoration: none;
-      color: inherit;
-      transition:
-        transform 0.6s var(--art-ease),
-        box-shadow 0.6s var(--art-ease),
-        border-color 0.5s ease;
-      overflow: hidden;
-      transform-style: preserve-3d;
-    }
-
-    /* inner glow */
-    .card .inner-glow {
-      position: absolute;
-      inset: 1px;
-      border-radius: calc(var(--radius) - 1px);
-      background: radial-gradient(
-        ellipse at 30% 0%,
-        rgba(255,255,255,0.06) 0%,
-        transparent 55%
-      );
-      pointer-events: none;
-      opacity: 0.6;
-      transition: opacity 0.5s ease;
-    }
-
-    /* corner flourishes */
-    .card .corner {
-      position: absolute;
-      width: 14px;
-      height: 14px;
-      border: 1px solid rgba(201,162,39,0.2);
-      opacity: 0;
-      transition: opacity 0.5s ease, transform 0.5s var(--art-ease);
-      pointer-events: none;
-    }
-    .card .corner-tl { top: 12px; left: 12px; border-right: none; border-bottom: none; }
-    .card .corner-tr { top: 12px; right: 12px; border-left: none; border-bottom: none; }
-    .card .corner-bl { bottom: 12px; left: 12px; border-right: none; border-top: none; }
-    .card .corner-br { bottom: 12px; right: 12px; border-left: none; border-top: none; }
-
-    .card:hover .corner {
-      opacity: 1;
-      transform: scale(1.15);
-    }
-
-    /* border gradient */
-    .card::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      padding: 1px;
-      background: linear-gradient(
-        145deg,
-        rgba(255,255,255,0.22) 0%,
-        transparent 30%,
-        transparent 55%,
-        rgba(201,162,39,0.28) 85%,
-        rgba(201,162,39,0.45) 100%
-      );
-      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
-      pointer-events: none;
-      opacity: 0.55;
-      transition: opacity 0.6s ease;
-    }
-
-    /* shine sweep */
-    .card::after {
-      content: "";
-      position: absolute;
-      top: -60%;
-      left: -60%;
-      width: 220%;
-      height: 220%;
-      background: radial-gradient(
-        28% 48% ellipse at var(--shine-x, 50%) var(--shine-y, 0%),
-        rgba(255,255,255,0.09) 0%,
-        transparent 55%
-      );
-      opacity: 0;
-      transition: opacity 0.5s ease;
-      pointer-events: none;
-      mix-blend-mode: overlay;
-    }
-
-    .card:hover {
-      border-color: rgba(201, 162, 39, 0.22);
-      box-shadow:
-        0 32px 72px rgba(0, 0, 0, 0.5),
-        0 0 0 1px rgba(201, 162, 39, 0.05),
-        0 0 60px var(--gold-glow);
-    }
-
-    .card:hover::before,
-    .card:hover::after,
-    .card:hover .inner-glow {
-      opacity: 1;
-    }
-
-    .card-top {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 24px;
-      position: relative;
-      z-index: 1;
-    }
-
-    .icon {
-      width: 54px;
-      height: 54px;
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
-      border: 1px solid rgba(255,255,255,0.08);
-      flex-shrink: 0;
-      transition: transform 0.55s var(--art-ease), background 0.45s ease, border-color 0.45s ease;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .icon::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, transparent, rgba(201,162,39,0.14), transparent);
-      opacity: 0;
-      transition: opacity 0.45s ease;
-    }
-
-    .card:hover .icon {
-      transform: scale(1.07) rotate(-3deg);
-      border-color: rgba(201, 162, 39, 0.22);
-    }
-
-    .card:hover .icon::after {
-      opacity: 1;
-    }
-
-    .icon svg {
-      width: 24px;
-      height: 24px;
-      stroke: var(--pearl);
-      stroke-width: 1.5;
-      fill: none;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-
-    .arrow {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.06);
-      opacity: 0;
-      transform: translateX(-12px);
-      transition: all 0.5s var(--art-ease);
-    }
-
-    .arrow svg {
-      width: 14px;
-      height: 14px;
-      stroke: var(--gold-light);
-      stroke-width: 1.6;
-      fill: none;
-    }
-
-    .card:hover .arrow {
-      opacity: 1;
-      transform: translateX(0);
-      background: var(--gold-dim);
-      border-color: rgba(201, 162, 39, 0.18);
-    }
-
-    .card-body {
-      position: relative;
-      z-index: 1;
-    }
-
-    .card h3 {
-      font-size: 19px;
-      font-weight: 500;
-      margin-bottom: 10px;
-      color: var(--text-0);
-      letter-spacing: 0.015em;
-      font-family: Georgia, "Times New Roman", "Noto Serif SC", serif;
-    }
-
-    .card p {
-      font-size: 13.5px;
-      color: var(--text-1);
-      line-height: 1.7;
-      font-weight: 300;
-    }
-
-    .tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      margin-top: 22px;
-      padding: 6px 14px;
-      border-radius: 50px;
-      font-size: 10px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text-2);
-      background: rgba(255,255,255,0.025);
-      border: 1px solid rgba(255,255,255,0.05);
-      align-self: flex-start;
-      transition: all 0.4s ease;
-      position: relative;
-      z-index: 1;
-    }
-
-    .tag::before {
-      content: "";
-      width: 4px;
-      height: 4px;
-      border-radius: 50%;
-      background: var(--gold);
-      opacity: 0.65;
-    }
-
-    .card:hover .tag {
-      color: var(--gold-light);
-      border-color: rgba(201, 162, 39, 0.15);
-      background: var(--gold-dim);
-    }
-
-    /* ---------- footer ---------- */
-    footer {
-      text-align: center;
-      color: var(--text-2);
-      font-size: 12px;
-      padding-top: 64px;
-      letter-spacing: 0.06em;
-      opacity: 0;
-      transform: translateY(24px);
-      transition: opacity 1.1s var(--art-ease) 0.2s, transform 1.1s var(--art-ease) 0.2s;
-    }
-
-    footer.revealed {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    footer::before {
-      content: "";
-      display: block;
-      width: 1px;
-      height: 56px;
-      background: linear-gradient(to bottom, var(--gold), transparent);
-      margin: 0 auto 28px;
-      opacity: 0.35;
-    }
-
-    /* ---------- animations ---------- */
-    @keyframes heroIn {
-      from { opacity: 0; transform: translateY(-28px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* ---------- responsive ---------- */
-    @media (max-width: 640px) {
-      .wrap { padding: 64px 22px 96px; }
-      .grid-cards { grid-template-columns: 1fr; gap: 18px; }
-      .section-head { flex-wrap: wrap; gap: 6px; }
-      .section-head::before { display: none; }
-      .card { min-height: auto; padding: 24px; }
-      .divider { height: 52px; }
-      h1 .gold { display: inline; }
-      .ornament-top::before,
-      .ornament-top::after { width: 40px; }
-    }
-
-    @media (min-width: 641px) and (max-width: 900px) {
-      .grid-cards { grid-template-columns: repeat(2, 1fr); }
-    }
-
-    /* reduce motion */
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
-    }
-  </style>
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;scroll-behavior:auto !important}
+  .reveal{opacity:1;transform:none;filter:none}
+}
+</style>
 </head>
 <body>
-  <div class="bg"></div>
-  <div class="vignette"></div>
-  <div class="grid"></div>
-  <div class="grain"></div>
-  <canvas id="stars" aria-hidden="true"></canvas>
-  <div class="halo" id="halo"></div>
-  <div class="orbs" aria-hidden="true">
-    <span class="orb orb-1"></span>
-    <span class="orb orb-2"></span>
-    <span class="orb orb-3"></span>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<g id="ic-brain" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5A2.5 2.5 0 0 0 6.5 7 2.5 2.5 0 0 0 5 11.5a2.5 2.5 0 0 0 1 2 2.5 2.5 0 0 0 2 4 2.5 2.5 0 0 0 4 .5V5.5a2.5 2.5 0 0 0-2-1z"/><path d="M15 4.5A2.5 2.5 0 0 1 17.5 7 2.5 2.5 0 0 1 19 11.5a2.5 2.5 0 0 1-1 2 2.5 2.5 0 0 1-2 4 2.5 2.5 0 0 1-4 .5"/><path d="M8.5 9.5h2M13.5 9.5h2M8.5 14h2M13.5 14h2"/></g>
+<g id="ic-monitor" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="12.5" rx="3"/><path d="M8.5 20.5h7M12 17v3.5"/></g>
+<g id="ic-terminal" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="3.2"/><path d="M7.2 10l2.6 2.4-2.6 2.4M12.4 15.2h4.2"/></g>
+<g id="ic-code" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 7.2 4 12l4.6 4.8M15.4 7.2 20 12l-4.6 4.8M13.4 5.2l-2.8 13.6"/></g>
+<g id="ic-spark" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l1.9 4.7 4.7 1.9-4.7 1.9L12 16.4l-1.9-4.7-4.7-1.9 4.7-1.9z"/><path d="M18.2 15.2l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8zM5.4 14.6l.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6 1.5-.6z"/></g>
+<g id="ic-cpu" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6.2" y="6.2" width="11.6" height="11.6" rx="3"/><rect x="9.6" y="9.6" width="4.8" height="4.8" rx="1.4"/><path d="M9.6 3v3.2M14.4 3v3.2M9.6 17.8V21M14.4 17.8V21M3 9.6h3.2M3 14.4h3.2M17.8 9.6H21M17.8 14.4H21"/></g>
+<g id="ic-chart" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5h16"/><path d="M7 19.5v-6M12 19.5V7.5M17 19.5v-9"/><circle cx="7" cy="12.6" r="1.5"/><circle cx="12" cy="6.6" r="1.5"/><circle cx="17" cy="9.6" r="1.5"/></g>
+<g id="ic-chat" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12.2c0 3.9-3.6 7-8 7-1 0-2-.15-2.9-.43L4.4 20.3l1.3-3.4A6.7 6.7 0 0 1 4 12.2c0-3.9 3.6-7 8-7s8 3.1 8 7z"/><path d="M9 11.8h6M9 14.4h3.6"/></g>
+<g id="ic-2048" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="3.2" width="7.2" height="7.2" rx="2.4"/><rect x="13.6" y="3.2" width="7.2" height="7.2" rx="2.4"/><rect x="3.2" y="13.6" width="7.2" height="7.2" rx="2.4"/><rect x="13.6" y="13.6" width="7.2" height="7.2" rx="2.4"/></g>
+<g id="ic-shield" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 5 6.2v5.1c0 4.3 2.8 7.5 7 9.5 4.2-2 7-5.2 7-9.5V6.2z"/><path d="M9.2 12.2l2 2 3.6-3.9"/></g>
+<g id="ic-game" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.6" y="7" width="18.8" height="10.6" rx="4.6"/><path d="M7.6 10.4v3.8M5.7 12.3h3.8"/><circle cx="15.6" cy="11.3" r="1.05"/><circle cx="18" cy="13.6" r="1.05"/></g>
+<g id="ic-knight" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.4 20.2h9.8c0-4.4-1.3-6.3-3.4-8.1l2.3-2.6-2.9.6-1.4-2.6-2.6 2.2c-1.3 1.1-1.8 2.5-1.8 4.2 0 1.6.6 2.4 1.8 3.1"/><path d="M9.9 12.8h5.4"/><circle cx="11.4" cy="8.4" r=".8"/></g>
+<g id="ic-braces" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.4 4.2c-2 0-2.6 1-2.6 2.7v2.5c0 1.6-.8 2.6-2.4 2.6 1.6 0 2.4 1 2.4 2.6v2.5c0 1.7.6 2.7 2.6 2.7M14.6 4.2c2 0 2.6 1 2.6 2.7v2.5c0 1.6.8 2.6 2.4 2.6-1.6 0-2.4 1-2.4 2.6v2.5c0 1.7-.6 2.7-2.6 2.7"/></g>
+<g id="ic-palette" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2a8.8 8.8 0 0 0 0 17.6c1.3 0 2-.8 2-1.8 0-1.4-1.2-1.7-1.2-2.8 0-.9.7-1.6 1.7-1.6h1.7c2.7 0 4.6-1.9 4.6-4.7 0-3.8-3.8-6.7-8.8-6.7z"/><circle cx="8.2" cy="11.6" r="1.1"/><circle cx="11.2" cy="7.8" r="1.1"/><circle cx="15.4" cy="8.6" r="1.1"/></g>
+<g id="ic-ruler" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="8.4" width="18.4" height="7.2" rx="2.6"/><path d="M7 8.4v2.8M10.4 8.4v4.2M13.8 8.4v2.8M17.2 8.4v4.2"/></g>
+<g id="ic-key" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="12" r="3.8"/><path d="M11.6 12h8.6M17.2 12v3M20 12v2.4"/></g>
+<g id="ic-note" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 4.6h13.2a1.6 1.6 0 0 1 1.6 1.6v8.3l-6.1 5.9H5.4a1.6 1.6 0 0 1-1.6-1.6V6.2a1.6 1.6 0 0 1 1.6-1.6z"/><path d="M18.8 20.4v-5.4h-4.8"/><path d="M8 9.4h8M8 12.6h5"/></g>
+<g id="ic-check" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.2" y="4.2" width="15.6" height="15.6" rx="4.2"/><path d="M8.4 12.2l2.6 2.6 4.6-5.2"/></g>
+<g id="ic-clock" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12.4" r="8.2"/><path d="M12 7.6v5.1l3.2 2"/><path d="M8.6 2.6h6.8"/></g>
+<g id="ic-keyboard" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.6" y="6.2" width="18.8" height="11.6" rx="3.2"/><path d="M6.4 9.8h.02M9.6 9.8h.02M12.8 9.8h.02M16 9.8h.02M6.4 13h.02M17.6 13h.02M9.4 14.2h5.2"/></g>
+<g id="ic-music" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.2 17.4V6.6l9.2-2v10.6"/><circle cx="6.8" cy="17.6" r="2.6"/><circle cx="16" cy="15.2" r="2.6"/></g>
+<g id="ic-pixel" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="3.2" width="17.6" height="17.6" rx="3.4"/><path d="M3.4 9.4h17.2M3.4 15.2h17.2M9.4 3.4v17.2M15.2 3.4v17.2"/></g>
+<g id="ic-brush" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.4 4.8a2.6 2.6 0 0 1 3.7 3.7l-6.8 6.8-3.7-3.7z"/><path d="M8.6 13.6c-2.6.6-3.6 2.4-3.6 4.6 0 1.2-.6 1.9-1.4 2.4 1.4.7 3 .8 4.5.2 1.9-.7 2.8-2.4 2.6-4.4"/></g>
+<g id="ic-search" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.6"/><path d="M16 16l4.6 4.6"/></g>
+<g id="ic-arrow" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 16.5 16.5 7.5M8.8 7.5h7.7v7.7"/></g>
+<g id="ic-arrow-r" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 12h14.8M13.2 6.2 19.4 12l-6.2 5.8"/></g>
+<g id="ic-tick" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.6 9.6 17 19 6.6"/></g>
+<g id="ic-x" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 6.4 17.6 17.6M17.6 6.4 6.4 17.6"/></g>
+<g id="ic-up" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5.6M6 11.6 12 5.4l6 6.2"/></g>
+<g id="ic-refresh" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4.2v4.6h-4.6"/></g>
+<g id="ic-info" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.6"/><path d="M12 11v5.2M12 7.8h.02"/></g>
+</defs></svg>
+
+<div class="bg-layer"></div>
+<div class="bg-grid"></div>
+<div class="bg-dots"></div>
+<div class="aurora"><i></i><i></i><i></i></div>
+<div class="grain"></div>
+<div class="pointer-glow" id="pointerGlow"></div>
+
+<main>
+  <!-- ======================= HERO ======================= -->
+  <section class="hero" id="top">
+    <div class="hero-inner">
+      <div class="pill"><span class="dot"></span><span>Portfolio · 个人作品集</span></div>
+
+      <h1 aria-label="Welcome to my home">
+        <span class="word grad-text" style="--wd:.34s">Welcome</span>
+        <span class="word" style="--wd:.52s">to</span>
+        <span class="word" style="--wd:.70s">my</span>
+        <span class="word home grad-text" style="--wd:.88s">home</span>
+      </h1>
+
+      <div class="tagline-wrap">
+        <div class="tagline" id="tagline" aria-live="polite"></div>
+        <button class="shuffle" id="shuffleBtn" type="button">
+          <svg viewBox="0 0 24 24"><use href="#ic-refresh"/></svg>
+          <span>换一句</span>
+        </button>
+      </div>
+
+      <div class="search-zone" id="searchZone">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24"><use href="#ic-search"/></svg>
+          <input id="searchInput" type="search" autocomplete="off" spellcheck="false"
+                 placeholder="搜索项目，试试 json、终端、画板、llm…"
+                 aria-label="搜索仓库内的项目">
+          <button class="search-go" id="searchGo" type="button" aria-label="搜索">
+            <span class="go-text">Go</span>
+            <svg viewBox="0 0 24 24"><use href="#ic-arrow-r"/></svg>
+          </button>
+        </div>
+        <div class="results" id="results" role="listbox" aria-label="搜索结果"></div>
+      </div>
+    </div>
+
+    <button class="cue" id="cueBtn" type="button" aria-label="上滑进入项目区">
+      <span class="cue-mark"><span>^</span></span>
+      <span>Explore works</span>
+    </button>
+  </section>
+
+  <!-- ======================= WORKS ======================= -->
+  <section class="works" id="works">
+    <div class="works-inner">
+      <div class="sec-head">
+        <div class="reveal">
+          <h2>Selected <span class="grad-text">Works</span></h2>
+          <p>仓库里所有能直接打开的页面都在这儿。点开任意作品查看详情，再一键跳转到它的主页。</p>
+        </div>
+        <div class="sec-count reveal" style="--d:110ms"><b id="workCount">0</b><span>个作品</span></div>
+      </div>
+
+      <div class="filters reveal" id="filters" style="--d:180ms"></div>
+      <div class="grid" id="grid"></div>
+      <div class="empty" id="empty" hidden>没有找到匹配的作品，换个关键词试试。</div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="foot-line"></div>
+  <div class="foot-inner">
+    <div class="foot-mark">Welcome to <span class="grad-text">my home</span></div>
+    <p>Handcrafted with HTML · CSS · JavaScript — hosted on GitHub Pages</p>
+    <button class="foot-top" id="footTop" type="button">
+      <svg viewBox="0 0 24 24"><use href="#ic-up"/></svg>
+      <span>回到顶部</span>
+    </button>
   </div>
+</footer>
 
-  <div class="wrap">
-    <header>
-      <div class="ornament-top">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3"/></svg>
+<!-- ======================= DETAIL OVERLAY ======================= -->
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+  <div class="overlay-bg" data-close></div>
+  <div class="sheet" id="sheet">
+    <div class="sheet-glow"></div>
+    <button class="sheet-close" id="sheetClose" type="button" aria-label="关闭">
+      <svg viewBox="0 0 24 24"><use href="#ic-x"/></svg>
+    </button>
+    <div class="sheet-scroll">
+      <div class="detail-head">
+        <div class="detail-ico" id="dIco"></div>
+        <div class="detail-title">
+          <h3 id="dTitle"></h3>
+          <span class="en" id="dEn"></span>
+          <div class="detail-cat" id="dCat"></div>
+        </div>
       </div>
-      <div class="mark">Project Portal</div>
-      <h1><span class="gold">工作室</span> · 项目向导</h1>
-      <p class="subtitle">这里汇集了仓库里所有能直接打开的页面。挑一个感兴趣的，点进去试试。</p>
-      <div class="divider"></div>
-    </header>
-
-    <section>
-      <div class="section-head">
-        <h2>应用与系统</h2>
-        <p>完整的独立应用</p>
+      <p class="detail-lead" id="dLead"></p>
+      <div class="detail-cols">
+        <div class="detail-block">
+          <h4>Highlights</h4>
+          <ul class="feat" id="dFeat"></ul>
+        </div>
+        <div class="detail-block">
+          <h4>Tech &amp; Tags</h4>
+          <div class="stack" id="dStack"></div>
+          <div class="detail-meta" id="dMeta"></div>
+        </div>
       </div>
-      <div class="grid-cards">
-        <a class="card" href="llm/web/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M12 8.4L7.4 15.6M12 8.4l4.6 7.2M8.4 18h7.2"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>MiniLLM 精简大模型</h3>
-            <p>从零实现并训练的 7 个精简 LLM（对话 / 问候 / 问答 / 英文 / 数学 / HTML / 网页创作），浏览器内实时推理。</p>
-            <span class="tag">LLM / 深度学习</span>
-          </div>
-        </a>
-
-        <a class="card" href="nt/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 9l3 3-3 3"/><path d="M13 14h4"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>WebNT 桌面系统</h3>
-            <p>浏览器里的网页操作系统，窗口、任务栏、文件管理、小游戏一应俱全。</p>
-            <span class="tag">Web OS</span>
-          </div>
-        </a>
-
-        <a class="card" href="mltsf/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h5M8 16h3"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>多语言终端</h3>
-            <p>MLTSF：集成 Python、C++、CMD 的浏览器终端，支持扩展包与项目管理。</p>
-            <span class="tag">Terminal</span>
-          </div>
-        </a>
-
-        <a class="card" href="py/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 3c-3 0-5 1-5 3.5V10h10V6.5C17 4 15 3 12 3z"/><path d="M7 11v4.5C7 18 9 19 12 19s5-1 5-3.5V11"/><path d="M12 14v3"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>蟒蛇 Python IDE</h3>
-            <p>在线运行 Python 代码，文件管理、编辑器、控制台一体化。</p>
-            <span class="tag">IDE</span>
-          </div>
-        </a>
-
-        <a class="card" href="ai/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>KOBG AI 训练台</h3>
-            <p>配置 API 后，对模型进行强化式训练、测试与知识问答。</p>
-            <span class="tag">AI</span>
-          </div>
-        </a>
-
-        <a class="card" href="logix/api/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>LogiX API</h3>
-            <p>Python 静态代码分析引擎，支持简单与进阶万级规则检测，快速定位代码问题。</p>
-            <span class="tag">Code Analysis</span>
-          </div>
-        </a>
+      <div class="detail-foot">
+        <div class="detail-path" id="dPath"></div>
+        <button class="btn-go" id="dGo" type="button">
+          <span>立即跳转</span>
+          <svg viewBox="0 0 24 24"><use href="#ic-arrow"/></svg>
+        </button>
       </div>
-    </section>
-
-    <section>
-      <div class="section-head">
-        <h2>KZK 工具箱</h2>
-        <p>日常会用到的轻量小工具</p>
-      </div>
-      <div class="grid-cards">
-        <a class="card" href="kzk/jsonfmt/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13l2 2 2-2M9 17h6"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>JSON 格式化</h3>
-            <p>粘贴 JSON，自动高亮、折叠、校验与压缩。</p>
-            <span class="tag">Developer</span>
-          </div>
-        </a>
-
-        <a class="card" href="kzk/colortool/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>色彩工具</h3>
-            <p>取色、调色、格式转换，前端配色好帮手。</p>
-            <span class="tag">Design</span>
-          </div>
-        </a>
-
-        <a class="card" href="kzk/converter/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h16"/><path d="M20 7l-3-3m3 3l-3 3"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>单位换算器</h3>
-            <p>长度、重量、温度、货币等多类单位互相转换。</p>
-            <span class="tag">Utility</span>
-          </div>
-        </a>
-
-        <a class="card" href="kzk/password/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><circle cx="12" cy="16" r="1.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>密码生成器</h3>
-            <p>自定义长度与字符集，一键生成安全强密码。</p>
-            <span class="tag">Security</span>
-          </div>
-        </a>
-
-        <a class="card" href="kzk/notes/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>便利贴</h3>
-            <p>随手记录、贴满屏幕，支持拖拽与多色便签。</p>
-            <span class="tag">Notes</span>
-          </div>
-        </a>
-
-        <a class="card" href="kzk/todo/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>待办清单</h3>
-            <p>简单的任务管理，添加、完成、筛选一气呵成。</p>
-            <span class="tag">Productivity</span>
-          </div>
-        </a>
-
-        <a class="card" href="kzk/timer/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>计时器</h3>
-            <p>倒计时、秒表、番茄钟，专注工作必备。</p>
-            <span class="tag">Time</span>
-          </div>
-        </a>
-
-        <a class="card" href="kzk/typing/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>打字练习</h3>
-            <p>随机文本、速度统计、错字高亮，练手速。</p>
-            <span class="tag">Practice</span>
-          </div>
-        </a>
-
-        <a class="card" href="kzk/music/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-3v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="15" r="3"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>WebNT 音乐</h3>
-            <p>本地音乐播放器，播放列表与封面展示。</p>
-            <span class="tag">Media</span>
-          </div>
-        </a>
-
-        <a class="card" href="kzk/pixelart/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>像素画板</h3>
-            <p>格点绘图、调色盘、导出图片，复古创作。</p>
-            <span class="tag">Art</span>
-          </div>
-        </a>
-
-        <a class="card" href="kzk/gf/hh/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>HH 画板</h3>
-            <p>自由绘图工具，画笔、橡皮、形状与保存。</p>
-            <span class="tag">Art</span>
-          </div>
-        </a>
-      </div>
-    </section>
-
-    <section>
-      <div class="section-head">
-        <h2>游戏与其他</h2>
-        <p>放松和实验性页面</p>
-      </div>
-      <div class="grid-cards">
-        <a class="card" href="2048/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>2048</h3>
-            <p>经典数字滑动拼图，看看你能拼到多少。</p>
-            <span class="tag">Game</span>
-          </div>
-        </a>
-
-        <a class="card" href="oua/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><circle cx="12" cy="16" r="1.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>加密计算</h3>
-            <p>基于密钥的加密与计算工具页。</p>
-            <span class="tag">Crypto</span>
-          </div>
-        </a>
-
-        <a class="card" href="ai/xq/index.html">
-          <span class="inner-glow"></span>
-          <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-          <span class="corner corner-bl"></span><span class="corner corner-br"></span>
-          <div class="card-top">
-            <div class="icon"><svg viewBox="0 0 24 24"><path d="M5 17l5-5 3 3 6-8"/><circle cx="18" cy="9" r="2"/><path d="M6 3v2M6 11v2M6 5a4 4 0 0 1 0 6"/></svg></div>
-            <div class="arrow"><svg viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></div>
-          </div>
-          <div class="card-body">
-            <h3>AI 象棋 · 五子棋</h3>
-            <p>配置模型接口后，AI 实时读取棋盘与你在象棋、五子棋中对弈。</p>
-            <span class="tag">Game / AI</span>
-          </div>
-        </a>
-      </div>
-    </section>
-
-    <footer>
-      <p>本页为仓库内部导航 · 点击卡片即可跳转对应项目</p>
-    </footer>
+    </div>
   </div>
+</div>
+<script>
+/* ============================================================
+   0. 艺术个性标语库（每次访问随机取一句，可手动换）
+   ============================================================ */
+const TAGLINES = [
+  'Do <em>interesting</em> things.',
+  'Look at <em>this</em> home.',
+  'Make something that <em>outlives</em> the deadline.',
+  'Beautiful things take <em>stubbornness</em>.',
+  'Stay <em>soft</em>, build <em>hard</em>.',
+  'Small tools, <em>long</em> evenings.',
+  'Write code like it’s a <em>letter</em>.',
+  'Ship <em>weird</em> ideas on time.',
+  'Craft over <em>clickbait</em>.',
+  'The devil is in the details, so I <em>live</em> there.',
+  'Slow down, <em>sharpen</em> the edges.',
+  'No template survives <em>my hands</em>.',
+  'Curiosity is a <em>feature</em>, not a bug.',
+  'Design is how it works when <em>nobody looks</em>.',
+  'Keep the <em>light</em> on.',
+  'Do more with less, and make it <em>pretty</em>.',
+  'Art is just engineering with <em>feelings</em>.',
+  'Every pixel owes me a <em>reason</em>.',
+  'Make it <em>round</em>, make it <em>glow</em>.',
+  'Today is a good day to <em>build</em>.',
+  'Boring code, <em>wild</em> ideas.',
+  'Don’t just finish it — finish it <em>beautifully</em>.',
+  'Play <em>seriously</em>.',
+  'Leave the campsite <em>better</em> than you found it.',
+  'The best interface is a little bit of <em>magic</em>.',
+  'Break things <em>gently</em>.',
+  'Soft edges, <em>sharp</em> minds.',
+  'Build quiet things that do <em>loud</em> work.',
+  '把无趣的事做得<em>有趣</em>一点。',
+  '认真<em>玩</em>，认真<em>做</em>。',
+  '手感比<em>参数</em>重要。',
+  '慢一点，做得<em>好</em>一点。',
+  '好的东西值得被<em>反复打磨</em>。',
+  '一点一点，做成一个<em>作品</em>。',
+  '别让想法死在<em>草稿箱</em>里。',
+  '有态度地活着，<em>有手感</em>地做事。',
+  '细节是写给自己的<em>情书</em>。',
+  '世界够吵了，做点<em>安静</em>的好东西。',
+  '不解释，直接<em>做出来</em>。',
+  '灵感会迟到，但<em>代码</em>不能。',
+  '用<em>好奇心</em>付房租。',
+  'Keep <em>building</em>, keep <em>wondering</em>.'
+];
 
-  <script>
-    (function () {
-      'use strict';
+/* ============================================================
+   1. 作品数据
+   ============================================================ */
+const PROJECTS = [
+  {
+    id:'minillm', name:'MiniLLM 精简大模型', en:'MiniLLM', cat:'app',
+    icon:'ic-brain', acc:'#79c0ff', soft:'rgba(121,192,255,.20)',
+    url:'xm/llm/web/index.html', path:'xm/llm/web/index.html',
+    tags:['LLM','深度学习','WebGPU'],
+    desc:'从零实现并训练的精简大语言模型，浏览器内加载权重实时推理，点开就能对话。',
+    lead:'一套真正「从零开始」的精简大语言模型：分词器、模型结构、训练脚本全部自己写，训练完把权重导出成浏览器能读的格式，打开页面就能开始聊天。',
+    feat:['BPE 分词、RoPE 位置编码、GQA 注意力、SwiGLU、RMSNorm','支持 KV Cache 的增量解码，打字机式流式输出','对话 / 问候 / 问答 / 英文 / 数学 / HTML / 网页创作 七个微模型','多镜像权重下载链，弱网环境也能秒开'],
+    stack:['JavaScript','WebGL','Python','NumPy'],
+    note:'纯前端推理，无需后端；首次加载需下载模型权重。'
+  },
+  {
+    id:'webnt', name:'WebNT 桌面系统', en:'WebNT Kernel', cat:'app',
+    icon:'ic-monitor', acc:'#bc8cff', soft:'rgba(188,140,255,.20)',
+    url:'xm/nt/index.html', path:'xm/nt/index.html',
+    tags:['操作系统','窗口管理','WebOS'],
+    desc:'浏览器里的网页操作系统：窗口管理、任务栏、文件管理器与内置小游戏一应俱全。',
+    lead:'一个跑在浏览器里的迷你操作系统内核，有自己的窗口管理器、任务栏、系统托盘与应用沙箱，装上就是一整个桌面。',
+    feat:['多窗口拖拽 / 缩放 / 最小化 / 层级管理','任务栏、开始菜单、系统托盘与桌面图标','文件管理器与应用沙箱隔离运行','内置小游戏与 SDK，可自行扩展应用'],
+    stack:['JavaScript','Import Maps','ES Modules','CSS'],
+    note:'通过 import-map 组织内核模块，纯静态部署即可运行。'
+  },
+  {
+    id:'polyterm', name:'PolyTerm 多语言终端', en:'PolyTerm', cat:'app',
+    icon:'ic-terminal', acc:'#4fd1c5', soft:'rgba(79,209,197,.20)',
+    url:'xm/polyterm/index.html', path:'xm/polyterm/index.html',
+    tags:['终端','开发工具','扩展'],
+    desc:'集成 Python、C++、CMD 的浏览器终端环境，支持扩展包与项目管理。',
+    lead:'一个开在浏览器里的多语言终端：切换 Python / C++ / CMD 三种运行环境，自带命令手册、AI 助手与可插拔的扩展包系统。',
+    feat:['Python / C++ / CMD 三种运行环境自由切换','扩展包 SDK：第三方可发布自己的命令与面板','项目管理器：创建、导出、迁移项目数据','内置 AI 助手、配色主题与命令自动补全'],
+    stack:['JavaScript','Pyodide','WebAssembly','CSS'],
+    note:'扩展包目录结构与发布规范见仓库内 PolyTerm 扩展包说明书。'
+  },
+  {
+    id:'pyide', name:'蟒蛇 Python IDE', en:'Serpent Python IDE', cat:'app',
+    icon:'ic-code', acc:'#f5c066', soft:'rgba(245,192,102,.20)',
+    url:'xm/py/index.html', path:'xm/py/index.html',
+    tags:['Python','IDE','在线运行'],
+    desc:'在线运行 Python 代码，集成文件管理、编辑器与控制台，另有 Py IDE Pro 版。',
+    lead:'为「写点 Python 试试看」而生的在线工作台：左边文件树，中间编辑器，下面控制台，写完直接跑。',
+    feat:['多文件项目管理与本地持久化','语法高亮编辑器 + 运行控制台','一键切换 Py IDE Pro 增强版','调用 LogiX 做静态代码检查'],
+    stack:['Python','JavaScript','CodeMirror','LogiX'],
+    note:'Pro 版地址：xm/py/pro/index.html'
+  },
+  {
+    id:'lumina', name:'Lumina Cloud Agent', en:'Lumina Cloud Agent', cat:'app',
+    icon:'ic-spark', acc:'#ff8fb1', soft:'rgba(255,143,177,.20)',
+    url:'xm/lumina/index.html', path:'xm/lumina/index.html',
+    tags:['AI','智能体','本地运行'],
+    desc:'运行在本机的自主 AI 智能体：邮箱登录后可读写文件、执行脚本、调用 MCP 并回传产物。',
+    lead:'一个住在你电脑里的自主智能体。浏览器只是界面，真正干活的是本机后端——它能读写文件、执行脚本、控制浏览器、调用 MCP 服务器，最后把产出和汇报交回给你。',
+    feat:['邮箱验证码登录，按用户隔离 1GB 云空间','Agent 工具集：文件、脚本、HTTP、浏览器、MCP','本地 GGUF 模型驱动，敏感数据不出本机','自动同步隧道地址，换 IP 也能自动重连'],
+    stack:['FastAPI','Python','llama.cpp','Transformers.js'],
+    note:'该项目含本机后端，需按 xm/lumina/README.md 启动后使用。'
+  },
+  {
+    id:'forge', name:'Forge AI 训练台', en:'Forge AI', cat:'app',
+    icon:'ic-cpu', acc:'#ff9ecb', soft:'rgba(255,158,203,.20)',
+    url:'xm/ai/index.html', path:'xm/ai/index.html',
+    tags:['AI','训练','知识问答'],
+    desc:'配置 API 后可对模型进行强化式训练、测试与知识问答。',
+    lead:'把「训练一个懂你的模型」这件事做成了一张工作台：配置好接口，就能持续投喂、回炉、评测，看着它一点点变聪明。',
+    feat:['强化式训练：持续投喂语料并回炉微调','训练过程流式输出，实时看到生成的代码','知识问答评测：统计知识库命中与正确率','可导出 C++ 训练框架模板离线复现'],
+    stack:['JavaScript','C++','OpenAI-compatible API','CSS'],
+    note:'需要自行配置模型 API 地址与密钥。'
+  },
+  {
+    id:'logix', name:'LogiX 代码分析', en:'LogiX API', cat:'app',
+    icon:'ic-chart', acc:'#7ee787', soft:'rgba(126,231,135,.20)',
+    url:'xm/logix/api/index.html', path:'xm/logix/api/index.html',
+    tags:['静态分析','代码质量','SDK'],
+    desc:'Python 静态代码分析引擎，支持简单与进阶万级规则检测，快速定位代码问题。',
+    lead:'给 Python 代码做「体检」的分析引擎：一行命令跑完简单 / 进阶两套规则集，把坏味道、隐患与规范问题一次性摊开给你看。',
+    feat:['简单 / 进阶双档规则，覆盖上万条检测项','行列级定位，直接指向问题代码','提供 JS SDK，可嵌入任意前端编辑器','分析结果结构化输出，方便二次处理'],
+    stack:['Python','JavaScript','静态分析','AST'],
+    note:'被蟒蛇 Python IDE 集成调用。'
+  },
+  {
+    id:'talkwave', name:'TalkWave 即时通讯', en:'TalkWave', cat:'app',
+    icon:'ic-chat', acc:'#79c0ff', soft:'rgba(121,192,255,.20)',
+    url:'xm/talkwave/index.html', path:'xm/talkwave/index.html',
+    tags:['即时通讯','社交','前端'],
+    desc:'轻量即时通讯系统，界面清爽，开箱即用。',
+    lead:'一个轻量的即时通讯小系统：会话、消息、通知，界面干净利落，适合作为通讯类前端的实践样本。',
+    feat:['会话列表与消息流展示','清爽的气泡式聊天界面','本地演示数据，打开即用','全圆角现代界面设计'],
+    stack:['HTML','CSS','JavaScript'],
+    note:'纯静态演示版本。'
+  },
+  {
+    id:'gomoku', name:'Gomoku 星阵五子棋', en:'Gomoku P2P', cat:'game',
+    icon:'ic-game', acc:'#56d364', soft:'rgba(86,211,100,.20)',
+    url:'xm/gomoku/index.html', path:'xm/gomoku/index.html',
+    tags:['五子棋','P2P','联机'],
+    desc:'P2P 零服务器联机五子棋，附带残局解析器。',
+    lead:'不用注册、不用服务器的联机五子棋：双方各开一个页面，凭房间码点对点对弈，落子即同步。',
+    feat:['P2P 点对点连接，零服务器依赖','实时同步落子与悔棋操作','内置残局解析器，本地推演不上传','支持双人同屏对战'],
+    stack:['WebRTC','JavaScript','Canvas'],
+    note:'旧版本归档于 xm/gomoku/old/。'
+  },
+  {
+    id:'ai-xq', name:'AI 象棋 · 五子棋', en:'AI Board Games', cat:'game',
+    icon:'ic-knight', acc:'#f5c066', soft:'rgba(245,192,102,.20)',
+    url:'xm/ai/xq/index.html', path:'xm/ai/xq/index.html',
+    tags:['象棋','五子棋','AI 对弈'],
+    desc:'配置模型接口后，AI 实时读取棋盘与你对弈中国象棋与五子棋，随机先手、按规则判定胜负。',
+    lead:'把大模型请到棋盘对面：它会实时读取当前盘面、按规则走子，你负责思考，它负责接招。',
+    feat:['中国象棋与五子棋双玩法','AI 实时读盘、按规则合法走子','随机先手，完整胜负判定','走子记录与复盘回看'],
+    stack:['JavaScript','Canvas','LLM API'],
+    note:'需要配置模型接口后使用。'
+  },
+  {
+    id:'game2048', name:'2048 小游戏', en:'2048', cat:'game',
+    icon:'ic-2048', acc:'#ffd591', soft:'rgba(255,213,145,.20)',
+    url:'xm/2048/index.html', path:'xm/2048/index.html',
+    tags:['益智','合成','经典'],
+    desc:'经典数字滑动拼图，看看你能拼到多少。',
+    lead:'一个干净版本的 2048：方块滑动、合并、计分、最高分记录，手感顺滑到停不下来。',
+    feat:['键盘与触屏滑动操作','平滑的方块合并动画','本地最高分记录','响应式布局，手机也好玩'],
+    stack:['JavaScript','CSS','LocalStorage'],
+    note:'纯前端实现。'
+  },
+  {
+    id:'cipher', name:'CipherLab 加密计算', en:'CipherLab', cat:'tool',
+    icon:'ic-shield', acc:'#8b949e', soft:'rgba(139,148,158,.20)',
+    url:'xm/cipher/index.html', path:'xm/cipher/index.html',
+    tags:['加密','计算','安全'],
+    desc:'基于密钥的加密与计算工具页，输入密码即可开始。',
+    lead:'一个基于密钥的加密计算小工具：输入密钥之后，页面才会把真正的计算界面交给你。',
+    feat:['密钥校验后才展示核心功能','加密与计算一体化操作','界面极简，全程无后端','适合当作轻量安全工具入口'],
+    stack:['HTML','CSS','JavaScript'],
+    note:'纯前端实现，不上传任何数据。'
+  },
+  /* ---------------- Atelier 匠作工具集 ---------------- */
+  {
+    id:'jsonfmt', name:'JSON 格式化', en:'JSON Formatter', cat:'tool',
+    icon:'ic-braces', acc:'#79c0ff', soft:'rgba(121,192,255,.20)',
+    url:'xm/atelier/jsonfmt/index.html', path:'xm/atelier/jsonfmt/index.html',
+    tags:['JSON','格式化','开发'],
+    desc:'粘贴 JSON 后自动高亮、折叠、校验与压缩。',
+    lead:'粘进去，它就帮你把 JSON 理顺：语法高亮、层级折叠、错误定位，还能一键压缩。',
+    feat:['自动格式化与语法高亮','节点折叠 / 展开','错误行号定位','一键压缩与复制'],
+    stack:['JavaScript','CSS'],
+    note:'Atelier 匠作工具集 · 01'
+  },
+  {
+    id:'colortool', name:'色彩工具', en:'Color Tools', cat:'tool',
+    icon:'ic-palette', acc:'#ff8fb1', soft:'rgba(255,143,177,.20)',
+    url:'xm/atelier/colortool/index.html', path:'xm/atelier/colortool/index.html',
+    tags:['取色','配色','设计'],
+    desc:'取色、调色、格式转换，前端配色好帮手。',
+    lead:'写前端时最常打开的小工具之一：取色、调色、看对比，HEX / RGB / HSL 随手互转。',
+    feat:['可视化取色与调色盘','HEX / RGB / HSL 格式互转','配色对比度参考','一键复制色值'],
+    stack:['JavaScript','CSS'],
+    note:'Atelier 匠作工具集 · 02'
+  },
+  {
+    id:'converter', name:'单位换算器', en:'Unit Converter', cat:'tool',
+    icon:'ic-ruler', acc:'#4fd1c5', soft:'rgba(79,209,197,.20)',
+    url:'xm/atelier/converter/index.html', path:'xm/atelier/converter/index.html',
+    tags:['换算','单位','效率'],
+    desc:'长度、重量、温度、货币等多类单位互相转换。',
+    lead:'长度、重量、温度、货币……选好单位输入数字，答案立刻出现，不需要按「计算」。',
+    feat:['多类别单位互转','实时计算，无需提交','常用单位快速切换','界面清爽好按'],
+    stack:['JavaScript','CSS'],
+    note:'Atelier 匠作工具集 · 03'
+  },
+  {
+    id:'password', name:'密码生成器', en:'Password Generator', cat:'tool',
+    icon:'ic-key', acc:'#bc8cff', soft:'rgba(188,140,255,.20)',
+    url:'xm/atelier/password/index.html', path:'xm/atelier/password/index.html',
+    tags:['密码','安全','随机'],
+    desc:'自定义长度与字符集，一键生成安全强密码。',
+    lead:'想偷懒又不想被破解？调好长度和字符集，一键生成高强度随机密码。',
+    feat:['长度与字符集自定义','强度实时评估','批量生成','一键复制'],
+    stack:['JavaScript','Web Crypto'],
+    note:'Atelier 匠作工具集 · 04'
+  },
+  {
+    id:'notes', name:'便利贴', en:'Sticky Notes', cat:'tool',
+    icon:'ic-note', acc:'#f5c066', soft:'rgba(245,192,102,.20)',
+    url:'xm/atelier/notes/index.html', path:'xm/atelier/notes/index.html',
+    tags:['便签','记录','效率'],
+    desc:'随手记录、贴满屏幕，支持拖拽与多色便签。',
+    lead:'像贴真的便签一样记事：多色、可拖拽、贴满屏幕，灵感来了随手一贴。',
+    feat:['多色便签','自由拖拽摆放','内容可随时编辑','本地保存不丢失'],
+    stack:['JavaScript','LocalStorage','CSS'],
+    note:'Atelier 匠作工具集 · 05'
+  },
+  {
+    id:'todo', name:'待办清单', en:'Todo List', cat:'tool',
+    icon:'ic-check', acc:'#56d364', soft:'rgba(86,211,100,.20)',
+    url:'xm/atelier/todo/index.html', path:'xm/atelier/todo/index.html',
+    tags:['待办','任务','效率'],
+    desc:'简单的任务管理，添加、完成、筛选一气呵成。',
+    lead:'不折腾的任务清单：添加、勾掉、筛选，三步之内把今天理清楚。',
+    feat:['添加 / 完成 / 删除任务','按状态筛选','剩余数量统计','本地持久化'],
+    stack:['JavaScript','LocalStorage','CSS'],
+    note:'Atelier 匠作工具集 · 06'
+  },
+  {
+    id:'timer', name:'计时器', en:'Timer', cat:'tool',
+    icon:'ic-clock', acc:'#ff9ecb', soft:'rgba(255,158,203,.20)',
+    url:'xm/atelier/timer/index.html', path:'xm/atelier/timer/index.html',
+    tags:['计时','番茄钟','专注'],
+    desc:'倒计时、秒表、番茄钟，专注工作必备。',
+    lead:'倒计时、秒表、番茄钟三种模式，一个界面全包，专心的时候只需要它。',
+    feat:['倒计时 / 秒表 / 番茄钟','自定义时长','完成提醒','全屏极简显示'],
+    stack:['JavaScript','CSS'],
+    note:'Atelier 匠作工具集 · 07'
+  },
+  {
+    id:'typing', name:'打字练习', en:'Typing Practice', cat:'tool',
+    icon:'ic-keyboard', acc:'#7ee787', soft:'rgba(126,231,135,.20)',
+    url:'xm/atelier/typing/index.html', path:'xm/atelier/typing/index.html',
+    tags:['打字','练习','速度'],
+    desc:'随机文本、速度统计、错字高亮，练手速。',
+    lead:'随机给一段文本，打字过程实时统计速度与准确率，错字当场标红。',
+    feat:['随机文本练习','实时速度与准确率','错字高亮','成绩记录'],
+    stack:['JavaScript','CSS'],
+    note:'Atelier 匠作工具集 · 08'
+  },
+  {
+    id:'music', name:'音乐播放器', en:'Music Player', cat:'tool',
+    icon:'ic-music', acc:'#bc8cff', soft:'rgba(188,140,255,.20)',
+    url:'xm/atelier/music/index.html', path:'xm/atelier/music/index.html',
+    tags:['音乐','播放器','本地'],
+    desc:'本地音乐播放器，支持播放列表与封面展示。',
+    lead:'把本地音乐拖进来就能听：播放列表、封面展示、进度拖拽，一个轻量的私人点唱机。',
+    feat:['本地音频文件播放','播放列表管理','封面与进度展示','播放模式切换'],
+    stack:['JavaScript','HTML Audio','CSS'],
+    note:'Atelier 匠作工具集 · 09'
+  },
+  {
+    id:'pixelart', name:'像素画板', en:'Pixel Art', cat:'tool',
+    icon:'ic-pixel', acc:'#79c0ff', soft:'rgba(121,192,255,.20)',
+    url:'xm/atelier/pixelart/index.html', path:'xm/atelier/pixelart/index.html',
+    tags:['绘画','像素','创作'],
+    desc:'格点绘图、调色盘、导出图片，复古创作。',
+    lead:'一格一格地画，回到像素时代的创作方式：调色盘、橡皮、导出，一样不少。',
+    feat:['格点画布与缩放','调色盘与取色','橡皮与填充','导出 PNG 图片'],
+    stack:['JavaScript','Canvas','CSS'],
+    note:'Atelier 匠作工具集 · 10'
+  },
+  {
+    id:'inkwell', name:'Inkwell 画板', en:'Inkwell Paint', cat:'tool',
+    icon:'ic-brush', acc:'#ff8fb1', soft:'rgba(255,143,177,.20)',
+    url:'xm/atelier/inkwell/index.html', path:'xm/atelier/inkwell/index.html',
+    tags:['绘画','画笔','创作'],
+    desc:'自由绘图工具，画笔、橡皮、形状与保存。',
+    lead:'随手涂鸦的自由画板：画笔、橡皮、形状、撤销，画完还能存成工程文件下次继续。',
+    feat:['画笔粗细与颜色调节','橡皮、直线、形状工具','撤销 / 重做与清空','存取 .ink1 工程文件'],
+    stack:['JavaScript','Canvas','CSS'],
+    note:'Atelier 匠作工具集 · 11'
+  }
+];
 
-      // cursor halo
-      const halo = document.getElementById('halo');
-      let sx = window.innerWidth / 2, sy = window.innerHeight / 2;
-      let cx = sx, cy = sy;
+const CATS = [
+  {key:'all',  label:'全部'},
+  {key:'app',  label:'应用与系统'},
+  {key:'tool', label:'工具集'},
+  {key:'game', label:'游戏'}
+];
+/* ============================================================
+   2. 工具函数
+   ============================================================ */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const ico = (id, cls = '') =>
+  `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><use href="#${id}"/></svg>`;
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-      function updateHalo() {
-        cx += (sx - cx) * 0.1;
-        cy += (sy - cy) * 0.1;
-        halo.style.setProperty('--x', cx + 'px');
-        halo.style.setProperty('--y', cy + 'px');
-        requestAnimationFrame(updateHalo);
-      }
+const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-      document.addEventListener('mousemove', function (e) {
-        sx = e.clientX;
-        sy = e.clientY;
-        halo.classList.add('active');
-      }, { passive: true });
+/* 丝滑滚动：自定义缓动（easeInOutQuint） */
+function glideTo(target, duration = 1150) {
+  const el = typeof target === 'number' ? null : (typeof target === 'string' ? $(target) : target);
+  const startY = window.scrollY;
+  const rawEnd = el ? el.getBoundingClientRect().top + startY : target;
+  const endY = Math.min(rawEnd, document.body.scrollHeight - window.innerHeight);
+  const dist = endY - startY;
+  if (REDUCED || Math.abs(dist) < 4) { window.scrollTo(0, Math.max(endY, 0)); return; }
+  const t0 = performance.now();
+  const ease = (t) => (t < .5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2);
+  (function step(now) {
+    const p = Math.min((now - t0) / duration, 1);
+    window.scrollTo(0, startY + dist * ease(p));
+    if (p < 1) requestAnimationFrame(step);
+  })(t0);
+}
 
-      document.addEventListener('mouseleave', function () {
-        halo.classList.remove('active');
-      });
+/* ============================================================
+   3. 标语：每次访问随机取一句，可手动换
+   ============================================================ */
+(function initTagline() {
+  const box = $('#tagline');
+  if (!box) return;
+  let current = -1;
 
-      requestAnimationFrame(updateHalo);
+  function pick() {
+    let i = Math.floor(Math.random() * TAGLINES.length);
+    if (TAGLINES.length > 1 && i === current) i = (i + 1) % TAGLINES.length;
+    current = i;
+    return TAGLINES[i];
+  }
 
-      // magnetic 3d tilt cards
-      const cards = document.querySelectorAll('.card');
-      cards.forEach(function (card) {
-        card.addEventListener('mousemove', function (e) {
-          const rect = card.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const y = e.clientY - rect.top;
-          const px = x / rect.width;
-          const py = y / rect.height;
-          const tiltX = (py - 0.5) * 9;
-          const tiltY = (px - 0.5) * -9;
-          card.style.transform = 'perspective(1000px) rotateX(' + tiltX + 'deg) rotateY(' + tiltY + 'deg) translateY(-5px) scale(1.012)';
-          card.style.setProperty('--shine-x', (px * 100) + '%');
-          card.style.setProperty('--shine-y', (py * 100) + '%');
-        }, { passive: true });
+  function paint(html, animate) {
+    const span = document.createElement('span');
+    span.className = /[\u4e00-\u9fa5]/.test(html) ? 'cn' : 'en';
+    span.innerHTML = html;
+    if (!animate) span.classList.add('on');
+    const old = box.querySelector('span.on');
+    if (old) {
+      old.classList.remove('on');
+      old.classList.add('out');
+      setTimeout(() => old.remove(), 900);
+    }
+    box.appendChild(span);
+    if (animate) requestAnimationFrame(() => requestAnimationFrame(() => span.classList.add('on')));
+  }
 
-        card.addEventListener('mouseleave', function () {
-          card.style.transform = '';
-        });
-      });
+  paint(pick(), false);
+  $('#shuffleBtn').addEventListener('click', () => paint(pick(), true));
+})();
 
-      // scroll reveal
-      const revealEls = document.querySelectorAll('section, footer');
-      const observer = new IntersectionObserver(function (entries) {
-        entries.forEach(function (entry) {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('revealed');
-            observer.unobserve(entry.target);
-          }
-        });
-      }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+/* ============================================================
+   4. 模糊匹配：子序列 + Levenshtein 相似度
+   ============================================================ */
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  let prev = new Array(n + 1), cur = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    [prev, cur] = [cur, prev];
+  }
+  return prev[n];
+}
 
-      revealEls.forEach(function (el) { observer.observe(el); });
+/* 子序列匹配：返回 0~1 的紧凑度评分 */
+function subseqScore(needle, hay) {
+  if (!needle) return 0;
+  let hi = 0, matched = 0, gap = 0, last = -1;
+  for (let i = 0; i < needle.length; i++) {
+    const ch = needle[i];
+    const at = hay.indexOf(ch, hi);
+    if (at === -1) return 0;
+    if (last >= 0) gap += at - last - 1;
+    last = at; hi = at + 1; matched++;
+  }
+  const spread = gap / Math.max(needle.length, 1);
+  return (matched / needle.length) * (1 / (1 + spread * 0.35));
+}
 
-      // starfield canvas
-      const canvas = document.getElementById('stars');
-      const ctx = canvas.getContext('2d');
-      let width, height;
-      let stars = [];
-      const isTouch = window.matchMedia('(pointer: coarse)').matches;
-      const starCount = isTouch ? 40 : 90;
+function tokenScore(query, text) {
+  if (!text) return 0;
+  if (text === query) return 130;
+  if (text.startsWith(query)) return 104;
+  if (text.includes(query)) return 82;
 
-      function resize() {
-        width = canvas.width = window.innerWidth;
-        height = canvas.height = window.innerHeight;
-      }
+  let s = subseqScore(query, text);
+  s = s > 0 ? 56 * s : 0;
 
-      function initStars() {
-        stars = [];
-        for (let i = 0; i < starCount; i++) {
-          stars.push({
-            x: Math.random() * width,
-            y: Math.random() * height,
-            r: Math.random() * 1.2 + 0.3,
-            a: Math.random() * 0.5 + 0.2,
-            va: (Math.random() - 0.5) * 0.008,
-            vx: (Math.random() - 0.5) * 0.15,
-            vy: (Math.random() - 0.5) * 0.15
-          });
+  if (s < 44) {
+    const toks = text.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    for (const tok of toks) {
+      const d = levenshtein(query, tok);
+      const sim = 1 - d / Math.max(query.length, tok.length);
+      if (sim > 0.6) s = Math.max(s, 52 * sim);
+    }
+  }
+  return s;
+}
+
+function scoreProject(p, rawQuery) {
+  const q = rawQuery.toLowerCase().trim();
+  if (!q) return 0;
+  const tokens = q.split(/\s+/).filter(Boolean);
+
+  const fields = [
+    [p.name.toLowerCase(), 1],
+    [p.en.toLowerCase(), .96],
+    [(p.tags || []).join(' ').toLowerCase(), .74],
+    [(p.desc || '').toLowerCase(), .46],
+    [(p.path || '').toLowerCase(), .38]
+  ];
+
+  const scoreOne = (t) => {
+    let best = 0;
+    for (const [text, w] of fields) best = Math.max(best, tokenScore(t, text) * w);
+    return best;
+  };
+
+  if (tokens.length === 1) return scoreOne(tokens[0]);
+  return Math.min(...tokens.map(scoreOne));
+}
+
+function searchProjects(q) {
+  if (!q.trim()) return [];
+  return PROJECTS
+    .map((p) => ({ p, s: scoreProject(p, q) }))
+    .filter((x) => x.s >= 26)
+    .sort((a, b) => b.s - a.s)
+    .map((x) => x.p);
+}
+
+function highlight(text, q) {
+  const out = esc(text);
+  const toks = q.toLowerCase().trim().split(/\s+/).filter((t) => t.length > 1);
+  if (!toks.length) return out;
+  let html = out;
+  for (const t of toks) {
+    const idx = html.toLowerCase().indexOf(esc(t).toLowerCase());
+    if (idx === -1) continue;
+    html = html.slice(0, idx) + '<mark>' + html.slice(idx, idx + t.length) + '</mark>' + html.slice(idx + t.length);
+  }
+  return html;
+}
+/* ============================================================
+   5. 渲染：分类筛选 + 作品卡片
+   ============================================================ */
+const grid = $('#grid'), filtersBox = $('#filters'), emptyBox = $('#empty');
+let activeCat = 'all';
+
+function cardHTML(p, i) {
+  return `<article class="card reveal" data-id="${p.id}" tabindex="0" role="button"
+     aria-label="${esc(p.name)} — 查看详情"
+     style="--acc:${p.acc};--acc-soft:${p.soft};--d:${(i % 3) * 85}ms">
+    <div class="card-top">
+      <div class="card-ico">${ico(p.icon)}</div>
+      <div class="card-arrow">${ico('ic-arrow')}</div>
+    </div>
+    <div class="card-body">
+      <h3>${esc(p.name)}<span class="en">${esc(p.en)}</span></h3>
+      <p>${esc(p.desc)}</p>
+    </div>
+    <div class="tags">${p.tags.map((t) => `<span>${esc(t)}</span>`).join('')}</div>
+    <div class="go-label">View →</div>
+  </article>`;
+}
+
+function renderGrid() {
+  const list = activeCat === 'all' ? PROJECTS : PROJECTS.filter((p) => p.cat === activeCat);
+  grid.innerHTML = list.map(cardHTML).join('');
+  emptyBox.hidden = list.length > 0;
+  $('#workCount').textContent = list.length;
+  observeReveals();
+}
+
+function renderFilters() {
+  filtersBox.innerHTML = CATS.map((c) => {
+    const n = c.key === 'all' ? PROJECTS.length : PROJECTS.filter((p) => p.cat === c.key).length;
+    return `<button class="chip${c.key === activeCat ? ' on' : ''}" data-cat="${c.key}" type="button">
+      ${c.label}<span style="opacity:.55;margin-left:.5em;font-size:.82em">${n}</span></button>`;
+  }).join('');
+}
+
+filtersBox.addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  activeCat = chip.dataset.cat;
+  renderFilters();
+  renderGrid();
+});
+
+/* ============================================================
+   6. 搜索：输入即搜，Go 跳转最佳匹配
+   ============================================================ */
+const searchInput = $('#searchInput'), resultsBox = $('#results'), searchZone = $('#searchZone');
+let resultList = [], activeIdx = -1;
+
+function renderResults() {
+  const q = searchInput.value.trim();
+  if (!q) { closeResults(); return; }
+  resultList = searchProjects(q).slice(0, 8);
+
+  if (!resultList.length) {
+    resultsBox.innerHTML = `<div class="hint">没有找到「${esc(q)}」相关的作品，试试别的关键词。</div>`;
+  } else {
+    resultsBox.innerHTML = resultList.map((p, i) => `
+      <button class="res-item" type="button" role="option" data-id="${p.id}" data-i="${i}"
+              style="--acc:${p.acc}">
+        <span class="res-ico">${ico(p.icon)}</span>
+        <span class="res-txt">
+          <b>${highlight(p.name, q)}</b>
+          <small>${highlight(p.en + ' · ' + p.path, q)}</small>
+        </span>
+        <span class="res-go">${ico('ic-arrow')}</span>
+      </button>`).join('');
+  }
+  activeIdx = -1;
+  resultsBox.classList.add('open');
+}
+
+function closeResults() {
+  resultsBox.classList.remove('open');
+  activeIdx = -1;
+}
+
+function moveActive(step) {
+  const items = $$('.res-item', resultsBox);
+  if (!items.length) return;
+  activeIdx = (activeIdx + step + items.length) % items.length;
+  items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+  items[activeIdx].scrollIntoView({ block: 'nearest' });
+}
+
+function gotoProject(p) {
+  if (!p) return;
+  closeResults();
+  searchInput.blur();
+  window.location.href = p.url;
+}
+
+searchInput.addEventListener('input', renderResults);
+searchInput.addEventListener('focus', () => { if (searchInput.value.trim()) renderResults(); });
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); moveActive(1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); moveActive(-1); }
+  else if (e.key === 'Enter') {
+    e.preventDefault();
+    gotoProject(activeIdx >= 0 ? resultList[activeIdx] : resultList[0]);
+  } else if (e.key === 'Escape') { closeResults(); searchInput.blur(); }
+});
+
+resultsBox.addEventListener('click', (e) => {
+  const item = e.target.closest('.res-item');
+  if (!item) return;
+  gotoProject(PROJECTS.find((p) => p.id === item.dataset.id));
+});
+
+$('#searchGo').addEventListener('click', () => {
+  if (!searchInput.value.trim()) { searchInput.focus(); return; }
+  gotoProject(searchProjects(searchInput.value)[0]);
+});
+
+document.addEventListener('click', (e) => {
+  if (!searchZone.contains(e.target)) closeResults();
+});
+
+/* ============================================================
+   7. 作品详情（浮层）+ 立即跳转
+   ============================================================ */
+const overlay = $('#overlay'), sheet = $('#sheet');
+let lastFocus = null, currentProject = null;
+
+function openDetail(p) {
+  if (!p) return;
+  currentProject = p;
+  lastFocus = document.activeElement;
+
+  sheet.style.setProperty('--acc', p.acc);
+  sheet.style.setProperty('--acc-soft', p.soft);
+  $('#dIco').innerHTML = ico(p.icon);
+  $('#dIco').style.setProperty('--acc', p.acc);
+  $('#dIco').style.setProperty('--acc-soft', p.soft);
+  $('#dTitle').textContent = p.name;
+  $('#dEn').textContent = p.en;
+  $('#dCat').innerHTML = `${ico('ic-info')}<span>${CATS.find((c) => c.key === p.cat).label}</span>`;
+  $('#dLead').textContent = p.lead;
+  $('#dFeat').innerHTML = p.feat.map((f) => `<li><i>${ico('ic-tick')}</i><span>${esc(f)}</span></li>`).join('');
+  $('#dStack').innerHTML = p.stack.map((s) => `<span>${esc(s)}</span>`).join('');
+  $('#dMeta').innerHTML = `${ico('ic-info')}<span>${esc(p.note)}</span>`;
+  $('#dPath').textContent = p.path;
+
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => $('#sheetClose').focus(), 120);
+}
+
+function closeDetail() {
+  overlay.classList.remove('open');
+  document.body.style.overflow = '';
+  if (lastFocus && lastFocus.focus) lastFocus.focus();
+}
+
+grid.addEventListener('click', (e) => {
+  const card = e.target.closest('.card');
+  if (card) openDetail(PROJECTS.find((p) => p.id === card.dataset.id));
+});
+grid.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const card = e.target.closest('.card');
+  if (!card) return;
+  e.preventDefault();
+  openDetail(PROJECTS.find((p) => p.id === card.dataset.id));
+});
+
+$('#sheetClose').addEventListener('click', closeDetail);
+overlay.addEventListener('click', (e) => { if (e.target.hasAttribute('data-close')) closeDetail(); });
+$('#dGo').addEventListener('click', () => { if (currentProject) window.location.href = currentProject.url; });
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && overlay.classList.contains('open')) closeDetail();
+  if (e.key === '/' && !overlay.classList.contains('open') &&
+      document.activeElement !== searchInput) {
+    e.preventDefault();
+    searchInput.focus();
+  }
+});
+/* ============================================================
+   8. 滚动渐显
+   ============================================================ */
+let revealObserver = null;
+function observeReveals() {
+  const targets = $$('.reveal:not(.in)');
+  if (REDUCED || !('IntersectionObserver' in window)) {
+    targets.forEach((el) => el.classList.add('in'));
+    return;
+  }
+  if (!revealObserver) {
+    revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        if (en.isIntersecting) {
+          en.target.classList.add('in');
+          revealObserver.unobserve(en.target);
         }
-      }
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: .12 });
+  }
+  targets.forEach((el) => revealObserver.observe(el));
+}
 
-      let mx = width / 2, my = height / 2;
-      document.addEventListener('mousemove', function (e) {
-        mx = e.clientX;
-        my = e.clientY;
-      }, { passive: true });
+/* ============================================================
+   9. 上滑进入作品区（^ 图标 / 滚轮上滑 / 触摸上滑）
+   ============================================================ */
+const worksEl = $('#works');
+$('#cueBtn').addEventListener('click', () => glideTo(worksEl, 1250));
+$('#footTop').addEventListener('click', () => glideTo(0, 1250));
 
-      function drawStars() {
-        ctx.clearRect(0, 0, width, height);
-        stars.forEach(function (s) {
-          s.a += s.va;
-          if (s.a > 0.7 || s.a < 0.15) s.va *= -1;
+let touchStartY = null;
+window.addEventListener('wheel', (e) => {
+  if (overlay.classList.contains('open')) return;
+  if (window.scrollY < 6 && e.deltaY < -4) glideTo(worksEl, 1250);
+}, { passive: true });
 
-          // subtle parallax toward cursor
-          const dx = (mx - width / 2) * 0.02 * s.r;
-          const dy = (my - height / 2) * 0.02 * s.r;
+window.addEventListener('touchstart', (e) => {
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
 
-          s.x += s.vx + dx * 0.005;
-          s.y += s.vy + dy * 0.005;
+window.addEventListener('touchend', (e) => {
+  if (touchStartY === null || overlay.classList.contains('open')) { touchStartY = null; return; }
+  const dy = touchStartY - e.changedTouches[0].clientY;
+  touchStartY = null;
+  if (window.scrollY < 6 && dy > 56) glideTo(worksEl, 1250);
+}, { passive: true });
 
-          if (s.x < 0) s.x = width;
-          if (s.x > width) s.x = 0;
-          if (s.y < 0) s.y = height;
-          if (s.y > height) s.y = 0;
+/* ============================================================
+   10. 光标追光 + 卡片聚光
+   ============================================================ */
+const glow = $('#pointerGlow');
+if (!REDUCED && window.matchMedia('(hover:hover)').matches) {
+  let raf = 0, px = 0, py = 0;
+  window.addEventListener('pointermove', (e) => {
+    px = e.clientX; py = e.clientY;
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      glow.style.setProperty('--mx', px + 'px');
+      glow.style.setProperty('--my', py + 'px');
+    });
+  }, { passive: true });
 
-          ctx.beginPath();
-          ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(244, 228, 188, ' + s.a + ')';
-          ctx.fill();
-        });
-        requestAnimationFrame(drawStars);
-      }
+  grid.addEventListener('pointermove', (e) => {
+    const card = e.target.closest('.card');
+    if (!card) return;
+    const r = card.getBoundingClientRect();
+    card.style.setProperty('--cx', ((e.clientX - r.left) / r.width * 100) + '%');
+    card.style.setProperty('--cy', ((e.clientY - r.top) / r.height * 100) + '%');
+  }, { passive: true });
+}
 
-      resize();
-      initStars();
-      drawStars();
-      window.addEventListener('resize', function () { resize(); initStars(); });
-
-      // disable tilt on touch
-      if (isTouch) {
-        cards.forEach(function (card) {
-          card.style.transform = 'none';
-        });
-      }
-    })();
-  </script>
+/* ============================================================
+   11. 启动
+   ============================================================ */
+renderFilters();
+renderGrid();
+observeReveals();
+</script>
 </body>
 </html>

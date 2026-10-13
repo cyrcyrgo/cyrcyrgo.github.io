@@ -2,46 +2,79 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>404 - 页面未找到</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>404 · 页面走丢了 | Welcome to my home</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='26' fill='%230d1117'/%3E%3Cpath d='M28 68V32l22 24 22-24v36' stroke='%2358a6ff' stroke-width='9' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
 <style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
-  background:#11111b;
-  color:#cdd6f4;
-  min-height:100vh;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  flex-direction:column;
-  text-align:center;
-  padding:40px 20px;
+:root{
+  --bg:#0b0e14;--line:rgba(255,255,255,.09);--line-2:rgba(255,255,255,.14);
+  --txt:#e8eef6;--txt-2:#a9b6c6;--txt-3:#6f7d8d;
+  --grad:linear-gradient(120deg,#79c0ff 0%,#bc8cff 42%,#ff9ecb 78%,#ffd591 100%);
+  --ease:cubic-bezier(.22,1,.36,1);--spring:cubic-bezier(.16,1.02,.3,1);--pill:999px;
 }
-.error-code{font-size:6rem;font-weight:900;color:#89b4fa;line-height:1;}
-.error-title{font-size:1.4rem;font-weight:700;margin:16px 0 8px;color:#f5c2e7;}
-.error-msg{font-size:0.9rem;color:#a6adc8;margin-bottom:32px;line-height:1.6;}
-.home-btn{
-  padding:14px 36px;
-  font-size:1rem;
-  font-weight:700;
-  background:linear-gradient(135deg,#89b4fa,#a6e3a1);
-  color:#1e1e2e;
-  border:none;
-  border-radius:12px;
-  cursor:pointer;
-  text-decoration:none;
-  display:inline-block;
-  transition:all 0.3s;
-  box-shadow:0 6px 20px rgba(137,180,250,0.3);
-}
-.home-btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(137,180,250,0.5);}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{min-height:100%}
+body{font-family:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  color:var(--txt);background:var(--bg);display:flex;align-items:center;justify-content:center;
+  text-align:center;padding:40px 22px;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+.bg{position:fixed;inset:0;z-index:-2;background:
+  radial-gradient(120% 90% at 12% -10%,rgba(88,166,255,.20),transparent 58%),
+  radial-gradient(100% 80% at 92% 4%,rgba(188,140,255,.17),transparent 55%),
+  radial-gradient(110% 90% at 50% 118%,rgba(255,143,177,.14),transparent 60%),
+  linear-gradient(180deg,#0b0e14,#0d1117 45%,#0a0d13)}
+.grid{position:fixed;inset:0;z-index:-2;opacity:.5;
+  background-image:linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);
+  background-size:56px 56px;
+  -webkit-mask-image:radial-gradient(115% 85% at 50% 0%,#000 8%,rgba(0,0,0,.35) 52%,transparent 84%);
+  mask-image:radial-gradient(115% 85% at 50% 0%,#000 8%,rgba(0,0,0,.35) 52%,transparent 84%)}
+.wrap{width:min(560px,100%);display:flex;flex-direction:column;align-items:center;gap:1.15rem;
+  opacity:0;transform:translateY(26px);filter:blur(9px);
+  animation:in 1.05s var(--ease) .1s forwards}
+@keyframes in{to{opacity:1;transform:none;filter:blur(0)}}
+.badge{display:inline-flex;align-items:center;gap:.55rem;padding:.52rem 1.1rem;border-radius:var(--pill);
+  background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--txt-2);
+  font-size:.76rem;letter-spacing:.16em;text-transform:uppercase}
+.badge i{width:7px;height:7px;border-radius:50%;background:#ff8fb1;box-shadow:0 0 0 4px rgba(255,143,177,.16)}
+.code{font-family:"Space Grotesk",ui-sans-serif,system-ui,sans-serif;font-size:clamp(5.2rem,20vw,9.5rem);
+  font-weight:700;line-height:.92;letter-spacing:-.05em;background:var(--grad);background-size:220% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:shift 14s var(--ease) infinite alternate}
+@keyframes shift{from{background-position:0 50%}to{background-position:100% 50%}}
+h1{font-family:"Space Grotesk",ui-sans-serif,system-ui,sans-serif;font-size:clamp(1.35rem,5vw,1.95rem);
+  font-weight:600;letter-spacing:-.028em}
+p{color:var(--txt-2);font-size:clamp(.92rem,2.6vw,1.02rem);line-height:1.85;max-width:38ch}
+.link{margin-top:.85rem;display:inline-flex;align-items:center;gap:.72rem;padding:1rem 2.15rem;
+  border-radius:var(--pill);border:0;cursor:pointer;text-decoration:none;
+  font-family:"Space Grotesk",ui-sans-serif,system-ui,sans-serif;font-size:1.02rem;font-weight:600;
+  letter-spacing:.055em;color:#08121f;background:var(--grad);background-size:190% 100%;
+  box-shadow:0 16px 40px rgba(88,166,255,.30);
+  transition:transform .6s var(--spring),box-shadow .6s ease,filter .6s ease,background-position .9s var(--ease)}
+.link:hover{transform:translateY(-3px) scale(1.03);box-shadow:0 26px 58px rgba(88,166,255,.42);
+  filter:saturate(1.22) brightness(1.05);background-position:100% 0}
+.link:active{transform:translateY(0) scale(.965)}
+.link svg{width:17px;height:17px;transition:transform .6s var(--spring)}
+.link:hover svg{transform:translateX(5px)}
+.foot{margin-top:1.65rem;color:var(--txt-3);font-size:.82rem;letter-spacing:.075em}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  .wrap{opacity:1;transform:none;filter:none}}
 </style>
 </head>
 <body>
-<div class="error-code">404</div>
-<div class="error-title">页面未找到</div>
-<div class="error-msg">您访问的页面不存在或已被移除。<br>请返回首页重新配置您的搜索页面。</div>
-<a class="home-btn" href="index.html">返回首页</a>
+<div class="bg"></div>
+<div class="grid"></div>
+
+<div class="wrap">
+  <div class="badge"><i></i><span>Page not found</span></div>
+  <div class="code">404</div>
+  <h1>这一页走丢了</h1>
+  <p>你访问的地址不存在，或者已经被搬到了别的地方。<br>不如回到首页，看看有什么好玩的作品。</p>
+  <a class="link" href="/">
+    <span>返回首页</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 12h14.8M13.2 6.2 19.4 12l-6.2 5.8"/></svg>
+  </a>
+  <div class="foot">Welcome to my home · 个人作品集</div>
+</div>
 </body>
 </html>

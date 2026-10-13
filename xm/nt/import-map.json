@@ -1,0 +1,21 @@
+{
+  "imports": {
+    "kernel/executor/ProcessManager": "/xm/nt/kernel/executor/ProcessManager.js",
+    "kernel/syscall/SysCall.Bridge": "/xm/nt/kernel/syscall/SysCall.Bridge.js",
+    "kernel/terminal/Terminal.CommandRegistry": "/xm/nt/kernel/terminal/Terminal.CommandRegistry.js",
+    "kernel/terminal/Terminal.Executor": "/xm/nt/kernel/terminal/Terminal.Executor.js",
+    "kernel/terminal/Terminal.Lexer": "/xm/nt/kernel/terminal/Terminal.Lexer.js",
+    "subsystem/app-sandbox/SandboxIframe.Bridge": "/xm/nt/subsystem/app-sandbox/SandboxIframe.Bridge.js",
+    "subsystem/app-sandbox/SandboxPolicy": "/xm/nt/subsystem/app-sandbox/SandboxPolicy.js",
+    "subsystem/display-pipeline/DisplayEventHub": "/xm/nt/subsystem/display-pipeline/DisplayEventHub.js",
+    "subsystem/display-pipeline/GlobalDisplay.API": "/xm/nt/subsystem/display-pipeline/GlobalDisplay.API.js",
+    "subsystem/window-manager/WindowManager.Core": "/xm/nt/subsystem/window-manager/WindowManager.Core.js",
+    "ui/UIMain": "/xm/nt/ui/UIMain.js",
+    "ui/components/DesktopIcons": "/xm/nt/ui/components/DesktopIcons.js",
+    "ui/components/Taskbar": "/xm/nt/ui/components/Taskbar.js",
+    "ui/components/SystemTray": "/xm/nt/ui/components/SystemTray.js",
+    "ui/components/TerminalUI": "/xm/nt/ui/components/TerminalUI.js",
+    "ui/components/WindowManagerUI": "/xm/nt/ui/components/WindowManagerUI.js",
+    "ui/sandbox/AppContainer": "/xm/nt/ui/sandbox/AppContainer.js"
+  }
+}

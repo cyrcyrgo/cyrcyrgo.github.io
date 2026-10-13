@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lumina Cloud LLM Agent</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A4%96%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css?v=20261005c" />
+</head>
+<body>
+
+<div id="login">
+  <div class="card">
+    <h1>Lumina <span style="color:#22d3ee">Cloud LLM Agent</span></h1>
+    <p class="sub">邮箱验证码 / 密码登录 · 本机 Agent 智能体</p>
+
+    <div class="tabs">
+      <button id="tab-code" class="on" type="button">验证码登录</button>
+      <button id="tab-pwd" type="button">密码登录</button>
+    </div>
+
+    <div class="field">
+      <input id="login-email" type="email" placeholder="邮箱地址" autocomplete="email" />
+    </div>
+
+    <div id="pane-code">
+      <div class="field row">
+        <input id="login-code" placeholder="6 位验证码" inputmode="numeric" maxlength="6" />
+        <button id="btn-send" class="ghost" style="flex:0 0 130px">获取验证码</button>
+      </div>
+      <button id="btn-verify" style="width:100%;padding:12px">登录 / 注册</button>
+    </div>
+
+    <div id="pane-pwd" class="hidden">
+      <div class="field">
+        <input id="login-password" type="password" placeholder="密码"
+               autocomplete="current-password" />
+      </div>
+      <button id="btn-pwd-login" style="width:100%;padding:12px">登录</button>
+      <div class="forgot-row">
+        <a href="javascript:void(0)" id="btn-forgot">忘记密码？</a>
+        <span class="forgot-sep">·</span>
+        <a href="javascript:void(0)" id="btn-go-unfreeze">账号解冻</a>
+      </div>
+    </div>
+
+    <div id="pane-unfreeze" class="hidden">
+      <div class="unfreeze-banner">🔒 账号因连续密码错误被安全冻结，请完成使用痕迹核验</div>
+      <div class="field">
+        <input id="uf-email" type="email" placeholder="被冻结的邮箱地址" autocomplete="email" />
+      </div>
+      <div class="field">
+        <textarea id="uf-reason" rows="2" placeholder="解冻原因（至少 5 个字）"></textarea>
+      </div>
+      <div id="uf-questions" class="uf-questions"></div>
+      <button id="btn-uf-submit" style="width:100%;padding:12px">提交解冻申请</button>
+      <div id="uf-result" class="msg"></div>
+      <div class="forgot-row">
+        <a href="javascript:void(0)" id="btn-uf-back">← 返回登录</a>
+      </div>
+    </div>
+
+    <div id="pane-reset" class="hidden">
+      <div class="field">
+        <input id="reset-email" type="email" placeholder="注册邮箱地址" autocomplete="email" />
+      </div>
+      <div class="field row">
+        <input id="reset-code" placeholder="6 位邮箱验证码" inputmode="numeric" maxlength="6" />
+        <button id="btn-reset-send" class="ghost" style="flex:0 0 130px">获取验证码</button>
+      </div>
+      <div class="field">
+        <input id="reset-password" type="password" placeholder="新密码（至少 6 位）"
+               autocomplete="new-password" />
+      </div>
+      <button id="btn-reset-ok" style="width:100%;padding:12px">重置密码并登录</button>
+      <div id="reset-msg" class="msg"></div>
+      <div class="forgot-row">
+        <a href="javascript:void(0)" id="btn-reset-back">← 返回登录</a>
+      </div>
+    </div>
+
+    <div id="login-msg" class="msg"></div>
+    <div class="settings">
+      <div>后端地址：<span id="api-label">检测中…</span></div>
+      <input id="api-input" placeholder="手动填写后端地址" />
+    </div>
+    <div class="local-entry">
+      <button id="btn-local" class="ghost" style="width:100%">⚡ 本地使用（离线 · 无需登录）</button>
+      <div class="local-hint">
+        服务器不可用时也能用：模型在本机浏览器内运行，服务器不保留任何信息，无需注册登录。
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <button id="sidebar-toggle" class="sidebar-toggle" title="收展对话栏">☰</button>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">Lumina <span>Agent</span></div>
+    <div class="userbox">
+      <div class="email" id="user-email"></div>
+      <div style="margin-top:6px" id="quota-text">空间 --</div>
+      <div class="quota" id="quota-bar"><i style="width:0%"></i></div>
+    </div>
+    <button id="btn-new" style="width:100%">+ 新建对话</button>
+    <input id="conv-search" class="conv-search" placeholder="搜索对话…" autocomplete="off" />
+    <div class="conv-list" id="conv-list"></div>
+    <div class="sidebar-foot">
+      <button id="btn-notifications" class="ghost" style="flex:1">
+        🔔 服务通知<span id="nt-badge" class="nt-badge hidden">0</span>
+      </button>
+      <button id="btn-files" class="ghost" style="flex:1">我的文件</button>
+      <button id="btn-logout" class="ghost">退出</button>
+    </div>
+    <div class="sidebar-foot">
+      <button id="btn-me" class="ghost me-btn" style="flex:1">
+        <span class="me-mini" id="me-mini-avatar">👤</span>
+        <span class="me-mini-name" id="me-mini-name">我</span>
+      </button>
+    </div>
+  </aside>
+
+  <main class="chat">
+    <div id="notice" class="notice hidden"></div>
+    <div class="chat-head">
+      <h2 id="chat-title">个人空间</h2>
+      <span id="run-status" class="tag tier" style="display:none">⏳ 任务运行中</span>
+      <span id="model-tag" class="tag ok" style="display:none"></span>
+      <span id="mode-tag" class="tag mode" style="display:none"></span>
+      <button id="btn-export" class="ghost head-btn hidden" title="导出当前对话为 Markdown">导出</button>
+      <button id="btn-settings" class="ghost head-btn" title="账户设置">⚙ 设置</button>
+    </div>
+    <div class="messages" id="messages">
+      <div class="empty">
+        在左侧新建一个对话，然后描述你的任务。<br />
+        对话框中可切换模型与工作模式：快速 / 思考 / 工作 / 专家。
+      </div>
+    </div>
+    <div class="composer">
+      <div class="templates" id="templates"></div>
+      <textarea id="chat-input" placeholder="描述任务…（Enter 发送，Shift+Enter 换行）"></textarea>
+      <div class="comp-row">
+        <div class="composer-controls">
+          <select id="model-select" class="model-select" title="选择模型">
+            <option value="">加载中…</option>
+          </select>
+          <select id="mode-select" class="mode-select" title="工作模式">
+            <option value="work">🛠 工作模式 · Agent 执行</option>
+            <option value="expert">🧠 专家模式 · 思考 + 多步工具</option>
+            <option value="think">🔍 思考模式 · 深度分析</option>
+            <option value="fast">⚡ 快速模式 · 直接输出</option>
+          </select>
+          <span class="char-count" id="char-count">0 字</span>
+        </div>
+        <button id="btn-send-msg" class="send">发送</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="notifications-panel" class="drawer hidden">
+  <div class="drawer-head">
+    <h3>🔔 服务通知</h3>
+    <div><button id="btn-close-notifications" class="ghost">关闭</button></div>
+  </div>
+  <div id="nt-list" class="nt-list"><div class="muted" style="padding:16px">加载中…</div></div>
+</div>
+
+<div id="files-panel" class="drawer wide-drawer hidden">
+  <div class="drawer-head">
+    <h3>我的文件</h3>
+    <div>
+      <button id="btn-upload-file" class="ghost">上传文件</button>
+      <button id="btn-close-files" class="ghost">关闭</button>
+    </div>
+  </div>
+  <input id="upload-input" type="file" multiple style="display:none" />
+  <div id="files-usage" class="files-usage-bar"></div>
+
+  <div id="files-batchbar" class="batchbar hidden">
+    <label class="batch-all"><input type="checkbox" id="files-checkall" /> 全选</label>
+    <span id="files-sel-count" class="muted">已选 0 项</span>
+    <span style="flex:1"></span>
+    <button id="btn-batch-download" class="ghost">⬇ 下载</button>
+    <button id="btn-batch-email" class="ghost">✉ 发送至邮箱</button>
+    <button id="btn-batch-delete" class="danger">删除</button>
+  </div>
+
+  <div id="files-list"></div>
+  <div class="foot"><button id="btn-clear-files" class="ghost">清空全部</button></div>
+</div>
+
+<!-- 发送文件到邮箱弹窗 -->
+<div id="file-mail-modal" class="modal hidden">
+  <div class="modal-box">
+    <h3>发送文件到我的邮箱</h3>
+    <p class="muted" id="file-mail-info">—</p>
+    <div class="me-field">
+      <label><input type="radio" name="mail-as" value="direct" /> 直接发送（多个文件时自动打包 ZIP）</label>
+    </div>
+    <div class="me-field">
+      <label><input type="radio" name="mail-as" value="zip" checked /> 打包成 ZIP 压缩包发送</label>
+    </div>
+    <div id="file-mail-msg" class="me-msg"></div>
+    <div class="modal-foot">
+      <button class="ghost" id="file-mail-cancel">取消</button>
+      <button id="file-mail-ok">发送</button>
+    </div>
+  </div>
+</div>
+
+<div id="preview-panel" class="drawer hidden">
+  <div class="drawer-head">
+    <h3 id="preview-title">预览</h3>
+    <div><button id="btn-preview-close" class="ghost">关闭</button></div>
+  </div>
+  <div id="preview-body"></div>
+</div>
+
+<div id="me-panel" class="drawer hidden">
+  <div class="drawer-head">
+    <h3>我的账户</h3>
+    <div><button id="btn-close-me" class="ghost">关闭</button></div>
+  </div>
+
+  <div class="me-block">
+    <div class="me-avatar-row">
+      <div class="me-avatar" id="me-avatar">👤</div>
+      <div class="me-avatar-acts">
+        <button id="btn-avatar-pick" class="ghost">更换头像</button>
+        <button id="btn-avatar-clear" class="ghost">清除</button>
+      </div>
+      <input id="avatar-input" type="file" accept="image/*" style="display:none" />
+    </div>
+    <div class="me-field">
+      <label>昵称</label>
+      <input id="me-name" maxlength="32" placeholder="给自己起个名字" />
+    </div>
+    <div class="me-inline">
+      <button id="btn-save-profile">保存资料</button>
+      <span class="me-msg" id="me-profile-msg"></span>
+    </div>
+  </div>
+
+  <div class="me-block">
+    <div class="me-title">账户信息</div>
+    <div class="me-kv"><span>登录邮箱</span><b id="me-email">--</b></div>
+    <div class="me-kv"><span>云空间</span><b id="me-quota">--</b></div>
+  </div>
+
+  <div class="me-block">
+    <div class="me-title">申请调整云空间 <span class="me-hint">· 基础空间 50MB，可申请扩大或缩小，管理员可设临时期限</span></div>
+    <div id="qreq-status" class="qreq-status"></div>
+    <div class="me-field row">
+      <input id="qreq-size" type="number" min="1" max="51200" placeholder="期望空间（MB），如 500" style="flex:1" />
+      <span class="me-hint" style="flex:0 0 auto;padding-top:8px">MB（1 ~ 51200）</span>
+    </div>
+    <div class="me-field">
+      <textarea id="qreq-reason" rows="3" placeholder="申请理由（至少 5 个字）：扩大或缩小的用途、期望大小…"></textarea>
+    </div>
+    <div class="me-inline">
+      <button id="btn-qreq-submit">提交调整申请</button>
+      <span class="me-msg" id="qreq-msg"></span>
+    </div>
+  </div>
+
+  <div class="me-block">
+    <div class="me-title">更改邮箱</div>
+    <div class="me-field"><input id="me-new-email" type="email" placeholder="新邮箱地址" /></div>
+    <div class="me-field row">
+      <input id="me-email-code" placeholder="6 位验证码" inputmode="numeric" maxlength="6" />
+      <button id="btn-me-send-code" class="ghost" style="flex:0 0 120px">获取验证码</button>
+    </div>
+    <div class="me-inline">
+      <button id="btn-me-change-email">确认更改</button>
+      <span class="me-msg" id="me-email-msg"></span>
+    </div>
+  </div>
+
+  <div class="me-block">
+    <div class="me-title">登录密码</div>
+    <div class="me-field" id="me-oldpw-field">
+      <input id="me-pw0" type="password" placeholder="旧密码" autocomplete="current-password" />
+    </div>
+    <div class="me-field">
+      <input id="me-pw1" type="password" placeholder="新密码（至少 6 位）" autocomplete="new-password" />
+    </div>
+    <div class="me-field">
+      <input id="me-pw2" type="password" placeholder="再次输入新密码" autocomplete="new-password" />
+    </div>
+    <div class="me-inline">
+      <button id="btn-me-save-pw">保存密码</button>
+      <span class="me-msg" id="me-pw-msg"></span>
+    </div>
+  </div>
+
+  <div class="me-block">
+    <div class="me-title">使用意见 / 反馈</div>
+    <div class="me-field">
+      <select id="me-fb-cat">
+        <option value="功能建议">功能建议</option>
+        <option value="问题反馈">问题反馈</option>
+        <option value="使用咨询">使用咨询</option>
+        <option value="其他">其他</option>
+      </select>
+    </div>
+    <div class="me-field">
+      <textarea id="me-fb-text" rows="4" placeholder="描述你的建议或遇到的问题…"></textarea>
+    </div>
+    <div class="me-field fb-target">
+      <label><input type="radio" name="fb-target" value="admin" checked />
+        发送到管理员后台（可查看回信、可撤销）</label>
+      <label><input type="radio" name="fb-target" value="email" />
+        发送到官方邮箱 Lumina-CLA@hotmail.com（仅收取，不回访、不可撤销）</label>
+    </div>
+    <div class="me-inline">
+      <button id="btn-me-feedback">提交反馈</button>
+      <span class="me-msg" id="me-fb-msg"></span>
+    </div>
+    <div class="me-hint">同一账号两次反馈至少间隔 3 分钟（服务器计时）。</div>
+
+    <div class="my-fb-head">
+      <span class="me-title" style="margin:0">我发送的反馈</span>
+      <button class="ghost" id="btn-myfb-refresh" type="button">刷新</button>
+    </div>
+    <div id="my-fb-list" class="my-fb-list"><div class="me-hint">点击刷新查看</div></div>
+  </div>
+</div>
+
+<div id="local" class="hidden">
+  <main class="chat">
+    <div class="chat-head">
+      <h2>本地模式 · 离线对话</h2>
+      <span id="local-gpu" class="tag mode" style="display:none"></span>
+      <button id="btn-local-model" class="ghost head-btn">模型</button>
+      <button id="btn-local-back" class="ghost head-btn">返回登录</button>
+    </div>
+    <div class="messages" id="local-messages">
+      <div class="empty">
+        本地模型尚未加载。<br />
+        点击右上角「模型」选择并下载一个本地模型，之后即可离线自由对话。
+      </div>
+    </div>
+    <div class="composer">
+      <textarea id="local-input" placeholder="输入消息…（Enter 发送，Shift+Enter 换行）"></textarea>
+      <div class="comp-row">
+        <div class="composer-controls">
+          <span class="char-count" id="local-model-label">未加载模型</span>
+          <button id="btn-local-clear" class="ghost" style="padding:6px 12px;font-size:12.5px">清空对话</button>
+        </div>
+        <button id="btn-local-send" class="send">发送</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="local-setup" class="modal hidden">
+  <div class="modal-box wide">
+    <h3>本地模型</h3>
+    <p class="muted">
+      模型在本机浏览器内运行（WebGPU）。首次使用经 GitHub 加速镜像下载权重并缓存到本浏览器，
+      之后断网也能直接打开页面离线对话，全程不经过服务器。
+    </p>
+    <div id="local-gpu-note" class="local-note"></div>
+    <div id="local-models" class="local-models"></div>
+    <div class="me-field">
+      <div class="me-hint">
+        首次下载通过 GitHub 加速镜像（如 gh-proxy.com）获取，文件保存在本浏览器缓存中；
+        下载完成后即使断网也能离线对话，服务器不保留任何对话信息。
+      </div>
+    </div>
+    <div id="local-progress" class="local-progress"></div>
+    <div class="modal-foot">
+      <button class="ghost" id="btn-local-close-setup">关闭</button>
+      <button class="ghost hidden" id="btn-local-cancel">取消下载</button>
+      <button id="btn-local-load">下载并启动</button>
+    </div>
+  </div>
+</div>
+
+<!-- 强制法律文件签署遮罩：未主动勾选并确认前不可使用系统 -->
+<div id="legal-overlay" class="legal-overlay hidden">
+  <div class="legal-box">
+    <h2 id="legal-heading">📜 服务条款与隐私同意书</h2>
+    <div class="legal-meta muted">
+      版本号：<span id="legal-version">—</span> · 生效日期：<span id="legal-date">—</span>
+    </div>
+    <div id="legal-body" class="legal-body" tabindex="0"></div>
+    <label class="legal-agree">
+      <input type="checkbox" id="legal-check" />
+      <span>我已完整阅读并理解《<b id="legal-d-title">免责声明</b>》和《<b id="legal-p-title">隐私同意书</b>》，
+        并自愿同意全部条款。</span>
+    </label>
+    <div id="legal-msg" class="msg"></div>
+    <div class="modal-foot">
+      <button class="ghost" id="legal-logout">不同意并退出登录</button>
+      <button id="legal-ok" disabled>确认并继续</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js?v=20261005c"></script>
+<script src="assets/local.js?v=20261005c"></script>
+</body>
+</html>
