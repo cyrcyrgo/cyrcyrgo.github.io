@@ -89,10 +89,13 @@ class ChatIn(BaseModel):
 # auth routes
 # --------------------------------------------------------------------------- #
 @app.post("/api/auth/send-code")
-async def send_code(body: SendCodeIn):
+async def send_code(body: SendCodeIn, request: Request):
     email = body.email.strip().lower()
     if "@" not in email or len(email) < 5:
         raise HTTPException(400, "邮箱格式不正确")
+    # IP 维度限流：防止对任意邮箱无限轰炸 / 无限爆破
+    if not auth.ip_send_allowed(_client_ip(request)):
+        raise HTTPException(429, "请求过于频繁，请稍后再试")
     ok, wait = auth.can_send(email)
     if not ok:
         raise HTTPException(429, f"请 {wait} 秒后再试")
@@ -109,6 +112,9 @@ async def send_code(body: SendCodeIn):
 @app.post("/api/auth/verify")
 async def verify(body: VerifyIn, request: Request):
     email = body.email.strip().lower()
+    # IP 维度限流：6 位验证码在无限尝试下必然可爆破
+    if not auth.ip_verify_allowed(_client_ip(request)):
+        raise HTTPException(429, "尝试次数过多，请稍后再试")
     if not auth.verify_code(email, body.code):
         raise HTTPException(400, "验证码错误或已过期")
     if _frozen_state(email):
@@ -229,8 +235,11 @@ async def password_login(body: PasswordLoginIn, request: Request):
         })
 
     user = store.get_user_by_email(email)
-    valid = bool(user) and auth.check_password(body.password,
-                                               user.get("password_hash"))
+    # 账号不存在时不计入失败次数：否则任何人只要连发 4 次错误密码，
+    # 就能把任意一位已注册用户的账号永久冻结（认证层拒绝服务）。
+    if not user:
+        raise HTTPException(401, "邮箱或密码不正确")
+    valid = auth.check_password(body.password, user.get("password_hash"))
     if not valid:
         fails = int(state.get("fails") or 0) + 1
         state["fails"] = fails
@@ -1729,14 +1738,11 @@ async def upload_file(request: Request, path: str = Query(...),
 # --------------------------------------------------------------------------- #
 @app.get("/api/health")
 async def health():
+    # 该接口原本对全网公开，会泄露可用模型清单、当前隧道地址与配额。
+    # 隧道地址尤其敏感：任何人拿到它就能直接打到本机后端。
     return {
         "ok": True,
-        "model": cfg.CONFIG["model"],
-        "models": cfg.CONFIG.get("models", []),
-        "engine": await llm.health(),
-        "tunnel": tunnel.TUNNEL.url,
-        "tunnel_pushed": tunnel.TUNNEL.pushed,
-        "quota_bytes": cfg.CONFIG["quota_bytes"],
+        "ai_enabled": bool(cfg.CONFIG.get("ai_enabled", True)),
     }
 
 
@@ -1801,7 +1807,8 @@ async def set_model(body: SetModelIn, user: dict = Depends(current_user)):
 
 
 @app.get("/api/tools")
-async def list_tools():
+async def list_tools(user: dict = Depends(current_user)):
+    # 工具 schema 暴露了智能体能做什么（含命令执行参数），不应匿名可读
     return {"ok": True, "tools": tools.openai_schemas()}
 
 
@@ -3417,7 +3424,8 @@ _HF_PASS_HEADERS = (
 
 
 @app.get("/api/local-weights/{rest:path}")
-async def local_weights_proxy(rest: str, request: Request):
+async def local_weights_proxy(rest: str, request: Request,
+                              user: dict = Depends(current_user)):
     if not rest or "\\" in rest or ".." in rest.split("/"):
         raise HTTPException(400, "非法路径")
     cache_path = (WEB_WEIGHTS_DIR / rest).resolve()

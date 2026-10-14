@@ -36,7 +36,7 @@ cyrcyrgo.github.io/
 ### 应用与系统
 - **MiniLLM 精简大模型**（`xm/llm/`）：从零实现并训练的精简 LLM（BPE 分词、RoPE、GQA、SwiGLU、RMSNorm、KV Cache），权重导出后在浏览器内实时推理。
 - **WebNT 桌面系统**（`xm/nt/`）：浏览器中的网页操作系统，包含窗口管理、任务栏、文件管理器与小游戏。
-- **PolyTerm 多语言终端**（`xm/polyterm/`）：集成 Python、C++、CMD 的浏览器终端环境，支持扩展包与项目管理。
+- **PolyTerm 多语言终端**（`xm/polyterm/`）：集成 Python、CMD 的浏览器终端环境，支持扩展包与项目管理。（C++ 环境入口保留但不可运行：浏览器端没有内置编译器。）
 - **蟒蛇 Python IDE**（`xm/py/`）：在线运行 Python 代码，集成文件管理、编辑器与控制台，另有 Py IDE Pro 版。
 - **Lumina Cloud Agent**（`xm/lumina/`）：运行在本机的自主 AI 智能体，邮箱验证码登录后可读写文件、执行脚本、调用 MCP 并回传产物。
 - **Forge AI 训练台**（`xm/ai/`）：配置 API 后可对模型进行强化式训练、测试与知识问答。

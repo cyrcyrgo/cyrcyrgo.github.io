@@ -1349,7 +1349,11 @@ button, input, select, textarea { touch-action: manipulation; }
   // 计算器辅助函数
   window.__calcEval = function(expr) {
     try {
-      expr = expr.replace(/[^0-9+-*/.() ]/g, '');
+      // 注意：原写法 /[^0-9+-*/.() ]/ 中 "+-*" 会被解析成字符范围，
+      // 而 "*" 不是有效范围终点，浏览器直接抛
+      // "Range out of order in character class"，导致计算器一输入就崩。
+      // 把 "-" 转义即可。
+      expr = expr.replace(/[^0-9+\-*/.() ]/g, '');
       return Function('"use strict"; return (' + expr + ')')();
     } catch(e) { return null; }
   };
@@ -2303,7 +2307,11 @@ function renderPinnedTaskbar() {
 }
 
 function updateTaskbarWindowButtons() {
-  const list = document.getElementById('tb-window-list');
+  // 本函数在重构合成单文件 bundle 后，查询的 'tb-window-list' 这个 id
+  // 在 DOM 里已不存在（容器实际是 'tb-center'），导致任务栏永远不会显示
+  // 已打开窗口，也就无法在任务栏切换/恢复窗口。这里回退到真实容器。
+  const list = document.getElementById('tb-window-list')
+            || document.getElementById('tb-center');
   if (!list) return;
   const wins = WindowManager.instance.getWindowList();
   list.innerHTML = '';
@@ -4885,7 +4893,16 @@ function launchTerminal() {
   tw.style.left='150px'; tw.style.top='80px';
   tw.style.zIndex=100;
   twInput.focus();
-  tw.dataset.winId = window.WindowManager.instance.createWindow({title:'终端',appId:'terminal',icon:'\u2328\ufe0f'});
+  // 只在尚未登记窗口时创建：原来每次调用都 createWindow 一次，
+  // 最小化（只隐藏不销毁）后再点任务栏终端键就会再建一个，
+  // 旧 id 永远残留在 WindowManager 的 Map 里变成删不掉的幽灵进程。
+  if (!tw.dataset.winId) {
+    tw.dataset.winId = window.WindowManager.instance.createWindow({title:'终端',appId:'terminal',icon:'\u2328\ufe0f'});
+  } else if (window.WindowManager && window.WindowManager.instance) {
+    // 已存在：回到前台并重新登记为活跃窗口
+    const wm = window.WindowManager.instance;
+    if (typeof wm.bringToFront === 'function') wm.bringToFront(tw.dataset.winId);
+  }
   tw.dataset.normalStyle = 'width:700px;height:420px;left:150px;top:80px';
 }
 

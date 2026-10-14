@@ -562,6 +562,15 @@ function doLogin(){
 const NTFY='https://ntfy.sh/';
 let lanES=null;   /* EventSource 订阅 */
 let lanPC=null;   /* 内网直连用 RTCPeerConnection */
+/* 房主的 lanPC 要等收到 offer 才创建，而加入方的 trickle ICE 候选可能更早到达。
+   原来这些候选因为 lanPC 还是 null 被整批丢弃，导致连接成功率下降。
+   这里先缓存，等 RTCPeerConnection 就绪后再补加。 */
+let lanPendingIce=[];
+function lanFlushIce(){
+  if(!lanPC)return;
+  const q=lanPendingIce;lanPendingIce=[];
+  q.forEach(c=>{lanPC.addIceCandidate(c).catch(()=>{})});
+}
 
 function lanTopic(ip){return 'gm-lan-'+ip.replace(/\./g,'-')}
 function lanSetStatus(id,txt){
@@ -618,7 +627,10 @@ async function lanCreateRoom(){
 /* 房主收到的信令 */
 function lanHostMsg(msg){
   if(msg.type==='offer')lanOnOffer(msg);
-  else if(msg.type==='ice'&&lanPC&&msg.candidate){lanPC.addIceCandidate(msg.candidate).catch(()=>{})}
+  else if(msg.type==='ice'&&msg.candidate){
+    if(lanPC)lanPC.addIceCandidate(msg.candidate).catch(()=>{});
+    else if(lanPendingIce.length<64)lanPendingIce.push(msg.candidate);
+  }
 }
 /* 房主收到offer：应答并回流ICE */
 async function lanOnOffer(msg){
@@ -633,6 +645,7 @@ async function lanOnOffer(msg){
     pc.onicecandidate=e=>{if(e.candidate)lanPost(msg.reply,{type:'ice',candidate:e.candidate.toJSON()})};
     pc.ondatachannel=e=>bindDC(e.channel,true); /* 房主执黑 */
     await pc.setRemoteDescription(msg.sdp);
+    lanFlushIce();   /* 补加在 lanPC 创建之前到达的 ICE 候选 */
     const ans=await pc.createAnswer();
     await pc.setLocalDescription(ans);
     await lanPost(msg.reply,{type:'answer',name:S.name,sdp:pc.localDescription});
@@ -672,6 +685,10 @@ async function lanJoin(){
         lanSetStatus('lan-join-status','连接超时：请确认IP正确、对方已在同一WiFi创建房间');
         document.getElementById('js1').className='step';
         lanStopListen();
+        /* 原来只停监听、不关连接：重试会叠加多个 RTCPeerConnection，
+           既占资源又会让对端收到来自旧连接的重复 offer。 */
+        if(lanPC){try{lanPC.close()}catch(e){};lanPC=null;S.pc=null}
+        lanPendingIce=[];
       }
     },30000);
   }catch(e){lanSetStatus('lan-join-status','发起失败: '+e.message)}
@@ -1323,9 +1340,14 @@ initNetworkInfo(); /* 初始化网络信息（内网/外网IP） */
 /* ==============================================================
    部署工具 (控制台调用)
    ============================================================== */
+/* 安全说明：此处曾经硬编码过 GitHub Personal Access Token，属于严重安全事故。
+   Token 永远不应写进源码 / 提交进仓库。现在改为运行时由使用者自行输入，
+   且只保存在内存变量中，不落盘、不写入 localStorage。 */
 window.deployToGitHub=async function(){
-  const token='***REVOKED_TOKEN_REMOVED***';
-  const repo='cyrcyrgo/cyrcyrgo.github.io',path='gomoku/index.html';
+  const token=(window.prompt('请输入 GitHub Personal Access Token（仅本次使用，不会保存）：')||'').trim();
+  if(!token){console.error('❌ 未输入 Token，已取消。');return}
+  if(!/^gh[pousr]_[A-Za-z0-9]{20,}$/.test(token)){console.error('❌ Token 格式不正确。');return}
+  const repo='cyrcyrgo/cyrcyrgo.github.io',path='xm/gomoku/index.html';
   const html=document.documentElement.outerHTML;
   const content=btoa(unescape(encodeURIComponent(html)));
   try{
@@ -1340,7 +1362,7 @@ window.deployToGitHub=async function(){
 };
 
 console.log('%cP2P五子棋 v2.01','font-size:20px;color:#c9a961;font-weight:bold');
-console.log('控制台输入 deployToGitHub() 可部署到 GitHub Pages');
+console.log('控制台输入 deployToGitHub() 可部署到 GitHub Pages（会提示输入 Token）');
 </script>
 </body>
 </html>

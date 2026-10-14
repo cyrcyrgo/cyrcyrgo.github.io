@@ -91,7 +91,12 @@ DEFAULTS: dict = {
     "session_secret": "",
     "code_ttl_seconds": 600,
     "code_resend_seconds": 60,
-    "allow_register": True,
+    # 安全默认值：本项目后端经公网隧道暴露，开放注册等于把「本机执行任意命令」
+    # 的能力交给任何人。需要开放注册时请在 config.local.json 中显式打开。
+    "allow_register": False,
+    # 高危工具（run_shell / run_python / http_request / browser / mcp_call）总开关。
+    # 默认关闭：智能体不得在无人确认的情况下在本机执行命令或访问任意 URL。
+    "sensitive_tools_enabled": False,
     # ---- admin-controlled global permissions -------------------------------
     "ai_enabled": True,            # master switch: suspend ALL model calls
     "allow_model_add": True,       # whether admins may still add new models
@@ -334,7 +339,7 @@ def save(cfg: dict) -> None:
                    "mcp_servers", "models", "api_keys", "admin",
                    "allow_register", "ai_enabled", "allow_model_add",
                    "announcement", "default_model", "max_tool_calls_per_step",
-                   "notification", "engine")
+                   "notification", "engine", "sensitive_tools_enabled")
     payload = {k: cfg[k] for k in secret_keys if k in cfg}
     # Never persist the GitHub token in the clear: only its encrypted form
     # (github.token_secret) belongs on disk. The plaintext copy stays in memory

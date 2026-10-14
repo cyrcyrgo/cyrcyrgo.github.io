@@ -4,10 +4,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
-import random
+import secrets
 import smtplib
 import ssl
 import time
+from collections import defaultdict
 from email.message import EmailMessage
 
 import jwt
@@ -17,7 +18,34 @@ from . import config as cfg
 # email -> {"code", "expires", "last_sent", "attempts"}
 _CODES: dict[str, dict] = {}
 
+# 发信 / 校验的 IP 维度限流（原本只有按邮箱 60s 冷却，可被无限轰炸 + 爆破）
+_IP_HITS: dict[str, list[float]] = defaultdict(list)
+IP_SEND_LIMIT = 10          # 同一 IP 每窗口最多请求发送几封验证码
+IP_SEND_WINDOW = 3600.0     # 窗口长度（秒）
+IP_VERIFY_LIMIT = 20        # 同一 IP 每窗口最多尝试校验几次
+IP_VERIFY_WINDOW = 600.0
+
 ALGO = "HS256"
+
+
+def _ip_hit(key: str, ip: str, limit: int, window: float) -> bool:
+    """记录一次命中；返回 True 表示已超限。"""
+    if not ip:
+        return False
+    bucket = f"{key}:{ip}"
+    now = time.time()
+    hits = [t for t in _IP_HITS[bucket] if now - t < window]
+    hits.append(now)
+    _IP_HITS[bucket] = hits
+    return len(hits) > limit
+
+
+def ip_send_allowed(ip: str) -> bool:
+    return not _ip_hit("send", ip, IP_SEND_LIMIT, IP_SEND_WINDOW)
+
+
+def ip_verify_allowed(ip: str) -> bool:
+    return not _ip_hit("verify", ip, IP_VERIFY_LIMIT, IP_VERIFY_WINDOW)
 
 
 # --------------------------------------------------------------------------- #
@@ -117,7 +145,8 @@ def can_send(email: str) -> tuple[bool, int]:
 def send_code(email: str, purpose: str = "login") -> None:
     email = email.lower()
     _smtp()
-    code = f"{random.randint(0, 999999):06d}"
+    # CSPRNG：random 是 Mersenne Twister，可被观测值预测，不能用于验证码。
+    code = f"{secrets.randbelow(1_000_000):06d}"
     if cfg.CONFIG.get("debug_codes"):
         print(f"[auth] {purpose} code for {email} = {code}", flush=True)
     _CODES[email] = {

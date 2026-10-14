@@ -992,24 +992,13 @@ updateNetworkUI(); /* 初始化网络状态检测 */
 /* ==============================================================
    部署工具 (控制台调用)
    ============================================================== */
+/* 归档版本：曾硬编码 GitHub PAT，已移除。请改用 xm/gomoku/index.html。 */
 window.deployToGitHub=async function(){
-  const token='***REVOKED_TOKEN_REMOVED***';
-  const repo='cyrcyrgo/cyrcyrgo.github.io',path='gomoku/index.html';
-  const html=document.documentElement.outerHTML;
-  const content=btoa(unescape(encodeURIComponent(html)));
-  try{
-    const r1=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{headers:{'Authorization':'token '+token}});
-    let sha;if(r1.ok){sha=(await r1.json()).sha}
-    const r2=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{
-      method:'PUT',headers:{'Authorization':'token '+token,'Content-Type':'application/json'},
-      body:JSON.stringify({message:'Deploy P2P五子棋',content,sha,branch:'main'})
-    });
-    r2.ok?console.log('✅ 部署成功! https://cyrcyrgo.github.io/xm/gomoku/'):console.error('❌',await r2.json());
-  }catch(e){console.error('❌',e)}
+  console.error('❌ 本归档页已停用部署功能（曾硬编码 Token）。请使用 xm/gomoku/index.html');
+  return;
 };
-
 console.log('%cP2P五子棋 v1.50','font-size:20px;color:#c9a961;font-weight:bold');
-console.log('控制台输入 deployToGitHub() 可部署到 GitHub Pages');
+console.log('本页为归档版本，部署功能已停用。');
 </script>
 </body>
 </html>

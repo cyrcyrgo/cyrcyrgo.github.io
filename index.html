@@ -802,9 +802,9 @@ const PROJECTS = [
     icon:'ic-terminal', acc:'#8f7ae8', soft:'rgba(143,122,232,.20)',
     url:'xm/polyterm/index.html', path:'xm/polyterm/index.html',
     tags:['终端','开发工具','扩展'],
-    desc:'集成 Python、C++、CMD 的浏览器终端环境，支持扩展包与项目管理。',
-    lead:'一个开在浏览器里的多语言终端：切换 Python / C++ / CMD 三种运行环境，自带命令手册、AI 助手与可插拔的扩展包系统。',
-    feat:['Python / C++ / CMD 三种运行环境自由切换','扩展包 SDK：第三方可发布自己的命令与面板','项目管理器：创建、导出、迁移项目数据','内置 AI 助手、配色主题与命令自动补全'],
+    desc:'集成 Python 与 CMD 的浏览器终端环境，支持扩展包与项目管理。',
+    lead:'一个开在浏览器里的多语言终端：切换 Python / CMD 运行环境，自带命令手册、AI 助手与可插拔的扩展包系统。',
+    feat:['Python / CMD 运行环境自由切换（C++ 环境因浏览器无内置编译器，暂不可运行）','扩展包 SDK：第三方可发布自己的命令与面板','项目管理器：创建、导出、迁移项目数据','内置 AI 助手、配色主题与命令自动补全'],
     stack:['JavaScript','Pyodide','WebAssembly','CSS'],
     note:'扩展包目录结构与发布规范见仓库内 PolyTerm 扩展包说明书。'
   },
@@ -868,11 +868,11 @@ const PROJECTS = [
     icon:'ic-game', acc:'#a78bfa', soft:'rgba(167,139,250,.20)',
     url:'xm/gomoku/index.html', path:'xm/gomoku/index.html',
     tags:['五子棋','P2P','联机'],
-    desc:'P2P 零服务器联机五子棋，附带残局解析器。',
-    lead:'不用注册、不用服务器的联机五子棋：双方各开一个页面，凭房间码点对点对弈，落子即同步。',
-    feat:['P2P 点对点连接，零服务器依赖','实时同步落子与悔棋操作','内置残局解析器，本地推演不上传','支持双人同屏对战'],
+    desc:'P2P 联机五子棋，支持内网直连与外网中继。',
+    lead:'不用注册的联机五子棋：内网模式下双方通过 WebRTC 直连对弈，外网模式借助公共中继服务（ntfy.sh）交换连接信息，落子即同步。',
+    feat:['内网 WebRTC 点对点直连，棋局数据不经过服务器','外网模式经 ntfy.sh 公共中继交换连接信息（仅信令，不含棋局内容）','实时同步落子与悔棋操作','支持双人同屏对战'],
     stack:['WebRTC','JavaScript','Canvas'],
-    note:'旧版本归档于 xm/gomoku/old/。'
+    note:'旧版本归档于 xm/gomoku/old/ 下的 v1.50 目录。'
   },
   {
     id:'ai-xq', name:'AI 象棋 · 五子棋', en:'AI Board Games', cat:'game',

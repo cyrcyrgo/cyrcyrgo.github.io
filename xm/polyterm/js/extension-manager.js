@@ -10,6 +10,12 @@
  * 包含丰富的资源加载、UI渲染、命令自动化、配置持久化等功能。
  */
 
+// 扩展包在仓库中的可能位置。
+// 站点重构后扩展包被移到 xm/polyterm/extensions/，原先硬编码的 extensions/
+// 已不存在（直接导致 /ar、/ap 对本仓库自带的 ai-v 扩展必然 404）。
+// 这里按优先级依次尝试，以同时兼容新旧布局与第三方仓库。
+const EXT_ROOTS = ['xm/polyterm/extensions', 'extensions'];
+
 // 扩展包管理器
 let extensionManager = {
     /** 扩展包元数据存储 { 包名: { config, status } } */
@@ -843,8 +849,11 @@ let extensionManager = {
         const validExtensions = [];
         for (const extName of extNames) {
             let validated = false;
+            // 仓库重构后扩展包实际位于 xm/polyterm/extensions/，
+            // 原来的 extensions/ 已不存在；两个前缀都试一遍以兼容旧布局。
+            for (const root of EXT_ROOTS) {
             for (const branch of branchesToTry) {
-                const configUrl = `https://raw.githubusercontent.com/${repoPath}/${branch}/extensions/${extName}/extension.json`;
+                const configUrl = `https://raw.githubusercontent.com/${repoPath}/${branch}/${root}/${extName}/extension.json`;
                 try {
                     const cfgResp = await this._fetchWithRetry(configUrl, 1, 500);
                     if (cfgResp.ok) {
@@ -857,7 +866,8 @@ let extensionManager = {
                             author: configData.author || '未知',
                             commands: (configData.commands || []).length,
                             loaded: isLoaded,
-                            _branch: branch
+                            _branch: branch,
+                            _root: root
                         });
                         validated = true;
                         break;
@@ -865,6 +875,8 @@ let extensionManager = {
                 } catch {
                     continue;
                 }
+            }
+            if (validated) break;
             }
             if (!validated) {
                 validExtensions.push({
@@ -906,7 +918,9 @@ let extensionManager = {
 
             try {
                 const branch = ext._branch || 'main';
-                const cdnBaseUrl = `https://raw.githubusercontent.com/${repoPath}/${branch}/extensions/${ext.name}/`;
+                // 与 _validateExtensions 保持一致：优先新布局，兼容旧布局
+                const root = (ext._root || EXT_ROOTS[0]);
+                const cdnBaseUrl = `https://raw.githubusercontent.com/${repoPath}/${branch}/${root}/${ext.name}/`;
                 const config = await this._fetchConfig(cdnBaseUrl, ext.name);
 
                 // 检查依赖（含版本约束）

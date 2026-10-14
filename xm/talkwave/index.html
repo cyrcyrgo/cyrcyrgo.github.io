@@ -1952,6 +1952,35 @@
       return div.innerHTML;
     }
 
+    // 用于属性上下文：escapeHtml 只转义 & < >，不转义引号，
+    // 因此放进 onclick="..." / data-xxx="..." 时仍可逃逸出属性。
+    function escapeAttr(text) {
+      return String(text == null ? '' : text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // 账号名白名单：服务端返回的账号名会被拼进 innerHTML，
+    // 必须先做格式校验，再叠加转义（纵深防御）。
+    const ACCOUNT_RE = /^[A-Za-z0-9_.@-]{1,64}$/;
+    function isValidAccount(v) {
+      return typeof v === 'string' && ACCOUNT_RE.test(v);
+    }
+    function safeAccount(v, fallback) {
+      return isValidAccount(v) ? escapeAttr(v) : escapeAttr(fallback || 'unknown');
+    }
+
+    // 语音数据来自 WebSocket 消息，只接受 base64（可含 data: 前缀），
+    // 避免远端构造带引号的内容逃逸出 data-audio="..." 属性。
+    function isValidAudioData(v) {
+      if (typeof v !== 'string' || v.length === 0 || v.length > 20 * 1024 * 1024) return false;
+      const body = v.startsWith('data:') ? v.slice(v.indexOf(',') + 1) : v;
+      return /^[A-Za-z0-9+/=]*$/.test(body);
+    }
+
     function formatDuration(seconds) {
       const m = Math.floor(seconds / 60);
       const s = seconds % 60;
@@ -2017,6 +2046,11 @@
         authError.textContent = '请填写账号和密码';
         return;
       }
+      // 账号名会被拼进联系人列表的 innerHTML，这里先做格式校验（服务端也应校验）
+      if (!isValidAccount(accountId)) {
+        authError.textContent = '账号只能包含字母、数字、下划线、点、@ 和连字符（1-64 位）';
+        return;
+      }
       authError.textContent = '';
       authBtn.disabled = true;
       authBtn.textContent = '处理中...';
@@ -2037,7 +2071,8 @@
           localStorage.setItem('accountId', data.accountId);
           // 存储 cookie
           document.cookie = 'token=' + data.token + '; path=/; max-age=86400';
-          document.cookie = 'accountId=' + data.accountId + '; path=/; max-age=86400';
+          // 必须编码：账号名含 ";" 或 "," 时可注入额外的 cookie 属性
+          document.cookie = 'accountId=' + encodeURIComponent(data.accountId) + '; path=/; max-age=86400; SameSite=Lax';
           showMain();
           connectWebSocket();
           loadFriends();
@@ -2372,21 +2407,22 @@
         return a.localeCompare(b);
       });
 
-      contactList.innerHTML = sortedUsers.map(u => {
+      contactList.innerHTML = sortedUsers.filter(isValidAccount).map(u => {
         const isActive = STATE.selectedContact === u && STATE.selectedContactType === 'user';
-        const avatarChar = getAvatarChar(u);
+        const avatarChar = escapeHtml(getAvatarChar(u));
         const unreadCount = STATE.unreadCounts[u] || 0;
         const badgeHtml = unreadCount > 0 ? '<span class="unread-badge">' + (unreadCount > 99 ? '99+' : unreadCount) + '</span>' : '';
         const isOnline = STATE.onlineUsers.includes(u);
+        // 账号名先经白名单校验，再用 escapeAttr 进入属性、escapeHtml 进入文本
         return `
-          <div class="contact-item ${isActive ? 'active' : ''}" data-account="${u}" onclick="selectContact('${u}', 'user')">
+          <div class="contact-item ${isActive ? 'active' : ''}" data-account="${escapeAttr(u)}" onclick="selectContact('${escapeAttr(u)}', 'user')">
             <div class="contact-avatar">
               ${avatarChar}
               <span class="online-dot ${isOnline ? '' : 'offline'}"></span>
               ${badgeHtml}
             </div>
             <div class="contact-info">
-              <div class="contact-name">${u}</div>
+              <div class="contact-name">${escapeHtml(u)}</div>
               <div class="contact-status">${isOnline ? '在线' : '离线'}</div>
             </div>
           </div>
@@ -2555,7 +2591,7 @@
         <div class="message-bubble">
           ${senderLabel}
           <div class="voice-message">
-            <button class="voice-play-btn" data-audio="${escapeHtml(audioData)}">▶</button>
+            <button class="voice-play-btn" data-audio="${escapeAttr(isValidAudioData(audioData) ? audioData : '')}">▶</button>
             <div class="voice-wave">
               ${Array.from({length: 20}, (_, i) => '<div class="voice-wave-bar" data-index="' + i + '"></div>').join('')}
             </div>
@@ -2768,18 +2804,18 @@
         friendsList.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-dim);font-size:13px;">暂无好友，点击 + 添加好友</div>';
         return;
       }
-      friendsList.innerHTML = list.map(f => {
+      friendsList.innerHTML = list.filter(f => isValidAccount(f.accountId)).map(f => {
         const isActive = STATE.selectedContact === f.accountId && STATE.selectedContactType === 'friend';
-        const avatarChar = getAvatarChar(f.accountId);
+        const avatarChar = escapeHtml(getAvatarChar(f.accountId));
         const isOnline = STATE.onlineUsers.includes(f.accountId);
         return `
-          <div class="friend-item ${isActive ? 'active' : ''}" onclick="selectContact('${f.accountId}', 'friend')">
+          <div class="friend-item ${isActive ? 'active' : ''}" onclick="selectContact('${escapeAttr(f.accountId)}', 'friend')">
             <div class="contact-avatar">
               ${avatarChar}
               <span class="online-dot ${isOnline ? '' : 'offline'}"></span>
             </div>
             <div class="contact-info">
-              <div class="contact-name">${f.accountId}</div>
+              <div class="contact-name">${escapeHtml(f.accountId)}</div>
               <div class="contact-status">${isOnline ? '在线' : '离线'}</div>
             </div>
           </div>

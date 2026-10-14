@@ -184,7 +184,10 @@
       <button class="btn ghost" id="htmlOpenNew" style="margin-left:auto">新标签页打开</button>
       <button class="btn ghost" id="htmlReRun">重新运行</button>
     </h3>
-    <iframe id="htmlFrame" sandbox="allow-scripts allow-same-origin" style="width:100%;height:480px;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe>
+    <!-- 重要：allow-scripts 与 allow-same-origin 同时存在时，框架内脚本可以
+         访问父文档并移除自身的 sandbox 属性，等同于没有沙箱。
+         这里只保留 allow-scripts，模型生成的 HTML 无法触碰本站数据。 -->
+    <iframe id="htmlFrame" sandbox="allow-scripts allow-popups" style="width:100%;height:480px;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe>
   </div>
 
   <div class="foot">

@@ -7,21 +7,151 @@ const os = require('os');
 const https = require('https');
 const http = require('http');
 const { URL } = require('url');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const TMP_DIR = path.join(os.tmpdir(), 'forge-ai-compiler');
 
-app.use(cors());
+/* ---------------------------------------------------------------------------
+   安全加固（原实现把「编译并执行任意 C++ 代码」无鉴权暴露在 0.0.0.0 上，
+   等同于给全网开放了一个远程代码执行接口）：
+   1) 默认只监听 127.0.0.1，不对外暴露；
+   2) 访问 /api/* 需要令牌（FORGE_API_TOKEN），未设置令牌时只允许本机回环访问；
+   3) 静态目录不再整目录暴露（原来 server.js / node_modules 都能被下载）；
+   4) 上游 LLM 地址走白名单，阻止 SSRF 打内网与云元数据。
+   --------------------------------------------------------------------------- */
+
+// 1) 监听地址：默认回环
+const HOST = process.env.HOST || '127.0.0.1';
+
+// 2) API 令牌：设置后所有 /api/* 必须携带
+const API_TOKEN = process.env.FORGE_API_TOKEN || '';
+
+// 3) 允许对外提供的静态文件后缀
+const STATIC_EXT = new Set([
+    '.html', '.htm', '.js', '.mjs', '.css', '.json', '.svg', '.png', '.jpg',
+    '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.map', '.txt', '.md',
+]);
+// 永远不通过静态目录暴露的路径前缀
+const STATIC_DENY = /(^|\/)(node_modules|server\.js|package(-lock)?\.json|\.git|\.env)(\/|$)/i;
+
+// 4) 允许的 LLM 上游域名（可经 FORGE_ALLOWED_HOSTS 逗号分隔扩展）
+const DEFAULT_ALLOWED_HOSTS = [
+    'api.openai.com',
+    'api.deepseek.com',
+    'dashscope.aliyuncs.com',
+    'ark.cn-beijing.volces.com',
+    'open.bigmodel.cn',
+    'api.moonshot.cn',
+    'api.siliconflow.cn',
+    'api.zhipuai.cn',
+    'generativelanguage.googleapis.com',
+    'api.anthropic.com',
+    'localhost',
+    '127.0.0.1',
+];
+const ALLOWED_HOSTS = new Set(
+    (process.env.FORGE_ALLOWED_HOSTS || '')
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean)
+        .concat(DEFAULT_ALLOWED_HOSTS)
+);
+
+function isPrivateHost(hostname) {
+    const h = hostname.toLowerCase();
+    if (h === 'localhost' || h === '::1') return true;
+    const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (!m) return false;
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 10 || a === 127 || a === 0) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 169 && b === 254) return true;   // 云元数据 169.254.169.254
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    return false;
+}
+
+/** 校验上游 URL：必须是 http(s)，host 在白名单内，且不是内网地址 */
+function assertUpstreamAllowed(rawUrl) {
+    let u;
+    try {
+        u = new URL(rawUrl);
+    } catch (_) {
+        return '上游地址不是合法的 URL';
+    }
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') {
+        return '仅允许 http/https 上游地址';
+    }
+    const host = u.hostname.toLowerCase();
+    if (isPrivateHost(host)) {
+        return `拒绝访问内网地址 ${host}（SSRF 防护）`;
+    }
+    if (!ALLOWED_HOSTS.has(host)) {
+        return `上游域名 ${host} 不在允许列表中，请通过 FORGE_ALLOWED_HOSTS 添加`;
+    }
+    return null;
+}
+
+// 只允许本机访问，或持有正确令牌的访问
+function apiGuard(req, res, next) {
+    const ip = (req.ip || req.socket?.remoteAddress || '').replace('::ffff:', '');
+    const isLoopback = ip === '127.0.0.1' || ip === '::1' || ip === '';
+    // CORS 不是 CSRF 防护：浏览器仍会把跨站 POST 发到 localhost。
+    // 拒绝未知 Origin，避免恶意网页借用户浏览器调用本机编译执行接口。
+    const origin = req.get('origin');
+    const allowedOrigin = process.env.FORGE_ALLOWED_ORIGIN || `http://${HOST}:${PORT}`;
+    if (origin && origin !== allowedOrigin && origin !== `http://localhost:${PORT}` &&
+        origin !== `http://127.0.0.1:${PORT}`) {
+        return res.status(403).json({ error: '请求来源未被允许' });
+    }
+    if (API_TOKEN) {
+        const sent = (req.get('authorization') || '').replace(/^Bearer\s+/i, '')
+            || req.get('x-api-key') || '';
+        if (!sent || sent.length !== API_TOKEN.length ||
+            !crypto.timingSafeEqual(Buffer.from(sent), Buffer.from(API_TOKEN))) {
+            return res.status(401).json({ error: '未提供有效访问令牌' });
+        }
+        return next();
+    }
+    if (!isLoopback) {
+        return res.status(403).json({
+            error: '未设置 FORGE_API_TOKEN，服务仅允许本机访问。'
+        });
+    }
+    next();
+}
+
+// 静态资源：先拒绝敏感路径，再按后缀放行（原来是整目录 express.static）
+app.use((req, res, next) => {
+    // API 路由由后面的 apiGuard 处理；不能按静态文件后缀拦掉 /api/compile 等接口。
+    if (req.path === '/api' || req.path.startsWith('/api/')) return next();
+    let rel;
+    try {
+        rel = decodeURIComponent(req.path.replace(/^\/+/, ''));
+    } catch (_) {
+        return res.status(400).end('Bad request');
+    }
+    if (!rel || rel.endsWith('/')) return next();
+    if (STATIC_DENY.test(rel)) return res.status(403).end('Forbidden');
+    if (!STATIC_EXT.has(path.extname(rel).toLowerCase())) {
+        return res.status(403).end('Forbidden');
+    }
+    return next();
+});
+
+app.use(cors({ origin: API_TOKEN ? true : 'http://localhost:' + PORT }));
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(__dirname));
+app.use(express.static(__dirname, { index: 'index.html', dotfiles: 'deny' }));
+app.use('/api', apiGuard);
 
 if (!fs.existsSync(TMP_DIR)) {
     fs.mkdirSync(TMP_DIR, { recursive: true });
 }
 
 function genId() {
-    return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+    return crypto.randomUUID();
 }
 
 app.get('/api/health', (req, res) => {
@@ -335,6 +465,12 @@ app.post('/api/chat', async (req, res) => {
         });
     }
 
+    // SSRF 防护：该端点原本会把任意 URL 的响应原样回传，可被用来探测内网与云元数据
+    const denyReason = assertUpstreamAllowed(url);
+    if (denyReason) {
+        return res.status(400).json({ error: { message: denyReason } });
+    }
+
     const apiUrl = url.replace(/\/+$/, '') + '/chat/completions';
 
     const body = {
@@ -418,11 +554,13 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
     console.log(`╔══════════════════════════════════════════╗`);
-    console.log(`║   Forge AI Compiler Server v1.01          ║`);
-    console.log(`║   http://localhost:${PORT}                       ║`);
+    console.log(`║   Forge AI Compiler Server v1.02          ║`);
+    console.log(`║   http://${HOST}:${PORT}${' '.repeat(Math.max(0, 22 - HOST.length - String(PORT).length))}║`);
     console.log(`╚══════════════════════════════════════════╝`);
     console.log(`  编译器: g++`);
     console.log(`  临时目录: ${TMP_DIR}`);
+    console.log(`  鉴权: ${API_TOKEN ? '已启用访问令牌' : '未设置令牌，仅允许本机访问'}`);
+    console.log(`  安全: 上游域名白名单已启用（SSRF 防护）`);
 });

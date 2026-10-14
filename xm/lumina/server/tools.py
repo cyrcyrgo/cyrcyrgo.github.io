@@ -107,6 +107,18 @@ async def execute(name: str, args: dict, ctx: ToolContext) -> dict:
     entry = REGISTRY.get(name)
     if not entry:
         return {"ok": False, "error": f"未知工具: {name}"}
+    # 高危工具（在本机执行命令 / 访问任意 URL）默认禁用。
+    # 它们是「模型说什么就做什么」，一旦被提示词注入或被注册用户调用，
+    # 等同于把本机 shell 交给对方。需要在 config.local.json 显式开启。
+    if entry.get("sensitive") and not cfg.CONFIG.get("sensitive_tools_enabled", False):
+        return {
+            "ok": False,
+            "error": (
+                f"工具 {name} 属于高危操作，当前已全局禁用。"
+                "如需启用，请在 config.local.json 设置 sensitive_tools_enabled=true，"
+                "并确保后端不对外暴露。"
+            ),
+        }
     try:
         result = await entry["fn"](ctx, **(args or {}))
         if isinstance(result, dict):

@@ -8,16 +8,20 @@
   const PREFIX_GH_RAW = "https://raw.githubusercontent.com/" + REPO + "/" + BRANCH + "/xm/llm/web/model/";
   const PREFIX_GHPAGES = (location.protocol === "file:" ? "" : location.origin) +
     location.pathname.replace(/[^/]*$/, "") + "model/";
+  // 说明：原先 MIRRORS[0] 写成 "https://gh-proxy.com/https://" + PREFIX_GH_RAW，
+  // 而 PREFIX_GH_RAW 本身已带 https://，拼出 "https://https://..." 必然失败；
+  // 且把第三方代理排在首位，等于让 70MB 权重全程过境未知的第三方。
+  // 现改为：同源（GitHub Pages）优先 → 官方 raw → jsDelivr → 第三方代理最后兜底。
   const MIRRORS = [
-    // gh-proxy 代理 raw 源（实测 25MB 权重 ~ 4.4s）
-    (p) => "https://gh-proxy.com/https://" + PREFIX_GH_RAW + p,
-    // jsDelivr（对小文件快，大文件 403）
-    (p) => "https://cdn.jsdelivr.net/gh/" + REPO + "@" + BRANCH + "/xm/llm/web/model/" + p,
-    (p) => "https://fastly.jsdelivr.net/gh/" + REPO + "@" + BRANCH + "/xm/llm/web/model/" + p,
+    // GitHub Pages / 本地同源：最快的路径，且不经过任何第三方
+    (p) => PREFIX_GHPAGES + p,
     // GitHub 官方 raw
     (p) => PREFIX_GH_RAW + p,
-    // GitHub Pages / 本地同源兜底
-    (p) => PREFIX_GHPAGES + p,
+    // jsDelivr（对小文件快，大文件常 403）
+    (p) => "https://cdn.jsdelivr.net/gh/" + REPO + "@" + BRANCH + "/xm/llm/web/model/" + p,
+    (p) => "https://fastly.jsdelivr.net/gh/" + REPO + "@" + BRANCH + "/xm/llm/web/model/" + p,
+    // 第三方代理仅作最后兜底（注意：权重会经过该第三方，仅在你信任它时保留）
+    (p) => "https://gh-proxy.com/https://raw.githubusercontent.com/" + REPO + "/" + BRANCH + "/xm/llm/web/model/" + p,
   ];
   const state = {
     modelKey: "dialog",
@@ -139,10 +143,19 @@
         let off = 0;
         for (const c of chunks) { out.set(c, off); off += c.length; }
         if (out.length === total) return out; // 完整下载即返回
+        // 不完整时记下来，但绝不把它当成「可用权重」静默返回——
+        // 截断的权重会让模型输出 NaN/乱码，且用户完全不知道发生了什么。
         if (out.length > bestLen) { bestLen = out.length; bestBuf = out; }
       } catch (e) { lastErr = e; }
     }
-    if (bestBuf && bestBuf.length > 0) return bestBuf;
+    // 所有镜像都拿不到完整文件时，明确报错而不是偷偷用残缺数据
+    if (bestBuf && bestBuf.length > 0) {
+      throw new Error(
+        "权重下载不完整：" + path +
+        "（仅获得 " + bestLen + " 字节，所有镜像均未返回完整文件）。" +
+        "请检查网络后重试。"
+      );
+    }
     throw lastErr || new Error("所有镜像均下载失败：" + path);
   }
 
@@ -451,9 +464,33 @@
     $("htmlPanel").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  // 属性上下文转义（放进 srcdoc="..." 用）
+  function escapeAttr(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   function openInNewTab(code) {
-    const blob = new Blob([code], { type: "text/html" });
-    window.open(URL.createObjectURL(blob), "_blank");
+    // 原实现用 Blob URL：blob: 会继承创建页面的同源，
+    // 新标签页里的脚本可以读取本站 localStorage / 发起同源请求。
+    // 改为在空白页里放一个 sandbox iframe（不含 allow-same-origin）承载代码。
+    const w = window.open("", "_blank");
+    if (!w) {
+      alert("新标签页被浏览器拦截，请允许弹出窗口后重试。");
+      return;
+    }
+    w.document.write(
+      "<!doctype html><html lang=\"zh\"><head><meta charset=\"utf-8\"><title>代码预览</title>" +
+      "<style>html,body{margin:0;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%;display:block}</style>" +
+      "</head><body>" +
+      "<iframe sandbox=\"allow-scripts allow-popups\" srcdoc=\"" + escapeAttr(code) + "\"></iframe>" +
+      "</body></html>"
+    );
+    w.document.close();
   }
 
   /** 渲染一条机器人消息；返回是否包含可运行代码 */

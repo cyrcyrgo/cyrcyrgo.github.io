@@ -1060,7 +1060,9 @@ html, body {
       updateOutputStats(formatted);
     } else if (action === 'minify') {
       const minified = JSON.stringify(obj);
-      jsonOutput.innerHTML = minified;
+      // 必须转义：JSON.stringify 不会处理 < > &，
+      // 直接 innerHTML 会让 {"a":"<img src=x onerror=...>"} 变成可执行脚本。
+      jsonOutput.innerHTML = escapeHTML(minified);
       treeContainer.innerHTML = '';
       updateOutputStats(minified);
       errorMessage.classList.remove('visible');
