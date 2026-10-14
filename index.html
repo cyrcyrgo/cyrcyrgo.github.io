@@ -174,12 +174,11 @@ a{color:inherit;text-decoration:none}
 /* ============================================================
    SEARCH BAR (capsule)
    ============================================================ */
-.search-zone{position:relative;width:min(720px,100%);margin-top:38px;
+.search-zone{position:relative;z-index:50;width:min(720px,100%);margin-top:38px;
   opacity:0;animation:fadeUp 1.15s var(--ease) 1.25s forwards}
 .search-box{position:relative;display:flex;align-items:center;gap:.55rem;
   padding:9px 9px 9px 24px;border-radius:var(--pill);
-  background:var(--panel);border:1px solid var(--line-2);
-  backdrop-filter:blur(22px) saturate(150%);-webkit-backdrop-filter:blur(22px) saturate(150%);
+  background:var(--panel);border:1px solid var(--line-2);isolation:isolate;
   box-shadow:0 18px 50px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.10);
   transition:box-shadow .65s var(--ease),border-color .65s ease,background .65s ease,transform .65s var(--spring)}
 .search-box::before{content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;
@@ -207,8 +206,7 @@ a{color:inherit;text-decoration:none}
 .search-go svg{width:15px;height:15px}
 
 .results{position:absolute;left:0;right:0;top:calc(100% + 14px);z-index:40;
-  border-radius:var(--r-lg);background:rgba(22,27,34,.94);border:1px solid var(--line-2);
-  backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);
+  border-radius:var(--r-lg);background:var(--panel);border:1px solid var(--line-2);isolation:isolate;
   box-shadow:var(--shadow-2);padding:10px;max-height:min(52vh,470px);overflow:auto;
   opacity:0;visibility:hidden;transform:translateY(-12px) scale(.975);transform-origin:top center;
   transition:opacity .45s var(--ease),transform .5s var(--spring),visibility .45s}
@@ -445,11 +443,11 @@ body.intro-live .pill,body.intro-live .word,body.intro-live .tagline-wrap,
 body.intro-live .search-zone,body.intro-live .cue{animation-play-state:paused!important}
 .intro{position:fixed;inset:0;z-index:300;cursor:pointer;
   background:linear-gradient(180deg,#120c1e 0%,#0d1117 46%,#010409 100%);
-  transition:background .9s var(--ease)}
+  transition:background .8s var(--ease)}
 .intro.done{background:transparent;pointer-events:none}
 /* the meteor canvas outlives the veil: it holds, then dissipates over the homepage */
 .intro canvas{position:absolute;inset:0;width:100%;height:100%;opacity:1;
-  transition:opacity 1.7s var(--ease) .7s}
+  transition:opacity 1.3s var(--ease) .5s}
 .intro.done canvas{opacity:0}
 .intro-mark{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;
   font-family:var(--font-d);font-weight:600;letter-spacing:.44em;text-transform:uppercase;
@@ -1371,11 +1369,13 @@ observeReveals();
      it (wind drag): heading up -> the bloom hangs below, etc.
    - the trail is trimmed by arc length, which scales with speed (short tail when
      crawling, long tail when racing).
-   - RHYTHM: one continuous speed law. It accelerates monotonically but keeps a
+   - RHYTHM: one continuous speed law. It accelerates steadily but keeps a shallow
      4-cycle ripple that eases through each turn; speed never approaches zero and
      has no step change at any boundary, so slow passages glide instead of stalling.
-   trajectory 5.38s = rise .9 | orbit 2.7 | spiral 1.78 -> detonation,
-   then a .45s hold and a 1.45s reveal of the homepage. */
+   - the launch is a cubic that leaves the bottom of the screen vertically and bends
+     over to meet the orbit tangentially, so there is no corner at the hand-off.
+   trajectory 4.48s = rise .74 | orbit 2.26 | spiral 1.48 -> detonation,
+   then a .38s hold and a 1.3s reveal of the homepage. */
 (() => {
   const intro = document.getElementById('intro');
   if (!intro) return;
@@ -1399,16 +1399,17 @@ observeReveals();
   const eOut = t => 1 - Math.pow(1 - t, 3);
   const clamp01 = p => p < 0 ? 0 : p > 1 ? 1 : p;
 
-  /* flow(): gentle ripple whose endpoints still travel at 72% -> no dead stop */
-  const K = .28;
+  /* flow(): very gentle ripple whose endpoints still travel at 88% -> no dead stop
+     and almost no speed pulse, so the launch glides instead of stepping. */
+  const K = .12;
   const flow = p => p - K * Math.sin(TAU * p) / TAU;
-  const flowIn = p => p * (.95 + .05 * p);   // long dive, matched to the orbit's exit speed
 
   /* One continuous law for the whole orbit. v(p) = (1 + A(2p-1)) * (1 - B cos8πp)
      rises steadily slow->fast (A) while dipping through all four turn apexes (B).
      Integrated and normalised once into a lookup table, so the angle mapping is
-     smooth everywhere and has no gear-shift between quarters. */
-  const ORB_N = 256, ORB_A = .68, ORB_B = .30;
+     smooth everywhere and has no gear-shift between quarters. B is kept small so
+     the turn dips read as graceful rather than as a stop-and-go stutter. */
+  const ORB_N = 512, ORB_A = .6, ORB_B = .14;
   const ORB_S = new Float64Array(ORB_N + 1);
   {
     const law = p => (1 + ORB_A * (2 * p - 1)) * (1 - ORB_B * Math.cos(8 * Math.PI * p));
@@ -1425,27 +1426,39 @@ observeReveals();
     const f = p * ORB_N, i = Math.min(ORB_N - 1, f | 0);
     return ORB_S[i] + (ORB_S[i + 1] - ORB_S[i]) * (f - i);
   };
+  /* entry / exit angular gain of the orbit (finite differences of the table), used
+     to hand the meteor off to the launch and the spiral without any speed step. */
+  const ORB_IN  = ORB_S[1] * ORB_N;
+  const ORB_OUT = (ORB_S[ORB_N] - ORB_S[ORB_N - 1]) * ORB_N;
 
-  const T_RISE   = .9;
-  const T_ORBIT  = 2.7;
-  const T_SPIRAL = 1.78;
-  const T_HOLD   = .45;                                     // hold before the reveal
-  const T_END    = T_RISE + T_ORBIT + T_SPIRAL;             // 5.38 = detonation
+  const T_RISE   = .74;
+  const T_ORBIT  = 2.26;
+  const T_SPIRAL = 1.48;
+  const T_HOLD   = .38;                                     // hold before the reveal
+  const T_END    = T_RISE + T_ORBIT + T_SPIRAL;             // 4.48 = detonation
   const T_FADE   = 2.4;                                       // matches the canvas dissolve
 
   const pos = t => {
-    if (t < T_RISE) {                                       // rise from off-screen, gliding
-      const lift = flow(clamp01(t / T_RISE));
-      return { x: cx, y: (H + 90) + (cy + ry - (H + 90)) * lift };
+    if (t < T_RISE) {                                       // rise from off-screen, curving into the orbit
+      /* cubic launch: vertical where it leaves the bottom of the screen, then it
+         bends over so its tangent is horizontal and its speed matches the orbit's
+         entry speed -> the hand-off into the loop is seamless (no corner, no jerk). */
+      const s = flow(clamp01(t / T_RISE)), u = 1 - s;
+      const y0 = H + 90, y1 = cy + ry;
+      const a = (y0 - y1) * .55;                            // vertical control reach
+      const f = rx * ORB_IN * TAU * T_RISE / (3 * (1 - K) * T_ORBIT);  // matches entry speed
+      const x = cx + 3 * u * s * s * f;
+      const y = u * u * u * y0 + 3 * u * u * s * (y0 - a) + 3 * u * s * s * y1 + s * s * s * y1;
+      return { x, y };
     }
     const t2 = t - T_RISE;
     if (t2 < T_ORBIT) {                                     // one smooth accelerating orbit
       const ang = Math.PI / 2 + TAU * orbMap(t2 / T_ORBIT);
       return { x: cx + Math.cos(ang) * rx, y: cy + Math.sin(ang) * ry };
     }
-    const t3 = clamp01((t2 - T_ORBIT) / T_SPIRAL);          // spiral in, leaves immediately
-    const e = flowIn(t3), shrink = 1 - e;
-    const ang = Math.PI / 2 + TAU + e * Math.PI * 1.7;
+    const t3 = clamp01((t2 - T_ORBIT) / T_SPIRAL);          // spiral in, then plunge
+    const shrink = 1 - t3 * t3;                             // no launch kick, fast final dive
+    const ang = Math.PI / 2 + TAU + t3 * ORB_OUT * TAU * T_SPIRAL / T_ORBIT;
     return { x: cx + Math.cos(ang) * rx * shrink, y: cy + Math.sin(ang) * ry * shrink, end: t3 >= 1 };
   };
 
@@ -1529,8 +1542,10 @@ observeReveals();
     lastPos = { x, y };
 
     const ang = Math.atan2(dir.y, dir.x);
-    const stretch = 1 + Math.min(spd / 950, 1) * 1.25;
-    const back = 10 * (stretch - 1) + 6;
+    // wind drag, amplified: the faster it goes the more the glow is stretched
+    // along the heading and shoved rearwards, so the bloom visibly lags behind.
+    const stretch = 1 + Math.min(spd / 640, 1) * 1.95;
+    const back = 26 * (stretch - 1) + 8;
 
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -1554,16 +1569,19 @@ observeReveals();
       }
     }
 
-    // ---- directional halo, leaning backwards
-    halo(x, y, ang, stretch, back, 104, [[0, 'rgba(255,255,255,.26)'], [1, 'rgba(255,255,255,0)']]);
-    halo(x, y, ang, stretch, back, 52, [[0, 'rgba(255,255,255,.55)'], [.45, 'rgba(255,255,255,.18)'], [1, 'rgba(255,255,255,0)']]);
-    halo(x, y, ang, stretch, back, 26, [[0, 'rgba(255,255,255,.95)'], [1, 'rgba(255,255,255,0)']]);
+    // ---- directional halo, leaning backwards (wind drag)
+    const wake = 1 + Math.min(spd / 640, 1) * 3.1;          // long, faint trailing wake
+    const wakeBack = 30 * (wake - 1) + 10;
+    halo(x, y, ang, wake, wakeBack, 150, [[0, 'rgba(255,255,255,.13)'], [.5, 'rgba(255,255,255,.05)'], [1, 'rgba(255,255,255,0)']]);
+    halo(x, y, ang, stretch, back, 116, [[0, 'rgba(255,255,255,.30)'], [1, 'rgba(255,255,255,0)']]);
+    halo(x, y, ang, stretch, back, 58, [[0, 'rgba(255,255,255,.60)'], [.45, 'rgba(255,255,255,.20)'], [1, 'rgba(255,255,255,0)']]);
+    halo(x, y, ang, stretch, back, 28, [[0, 'rgba(255,255,255,.97)'], [1, 'rgba(255,255,255,0)']]);
 
-    // ---- head: crisp, smeared slightly along the heading as it speeds up
+    // ---- head: crisp, smeared further along the heading as it speeds up
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(ang);
-    ctx.scale(1 + Math.min(spd / 1800, 1) * .9, 1);
+    ctx.scale(1 + Math.min(spd / 1400, 1) * 1.15, 1);
     ctx.fillStyle = '#fff';
     ctx.beginPath(); ctx.arc(0, 0, 9.5, 0, TAU); ctx.fill();
     ctx.restore();
