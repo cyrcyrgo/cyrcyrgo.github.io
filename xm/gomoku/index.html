@@ -153,14 +153,8 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
       <div class="mode-btn" data-mode="p2p" onclick="selectMode(this)">
         <span class="icon">🌐</span><span class="label">外网P2P</span>
       </div>
-      <div class="mode-btn" data-mode="ngrok" onclick="selectMode(this)">
-        <span class="icon">🚀</span><span class="label">Ngrok穿透</span>
-      </div>
       <div class="mode-btn" data-mode="auto" onclick="selectMode(this)">
         <span class="icon">⚡</span><span class="label">自动优选</span>
-      </div>
-      <div class="mode-btn" data-mode="tok" onclick="selectMode(this)">
-        <span class="icon">🔑</span><span class="label">Token配对</span>
       </div>
     </div>
     <!-- 网络信息区域 -->
@@ -179,24 +173,8 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
           <span style="color:var(--dim)">外网IP:</span>
           <span id="wan-ip" style="font-family:'DM Mono',monospace">—</span>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="color:var(--dim)">连接Token:</span>
-          <span id="conn-token" style="font-family:'DM Mono',monospace;font-size:1rem;font-weight:700;color:var(--accent)">—</span>
-        </div>
       </div>
-      <p style="font-size:.65rem;color:var(--dim);margin-top:.5rem;line-height:1.5">🔑 Token为5位随机码，每次进入页面自动刷新。内网模式下输入对方Token即可极速配对，无需扫码。</p>
-    </div>
-    <!-- Token 极速配对面板（内网/Token配对模式显示） -->
-    <div id="token-panel" style="margin:1rem 0;padding:1rem;background:var(--surface2);border-radius:8px;border:1px solid var(--accent);display:none">
-      <div id="tok-panel-title" style="font-size:.78rem;color:var(--accent);margin-bottom:.5rem;font-weight:600">⚡ 内网极速配对（Token直连）</div>
-      <p id="tok-panel-desc" style="font-size:.7rem;color:var(--dim);margin-bottom:.5rem;line-height:1.5">同WiFi/内网下：把Token发给对方，输入对方Token即可极速直连，无需扫码、无需房间码。</p>
-      <p style="font-size:.7rem;color:var(--dim);margin-bottom:.5rem">我的配对Token：<span id="tok-my" style="font-family:'DM Mono',monospace;font-size:1.1rem;font-weight:700;color:var(--accent);letter-spacing:.15em">—</span></p>
-      <div style="display:flex;gap:.4rem;align-items:center;margin-top:.4rem">
-        <input type="text" id="tok-input" placeholder="输入对方5位Token" maxlength="5" style="flex:1;font-family:'DM Mono',monospace;letter-spacing:.2em;text-align:center">
-      </div>
-      <p style="font-size:.65rem;color:var(--dim);margin:.3rem 0 .5rem">注意：双方需在同一时间在线，且都处于当前模式。</p>
-      <button class="btn btn-accent btn-block" onclick="tokenConnect()" id="tok-connect-btn">⚡ 输入Token极速配对</button>
-      <div class="status-bar" id="tok-status" style="display:none"><div class="status-dot waiting"></div><span id="tok-status-text">等待配对...</span></div>
+      <p style="font-size:.65rem;color:var(--dim);margin-top:.5rem;line-height:1.5">🏠 内网对战无需连接码：创建房间后把你的内网IP告诉对手，对方输入该IP即可直连。</p>
     </div>
     <button class="btn btn-accent btn-block" onclick="doLogin()">进入大厅</button>
   </div>
@@ -212,15 +190,12 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
     </div>
     <button class="btn btn-accent btn-block" onclick="createRoom()">创建房间</button>
     <div style="text-align:center;color:var(--dim);margin:.6rem 0;font-size:.8rem">— 或 —</div>
-    <button class="btn btn-ghost btn-block" onclick="goTo('join-screen')">手动加入房间</button>
+    <button class="btn btn-ghost btn-block" onclick="openJoinScreen()">手动加入房间</button>
     <div style="text-align:center;color:var(--dim);margin:.6rem 0;font-size:.8rem">— 或 —</div>
     <!-- 大厅页扫码快捷入口 -->
     <button class="btn btn-scan btn-block" onclick="lobbyScanJoin()">
       <span class="scan-anim">📷</span> 扫码加入房间
     </button>
-    <!-- Token 极速配对入口（内网/Token模式下可用） -->
-    <div style="text-align:center;color:var(--dim);margin:.6rem 0;font-size:.8rem">— 或 —</div>
-    <button class="btn btn-accent btn-block" onclick="goToTokenPair()" id="lobby-tok-btn" style="display:none">⚡ Token 极速配对</button>
   </div>
 </div>
 
@@ -229,28 +204,43 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
   <div class="card">
     <div class="steps"><div class="step active" id="cs1"></div><div class="step" id="cs2"></div></div>
     <h2>创建房间</h2>
-    <div class="status-bar"><div class="status-dot waiting"></div><span id="create-status">正在生成连接码...</span></div>
-    <div id="create-code-area" style="display:none">
-      <p style="font-size:.82rem;color:var(--dim);margin-bottom:.3rem">将以下房间码分享给对手：</p>
-      <div class="code-box" id="create-code"></div>
-      <div class="qr-wrap"><div id="create-qr"></div></div>
+    <!-- 内网模式：IP直连等待区 -->
+    <div id="create-lan-area" style="display:none">
+      <p style="font-size:.82rem;color:var(--dim);margin-bottom:.3rem">你的内网IP（告诉对手，或让对手扫码）：</p>
+      <div class="code-box" id="create-lan-ip" style="font-size:1.15rem;color:var(--accent);text-align:center;letter-spacing:.05em">—</div>
+      <div class="qr-wrap"><div id="create-lan-qr"></div></div>
       <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center">
-        <button class="btn btn-ghost btn-sm" onclick="copyCode('create-code')">📋 复制</button>
-        <button class="btn btn-ghost btn-sm" onclick="showQRFull('create-code')">📱 全屏QR</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyCode('create-lan-ip')">📋 复制IP</button>
+        <button class="btn btn-ghost btn-sm" onclick="showQRFull('create-lan-ip')">📱 全屏QR</button>
       </div>
+      <div class="status-bar" id="lan-create-status" style="display:none"><div class="status-dot waiting"></div><span id="lan-create-status-text">等待对手连接...</span></div>
+      <p style="font-size:.7rem;color:var(--dim);margin-top:.5rem;line-height:1.5">对手连接同一WiFi后，在本页选择「加入房间」并输入上述IP即可直连，全程无需连接码。</p>
     </div>
-    <hr style="border-color:var(--border);margin:1rem 0">
-    <!-- 步骤2：接收应答码，支持扫码 -->
-    <p style="font-size:.82rem;color:var(--dim);margin-bottom:.3rem">步骤2：获取对手的应答码</p>
-    <textarea id="inp-answer" placeholder="在此粘贴对手的应答码..."></textarea>
-    <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
-      <button class="btn btn-scan btn-sm" onclick="startScan('inp-answer')">
-        <span class="scan-anim">📷</span> 扫描应答码
-      </button>
-      <button class="btn btn-ghost btn-sm" onclick="openGallery('inp-answer')">🖼️ 相册</button>
-      <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-answer')">📋 粘贴</button>
+    <!-- 外网P2P/自动优选：连接码交换 -->
+    <div id="create-p2p-flow" style="display:none">
+      <div class="status-bar"><div class="status-dot waiting"></div><span id="create-status">正在生成连接码...</span></div>
+      <div id="create-code-area" style="display:none">
+        <p style="font-size:.82rem;color:var(--dim);margin-bottom:.3rem">将以下房间码分享给对手：</p>
+        <div class="code-box" id="create-code"></div>
+        <div class="qr-wrap"><div id="create-qr"></div></div>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center">
+          <button class="btn btn-ghost btn-sm" onclick="copyCode('create-code')">📋 复制</button>
+          <button class="btn btn-ghost btn-sm" onclick="showQRFull('create-code')">📱 全屏QR</button>
+        </div>
+      </div>
+      <hr style="border-color:var(--border);margin:1rem 0">
+      <!-- 步骤2：接收应答码，支持扫码 -->
+      <p style="font-size:.82rem;color:var(--dim);margin-bottom:.3rem">步骤2：获取对手的应答码</p>
+      <textarea id="inp-answer" placeholder="在此粘贴对手的应答码..."></textarea>
+      <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
+        <button class="btn btn-scan btn-sm" onclick="startScan('inp-answer')">
+          <span class="scan-anim">📷</span> 扫描应答码
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="openGallery('inp-answer')">🖼️ 相册</button>
+        <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-answer')">📋 粘贴</button>
+      </div>
+      <button class="btn btn-accent btn-block" onclick="acceptAnswer()" style="margin-top:.8rem">确认连接</button>
     </div>
-    <button class="btn btn-accent btn-block" onclick="acceptAnswer()" style="margin-top:.8rem">确认连接</button>
     <button class="btn btn-ghost btn-block btn-sm" onclick="goTo('lobby-screen')">取消</button>
   </div>
 </div>
@@ -260,30 +250,40 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
   <div class="card">
     <div class="steps"><div class="step" id="js1"></div><div class="step" id="js2"></div></div>
     <h2>加入房间</h2>
-    <p style="font-size:.82rem;color:var(--dim);margin-bottom:.5rem">输入对手的房间码，或直接扫码：</p>
-    <textarea id="inp-room-code" placeholder="在此粘贴房间码..."></textarea>
-    <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
-      <!-- 扫码按钮突出显示 -->
-      <button class="btn btn-scan btn-sm" onclick="startScan('inp-room-code')">
-        <span class="scan-anim">📷</span> 扫描房间码
-      </button>
-      <button class="btn btn-ghost btn-sm" onclick="openGallery('inp-room-code')">🖼️ 相册</button>
-      <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-room-code')">📋 粘贴</button>
+    <!-- 内网模式：输入房主内网IP直连 -->
+    <div id="join-lan-flow" style="display:none">
+      <p style="font-size:.82rem;color:var(--dim);margin-bottom:.5rem">输入房主的内网IP，直连对方（需连接同一WiFi）：</p>
+      <input type="text" id="inp-lan-ip" placeholder="如 192.168.1.5" inputmode="decimal" style="font-family:'DM Mono',monospace;text-align:center;letter-spacing:.05em">
+      <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
+        <button class="btn btn-scan btn-sm" onclick="startScan('inp-lan-ip')">
+          <span class="scan-anim">📷</span> 扫描IP二维码
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-lan-ip')">📋 粘贴</button>
+      </div>
+      <button class="btn btn-accent btn-block" onclick="lanJoin()" style="margin-top:.8rem">🔗 直连房主</button>
+      <div class="status-bar" id="lan-join-status" style="display:none"><div class="status-dot waiting"></div><span id="lan-join-status-text">...</span></div>
     </div>
-    <!-- Token校验输入（可选，推荐用Token极速配对更快） -->
-    <div style="margin-top:.8rem">
-      <p style="font-size:.78rem;color:var(--dim);margin-bottom:.3rem">🔑 连接Token <span style="color:var(--info)">(可选)</span>：</p>
-      <input type="text" id="inp-token" placeholder="输入5位连接Token（可选）" maxlength="5" style="font-family:'DM Mono',monospace;letter-spacing:.3em;text-align:center">
-      <p style="font-size:.65rem;color:var(--dim);margin-top:.3rem">💡 提示：内网对战建议直接使用「Token极速配对」，无需填写房间码。</p>
-    </div>
-    <button class="btn btn-accent btn-block" onclick="joinRoom()" style="margin-top:.8rem">生成应答码</button>
-    <div id="answer-area" style="display:none;margin-top:1rem">
-      <div class="status-bar"><div class="status-dot waiting"></div><span>请将应答码分享给房主：</span></div>
-      <div class="code-box" id="join-answer-code"></div>
-      <div class="qr-wrap"><div id="join-answer-qr"></div></div>
-      <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center">
-        <button class="btn btn-ghost btn-sm" onclick="copyCode('join-answer-code')">📋 复制</button>
-        <button class="btn btn-ghost btn-sm" onclick="showQRFull('join-answer-code')">📱 全屏QR</button>
+    <!-- 外网P2P/自动优选：连接码 -->
+    <div id="join-code-flow" style="display:none">
+      <p style="font-size:.82rem;color:var(--dim);margin-bottom:.5rem">输入对手的房间码，或直接扫码：</p>
+      <textarea id="inp-room-code" placeholder="在此粘贴房间码..."></textarea>
+      <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
+        <!-- 扫码按钮突出显示 -->
+        <button class="btn btn-scan btn-sm" onclick="startScan('inp-room-code')">
+          <span class="scan-anim">📷</span> 扫描房间码
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="openGallery('inp-room-code')">🖼️ 相册</button>
+        <button class="btn btn-ghost btn-sm" onclick="pasteClip('inp-room-code')">📋 粘贴</button>
+      </div>
+      <button class="btn btn-accent btn-block" onclick="joinRoom()" style="margin-top:.8rem">生成应答码</button>
+      <div id="answer-area" style="display:none;margin-top:1rem">
+        <div class="status-bar"><div class="status-dot waiting"></div><span>请将应答码分享给房主：</span></div>
+        <div class="code-box" id="join-answer-code"></div>
+        <div class="qr-wrap"><div id="join-answer-qr"></div></div>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center">
+          <button class="btn btn-ghost btn-sm" onclick="copyCode('join-answer-code')">📋 复制</button>
+          <button class="btn btn-ghost btn-sm" onclick="showQRFull('join-answer-code')">📱 全屏QR</button>
+        </div>
       </div>
     </div>
     <button class="btn btn-ghost btn-block btn-sm" onclick="goTo('lobby-screen')" style="margin-top:.8rem">返回</button>
@@ -343,7 +343,7 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
    全局状态
    ============================================================== */
 const S={name:'',mode:'lan',role:'',pc:null,dc:null,connected:false,gameStarted:false,
-  board:null,myColor:'',turn:'black',over:false,moves:0,lastMove:null,opponentName:'',token:'',
+  board:null,myColor:'',turn:'black',over:false,moves:0,lastMove:null,opponentName:'',lanIP:'',
   peer:null,peerConn:null};
 
 const STUN=[
@@ -361,11 +361,9 @@ const TURN=[
 const ICE={
   lan:{iceServers:[]},
   p2p:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'},
-  ngrok:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'},
-  auto:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'},
-  tok:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'}
+  auto:{iceServers:[...STUN,...TURN],iceTransportPolicy:'all'}
 };
-const MLABELS={lan:'🏠 内网模式',p2p:'🌐 外网P2P',ngrok:'🚀 Ngrok穿透',auto:'⚡ 自动优选',tok:'🔑 Token配对'};
+const MLABELS={lan:'🏠 内网模式',p2p:'🌐 外网P2P',auto:'⚡ 自动优选'};
 
 /* ==============================================================
    网络信息获取
@@ -464,27 +462,14 @@ async function getPublicIP(){
   }catch(e){return '获取失败'}
 }
 
-// 生成5位数随机Token
-function generateToken(){
-  return Math.floor(10000 + Math.random() * 90000).toString();
-}
-
 // 初始化网络信息
 async function initNetworkInfo(){
   const netEnv=document.getElementById('net-env');
   const lanIp=document.getElementById('lan-ip');
   const wanIp=document.getElementById('wan-ip');
-  const tokenEl=document.getElementById('conn-token');
 
   if(netEnv) netEnv.textContent = getNetworkType();
   if(lanIp) lanIp.textContent = '获取中...';
-
-  // 生成并显示5位连接Token
-  const token=generateToken();
-  S.token=token;
-  if(tokenEl) tokenEl.textContent = token;
-  const tokMyEl=document.getElementById('tok-my');
-  if(tokMyEl) tokMyEl.textContent = token;
 
   // 并行获取IP
   const [ip1, ip2]=await Promise.all([
@@ -492,6 +477,7 @@ async function initNetworkInfo(){
     getPublicIP()
   ]);
 
+  S.lanIP=ip1||'';
   if(lanIp) lanIp.textContent = ip1;
   if(wanIp) wanIp.textContent = ip2;
 }
@@ -525,20 +511,6 @@ function selectMode(el){
   }
   document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('selected'));
   el.classList.add('selected');S.mode=el.dataset.mode;
-  /* 切换 Token 极速配对 面板显示（内网/Token配对模式均可用） */
-  const panel=document.getElementById('token-panel');
-  const showPanel=(S.mode==='lan'||S.mode==='tok');
-  if(panel)panel.style.display=showPanel?'block':'none';
-  /* 根据模式切换面板文案 */
-  const pTitle=document.getElementById('tok-panel-title');
-  const pDesc=document.getElementById('tok-panel-desc');
-  if(showPanel){
-    const isLan=S.mode==='lan';
-    if(pTitle)pTitle.innerHTML=isLan?'⚡ 内网极速配对（Token直连）':'🔑 Token 跨网配对';
-    if(pDesc)pDesc.textContent=isLan
-      ?'同WiFi/内网下：把Token发给对方，输入对方Token即可极速直连，无需扫码、无需房间码。'
-      :'任意网络：把Token发给对方，输入对方Token即可配对连接，无需交换房间码。';
-  }
 }
 /* 网络环境检测 */
 function isWiFi(){
@@ -579,182 +551,150 @@ function doLogin(){
   S.name=n;
   document.getElementById('lobby-user').textContent='👤 '+n;
   document.getElementById('lobby-mode-label').textContent=MLABELS[S.mode];
-  /* 大厅页 Token 极速配对入口：内网/Token配对模式可见 */
-  const lobBtn=document.getElementById('lobby-tok-btn');
-  if(lobBtn)lobBtn.style.display=(S.mode==='lan'||S.mode==='tok')?'inline-flex':'none';
-  /* 内网模式：进入大厅（可用 Token 极速配对 / 传统房间码 / 扫码） */
-  if(S.mode==='lan'){
-    setTimeout(()=>tokStartListen(),300); /* 提前启动监听，确保能收到配对请求 */
-    goTo('lobby-screen');
-    return;
-  }
-  /* Token配对模式：登录后停留在登录页，直接在此面板配对 */
-  if(S.mode==='tok'){
-    const panel=document.getElementById('token-panel');
-    if(panel)panel.style.display='block';
-    tokSetStatus('正在初始化配对通道...');
-    tokBtnDisable(false);
-    setTimeout(()=>tokStartListen(),300);
-    goTo('login-screen'); /* 停留在登录页，显示配对面板 */
-    toast('Token配对已就绪：把下方Token发给对方','ok');
-    return;
-  }
   goTo('lobby-screen');
 }
 
-/* 大厅页 → Token 极速配对面板 */
-function goToTokenPair(){
-  const panel=document.getElementById('token-panel');
-  if(panel)panel.style.display='block';
-  if(!tokES)tokStartListen();
-  goTo('login-screen');
-  tokSetStatus('配对通道已就绪，等待对方连接...');
-}
-
 /* ==============================================================
-   Token 配对 (ntfy.sh 公共信令中继)
-   用 token 作为 ntfy topic，双方通过 HTTP 发布/订阅交换
-   WebRTC offer/answer/ICE，任意网络环境下仅凭 token 配对。
+   内网IP直连（ntfy.sh 仅作信令中继，数据通道在内网直接建立）
+   房主以内网IP派生的topic监听，加入方输入IP发起offer，
+   WebRTC数据通道走内网host候选直连，全程无需Base64连接码。
    ============================================================== */
 const NTFY='https://ntfy.sh/';
-let tokES=null;      /* EventSource 订阅 */
-let tokPC=null;      /* 配对用 RTCPeerConnection */
-let tokWaiting=false;/* 是否正在等待应答 */
+let lanES=null;   /* EventSource 订阅 */
+let lanPC=null;   /* 内网直连用 RTCPeerConnection */
 
-function tokTopic(t){return 'gm-tk-'+t}
-
-function tokSetStatus(txt){
-  const st=document.getElementById('tok-status');
-  const stt=document.getElementById('tok-status-text');
-  if(st)st.style.display=txt?'flex':'none';
-  if(stt)stt.textContent=txt||'';
+function lanTopic(ip){return 'gm-lan-'+ip.replace(/\./g,'-')}
+function lanSetStatus(id,txt){
+  const bar=document.getElementById(id);
+  const txtEl=document.getElementById(id+'-text');
+  if(bar)bar.style.display=txt?'flex':'none';
+  if(txtEl)txtEl.textContent=txt||'';
 }
-function tokBtnDisable(disable){
-  const b=document.getElementById('tok-connect-btn');
-  if(b)b.disabled=disable;
-}
-/* 发布一条信令消息到指定 token 的 topic */
-async function tokPublish(toToken,msg){
+/* 向指定topic发布一条信令消息 */
+async function lanPost(topic,msg){
   try{
-    const body={...msg,from:S.token,ts:Date.now()};
-    await fetch(NTFY+tokTopic(toToken),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  }catch(e){console.warn('tokPublish fail',e)}
+    await fetch(NTFY+topic,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(msg)});
+  }catch(e){console.warn('lanPost fail',e)}
 }
-/* 订阅自己的 topic，持续监听对方的 offer/answer/ice */
-function tokStartListen(){
-  tokStopListen();
-  if(!S.token){tokSetStatus('Token无效，请刷新页面');return}
+/* 订阅指定topic */
+function lanListen(topic,onMsg){
+  lanStopListen();
   try{
-    tokES=new EventSource(NTFY+tokTopic(S.token)+'/json');
-    tokES.onopen=()=>{
-      if(S.mode==='lan'||S.mode==='tok')tokSetStatus('配对通道已就绪，等待对方连接...');
-    };
-    tokES.onmessage=e=>{
+    lanES=new EventSource(NTFY+topic+'/json');
+    lanES.onmessage=e=>{
       try{
         const raw=JSON.parse(e.data);
         if(!raw||!raw.message)return;
         const msg=JSON.parse(raw.message);
-        if(!msg||msg.from===S.token)return; /* 忽略自己的消息 */
-        tokHandleMsg(msg);
+        if(msg)onMsg(msg);
       }catch(err){}
     };
-    tokES.onerror=()=>{ /* EventSource 自动重连 */ };
-  }catch(e){tokSetStatus('配对通道初始化失败，请刷新重试')}
+    lanES.onerror=()=>{ /* EventSource 自动重连 */ };
+  }catch(e){}
 }
-function tokStopListen(){
-  if(tokES){tokES.close();tokES=null}
+function lanStopListen(){
+  if(lanES){lanES.close();lanES=null}
 }
-/* 信令消息分发 */
-function tokHandleMsg(msg){
-  if(msg.type==='offer')tokOnOffer(msg);
-  else if(msg.type==='answer')tokOnAnswer(msg);
-  else if(msg.type==='ice')tokOnIce(msg);
+
+/* ---------- 房主：以内网IP为房间标识，等待对手直连 ---------- */
+async function lanCreateRoom(){
+  const ipEl=document.getElementById('create-lan-ip');
+  ipEl.textContent='—';
+  document.getElementById('create-lan-area').style.display='block';
+  document.getElementById('cs1').className='step done';
+  document.getElementById('cs2').className='step active';
+  lanSetStatus('lan-create-status','正在获取内网IP...');
+  if(!S.lanIP||S.lanIP==='获取失败')S.lanIP=await getLocalIP();
+  if(!S.lanIP||S.lanIP==='获取失败'){
+    ipEl.textContent='获取失败';
+    lanSetStatus('lan-create-status','无法获取内网IP，请确认已连接WiFi后重新创建房间');
+    toast('无法获取内网IP，请检查WiFi','err');return;
+  }
+  ipEl.textContent=S.lanIP;
+  genQR('create-lan-qr',S.lanIP);
+  lanListen(lanTopic(S.lanIP),lanHostMsg);
+  lanSetStatus('lan-create-status','等待对手连接...对手选择「加入房间」输入该IP即可');
 }
-/* 根据模式选择 ICE 配置：内网(lan)纯直连极速，Token(tok)带STUN/TURN跨网 */
-function tokIceCfg(){
-  return (S.mode==='lan')?ICE.lan:ICE.tok;
+/* 房主收到的信令 */
+function lanHostMsg(msg){
+  if(msg.type==='offer')lanOnOffer(msg);
+  else if(msg.type==='ice'&&lanPC&&msg.candidate){lanPC.addIceCandidate(msg.candidate).catch(()=>{})}
 }
-/* 加入方收到 offer：创建PC、应答 */
-async function tokOnOffer(msg){
-  if(S.connected||S.gameStarted||S.role==='host')return;
-  if(!msg.sdp||!msg.sdp.sdp)return;
-  S.role='join';
-  tokBtnDisable(true);
-  tokSetStatus('收到 '+msg.name+' 的配对请求，正在应答...');
+/* 房主收到offer：应答并回流ICE */
+async function lanOnOffer(msg){
+  if(S.connected||S.gameStarted)return;
+  if(!msg.sdp||!msg.sdp.sdp||!msg.reply)return;
+  S.role='host';
+  lanSetStatus('lan-create-status','收到 '+(msg.name||'对手')+' 的连接请求，正在应答...');
   try{
-    const pc=new RTCPeerConnection(tokIceCfg());
-    tokPC=pc;S.pc=pc;
-    pc.onicecandidate=e=>{if(e.candidate)tokPublish(msg.from,{type:'ice',candidate:e.candidate.toJSON()})};
-    pc.ondatachannel=e=>{
-      const dc=e.channel;
-      S.dc=dc;
-      dc.onopen=()=>{S.connected=true;tokSetStatus('配对成功，连接已建立!');toast('Token配对成功!','ok');startGame(false)};
-      dc.onmessage=ev=>{try{handleMsg(JSON.parse(ev.data))}catch(x){}};
-      dc.onclose=()=>{S.connected=false;toast('Token通道已断开','err')};
-    };
+    if(lanPC){try{lanPC.close()}catch(e){}}
+    const pc=new RTCPeerConnection(ICE.lan);
+    lanPC=pc;S.pc=pc;
+    pc.onicecandidate=e=>{if(e.candidate)lanPost(msg.reply,{type:'ice',candidate:e.candidate.toJSON()})};
+    pc.ondatachannel=e=>bindDC(e.channel,true); /* 房主执黑 */
     await pc.setRemoteDescription(msg.sdp);
     const ans=await pc.createAnswer();
     await pc.setLocalDescription(ans);
-    await tokPublish(msg.from,{type:'answer',name:S.name,sdp:pc.localDescription});
-    tokSetStatus('已发送应答，等待数据通道建立...');
-  }catch(e){tokSetStatus('应答失败: '+e.message);tokBtnDisable(false)}
+    await lanPost(msg.reply,{type:'answer',name:S.name,sdp:pc.localDescription});
+    lanSetStatus('lan-create-status','已应答，正在建立内网连接...');
+  }catch(e){lanSetStatus('lan-create-status','应答失败: '+e.message)}
 }
-/* 发起方收到 answer */
-async function tokOnAnswer(msg){
-  if(!tokPC||S.connected||!msg.sdp)return;
-  tokSetStatus('对方已应答，正在建立数据通道...');
-  try{
-    await tokPC.setRemoteDescription(msg.sdp);
-  }catch(e){tokSetStatus('应答处理失败')}
-}
-/* 收到 ICE 候选 */
-async function tokOnIce(msg){
-  if(!tokPC)return;
-  try{await tokPC.addIceCandidate(msg.candidate)}catch(e){}
-}
-/* 用户点击"连接对方"：作为发起方(Host)创建PC并发offer */
-async function tokenConnect(){
-  /* 未登录时自动读取昵称 */
+
+/* ---------- 加入方：输入房主内网IP发起直连 ---------- */
+async function lanJoin(){
+  const ip=document.getElementById('inp-lan-ip').value.trim();
+  if(!/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)){toast('请输入有效的内网IP，如 192.168.1.5','err');return}
   if(!S.name){
     const n=document.getElementById('inp-name').value.trim();
-    if(!n){toast('请先输入昵称','err');return}
-    S.name=n;
-    document.getElementById('lobby-user').textContent='👤 '+n;
+    if(!n){toast('请先返回登录页输入昵称','err');return}
+    S.name=n;document.getElementById('lobby-user').textContent='👤 '+n;
   }
-  const input=document.getElementById('tok-input').value.trim();
-  if(!input){toast('请输入对方5位Token','err');return}
-  if(!/^\d{5}$/.test(input)){toast('Token必须为5位数字','err');return}
-  if(input===S.token){toast('不能连接自己的Token','err');return}
-  /* 确保自己也在监听自己的 topic（接收对方的 answer/ice） */
-  if(!tokES)tokStartListen();
-  /* 若已有旧PC先关闭 */
-  if(tokPC){try{tokPC.close()}catch(e){};tokPC=null}
-  S.role='host';
-  tokBtnDisable(true);
-  tokSetStatus('正在连接对方Token: '+input+' ...');
+  S.role='join';
+  document.getElementById('js1').className='step active';
+  lanSetStatus('lan-join-status','正在连接 '+ip+' ...');
   try{
-    const pc=new RTCPeerConnection(tokIceCfg());
-    tokPC=pc;S.pc=pc;
-    /* 发起方创建数据通道 */
+    if(lanPC){try{lanPC.close()}catch(e){}}
+    const pc=new RTCPeerConnection(ICE.lan);
+    lanPC=pc;S.pc=pc;
+    /* 随机应答topic：房主凭此回传answer/ICE */
+    const reply='gm-lan-r-'+Math.random().toString(36).slice(2,12);
     const dc=pc.createDataChannel('game');
-    S.dc=dc;
-    dc.onopen=()=>{S.connected=true;tokSetStatus('配对成功，连接已建立!');toast('Token配对成功!','ok');startGame(true)};
-    dc.onmessage=e=>{try{handleMsg(JSON.parse(e.data))}catch(x){}};
-    dc.onclose=()=>{S.connected=false;toast('Token通道已断开','err')};
+    bindDC(dc,false); /* 加入方执白 */
     /* trickle ICE：候选逐条发送（ntfy 单消息限4KB，SDP不带候选） */
-    pc.onicecandidate=e=>{if(e.candidate)tokPublish(input,{type:'ice',candidate:e.candidate.toJSON()})};
+    pc.onicecandidate=e=>{if(e.candidate)lanPost(lanTopic(ip),{type:'ice',candidate:e.candidate.toJSON(),reply})};
     const offer=await pc.createOffer();
     await pc.setLocalDescription(offer);
-    await tokPublish(input,{type:'offer',name:S.name,sdp:pc.localDescription});
-    tokSetStatus('已发送配对请求，等待对方应答...');
-    /* 超时提示 */
+    lanListen(reply,lanGuestMsg); /* 先订阅应答通道再发offer */
+    await lanPost(lanTopic(ip),{type:'offer',name:S.name,reply,sdp:pc.localDescription});
+    lanSetStatus('lan-join-status','已向 '+ip+' 发起连接，等待对方应答...');
     setTimeout(()=>{
       if(!S.connected&&!S.gameStarted){
-        tokSetStatus('连接超时，对方可能不在线');
-        tokBtnDisable(false);
+        lanSetStatus('lan-join-status','连接超时：请确认IP正确、对方已在同一WiFi创建房间');
+        document.getElementById('js1').className='step';
+        lanStopListen();
       }
     },30000);
-  }catch(e){tokSetStatus('发起失败: '+e.message);tokBtnDisable(false)}
+  }catch(e){lanSetStatus('lan-join-status','发起失败: '+e.message)}
+}
+/* 加入方收到的信令 */
+function lanGuestMsg(msg){
+  if(msg.type==='answer'&&lanPC&&!S.connected&&msg.sdp){
+    lanPC.setRemoteDescription(msg.sdp).then(()=>{
+      lanSetStatus('lan-join-status','对方已应答，正在建立内网连接...');
+      document.getElementById('js1').className='step done';
+      document.getElementById('js2').className='step active';
+    }).catch(()=>{});
+  }else if(msg.type==='ice'&&lanPC&&msg.candidate){
+    lanPC.addIceCandidate(msg.candidate).catch(()=>{});
+  }
+}
+
+/* 大厅页 → 加入房间（按模式切换界面） */
+function openJoinScreen(){
+  const lan=(S.mode==='lan');
+  document.getElementById('join-lan-flow').style.display=lan?'block':'none';
+  document.getElementById('join-code-flow').style.display=lan?'none':'block';
+  goTo('join-screen');
 }
 
 /* ==============================================================
@@ -785,8 +725,8 @@ function createPC(){
     if(pc.connectionState==='disconnected'||pc.connectionState==='failed'){
       S.connected=false;
       if(!S.gameStarted){
-        toast('连接失败：可能双方网络均受限，请尝试Ngrok模式','err');
-        if(document.getElementById('create-status'))document.getElementById('create-status').textContent='连接失败，请尝试Ngrok模式';
+        toast('连接失败：可能双方网络均受限，请尝试外网P2P模式','err');
+        if(document.getElementById('create-status'))document.getElementById('create-status').textContent='连接失败，请尝试外网P2P模式';
       }else{
         toast('连接断开','err');
       }
@@ -861,6 +801,11 @@ function handleMsg(m){
    ============================================================== */
 async function createRoom(){
   S.role='host';S.gameStarted=false;goTo('create-screen');
+  document.getElementById('create-lan-area').style.display='none';
+  document.getElementById('create-p2p-flow').style.display='none';
+  /* 内网模式：IP直连，不走连接码 */
+  if(S.mode==='lan'){await lanCreateRoom();return}
+  document.getElementById('create-p2p-flow').style.display='block';
   document.getElementById('create-status').textContent='正在生成连接码...';
   document.getElementById('create-code-area').style.display='none';
   document.getElementById('cs1').className='step active';document.getElementById('cs2').className='step';
@@ -874,8 +819,8 @@ async function createRoom(){
     const offer=await pc.createOffer();await pc.setLocalDescription(offer);
     /* ICE收集超时8秒（TURN候选需要更长时间） */
     await waitICE(pc,8000);
-    /* 生成连接码，附带Token用于校验 */
-    const code=mkCode({sdp:pc.localDescription,name:S.name,mode:S.mode,token:S.token,ts:Date.now()});
+    /* 生成连接码 */
+    const code=mkCode({sdp:pc.localDescription,name:S.name,mode:S.mode,ts:Date.now()});
 
     document.getElementById('create-status').textContent='等待对手加入...';
     document.getElementById('create-code').textContent=code;
@@ -891,12 +836,6 @@ async function acceptAnswer(){
   if(!raw){toast('请粘贴或扫描应答码','err');return}
   const d=parseCode(raw);
   if(!d){toast('无效的应答码','err');return}
-  /* 房主校验应答码中的Token（若存在） */
-  const answerToken=d.token||'';
-  if(answerToken&&answerToken!==S.token){
-    toast('Token校验失败：应答方Token不匹配','err');
-    return;
-  }
   try{
     await applyRemote(S.pc,d);
     toast('已连接，等待数据通道打开...','ok');
@@ -922,8 +861,8 @@ async function acceptAnswer(){
     /* 超时检测：从交换SDP后开始计时 */
     setTimeout(()=>{
       if(!S.gameStarted&&!S.connected){
-        toast('连接超时，双方网络可能无法互通，请尝试Ngrok模式','err');
-        if(document.getElementById('create-status'))document.getElementById('create-status').textContent='连接超时，请尝试Ngrok模式';
+        toast('连接超时，双方网络可能无法互通，请尝试外网P2P模式','err');
+        if(document.getElementById('create-status'))document.getElementById('create-status').textContent='连接超时，请检查网络';
       }
     },30000);
   }catch(e){toast('连接失败: '+e.message,'err')}
@@ -937,11 +876,6 @@ async function joinRoom(){
   if(!raw){toast('请输入或扫描房间码','err');return}
   const d=parseCode(raw);
   if(!d){toast('无效的房间码','err');return}
-  /* Token校验：可选（填了才校验，不填放行） */
-  const hostToken=d.token||'';
-  let inputToken=document.getElementById('inp-token').value.trim();
-  if(inputToken&&hostToken&&inputToken!==hostToken){toast('Token校验失败，请检查后重试','err');return}
-  if(inputToken&&!hostToken){toast('该房间码不含Token，无需校验','info')}
   S.role='join';
   document.getElementById('js1').className='step active';
   try{
@@ -952,7 +886,7 @@ async function joinRoom(){
     await pc.setLocalDescription(ans);
     /* 不等待ICE收集完成，直接用当前SDP生成应答码
        ICE候选已嵌入SDP，后续会通过ICE trickle补充 */
-    const code=mkCode({sdp:pc.localDescription,name:S.name,token:S.token,ts:Date.now()});
+    const code=mkCode({sdp:pc.localDescription,name:S.name,ts:Date.now()});
 
     document.getElementById('join-answer-code').textContent=code;
     document.getElementById('answer-area').style.display='block';
@@ -1034,17 +968,9 @@ function checkWin(x,y,c){
 function requestRematch(){if(S.dc&&S.dc.readyState==='open'){S.dc.send(JSON.stringify({type:'rematch-req'}));toast('已发送请求','info')}}
 function exitGame(){
   if(S.pc){S.pc.close();S.pc=null}
-  if(tokPC){try{tokPC.close()}catch(e){};tokPC=null}
+  if(lanPC){try{lanPC.close()}catch(e){};lanPC=null}
+  lanStopListen();
   S.dc=null;S.connected=false;S.gameStarted=false;S.role='';
-  if(S.mode==='tok'){
-    /* Token配对：退出后回到登录页配对面板，可重新配对 */
-    const panel=document.getElementById('token-panel');
-    if(panel)panel.style.display='block';
-    tokBtnDisable(false);
-    tokSetStatus('已退出对局，可重新配对');
-    goTo('login-screen');
-    return;
-  }
   goTo('lobby-screen');
 }
 
@@ -1273,7 +1199,7 @@ function startScan(targetId){
 
         if(typeof jsQR!=='undefined'){
           const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:'dontInvert'});
-          if(code&&code.data&&code.data.length>10){
+          if(code&&code.data&&code.data.length>6){
             scanning=false;
             stopScanner();
             onScanResult(code.data);
@@ -1313,8 +1239,15 @@ function onScanResult(data){
 
   // 大厅快捷扫码 → 自动填入并跳转加入流程
   if(scanTargetId==='__lobby_scan__'){
+    if(S.mode==='lan'){
+      /* 内网模式：扫到的是房主的IP二维码 */
+      document.getElementById('inp-lan-ip').value=data;
+      openJoinScreen();
+      setTimeout(()=>lanJoin(),300);
+      return;
+    }
     document.getElementById('inp-room-code').value=data;
-    goTo('join-screen');
+    openJoinScreen();
     // 自动触发加入
     setTimeout(()=>joinRoom(),300);
     return;
@@ -1325,7 +1258,10 @@ function onScanResult(data){
   if(target){
     target.value=data;
     // 如果有对应按钮，自动触发
-    if(scanTargetId==='inp-room-code'){
+    if(scanTargetId==='inp-lan-ip'){
+      toast('已获取IP，正在连接...','info');
+      setTimeout(()=>lanJoin(),300);
+    }else if(scanTargetId==='inp-room-code'){
       toast('已填入房间码，点击“生成应答码”继续','info');
     }else if(scanTargetId==='inp-answer'){
       toast('已填入应答码，点击“确认连接”继续','info');
@@ -1382,7 +1318,7 @@ document.addEventListener('touchend',e=>{
 
 renderBoard();
 updateNetworkUI(); /* 初始化网络状态检测 */
-initNetworkInfo(); /* 初始化网络信息与Token生成 */
+initNetworkInfo(); /* 初始化网络信息（内网/外网IP） */
 
 /* ==============================================================
    部署工具 (控制台调用)
