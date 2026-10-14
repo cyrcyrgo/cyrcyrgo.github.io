@@ -1372,9 +1372,10 @@ observeReveals();
    - RHYTHM: one continuous speed law. It accelerates steadily but keeps a shallow
      4-cycle ripple that eases through each turn; speed never approaches zero and
      has no step change at any boundary, so slow passages glide instead of stalling.
-   - the launch is a cubic that leaves the bottom of the screen vertically and bends
-     over to meet the orbit tangentially, so there is no corner at the hand-off.
-   trajectory 4.48s = rise .74 | orbit 2.26 | spiral 1.48 -> detonation,
+   - the launch sweeps in from the lower right and merges tangentially into one
+     full lap; a hairpin then whips the meteor around and it plunges straight into
+     the core. Every seam is tangent + speed matched, so the path never breaks.
+   trajectory ~3.4s = rise .74 | lap 2.26 | hairpin-dive ~.4 -> detonation,
    then a .38s hold and a 1.3s reveal of the homepage. */
 (() => {
   const intro = document.getElementById('intro');
@@ -1392,7 +1393,6 @@ observeReveals();
     cx = W / 2; cy = H * .46;
     rx = Math.min(W * .42, 540); ry = Math.min(H * .30, 300);
   };
-  fit(); addEventListener('resize', fit, { passive: true });
 
   const TAU = Math.PI * 2;
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -1427,83 +1427,128 @@ observeReveals();
     return ORB_S[i] + (ORB_S[i + 1] - ORB_S[i]) * (f - i);
   };
   /* entry / exit angular gain of the orbit (finite differences of the table), used
-     to hand the meteor off to the launch and the spiral without any speed step. */
+     to hand the meteor off to the launch and the hairpin without any speed step. */
   const ORB_IN  = ORB_S[1] * ORB_N;
   const ORB_OUT = (ORB_S[ORB_N] - ORB_S[ORB_N - 1]) * ORB_N;
 
   const T_RISE   = .74;
   const T_ORBIT  = 2.26;
-  const T_SPIRAL = 1.48;
   const T_HOLD   = .38;                                     // hold before the reveal
-  const T_END    = T_RISE + T_ORBIT + T_SPIRAL;             // 4.48 = detonation
   const T_FADE   = 2.4;                                       // matches the canvas dissolve
+  let T_TURN = .5;                                          // refined by buildTurn()
+  let T_END = T_RISE + T_ORBIT + T_TURN;                    // ~3.4 = detonation
+
+  /* HAIRPIN TABLE — the post-lap U-turn and center dive, sampled once per resize
+     into arc lengths so the whip reads at a constant, matched pace. */
+  const TURN_N = 320, TURN_A = 1.4;
+  const TURN_L = new Float64Array(TURN_N + 1);
+  const TURN_P = new Float64Array((TURN_N + 1) * 2);
+  let TURN_LEN = 0;
+  const buildTurn = () => {
+    const c = rx * .48, d = ry * .72;                       // hairpin size
+    const bx = [cx, cx - c, cx, cx], by = [cy + ry, cy + ry, cy + ry - d, cy];
+    let acc = 0, px = bx[0], py = by[0];
+    TURN_P[0] = px; TURN_P[1] = py;
+    for (let i = 1; i <= TURN_N; i++) {
+      const u = i / TURN_N, v = 1 - u;
+      const X = v*v*v*bx[0] + 3*v*v*u*bx[1] + 3*v*u*u*bx[2] + u*u*u*bx[3];
+      const Y = v*v*v*by[0] + 3*v*v*u*by[1] + 3*v*u*u*by[2] + u*u*u*by[3];
+      acc += Math.hypot(X - px, Y - py);
+      px = X; py = Y;
+      TURN_L[i] = acc; TURN_P[i * 2] = X; TURN_P[i * 2 + 1] = Y;
+    }
+    TURN_LEN = acc;
+    /* dive law w(u)=1+A·u²: entry speed equals the lap's exit speed exactly, then
+       the plunge accelerates to (1+A)·v by the bullseye. */
+    T_TURN = TURN_LEN / (rx * ORB_OUT * TAU / T_ORBIT) / (1 + TURN_A / 3);
+    T_END = T_RISE + T_ORBIT + T_TURN;
+  };
+
+  fit(); buildTurn();
+  addEventListener('resize', () => { fit(); buildTurn(); }, { passive: true });
 
   const pos = t => {
-    if (t < T_RISE) {                                       // rise from off-screen, curving into the orbit
-      /* cubic launch: vertical where it leaves the bottom of the screen, then it
-         bends over so its tangent is horizontal and its speed matches the orbit's
-         entry speed -> the hand-off into the loop is seamless (no corner, no jerk). */
+    if (t < T_RISE) {                                       // sweep in from the lower right
+      /* cubic launch: rises vertically off-screen, then bends left so its tangent
+         and speed meet the loop's entry exactly -> one continuous arc, no kink. */
       const s = flow(clamp01(t / T_RISE)), u = 1 - s;
       const y0 = H + 90, y1 = cy + ry;
       const a = (y0 - y1) * .55;                            // vertical control reach
       const f = rx * ORB_IN * TAU * T_RISE / (3 * (1 - K) * T_ORBIT);  // matches entry speed
-      const x = cx + 3 * u * s * s * f;
-      const y = u * u * u * y0 + 3 * u * u * s * (y0 - a) + 3 * u * s * s * y1 + s * s * s * y1;
+      const e = f * 1.5;                                    // sweep-in offset
+      const x = u*u*u*(cx+e) + 3*u*u*s*(cx+e) + 3*u*s*s*(cx+f) + s*s*s*cx;
+      const y = u*u*u*y0 + 3*u*u*s*(y0-a) + 3*u*s*s*y1 + s*s*s*y1;
       return { x, y };
     }
     const t2 = t - T_RISE;
-    if (t2 < T_ORBIT) {                                     // one smooth accelerating orbit
+    if (t2 < T_ORBIT) {                                     // one full smooth lap
       const ang = Math.PI / 2 + TAU * orbMap(t2 / T_ORBIT);
       return { x: cx + Math.cos(ang) * rx, y: cy + Math.sin(ang) * ry };
     }
-    const t3 = clamp01((t2 - T_ORBIT) / T_SPIRAL);          // spiral in, then plunge
-    const shrink = 1 - t3 * t3;                             // no launch kick, fast final dive
-    const ang = Math.PI / 2 + TAU + t3 * ORB_OUT * TAU * T_SPIRAL / T_ORBIT;
-    return { x: cx + Math.cos(ang) * rx * shrink, y: cy + Math.sin(ang) * ry * shrink, end: t3 >= 1 };
+    /* hairpin + plunge: leaves the lap's exit point, whips around hard and dives
+       into the core. The dive accelerates quadratically from the orbit's exact
+       exit speed, and the arc-length table keeps the whip at a constant pace. */
+    const t3 = clamp01((t2 - T_ORBIT) / T_TURN);
+    const ell = (t3 + TURN_A * t3 * t3 * t3 / 3) / (1 + TURN_A / 3) * TURN_LEN;
+    let lo = 0, hi = TURN_N;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (TURN_L[mid] < ell) lo = mid; else hi = mid; }
+    const fr = (ell - TURN_L[lo]) / ((TURN_L[hi] - TURN_L[lo]) || 1);
+    return {
+      x: TURN_P[lo * 2] + (TURN_P[hi * 2] - TURN_P[lo * 2]) * fr,
+      y: TURN_P[lo * 2 + 1] + (TURN_P[hi * 2 + 1] - TURN_P[lo * 2 + 1]) * fr,
+      end: t3 >= 1
+    };
   };
 
   let parts = [], trail = [], raf = 0, t0 = 0, prev = 0;
   let exploded = false, finished = false, flash = 0, shake = 0;
   let lastPos = null, dir = { x: 0, y: -1 };
 
-  /* the burst: a white core flare, layered shockwaves, a star-ray flare, fast
-     speed-streaked sparks, slow drifting embers, and a delayed secondary pop. */
+  /* the burst: a white core flare, three mega halos blooming to a huge radius,
+     layered shockwaves, a star-ray flare, fast speed-streaked sparks, slow
+     drifting embers and a delayed secondary pop — plus a heavy screen shake. */
   const burst = (x, y) => {
-    const small = W < 640, m = small ? .72 : 1;
-    flash = 1.6; shake = .34;
+    const small = W < 640, m = small ? .78 : 1;
+    flash = 2.3; shake = .6;
 
-    parts.push({ kind: 'core', x, y, age: 0, life: .90, R: small ? 260 : 420 });
+    parts.push({ kind: 'core', x, y, age: 0, life: 1.05, R: small ? 340 : 640 });
 
-    parts.push({ kind: 'ring', x, y, age: 0,    life: 1.40, g: 1.0, w: 3.6 });
-    parts.push({ kind: 'ring', x, y, age: -.07, life: 1.60, g: .80, w: 2.4 });
-    parts.push({ kind: 'ring', x, y, age: -.22, life: 2.20, g: .34, w: 1.0 });
-    parts.push({ kind: 'ring', x, y, age: -.14, life: 1.85, g: .60, w: 1.6 });
+    // mega halos: three soft blooms expanding far past the viewport edges
+    parts.push({ kind: 'halo', x, y, age: 0,    life: 1.35, R: small ? 560 : 1050, a: .34 });
+    parts.push({ kind: 'halo', x, y, age: -.10, life: 1.75, R: small ? 740 : 1400, a: .21 });
+    parts.push({ kind: 'halo', x, y, age: -.26, life: 2.15, R: small ? 900 : 1750, a: .12 });
 
-    const nr = small ? 6 : 8;
+    parts.push({ kind: 'ring', x, y, age: 0,    life: 1.35, g: 1.15, w: 5.0 });
+    parts.push({ kind: 'ring', x, y, age: -.06, life: 1.60, g: .88, w: 3.2 });
+    parts.push({ kind: 'ring', x, y, age: -.18, life: 2.15, g: .48, w: 2.0 });
+    parts.push({ kind: 'ring', x, y, age: -.10, life: 1.85, g: .68, w: 2.6 });
+    parts.push({ kind: 'ring', x, y, age: -.30, life: 2.45, g: .28, w: 1.2 });
+
+    const nr = small ? 9 : 14;
     for (let i = 0; i < nr; i++) {
-      parts.push({ kind: 'ray', x, y, a: i / nr * TAU + rand(-.06, .06),
-        len: rand(.55, 1) * (small ? 280 : 540), age: 0, life: .90, w: rand(1.6, 4.0) });
+      parts.push({ kind: 'ray', x, y, a: i / nr * TAU + rand(-.05, .05),
+        len: rand(.6, 1) * (small ? 380 : 740), age: 0, life: .95, w: rand(1.8, 4.6) });
     }
 
-    const ns = small ? 112 : 210;
+    const ns = small ? 240 : 450;
     for (let i = 0; i < ns; i++) {
-      const a = rand(0, TAU), sp = rand(130, 560) * m;
+      const a = rand(0, TAU), sp = rand(160, 780) * m;
       parts.push({ kind: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-        age: 0, life: rand(1.80, 3.00), r: rand(.8, 2.2), white: Math.random() < .62 });
+        age: 0, life: rand(1.6, 2.9), r: rand(.8, 2.3), white: Math.random() < .62 });
     }
 
-    const ne = small ? 84 : 155;
+    const ne = small ? 170 : 310;
     for (let i = 0; i < ne; i++) {
-      const a = rand(0, TAU), sp = rand(20, 110) * m;
+      const a = rand(0, TAU), sp = rand(24, 135) * m;
       parts.push({ kind: 'ember', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - rand(10, 60),
         age: 0, life: rand(2.6, 4.4), r: rand(1.2, 3.4), white: Math.random() < .45 });
     }
 
-    const n2 = small ? 44 : 80;
+    const n2 = small ? 90 : 165;
     for (let i = 0; i < n2; i++) {
-      const a = rand(0, TAU), sp = rand(110, 420) * m;
+      const a = rand(0, TAU), sp = rand(130, 580) * m;
       parts.push({ kind: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-        age: -.16, life: rand(1.20, 2.00), r: rand(.7, 1.8), white: Math.random() < .7 });
+        age: -.14, life: rand(1.1, 1.9), r: rand(.7, 1.9), white: Math.random() < .7 });
     }
   };
 
@@ -1542,10 +1587,12 @@ observeReveals();
     lastPos = { x, y };
 
     const ang = Math.atan2(dir.y, dir.x);
-    // wind drag, amplified: the faster it goes the more the glow is stretched
-    // along the heading and shoved rearwards, so the bloom visibly lags behind.
-    const stretch = 1 + Math.min(spd / 640, 1) * 1.95;
-    const back = 26 * (stretch - 1) + 8;
+    // wind drag: the faster it goes the more the glow stretches along the heading
+    // and shifts rearwards — but each layer's shift scales with its own radius so
+    // the bloom always stays welded to the head and never detaches from it.
+    const drag = Math.min(spd / 640, 1);
+    const stretch = 1 + drag * 1.95;
+    const back = 8 + 46 * drag;
 
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -1569,13 +1616,13 @@ observeReveals();
       }
     }
 
-    // ---- directional halo, leaning backwards (wind drag)
-    const wake = 1 + Math.min(spd / 640, 1) * 3.1;          // long, faint trailing wake
-    const wakeBack = 30 * (wake - 1) + 10;
-    halo(x, y, ang, wake, wakeBack, 150, [[0, 'rgba(255,255,255,.13)'], [.5, 'rgba(255,255,255,.05)'], [1, 'rgba(255,255,255,0)']]);
-    halo(x, y, ang, stretch, back, 116, [[0, 'rgba(255,255,255,.30)'], [1, 'rgba(255,255,255,0)']]);
-    halo(x, y, ang, stretch, back, 58, [[0, 'rgba(255,255,255,.60)'], [.45, 'rgba(255,255,255,.20)'], [1, 'rgba(255,255,255,0)']]);
-    halo(x, y, ang, stretch, back, 28, [[0, 'rgba(255,255,255,.97)'], [1, 'rgba(255,255,255,0)']]);
+    // ---- directional halo, leaning backwards (wind drag, still hugging the head)
+    const wake = 1 + drag * 3.1;                            // long, faint trailing wake
+    halo(x, y, ang, wake, Math.min(14 + 70 * drag, 72), 150,
+      [[0, 'rgba(255,255,255,.13)'], [.5, 'rgba(255,255,255,.05)'], [1, 'rgba(255,255,255,0)']]);
+    halo(x, y, ang, stretch, back * (116 / 150), 116, [[0, 'rgba(255,255,255,.30)'], [1, 'rgba(255,255,255,0)']]);
+    halo(x, y, ang, stretch, back * (58 / 150), 58, [[0, 'rgba(255,255,255,.60)'], [.45, 'rgba(255,255,255,.20)'], [1, 'rgba(255,255,255,0)']]);
+    halo(x, y, ang, stretch, back * (28 / 150), 28, [[0, 'rgba(255,255,255,.97)'], [1, 'rgba(255,255,255,0)']]);
 
     // ---- head: crisp, smeared further along the heading as it speeds up
     ctx.save();
@@ -1593,7 +1640,7 @@ observeReveals();
     ctx.save();
     if (shake > 0) {
       shake = Math.max(0, shake - dt);
-      const amp = 10 * Math.pow(shake / .34, 2);
+      const amp = 16 * Math.pow(shake / .6, 2);
       ctx.translate(rand(-amp, amp), rand(-amp, amp));
     }
     ctx.globalCompositeOperation = 'lighter';
@@ -1614,8 +1661,18 @@ observeReveals();
         ctx.fillStyle = g;
         ctx.beginPath(); ctx.arc(p.x, p.y, grow, 0, TAU); ctx.fill();
 
+      } else if (p.kind === 'halo') {                 // mega soft bloom, huge radius
+        const grow = p.R * (1 - Math.pow(1 - Math.min(p.age / .55, 1), 2.6));
+        const a = Math.max(0, Math.pow(k, 1.15) * p.a);
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, grow);
+        g.addColorStop(0, 'rgba(255,255,255,' + a + ')');
+        g.addColorStop(.45, 'rgba(224,198,255,' + (a * .45) + ')');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(p.x, p.y, grow, 0, TAU); ctx.fill();
+
       } else if (p.kind === 'ring') {                 // layered shockwaves
-        const r = eOut(p.age / p.life) * Math.max(W, H) * .40;
+        const r = eOut(p.age / p.life) * Math.max(W, H) * .54;
         ctx.strokeStyle = 'rgba(255,255,255,' + (Math.pow(k, .8) * .62 * p.g) + ')';
         ctx.lineWidth = .5 + p.w * k;
         ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.stroke();
@@ -1662,8 +1719,8 @@ observeReveals();
     prev = ts;
     ctx.clearRect(0, 0, W, H);
     if (!exploded) {
-      const p = pos(Math.min(t, T_RISE + T_ORBIT + T_SPIRAL));
-      if (p.end || t >= T_RISE + T_ORBIT + T_SPIRAL) { exploded = true; trail = []; flash = 1; burst(cx, cy); }
+      const p = pos(Math.min(t, T_END));
+      if (p.end || t >= T_END) { exploded = true; trail = []; flash = 1; burst(cx, cy); }
       else meteor(p.x, p.y, dt);
     } else fx(dt);
     if (t >= T_END + T_HOLD && !finished) {
