@@ -344,7 +344,13 @@
         // 游戏状态
         let grid = [];
         let score = 0;
-        let bestScore = localStorage.getItem('2048-best-score') || 0;
+        let bestScore = 0;
+        try {
+            bestScore = Number(localStorage.getItem('2048-best-score')) || 0;
+        } catch (err) {
+            // 隐私模式下 getItem 也可能抛异常，当前会话仍可正常游戏。
+            console.warn('2048 无法读取最高分', err);
+        }
         let gameOver = false;
         let gameWon = false;
         
@@ -454,7 +460,12 @@
             if (score > bestScore) {
                 bestScore = score;
                 bestScoreElement.textContent = bestScore;
-                localStorage.setItem('2048-best-score', bestScore);
+                try {
+                    localStorage.setItem('2048-best-score', bestScore);
+                } catch (err) {
+                    // 隐私模式或配额不足时，最高分仍保留在当前会话中。
+                    console.warn('2048 最高分无法持久化', err);
+                }
             }
         }
 
@@ -644,6 +655,11 @@
 
         // 键盘事件处理
         document.addEventListener('keydown', (e) => {
+            // 输入框/文本域内的方向键应由浏览器处理，不能被游戏抢走。
+            const target = e.target;
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+                return;
+            }
             // 如果Auto模式开启，手动操作会自动关闭Auto模式
             if (autoMode) {
                 stopAutoMode();

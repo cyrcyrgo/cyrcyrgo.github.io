@@ -592,7 +592,10 @@
     stopProgress();
     const dur = getTrack().dur;
     const parts = dur.split(':');
-    const totalSec = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+    // 0:00 曲目不能作为除数，否则 stepPct=Infinity，定时器会每 200ms
+    // 无限切歌。对无时长的占位曲目按 1 秒处理，保证状态机仍可恢复。
+    const parsedSec = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+    const totalSec = Math.max(1, parsedSec);
     const stepMs = 200;
     const stepPct = (stepMs / 1000) / totalSec;
 

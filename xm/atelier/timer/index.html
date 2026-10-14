@@ -508,6 +508,7 @@ let cdTotal = 0;
 let cdRemaining = 0;
 let cdRunning = false;
 let cdTimer = null;
+let cdDeadline = 0;
 let cdAlarmed = false;
 
 // Clamp input values
@@ -580,8 +581,10 @@ function startCountdown() {
   document.getElementById('presets').style.pointerEvents = 'none';
   document.getElementById('presets').style.opacity = '0.5';
 
+  // 用绝对截止时间计算剩余秒数，避免后台标签页的 setInterval 被节流后变慢。
+  cdDeadline = Date.now() + cdRemaining * 1000;
   cdTimer = setInterval(() => {
-    cdRemaining--;
+    cdRemaining = Math.max(0, Math.ceil((cdDeadline - Date.now()) / 1000));
     updateCountdownDisplay();
 
     if (cdRemaining <= 0) {
@@ -603,10 +606,14 @@ function startCountdown() {
       void flash.offsetWidth;
       flash.classList.add('flash');
     }
-  }, 1000);
+  }, 200);
 }
 
 function pauseCountdown() {
+  if (cdRunning && cdDeadline) {
+    cdRemaining = Math.max(0, Math.ceil((cdDeadline - Date.now()) / 1000));
+    updateCountdownDisplay();
+  }
   if (cdTimer) {
     clearInterval(cdTimer);
     cdTimer = null;

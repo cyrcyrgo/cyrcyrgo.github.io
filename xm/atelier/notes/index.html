@@ -337,7 +337,12 @@ function loadNotes() {
 }
 
 function saveNotes(notes) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+  } catch (err) {
+    // 隐私模式 / 存储配额耗尽时 setItem 会抛异常，不能让保存操作打断页面。
+    console.warn('便签无法持久化：浏览器存储不可用或空间不足', err);
+  }
 }
 
 let notes = loadNotes();

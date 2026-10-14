@@ -300,7 +300,12 @@ h1 {
   }
 
   function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    } catch (err) {
+      // 隐私模式 / 配额超限时不应让新增、完成或删除任务直接抛错。
+      console.warn('待办清单无法持久化：浏览器存储不可用或空间不足', err);
+    }
   }
 
   function getFiltered() {

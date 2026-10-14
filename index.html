@@ -1193,9 +1193,13 @@ function highlight(text, q) {
   if (!toks.length) return out;
   let html = out;
   for (const t of toks) {
-    const idx = html.toLowerCase().indexOf(esc(t).toLowerCase());
+    // html 已经转义过，匹配和切片都必须使用转义后的长度。
+    // 例如 "C&C" 会变成 "C&amp;C"，原来用 t.length 会切断实体。
+    const needle = esc(t);
+    const idx = html.toLowerCase().indexOf(needle.toLowerCase());
     if (idx === -1) continue;
-    html = html.slice(0, idx) + '<mark>' + html.slice(idx, idx + t.length) + '</mark>' + html.slice(idx + t.length);
+    const end = idx + needle.length;
+    html = html.slice(0, idx) + '<mark>' + html.slice(idx, end) + '</mark>' + html.slice(end);
   }
   return html;
 }

@@ -641,7 +641,12 @@
     const recents = getRecent().filter(h => h !== hex);
     recents.unshift(hex);
     if (recents.length > 10) recents.pop();
-    localStorage.setItem(RECENT_KEY, JSON.stringify(recents));
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(recents));
+    } catch (err) {
+      // 隐私模式 / 配额不足时保留当前颜色，但不让工具崩溃。
+      console.warn('最近颜色无法持久化', err);
+    }
     renderRecent();
   }
 
