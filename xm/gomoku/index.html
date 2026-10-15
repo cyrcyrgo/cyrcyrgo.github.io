@@ -37,8 +37,6 @@ textarea{resize:vertical;min-height:80px}
 .btn-sm{padding:.4rem .8rem;font-size:.8rem}
 .btn-block{width:100%;margin-top:.5rem}
 .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.wifi-warn{display:none;font-size:.75rem;color:var(--err);margin-top:.4rem;align-items:center;gap:.3rem}
-.wifi-warn.show{display:flex}
 .mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:1rem 0}
 .network-info{margin:1rem 0;padding:1rem;background:var(--surface2);border-radius:8px;border:1px solid var(--border)}
 .mode-btn{padding:1.1rem .8rem;background:var(--surface2);border:2px solid var(--border);border-radius:10px;cursor:pointer;text-align:center;transition:all .25s}
@@ -145,7 +143,6 @@ canvas#board{border-radius:4px;cursor:crosshair;box-shadow:0 4px 24px rgba(0,0,0
     <h2 style="font-size:1.5rem;margin-bottom:.3rem">P2P五子棋 <span style="font-size:.7rem;color:var(--dim);font-weight:400;vertical-align:middle">v2.01</span></h2>
     <p style="margin-bottom:1.5rem">零服务器 · 联机对战</p>
     <input type="text" id="inp-name" placeholder="输入你的昵称" maxlength="12" style="margin-bottom:1rem">
-    <div class="wifi-warn" id="wifi-warn">⚠️ 未检测到WiFi，内网模式不可用</div>
     <div class="mode-grid">
       <div class="mode-btn selected" data-mode="lan" onclick="selectMode(this)">
         <span class="icon">🏠</span><span class="label">内网对战</span>
@@ -505,49 +502,12 @@ async function pasteClip(tid){
    登录 & 模式
    ============================================================== */
 function selectMode(el){
-  /* 内网模式WiFi检查 */
-  if(el.dataset.mode==='lan'&&!isWiFi()){
-    toast('未连接WiFi，内网模式不可用','err');return;
-  }
   document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('selected'));
   el.classList.add('selected');S.mode=el.dataset.mode;
 }
-/* 网络环境检测 */
-function isWiFi(){
-  try{
-    const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
-    if(!c)return true; /* 无法检测时放行 */
-    const t=(c.type||c.effectiveType||'').toLowerCase();
-    if(t==='wifi'||t==='ethernet'||t==='none')return true;
-    /* effectiveType 4g/3g/2g 表示移动数据 */
-    if(['4g','3g','2g','slow-2g'].includes(t))return false;
-    return true;
-  }catch(e){return true}
-}
-function updateNetworkUI(){
-  const w=isWiFi();
-  document.getElementById('wifi-warn').classList.toggle('show',!w);
-  /* 非WiFi时自动切换到P2P */
-  if(!w&&S.mode==='lan'){
-    S.mode='p2p';
-    document.querySelectorAll('.mode-btn').forEach(b=>{
-      b.classList.toggle('selected',b.dataset.mode==='p2p');
-    });
-    toast('已自动切换到外网P2P模式','info');
-  }
-  /* 非WiFi时禁用内网按钮视觉 */
-  const lanBtn=document.querySelector('.mode-btn[data-mode="lan"]');
-  if(lanBtn)lanBtn.style.opacity=w?'1':'0.4';
-}
-/* 监听网络变化 */
-try{
-  const nc=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
-  if(nc)nc.addEventListener('change',updateNetworkUI);
-}catch(e){}
 function doLogin(){
   const n=document.getElementById('inp-name').value.trim();
   if(!n){toast('请输入昵称','err');return}
-  if(S.mode==='lan'&&!isWiFi()){toast('未连接WiFi，请切换到外网P2P模式','err');return}
   S.name=n;
   document.getElementById('lobby-user').textContent='👤 '+n;
   document.getElementById('lobby-mode-label').textContent=MLABELS[S.mode];
@@ -648,6 +608,8 @@ async function lanOnOffer(msg){
     lanFlushIce();   /* 补加在 lanPC 创建之前到达的 ICE 候选 */
     const ans=await pc.createAnswer();
     await pc.setLocalDescription(ans);
+    /* 等待ICE收集完成，让内网直连候选全部内嵌进应答SDP */
+    await waitICE(pc,4000);
     await lanPost(msg.reply,{type:'answer',name:S.name,sdp:pc.localDescription});
     lanSetStatus('lan-create-status','已应答，正在建立内网连接...');
   }catch(e){lanSetStatus('lan-create-status','应答失败: '+e.message)}
@@ -673,11 +635,12 @@ async function lanJoin(){
     const reply='gm-lan-r-'+Math.random().toString(36).slice(2,12);
     const dc=pc.createDataChannel('game');
     bindDC(dc,false); /* 加入方执白 */
-    /* trickle ICE：候选逐条发送（ntfy 单消息限4KB，SDP不带候选） */
-    pc.onicecandidate=e=>{if(e.candidate)lanPost(lanTopic(ip),{type:'ice',candidate:e.candidate.toJSON(),reply})};
+    /* 先订阅应答通道，避免漏掉房主回传的应答 */
+    lanListen(reply,lanGuestMsg);
     const offer=await pc.createOffer();
     await pc.setLocalDescription(offer);
-    lanListen(reply,lanGuestMsg); /* 先订阅应答通道再发offer */
+    /* 等待ICE收集完成，让内网直连候选全部内嵌进SDP，避免trickle时序竞态导致连接失败 */
+    await waitICE(pc,4000);
     await lanPost(lanTopic(ip),{type:'offer',name:S.name,reply,sdp:pc.localDescription});
     lanSetStatus('lan-join-status','已向 '+ip+' 发起连接，等待对方应答...');
     setTimeout(()=>{
@@ -1334,7 +1297,6 @@ document.addEventListener('touchend',e=>{
 },{passive:false});
 
 renderBoard();
-updateNetworkUI(); /* 初始化网络状态检测 */
 initNetworkInfo(); /* 初始化网络信息（内网/外网IP） */
 
 /* ==============================================================
