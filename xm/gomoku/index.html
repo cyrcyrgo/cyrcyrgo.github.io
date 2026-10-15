@@ -545,11 +545,12 @@ async function lanPost(topic,msg){
     await fetch(NTFY+topic,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(msg)});
   }catch(e){console.warn('lanPost fail',e)}
 }
-/* 订阅指定topic */
+/* 订阅指定topic（须用 /sse，ntfy 的 /json 返回 application/x-ndjson，
+   不是合法的 text/event-stream，会导致 EventSource 直接中止、收不到信令） */
 function lanListen(topic,onMsg){
   lanStopListen();
   try{
-    lanES=new EventSource(NTFY+topic+'/json');
+    lanES=new EventSource(NTFY+topic+'/sse');
     lanES.onmessage=e=>{
       try{
         const raw=JSON.parse(e.data);
