@@ -1,0 +1,2155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>YUNPAN · 加密云盘</title>
+<style>
+  :root{
+    --bg:#070a14;
+    --panel:rgba(255,255,255,.045);
+    --panel-2:rgba(255,255,255,.07);
+    --line:rgba(255,255,255,.09);
+    --line-strong:rgba(255,255,255,.16);
+    --txt:#e9edf7;
+    --muted:#8e97ad;
+    --cyan:#66e3f4;
+    --violet:#a78bfa;
+    --green:#5eead4;
+    --red:#fb7185;
+    --radius:18px;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--txt);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  }
+  .aurora{position:fixed;inset:0;z-index:0;pointer-events:none;background:
+    radial-gradient(60vw 60vw at 12% -8%, rgba(102,227,244,.16), transparent 60%),
+    radial-gradient(50vw 50vw at 92% 8%, rgba(167,139,250,.16), transparent 62%),
+    radial-gradient(60vw 40vw at 50% 108%, rgba(94,234,212,.10), transparent 60%);
+  }
+  .aurora::after{content:"";position:absolute;inset:0;background-image:
+    linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+    background-size:44px 44px;mask-image:radial-gradient(70% 60% at 50% 0%,#000 30%,transparent 85%);
+  }
+  button,input{font:inherit;color:inherit}
+  button{cursor:pointer}
+  a{color:var(--cyan);text-decoration:none}
+  ::selection{background:rgba(102,227,244,.28)}
+
+  /* ---------- 锁屏 ---------- */
+  .lock{position:relative;z-index:1;min-height:100vh;display:grid;place-items:center;padding:28px 18px}
+  .lock-card{
+    width:min(440px,100%);background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.028));
+    border:1px solid var(--line);border-radius:26px;padding:34px 30px 26px;
+    box-shadow:0 30px 80px -20px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,255,255,.09);
+    backdrop-filter:blur(18px);
+  }
+  .badge{
+    display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.18em;font-weight:600;
+    color:var(--cyan);background:rgba(102,227,244,.09);border:1px solid rgba(102,227,244,.24);
+    padding:6px 11px;border-radius:999px;
+  }
+  .badge .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+  .lock-card h1{font-size:29px;margin:18px 0 8px;letter-spacing:-.02em;font-weight:700;
+    background:linear-gradient(120deg,#fff 20%,#9fe9f6 60%,#c6b5ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lock-card .sub{margin:0 0 26px;color:var(--muted);font-size:13.5px;line-height:1.65}
+  .field{position:relative;display:flex;align-items:center}
+  .field input{
+    width:100%;padding:14px 46px 14px 16px;border-radius:13px;border:1px solid var(--line-strong);
+    background:rgba(6,10,22,.62);outline:none;font-size:15px;letter-spacing:.02em;transition:border-color .18s,box-shadow .18s;
+  }
+  .field input:focus{border-color:rgba(102,227,244,.6);box-shadow:0 0 0 4px rgba(102,227,244,.11)}
+  .ghost{position:absolute;right:8px;background:none;border:0;padding:8px;border-radius:9px;color:var(--muted);display:grid;place-items:center}
+  .ghost:hover{color:var(--txt);background:rgba(255,255,255,.06)}
+  .primary{
+    width:100%;margin-top:12px;padding:14px;border-radius:13px;border:1px solid rgba(102,227,244,.34);
+    background:linear-gradient(120deg,rgba(102,227,244,.22),rgba(167,139,250,.22));color:#fff;font-weight:600;
+    letter-spacing:.04em;transition:transform .12s,box-shadow .2s,filter .2s;
+  }
+  .primary:hover{filter:brightness(1.12);box-shadow:0 10px 30px -12px rgba(102,227,244,.6)}
+  .primary:active{transform:translateY(1px)}
+  .primary:disabled{opacity:.55;cursor:progress}
+  .msg{min-height:20px;margin:12px 2px 0;font-size:12.6px;color:var(--red);line-height:1.5}
+  .lock-card .foot{margin:18px 0 0;padding-top:16px;border-top:1px dashed var(--line);color:#6b7488;font-size:11.5px;line-height:1.7}
+  .shake{animation:shake .38s cubic-bezier(.36,.07,.19,.97)}
+  @keyframes shake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-5px)}40%,60%{transform:translateX(5px)}}
+
+  /* ---------- 主界面 ---------- */
+  #appView{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column}
+  .top{position:sticky;top:0;z-index:20;backdrop-filter:blur(20px);background:rgba(7,10,20,.68);border-bottom:1px solid var(--line)}
+  .top-in{max-width:1060px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:14px}
+  .logo{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(140deg,rgba(102,227,244,.2),rgba(167,139,250,.18));border:1px solid var(--line-strong);flex:none}
+  .logo svg{width:19px;height:19px;stroke:var(--cyan)}
+  .brand{line-height:1.25;min-width:0}
+  .brand b{display:block;font-size:15px;letter-spacing:.14em}
+  .brand span{display:block;font-size:11px;color:var(--muted);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .top-spacer{flex:1}
+  .stat{display:flex;gap:16px;align-items:center;padding-right:2px}
+  .stat div{text-align:right}
+  .stat b{display:block;font-size:14px;font-variant-numeric:tabular-nums}
+  .stat span{font-size:10.5px;color:var(--muted);letter-spacing:.1em}
+  .icon-btn{
+    width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
+    display:grid;place-items:center;color:var(--muted);transition:.18s;flex:none;
+  }
+  .icon-btn:hover{color:var(--txt);background:var(--panel-2);border-color:var(--line-strong)}
+  .icon-btn svg{width:16px;height:16px}
+  .icon-btn.spin svg{animation:rot .9s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+
+  .wrap{width:100%;max-width:1060px;margin:0 auto;padding:26px 20px 44px;flex:1}
+
+  .drop{
+    position:relative;border:1.5px dashed rgba(255,255,255,.16);border-radius:var(--radius);
+    background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
+    padding:30px 22px;text-align:center;transition:border-color .2s,background .2s,transform .2s;
+  }
+  .drop:hover{border-color:rgba(102,227,244,.4);background:rgba(102,227,244,.045)}
+  .drop.drag{border-color:var(--cyan);background:rgba(102,227,244,.09);transform:scale(1.005)}
+  .drop .up-ico{width:46px;height:46px;margin:0 auto 12px;border-radius:14px;display:grid;place-items:center;
+    background:linear-gradient(145deg,rgba(102,227,244,.18),rgba(167,139,250,.18));border:1px solid var(--line-strong)}
+  .drop .up-ico svg{width:21px;height:21px;stroke:var(--cyan);fill:none}
+  .drop h3{margin:0 0 5px;font-size:15px;font-weight:600}
+  .drop p{margin:0 0 16px;font-size:12px;color:var(--muted)}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:11px;font-size:13px;font-weight:600;
+    border:1px solid rgba(102,227,244,.34);background:linear-gradient(120deg,rgba(102,227,244,.2),rgba(167,139,250,.2));
+    color:#fff;transition:.18s;
+  }
+  .btn:hover{filter:brightness(1.12);box-shadow:0 8px 24px -12px rgba(102,227,244,.7)}
+  .btn svg{width:15px;height:15px;stroke:currentColor;fill:none}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .note{margin-top:10px;font-size:11px;color:#687189}
+
+  .queue{margin-top:14px;display:grid;gap:8px}
+  .q{display:flex;align-items:center;gap:11px;padding:11px 14px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.032);font-size:12.5px}
+  .q .qname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .q .qmsg{color:var(--muted);font-size:11.5px;white-space:nowrap}
+  .q.ok .qmsg{color:var(--green)}
+  .q.err .qmsg{color:var(--red)}
+  .spinner{width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(255,255,255,.18);border-top-color:var(--cyan);animation:rot .8s linear infinite;flex:none}
+  .q.ok .spinner,.q.err .spinner{animation:none;border:0;font-size:13px;display:grid;place-items:center}
+  .q.ok .spinner::after{content:"✓";color:var(--green)}
+  .q.err .spinner::after{content:"!";color:var(--red);font-weight:700}
+
+  .files{margin-top:32px}
+  .files-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:0 2px}
+  .files-head h2{margin:0;font-size:14px;font-weight:600;letter-spacing:.08em;color:#cfd6e6}
+  .files-head .count{font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:2px 8px;border-radius:999px;letter-spacing:.04em}
+  .files-head .spacer{flex:1}
+  .mini{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);color:var(--muted);
+    padding:7px 12px;border-radius:10px;font-size:12px;transition:.18s}
+  .mini:hover{color:var(--txt);border-color:var(--line-strong);background:var(--panel-2)}
+  .mini svg{width:13px;height:13px;stroke:currentColor;fill:none}
+
+  .list{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:rgba(255,255,255,.022)}
+  .row{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--line);transition:background .16s}
+  .row:last-child{border-bottom:0}
+  .row:hover{background:rgba(255,255,255,.038)}
+  .ficon{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;flex:none;
+    background:rgba(102,227,244,.09);border:1px solid rgba(102,227,244,.18)}
+  .ficon svg{width:17px;height:17px;stroke:var(--cyan);fill:none}
+  .fmain{flex:1;min-width:0}
+  .fname{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fmeta{margin-top:3px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+  .fmeta .sep{margin:0 6px;opacity:.5}
+  .actions{display:flex;gap:8px;flex:none}
+  .dl{border:1px solid rgba(102,227,244,.3);background:rgba(102,227,244,.11);color:#bdf3fb;
+    padding:7px 13px;border-radius:9px;font-size:12px;font-weight:600;transition:.16s}
+  .dl:hover{background:rgba(102,227,244,.2);color:#fff}
+  .dl[disabled]{opacity:.6;cursor:progress}
+  .list-msg{margin:0 2px 10px;font-size:12px;line-height:1.6;color:var(--red)}
+
+  .empty{padding:46px 20px;text-align:center;color:var(--muted);font-size:12.5px;line-height:1.9}
+  .empty .eico{width:52px;height:52px;margin:0 auto 12px;border-radius:16px;display:grid;place-items:center;
+    background:var(--panel);border:1px dashed var(--line-strong)}
+  .empty .eico svg{width:22px;height:22px;stroke:#77809a;fill:none}
+
+  footer{padding:18px 20px 26px;text-align:center;font-size:10.5px;color:#5d667c;letter-spacing:.04em;line-height:1.8}
+  footer .bar{max-width:1060px;margin:0 auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.05)}
+
+  #toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);z-index:60;opacity:0;pointer-events:none;
+    background:rgba(16,22,38,.96);border:1px solid var(--line-strong);border-radius:12px;padding:11px 18px;
+    font-size:12.5px;box-shadow:0 20px 50px -16px rgba(0,0,0,.8);transition:.26s;max-width:min(90vw,420px);text-align:center}
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+  #toast.err{border-color:rgba(251,113,133,.4);color:#ffc7cf}
+  #toast.ok{border-color:rgba(94,234,212,.35);color:#c7fff5}
+
+  @media (max-width:640px){
+    .lock-card{padding:28px 22px 22px}
+    .lock-card h1{font-size:25px}
+    .wrap{padding:18px 14px 36px}
+    .stat{display:none}
+    .row{padding:13px 13px;gap:11px}
+    .actions{gap:6px}
+    .fmeta{font-size:10.5px}
+    .brand span{max-width:180px}
+  }
+
+  /* ---------- v6 多用户 / 目录 / 弹窗 ---------- */
+  .field + .field{margin-top:10px}
+  .secondary{
+    width:100%;margin-top:10px;padding:13px;border-radius:13px;border:1px solid var(--line-strong);
+    background:rgba(255,255,255,.04);color:var(--txt);font-weight:500;letter-spacing:.06em;transition:.18s;
+  }
+  .secondary:hover{background:rgba(255,255,255,.085);border-color:rgba(255,255,255,.26)}
+  .secondary:disabled{opacity:.55;cursor:progress}
+  .user-chip{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;
+    border:1px solid var(--line);background:var(--panel);font-size:12px;color:#cfd6e6;white-space:nowrap;flex:none;cursor:pointer}
+  .user-chip:hover{border-color:var(--line-strong);background:var(--panel-2)}
+  .user-chip b{font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+  .user-chip .role{font-size:9.5px;letter-spacing:.1em;color:var(--cyan)}
+  .plain-opt{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:9px 13px;
+    border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.03);
+    font-size:12px;color:var(--muted);cursor:pointer;user-select:none}
+  .plain-opt:hover{color:var(--txt);border-color:var(--line-strong)}
+  .plain-opt input{accent-color:#66e3f4;width:15px;height:15px;margin:0}
+  .crumbs{display:flex;align-items:center;flex-wrap:wrap;gap:3px;margin:0 0 12px;font-size:12px}
+  .crumb{background:none;border:0;padding:4px 8px;border-radius:8px;color:#b9c4da;font-size:12.5px;transition:.15s}
+  .crumb:hover{background:rgba(255,255,255,.07);color:#fff}
+  .crumb.current{color:var(--cyan);font-weight:600}
+  .crumb-sep{opacity:.35;color:var(--muted)}
+  .act{border:1px solid var(--line);background:var(--panel);color:var(--muted);padding:7px 11px;
+    border-radius:9px;font-size:12px;transition:.16s;white-space:nowrap}
+  .act:hover{color:var(--txt);background:var(--panel-2);border-color:var(--line-strong)}
+  .act.danger{color:#ff9aa8;border-color:rgba(251,113,133,.26);background:rgba(251,113,133,.08)}
+  .act.danger:hover{color:#fff;background:rgba(251,113,133,.2)}
+  .act[disabled]{opacity:.55;cursor:progress}
+  .ficon.dir{background:rgba(167,139,250,.1);border-color:rgba(167,139,250,.22)}
+  .ficon.dir svg{stroke:var(--violet)}
+  .ficon.plain{background:rgba(94,234,212,.09);border-color:rgba(94,234,212,.2)}
+  .ficon.plain svg{stroke:var(--green)}
+  .modal{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:22px 16px;
+    background:rgba(3,5,12,.74);backdrop-filter:blur(10px)}
+  .share-title{margin:0 0 10px;font-size:13px;color:#cfd6e6;word-break:break-all}
+  #confirmModal{z-index:95}
+  .modal-card{width:min(440px,100%);max-height:88vh;display:flex;flex-direction:column;
+    background:linear-gradient(180deg,rgba(22,28,46,.98),rgba(12,16,28,.98));
+    border:1px solid var(--line-strong);border-radius:22px;overflow:hidden;
+    box-shadow:0 30px 80px -20px rgba(0,0,0,.85)}
+  .modal-card.wide{width:min(780px,100%)}
+  .modal-head{display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line);font-size:14px}
+  .modal-head b{flex:1;font-weight:600;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .modal-head .close{background:none;border:0;color:var(--muted);font-size:20px;line-height:1;padding:2px 7px;border-radius:8px}
+  .modal-head .close:hover{color:#fff;background:rgba(255,255,255,.07)}
+  .modal-body{padding:18px;overflow:auto}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
+  .modal-actions .primary{width:auto;margin:0;padding:11px 24px}
+  .preview-pre{margin:0;padding:16px;border-radius:12px;background:rgba(4,7,16,.72);
+    border:1px solid var(--line);font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    white-space:pre-wrap;word-break:break-word;color:#d7e2f5;max-height:60vh;overflow:auto}
+  .preview-note{margin:10px 0 0;font-size:11px;color:var(--muted)}
+  video.preview-video{display:block;width:100%;max-height:60vh;border-radius:12px;background:#000;outline:none}
+  .admin-list{display:grid;gap:8px;margin-bottom:20px}
+  .urec{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--line);
+    border-radius:12px;background:rgba(255,255,255,.03)}
+  .urec .uinfo{flex:1;min-width:0}
+  .urec .uname{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .urec .umeta{font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .admin-add{padding-top:16px;border-top:1px dashed var(--line)}
+  .admin-add h4{margin:0 0 12px;font-size:12px;letter-spacing:.08em;color:#cfd6e6;font-weight:600}
+  .admin-add .row2{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .admin-add .row2 .field{flex:1;min-width:150px}
+  .admin-add .row2 .field + .field{margin-top:0}
+  .admin-empty{padding:22px;text-align:center;color:var(--muted);font-size:12px;
+    border:1px dashed var(--line);border-radius:12px;margin-bottom:18px}
+  @media (max-width:640px){
+    .user-chip b{max-width:80px}
+    .actions{flex-wrap:wrap}
+    .files-head{gap:7px}
+    .mini{padding:7px 9px;font-size:11.5px}
+  }
+</style>
+</head>
+<body>
+<div class="aurora"></div>
+
+<!-- ============ 锁屏 ============ -->
+<main id="lockView" class="lock">
+  <div class="lock-card" id="lockCard">
+    <span class="badge"><span class="dot"></span>HC · YUNPAN</span>
+    <h1>加密云盘</h1>
+    <p class="sub">输入用户名与密码解锁。管理员使用 admin 或 cyrcyrgo 登录，其他用户使用注册时的账号。登录后可点击右上角用户名修改密码或注销账号。</p>
+    <form id="unlockForm" autocomplete="off" novalidate>
+      <div class="field">
+        <input id="loginUser" type="text" placeholder="用户名" autocomplete="username" spellcheck="false" required>
+      </div>
+      <div class="field">
+        <input id="pwd" type="password" placeholder="用户密码" autocomplete="current-password" spellcheck="false" required>
+        <button type="button" class="ghost" id="togglePwd" aria-label="显示密码">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="2.6"/></svg>
+        </button>
+      </div>
+      <button id="unlockBtn" class="primary" type="submit">解 锁</button>
+      <button id="regBtn" class="secondary" type="button">注 册 新 用 户</button>
+      <p id="lockMsg" class="msg" role="alert"></p>
+    </form>
+    <p class="foot">账号凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密，登录时仅校验本地密文。登录成功后会话保存在本机 Cookie（30 天）。<br><span style="opacity:.75">build v7 · 若无法进入请按 Ctrl+F5 强制刷新</span></p>
+  </div>
+</main>
+
+<!-- ============ 注册 ============ -->
+<main id="regView" class="lock" hidden>
+  <div class="lock-card">
+    <span class="badge"><span class="dot"></span>REGISTER</span>
+    <h1>注册新用户</h1>
+    <p class="sub">填写用户名、密码与管理员邀请码。邀请码用于解出仓库 TOKEN 密文，随后立即用你的密码重新加密并保存。</p>
+    <form id="regForm" autocomplete="off" novalidate>
+      <div class="field">
+        <input id="regUser" type="text" placeholder="用户名（2–20 位）" autocomplete="username" spellcheck="false" required>
+      </div>
+      <div class="field">
+        <input id="regPwd" type="password" placeholder="用户密码（至少 6 位）" autocomplete="new-password" required>
+      </div>
+      <div class="field">
+        <input id="regPwd2" type="password" placeholder="确认密码" autocomplete="new-password" required>
+      </div>
+      <div class="field">
+        <input id="regInvite" type="password" placeholder="管理员邀请码" autocomplete="off" spellcheck="false" required>
+      </div>
+      <button id="regSubmit" class="primary" type="submit">注 册</button>
+      <button id="backBtn" class="secondary" type="button">返 回 登 录</button>
+      <p id="regMsg" class="msg" role="alert"></p>
+    </form>
+    <p class="foot">注册成功后自动创建个人目录 /yunpan/用户名/ 并加密保存该用户的 TOKEN 密文。<br><span style="opacity:.75">邀请码由管理员提供</span></p>
+  </div>
+</main>
+
+<!-- ============ 主界面 ============ -->
+<div id="appView" hidden>
+  <header class="top">
+    <div class="top-in">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
+      </div>
+      <div class="brand">
+        <b>YUNPAN</b>
+        <span>hicodehc.github.io / yunpan</span>
+      </div>
+      <div class="top-spacer"></div>
+      <div class="user-chip" id="userChip" hidden><b id="chipName"></b><span class="role" id="chipRole"></span></div>
+      <button class="icon-btn" id="adminBtn" title="管理员控制台" aria-label="管理员控制台" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.2"/><circle cx="8" cy="17" r="2.2"/></svg>
+      </button>
+      <div class="stat">
+        <div><b id="statFiles">0</b><span>FILES</span></div>
+        <div><b id="statSize">0 B</b><span>TOTAL</span></div>
+      </div>
+      <button class="icon-btn" id="lockBtn" title="锁定并重新解锁" aria-label="锁定">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>
+      </button>
+      <button class="icon-btn" id="refreshBtn" title="刷新" aria-label="刷新">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="drop" id="dropZone">
+      <div class="up-ico">
+        <svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M4.5 15v3.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>
+      </div>
+      <h3>拖拽文件到此处，或点击上传</h3>
+      <p>文件将在浏览器本地以 AES-256 加密为 ZIP 后上传至仓库</p>
+      <button class="btn" id="pickBtn" type="button">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M4.5 15v3.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>
+        选择文件上传
+      </button>
+      <p class="note">加密 ZIP 使用当前登录密码 · 单文件上限 95 MB</p>
+      <label class="plain-opt"><input type="checkbox" id="plainHtml"> HTML 文件明文存储（可直接部署为网站）</label>
+      <div><button class="mini" id="importUrlBtn" type="button" style="margin-top:12px">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13.5a4 4 0 0 0 5.7 0l2.1-2.1a4 4 0 0 0-5.7-5.7l-1.2 1.2"/><path d="M14 10.5a4 4 0 0 0-5.7 0l-2.1 2.1a4 4 0 0 0 5.7 5.7l1.2-1.2"/></svg>
+        通过 URL 上传（不复制文件）
+      </button></div>
+      <input id="fileInput" type="file" multiple hidden>
+      <div class="queue" id="queue"></div>
+    </section>
+
+    <section class="files">
+      <div class="files-head">
+        <h2>文件列表</h2>
+        <span class="count" id="fileCount">0</span>
+        <span class="spacer"></span>
+        <button class="mini" id="newFolderBtn">
+          <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          新建文件夹
+        </button>
+        <button class="mini" id="refreshMini">
+          <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+          刷新
+        </button>
+      </div>
+      <div class="crumbs" id="crumbs"></div>
+      <p class="list-msg" id="listMsg" hidden></p>
+      <div class="list" id="listBox"></div>
+      <div class="empty" id="emptyBox">
+        <div class="eico">
+          <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2.5h8a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z"/></svg>
+        </div>
+        还没有文件<br>上传的文件会保存到当前用户目录，可新建文件夹分类管理
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="bar">文件存储于 hicodehc/hicodehc.github.io/yunpan/ 用户目录 · 镜像站超时自动切换 · 下载本地解密<br>由 CYRCYRGO 管理 · YUNPAN</div>
+  </footer>
+</div>
+<!-- ============ 弹窗 ============ -->
+<div class="modal" id="previewModal" hidden>
+  <div class="modal-card wide">
+    <div class="modal-head"><b id="previewTitle">预览</b><button class="close" id="previewClose" type="button" aria-label="关闭">×</button></div>
+    <div class="modal-body" id="previewBody"></div>
+  </div>
+</div>
+
+<div class="modal" id="inputModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head"><b id="inputTitle">输入</b><button class="close" type="button" data-close aria-label="关闭">×</button></div>
+    <form id="inputForm">
+      <div class="modal-body">
+        <div class="field"><input id="inputField" type="text" autocomplete="off" spellcheck="false"></div>
+        <p class="msg" id="inputMsg"></p>
+        <div class="modal-actions">
+          <button type="button" class="act" data-close>取消</button>
+          <button type="submit" class="primary">确定</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="shareModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head"><b>分享文件</b><button class="close" type="button" data-close aria-label="关闭">×</button></div>
+    <div class="modal-body">
+      <p class="share-title" id="shareName"></p>
+      <div class="field"><input id="shareUrl" type="text" readonly></div>
+      <p class="note" style="margin-top:10px">把链接发给其他用户，对方在“通过 URL 上传”里粘贴即可引用。文件不会复制，也不占用对方空间。</p>
+      <div class="modal-actions">
+        <button type="button" class="act" data-close>关闭</button>
+        <button type="button" class="primary" id="shareCopyBtn">转 发（复制链接）</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="urlModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head"><b>通过 URL 上传</b><button class="close" type="button" data-close aria-label="关闭">×</button></div>
+    <form id="urlForm">
+      <div class="modal-body">
+        <div class="field"><input id="importUrl" type="text" placeholder="粘贴文件 URL（本站链接 / raw / 镜像链接）" autocomplete="off" spellcheck="false"></div>
+        <p class="msg" id="importMsg"></p>
+        <p class="note" style="margin-top:0">仅把链接记录到你的 yunml.json，不会复制源文件；删除时只移除链接记录。</p>
+        <div class="modal-actions">
+          <button type="button" class="act" data-close>取消</button>
+          <button type="submit" class="primary" id="importBtn">导 入</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="confirmModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head"><b id="confirmTitle">确认</b><button class="close" type="button" data-close aria-label="关闭">×</button></div>
+    <div class="modal-body">
+      <p id="confirmText" style="margin:0;font-size:13px;line-height:1.75;color:#c9d3e6"></p>
+      <div class="modal-actions">
+        <button type="button" class="act" data-close>取消</button>
+        <button type="button" class="act danger" id="confirmOk">确定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="adminModal" hidden>
+  <div class="modal-card wide">
+    <div class="modal-head"><b>管理员控制台</b><span id="adminCount" style="font-size:11px;color:var(--muted)"></span><button class="close" id="adminClose" type="button" aria-label="关闭">×</button></div>
+    <div class="modal-body">
+      <div class="admin-list" id="adminList"></div>
+      <form class="admin-add" id="addUserForm" autocomplete="off">
+        <h4>添加用户</h4>
+        <div class="row2">
+          <div class="field"><input id="newUserName" type="text" placeholder="用户名" autocomplete="off" spellcheck="false"></div>
+          <div class="field"><input id="newUserPwd" type="password" placeholder="初始密码（≥6 位）" autocomplete="new-password"></div>
+          <button class="primary" id="addUserBtn" type="submit" style="width:auto;margin:0;padding:12px 20px">添加用户</button>
+        </div>
+        <p class="msg" id="adminMsg"></p>
+        <p class="note" style="margin-top:0">新用户将获得独立目录 /yunpan/用户名/，其 TOKEN 密文使用该密码加密。</p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="accountModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head"><b>账户设置</b><button class="close" type="button" data-close aria-label="关闭">×</button></div>
+    <div class="modal-body">
+      <p class="share-title" id="acctName"></p>
+      <div id="acctPwdBox">
+        <form id="pwdForm" autocomplete="off">
+          <div class="field"><input id="oldPwd" type="password" placeholder="原密码" autocomplete="current-password" required></div>
+          <div class="field"><input id="newPwd" type="password" placeholder="新密码（至少 6 位）" autocomplete="new-password" required></div>
+          <div class="field"><input id="newPwd2" type="password" placeholder="确认新密码" autocomplete="new-password" required></div>
+          <p class="msg" id="pwdMsg"></p>
+          <div class="modal-actions"><button type="submit" class="primary" id="pwdSubmit">修改密码</button></div>
+        </form>
+      </div>
+      <p class="note" id="acctNote" hidden></p>
+      <div id="acctDanger" style="margin-top:18px;padding-top:16px;border-top:1px dashed var(--line)">
+        <button class="act danger" id="delAccBtn" type="button">注销账号并删除所有数据</button>
+        <p class="note" style="margin-top:8px">注销后将删除你的账号记录与 /yunpan/用户名/ 目录下的全部文件与链接记录，且不可恢复。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script id="vault" type="application/json">{"v":1,"alg":"PBKDF2-SHA256+AES-256-GCM","items":[{"it":210000,"s":"o9Z7x6oIiyIaEF9qlUMkxw==","n":"Ywd5uaj4Ikk64kJB","c":"4WoC35jVPOS/3bHkVnLX1lxyMQvKG666t1j1i1cYo9eKOOUAjDZkwyUaShD1Df2+S+UAmnYyssk=","tag":"admin"},{"it":210000,"s":"wmBAp6G7EqMhDFPbQ5dEjg==","n":"l8Tu/p/igF0iITrd","c":"qc/HCv9PaGaAu7CVbeTV6XqRzO8HOIcOpZZ2XkBxBcluvf9bR9UwqklgkZqfPjWm/uzAgMklRQE=","tag":"invite"}]}</script>
+<script>
+(function(){
+  'use strict';
+
+  var CFG = {
+    owner: 'hicodehc',
+    repo: 'hicodehc.github.io',
+    branch: 'main',
+    dir: 'yunpan',
+    usersFile: 'yh.json',
+    cookie: 'hc_yunpan_session',
+    cookieDays: 30,
+    maxFileMB: 95,
+    mirrorTimeout: 8000,
+    apiTimeout: 20000,
+    pbkdf2Iter: 210000,
+    inviteCode: 'outlook00',
+    pagesBase: 'https://hicodehc.github.io/',
+    zipPassword: 'cyry5988',
+    rootUser: 'cyrcyrgo',
+    mirrors: [
+      'https://gh-proxy.com/',
+      'https://ghfast.top/',
+      'https://cdn.jsdelivr.net/gh/hicodehc/hicodehc.github.io@main/',
+      'https://raw.githubusercontent.com/hicodehc/hicodehc.github.io/main/'
+    ]
+  };
+  var API = 'https://api.github.com/repos/' + CFG.owner + '/' + CFG.repo;
+  var VAULT = JSON.parse(document.getElementById('vault').textContent);
+  var $ = function(s){ return document.querySelector(s); };
+  var encoder = new TextEncoder(), decoder = new TextDecoder();
+  var S = { user: '', login: '', role: '', token: '', pwd: '', path: [], items: [], admin: false };
+  var MIRROR_KEY = 'hc_yunpan_last_mirror';
+  var TEXT_EXT = ['txt','md','markdown','json','js','mjs','ts','tsx','jsx','css','html','htm','xml','yml','yaml','csv','log','ini','conf','sh','bat','ps1','py','java','c','cpp','h','go','rs','php','sql','svg'];
+  var VIDEO_EXT = ['mp4','webm','ogv','ogg','mov','m4v'];
+  var PREVIEW_TEXT_CAP = 512 * 1024;
+  var previewUrl = '';
+
+  /* ---------- 基础工具 ---------- */
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function b64d(s){ return Uint8Array.from(atob(s), function(c){ return c.charCodeAt(0); }); }
+  function b64e(u8){
+    var out = '', CH = 0x8000;
+    for (var i = 0; i < u8.length; i += CH){
+      out += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
+    }
+    return btoa(out);
+  }
+  function fmtSize(n){
+    n = Number(n) || 0;
+    if (n < 1024) return n + ' B';
+    var u = ['KB','MB','GB','TB'], i = -1;
+    do { n /= 1024; i++; } while (n >= 1024 && i < 3);
+    return (n >= 100 ? n.toFixed(0) : n.toFixed(1)) + ' ' + u[i];
+  }
+  function pad(x, l){ l = l || 2; x = String(x); while (x.length < l) x = '0' + x; return x; }
+  function fmtDate(iso){
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function stamp(){
+    var d = new Date();
+    return '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+  }
+  function toast(msg, kind){
+    var el = $('#toast');
+    el.textContent = msg;
+    el.className = 'show' + (kind ? ' ' + kind : '');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function(){ el.className = ''; }, 3200);
+  }
+  function withTimeout(promise, ms, message){
+    return new Promise(function(resolve, reject){
+      var done = false;
+      var timer = setTimeout(function(){
+        if (done) return;
+        done = true;
+        reject(new Error(message));
+      }, ms);
+      promise.then(function(v){
+        if (done) return;
+        done = true; clearTimeout(timer); resolve(v);
+      }, function(e){
+        if (done) return;
+        done = true; clearTimeout(timer); reject(e);
+      });
+    });
+  }
+  function encodePath(p){
+    return String(p).split('/').map(encodeURIComponent).join('/');
+  }
+  function sanitizeName(name){
+    var n = String(name).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '').trim();
+    if (!n) n = 'file';
+    if (n.length > 110) n = n.slice(0, 110);
+    return n;
+  }
+  function isZipName(name){ return /\.zip$/i.test(String(name)); }
+  function dispName(name){ var n = String(name); return isZipName(n) ? n.slice(0, -4) : n; }
+  function extOf(name){ var i = String(name).lastIndexOf('.'); return i < 0 ? '' : String(name).slice(i + 1).toLowerCase(); }
+  function canText(name){ return TEXT_EXT.indexOf(extOf(name)) >= 0; }
+  function canVideo(name){ return VIDEO_EXT.indexOf(extOf(name)) >= 0; }
+  function isHtmlName(name){ return /\.(html?|htm)$/i.test(String(name)); }
+  function isProtectedUser(name){
+    var n = String(name == null ? '' : name).toLowerCase();
+    return n === 'admin' || n === String(CFG.rootUser).toLowerCase();
+  }
+  function validName(name){
+    if (!name) return '请输入用户名';
+    if (!/^[A-Za-z0-9_\u4e00-\u9fa5-]{2,20}$/.test(name)) return '用户名需为 2–20 位字母 / 数字 / 下划线 / 短横线 / 汉字';
+    if (/^[._-]/.test(name)) return '用户名不能以 . _ - 开头';
+    if (isProtectedUser(name)) return '“' + name + '” 为保留账号，不能注册或添加';
+    return '';
+  }
+  function validPwd(pwd){
+    if (!pwd) return '请输入密码';
+    if (pwd.length < 6) return '密码至少 6 位';
+    if (pwd.length > 64) return '密码不能超过 64 位';
+    return '';
+  }
+
+  /* ---------- Cookie 会话 ---------- */
+  function cookiePath(){ return location.pathname.replace(/[^/]*$/, '') || '/'; }
+  function saveSession(){
+    var payload = { u: S.user, l: S.login, r: S.role, t: S.token, p: S.pwd };
+    var d = new Date(Date.now() + CFG.cookieDays * 864e5);
+    document.cookie = CFG.cookie + '=' + encodeURIComponent(JSON.stringify(payload)) + '; path=' + cookiePath() +
+      '; expires=' + d.toUTCString() + '; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '');
+  }
+  function loadSession(){
+    var m = document.cookie.match(new RegExp('(?:^|; )' + CFG.cookie + '=([^;]+)'));
+    if (!m) return null;
+    try{
+      var p = JSON.parse(decodeURIComponent(m[1]));
+      if (!p || !p.u || !p.t || typeof p.p !== 'string' || !p.p) return null;
+      return p;
+    }catch(_){ return null; }
+  }
+  function clearSession(){
+    document.cookie = CFG.cookie + '=; path=' + cookiePath() + '; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    document.cookie = 'hc_yunpan_token=; path=' + cookiePath() + '; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    document.cookie = 'hc_yunpan_token=; path=/yunpan/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+  }
+
+  /* ---------- 加密 ---------- */
+  function pwdVariants(pwd){
+    var src = String(pwd == null ? '' : pwd);
+    var norm = src.normalize ? src.normalize('NFKC') : src;
+    var lower = norm.toLowerCase();
+    var bare = lower.replace(/\s+/g, '');
+    var out = [];
+    [src, src.trim(), norm, norm.trim(), lower.trim(), bare].forEach(function(v){
+      if (v && out.indexOf(v) === -1) out.push(v);
+    });
+    return out;
+  }
+  async function deriveKey(pwd, saltB64, it){
+    var km = await crypto.subtle.importKey('raw', encoder.encode(String(pwd)), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', hash: 'SHA-256', salt: b64d(saltB64), iterations: it || CFG.pbkdf2Iter },
+      km, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+    );
+  }
+  async function decryptBox(box, pwd){
+    var key = await deriveKey(pwd, box.s, box.it);
+    var pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(box.n) }, key, b64d(box.c));
+    return decoder.decode(pt).trim();
+  }
+  async function encryptBox(token, pwd){
+    var salt = crypto.getRandomValues(new Uint8Array(16));
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var key = await deriveKey(pwd, b64e(salt), CFG.pbkdf2Iter);
+    var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, encoder.encode(token));
+    return { it: CFG.pbkdf2Iter, s: b64e(salt), n: b64e(iv), c: b64e(new Uint8Array(ct)) };
+  }
+  async function tryVault(pwd, tag){
+    var variants = pwdVariants(pwd);
+    for (var v = 0; v < variants.length; v++){
+      for (var i = 0; i < VAULT.items.length; i++){
+        var item = VAULT.items[i];
+        if (item.tag !== tag) continue;
+        try{
+          var token = await decryptBox(item, variants[v]);
+          if (token) return token;
+        }catch(_){ /* 密码不匹配 */ }
+      }
+    }
+    return '';
+  }
+
+  /* ---------- 镜像站故障切换 ---------- */
+  function mirrorOrder(){
+    var last = '';
+    try{ last = localStorage.getItem(MIRROR_KEY) || ''; }catch(_){}
+    var list = CFG.mirrors.slice();
+    var idx = list.indexOf(last);
+    if (idx > 0){ list.splice(idx, 1); list.unshift(last); }
+    return list;
+  }
+  async function fetchRepoBlob(path, bust){
+    var rel = encodePath(path) + (bust ? '?t=' + Date.now() : '');
+    var order = mirrorOrder();
+    var errors = [];
+    for (var i = 0; i < order.length; i++){
+      var base = order[i];
+      var ctrl = new AbortController();
+      var timer = setTimeout(function(){ ctrl.abort(); }, CFG.mirrorTimeout);
+      var t0 = Date.now();
+      try{
+        var res = await fetch(base + rel, { cache: 'no-store', signal: ctrl.signal });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var blob = await res.blob();
+        if (!blob.size) throw new Error('空文件');
+        try{ localStorage.setItem(MIRROR_KEY, base); }catch(_){}
+        console.log('[yunpan] mirror ok:', base, (Date.now() - t0) + 'ms');
+        return blob;
+      }catch(e){
+        var why = (e && e.name === 'AbortError') ? '超时' : ((e && e.message) || '失败');
+        errors.push(base.replace(/^https?:\/\//, '').replace(/\/$/, '') + ' ' + why);
+        console.warn('[yunpan] mirror fail:', base, why);
+      }finally{
+        clearTimeout(timer);
+      }
+    }
+    throw new Error('所有镜像站均不可用（' + errors.join('；') + '）');
+  }
+
+  /* ---------- GitHub API ---------- */
+  class AuthError extends Error {
+    constructor(m){ super(m); this.name = 'AuthError'; }
+  }
+  async function gh(path, opts){
+    opts = opts || {};
+    var headers = Object.assign({
+      'Authorization': 'token ' + S.token,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    }, opts.headers || {});
+    var ctrl = new AbortController();
+    var timer = setTimeout(function(){ ctrl.abort(); }, CFG.apiTimeout);
+    var res;
+    try{
+      res = await fetch(API + path, Object.assign({ cache: 'no-store', signal: ctrl.signal }, opts, { headers: headers }));
+    }catch(err){
+      if (err && err.name === 'AbortError') throw new Error('请求 GitHub 超时，请检查网络');
+      throw err;
+    }finally{
+      clearTimeout(timer);
+    }
+    if (res.status === 401){
+      clearSession();
+      S.token = '';
+      showLock('凭据已失效，请重新登录');
+      throw new AuthError('unauthorized');
+    }
+    if (!res.ok){
+      var msg = res.statusText || ('HTTP ' + res.status);
+      try{
+        var j = await res.json();
+        if (j && j.message) msg = j.message;
+      }catch(_){}
+      var e = new Error(msg + ' (' + res.status + ')');
+      e.status = res.status;
+      throw e;
+    }
+    return res;
+  }
+  async function putFile(path, u8, message, sha){
+    var body = { message: message, content: b64e(u8), branch: CFG.branch };
+    if (sha) body.sha = sha;
+    return gh('/contents/' + encodePath(path), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  }
+  async function deletePath(path, sha, message){
+    return gh('/contents/' + encodePath(path), {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: message, sha: sha, branch: CFG.branch })
+    });
+  }
+  async function listDir(path){
+    try{
+      var res = await gh('/contents/' + encodePath(path) + '?ref=' + CFG.branch);
+      var j = await res.json();
+      return Array.isArray(j) ? j : [];
+    }catch(e){
+      if (e.status === 404) return [];
+      throw e;
+    }
+  }
+  async function getFileBytes(entry){
+    var res = await gh('/contents/' + encodePath(entry.path) + '?ref=' + CFG.branch, {
+      headers: { 'Accept': 'application/vnd.github.raw+json' }
+    });
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
+  /* ---------- 用户注册表 yh.json ---------- */
+  function normalizeUsers(doc){
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) doc = {};
+    if (!Array.isArray(doc.users)) doc.users = [];
+    doc.version = doc.version || 1;
+    return doc;
+  }
+  async function fetchUsersPublic(){
+    try{
+      var res = await fetch(API + '/contents/' + CFG.dir + '/' + CFG.usersFile + '?ref=' + CFG.branch, { cache: 'no-store' });
+      if (res.ok){
+        var j = await res.json();
+        var text = decoder.decode(b64d(String(j.content || '').replace(/[\r\n]/g, '')));
+        return { doc: normalizeUsers(JSON.parse(text)), sha: j.sha };
+      }
+      console.warn('[yunpan] public users api:', res.status);
+    }catch(e){
+      console.warn('[yunpan] public users api fail:', e && e.message);
+    }
+    /* 匿名 API 被限流时，用邀请码解出的凭据读取最新 yh.json，避免镜像缓存过期 */
+    try{
+      return await fetchUsersByInviteToken();
+    }catch(e2){
+      console.warn('[yunpan] invite-token users api fail:', e2 && e2.message);
+    }
+    var blob = await fetchRepoBlob(CFG.dir + '/' + CFG.usersFile, true);
+    var txt = await blob.text();
+    return { doc: normalizeUsers(JSON.parse(txt)), sha: null };
+  }
+  async function fetchUsersByInviteToken(){
+    var token = await tryVault(CFG.inviteCode, 'invite');
+    if (!token) throw new Error('读取凭据不可用');
+    var res = await fetch(API + '/contents/' + CFG.dir + '/' + CFG.usersFile + '?ref=' + CFG.branch, {
+      cache: 'no-store',
+      headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var j = await res.json();
+    var text = decoder.decode(b64d(String(j.content || '').replace(/[\r\n]/g, '')));
+    return { doc: normalizeUsers(JSON.parse(text)), sha: j.sha };
+  }
+  async function fetchUsersAuthed(){
+    try{
+      var res = await gh('/contents/' + CFG.dir + '/' + CFG.usersFile + '?ref=' + CFG.branch);
+      var j = await res.json();
+      var text = decoder.decode(b64d(String(j.content || '').replace(/[\r\n]/g, '')));
+      return { doc: normalizeUsers(JSON.parse(text)), sha: j.sha };
+    }catch(e){
+      if (e.status === 404) return { doc: normalUsersEmpty(), sha: null };
+      throw e;
+    }
+  }
+  function normalUsersEmpty(){ return { version: 1, users: [] }; }
+  async function saveUsers(doc, sha){
+    var json = JSON.stringify(doc, null, 2);
+    await putFile(CFG.dir + '/' + CFG.usersFile, encoder.encode(json), 'users: update ' + CFG.usersFile, sha);
+  }
+  async function mutateUsers(fn){
+    for (var attempt = 0; attempt < 3; attempt++){
+      var out = await fetchUsersAuthed();
+      await fn(out.doc);
+      out.doc.version = out.doc.version || 1;
+      out.doc.updated = new Date().toISOString();
+      try{
+        await saveUsers(out.doc, out.sha);
+        return out.doc;
+      }catch(e){
+        if (e.status === 409 || e.status === 422) continue;
+        throw e;
+      }
+    }
+    throw new Error('用户数据更新冲突，请重试');
+  }
+  async function ensureUserFolder(name){
+    var metaPath = CFG.dir + '/' + name + '/yunml.json';
+    var body = JSON.stringify({ version: 1, files: [], createdAt: new Date().toISOString() }, null, 2);
+    try{
+      await putFile(metaPath, encoder.encode(body), 'init: user registry ' + name);
+    }catch(e){
+      if (e.status !== 422) throw e;
+    }
+  }
+  async function withToken(token, fn){
+    var prev = S.token;
+    S.token = token;
+    try{ return await fn(); }
+    finally{ S.token = prev; }
+  }
+  /* ---------- 视图切换 ---------- */
+  var lockView = $('#lockView'), regView = $('#regView'), appView = $('#appView'), lockCard = $('#lockCard');
+  function showLock(msg){
+    appView.hidden = true; appView.style.display = 'none';
+    regView.hidden = true; regView.style.display = 'none';
+    lockView.hidden = false; lockView.style.display = 'grid';
+    $('#lockMsg').textContent = msg || '';
+    setTimeout(function(){
+      if (!$('#loginUser').value) $('#loginUser').focus();
+      else $('#pwd').focus();
+    }, 40);
+  }
+  function showReg(){
+    lockView.hidden = true; lockView.style.display = 'none';
+    appView.hidden = true; appView.style.display = 'none';
+    regView.hidden = false; regView.style.display = 'grid';
+    $('#regMsg').textContent = '';
+    setTimeout(function(){ $('#regUser').focus(); }, 40);
+  }
+  function showApp(){
+    lockView.hidden = true; lockView.style.display = 'none';
+    regView.hidden = true; regView.style.display = 'none';
+    appView.hidden = false; appView.style.display = 'flex';
+    $('#chipName').textContent = S.user;
+    $('#chipRole').textContent = S.admin ? 'ADMIN' : 'USER';
+    var chip = $('#userChip');
+    chip.hidden = false; chip.style.display = 'inline-flex';
+    chip.title = '账户设置 · 修改密码 / 注销账号';
+    var ab = $('#adminBtn');
+    ab.hidden = !S.admin;
+    ab.style.display = S.admin ? 'grid' : 'none';
+  }
+  function shakeCard(){
+    lockCard.classList.remove('shake');
+    void lockCard.offsetWidth;
+    lockCard.classList.add('shake');
+  }
+  function setListMsg(msg){
+    var el = $('#listMsg');
+    el.textContent = msg || '';
+    el.hidden = !msg;
+  }
+
+  /* ---------- 登录 ---------- */
+  $('#togglePwd').addEventListener('click', function(){
+    var p = $('#pwd');
+    p.type = p.type === 'password' ? 'text' : 'password';
+    p.focus();
+  });
+  $('#unlockForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var username = $('#loginUser').value.trim();
+    var pwd = $('#pwd').value;
+    var msg = $('#lockMsg');
+    if (!username || !pwd){ msg.textContent = '请输入用户名和密码'; return; }
+    if (!window.crypto || !crypto.subtle){
+      msg.textContent = '当前访问环境不支持浏览器端解密，请使用 HTTPS 地址访问';
+      return;
+    }
+    var btn = $('#unlockBtn');
+    btn.disabled = true; btn.textContent = '验证中…'; msg.textContent = '';
+    console.log('[yunpan] login start ·', username, '· build v7');
+    try{
+      var lower = username.toLowerCase();
+      var isRoot = (lower === 'admin' || lower === String(CFG.rootUser).toLowerCase());
+      if (isRoot){
+        var adminToken = '';
+        var adminRec = null;
+        if (lower !== 'admin'){
+          /* 根用户 cyrcyrgo 若已自行改过密码，则使用 yh.json 中的记录 */
+          try{
+            var uo = await withTimeout(fetchUsersPublic(), 20000, '读取用户列表超时');
+            for (var ui = 0; ui < uo.doc.users.length; ui++){
+              if (String(uo.doc.users[ui].name).toLowerCase() === lower){ adminRec = uo.doc.users[ui]; break; }
+            }
+          }catch(e0){ console.warn('[yunpan] read root record fail', e0 && e0.message); }
+        }
+        if (adminRec){
+          var avs = pwdVariants(pwd);
+          for (var av = 0; av < avs.length && !adminToken; av++){
+            try{ adminToken = await decryptBox(adminRec, avs[av]); }catch(_){}
+          }
+        }else{
+          adminToken = await withTimeout(tryVault(pwd, 'admin'), 25000, '本地解密超时，请重试');
+        }
+        if (!adminToken) throw new Error('用户名或密码错误');
+        S = { user: CFG.rootUser, login: lower, role: 'admin', token: adminToken, pwd: pwd, path: [], items: [], admin: true };
+      }else{
+        var out = await withTimeout(fetchUsersPublic(), 20000, '读取用户列表超时');
+        var rec = null;
+        for (var i = 0; i < out.doc.users.length; i++){
+          if (String(out.doc.users[i].name).toLowerCase() === lower){ rec = out.doc.users[i]; break; }
+        }
+        if (!rec) throw new Error('用户名不存在，请联系管理员');
+        var token = '';
+        var variants = pwdVariants(pwd);
+        for (var v = 0; v < variants.length && !token; v++){
+          try{ token = await decryptBox(rec, variants[v]); }catch(_){}
+        }
+        if (!token) throw new Error('用户名或密码错误');
+        S = { user: rec.name, login: rec.name, role: 'user', token: token, pwd: pwd, path: [], items: [], admin: false };
+      }
+      console.log('[yunpan] login ok:', S.user, S.role);
+      saveSession();
+      $('#pwd').value = '';
+      await enterApp();
+    }catch(err){
+      console.error('[yunpan] login fail', err);
+      msg.textContent = (err && err.message) || '登录失败';
+      shakeCard();
+    }finally{
+      btn.disabled = false; btn.textContent = '解 锁';
+    }
+  });
+
+  /* ---------- 注册 ---------- */
+  $('#regBtn').addEventListener('click', showReg);
+  $('#backBtn').addEventListener('click', function(){ showLock(''); });
+  $('#regForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var name = $('#regUser').value.trim();
+    var pwd = $('#regPwd').value;
+    var pwd2 = $('#regPwd2').value;
+    var invite = $('#regInvite').value.trim();
+    var msg = $('#regMsg');
+    var err = validName(name) || validPwd(pwd) ||
+      (pwd !== pwd2 ? '两次输入的密码不一致' : '') ||
+      (invite !== CFG.inviteCode ? '管理员邀请码无效' : '');
+    if (err){ msg.textContent = err; return; }
+    msg.textContent = '';
+    var btn = $('#regSubmit');
+    btn.disabled = true; btn.textContent = '邀请码校验中…';
+    try{
+      var token = await withTimeout(tryVault(invite, 'invite'), 25000, '邀请码校验超时，请重试');
+      if (!token) throw new Error('管理员邀请码无效');
+      btn.textContent = '加密 TOKEN…';
+      var box = await encryptBox(token, pwd);
+      var rec = { name: name, role: 'user', it: box.it, s: box.s, n: box.n, c: box.c, createdAt: new Date().toISOString() };
+      btn.textContent = '写入注册表…';
+      await withToken(token, async function(){
+        await mutateUsers(function(doc){
+          for (var i = 0; i < doc.users.length; i++){
+            if (String(doc.users[i].name).toLowerCase() === name.toLowerCase()) throw new Error('用户名已存在');
+          }
+          doc.users.push(rec);
+        });
+        try{ await ensureUserFolder(name); }catch(e2){ console.warn('[yunpan] create user folder fail', e2); }
+      });
+      S = { user: name, role: 'user', token: token, pwd: pwd, path: [], items: [], admin: false };
+      saveSession();
+      $('#regForm').reset();
+      toast('注册成功，已自动登录', 'ok');
+      await enterApp();
+    }catch(err2){
+      console.error('[yunpan] register fail', err2);
+      msg.textContent = '注册失败：' + ((err2 && err2.message) || '未知错误');
+      if (err2 && err2.name === 'AuthError') showLock('凭据失效，请重新登录');
+    }finally{
+      btn.disabled = false; btn.textContent = '注 册';
+    }
+  });
+
+  /* ---------- 管理员控制台 ---------- */
+  function openModal(el){ el.hidden = false; el.style.display = 'grid'; }
+  function closeModal(el){ el.hidden = true; el.style.display = 'none'; }
+
+  async function openAdmin(){
+    if (!S.admin){ toast('仅管理员可访问', 'err'); return; }
+    openModal($('#adminModal'));
+    $('#adminMsg').textContent = '';
+    $('#adminList').innerHTML = '<div class="admin-empty">加载中…</div>';
+    try{
+      var out = await fetchUsersAuthed();
+      renderAdminUsers(out.doc);
+    }catch(e){
+      $('#adminList').innerHTML = '<div class="admin-empty">加载失败：' + esc(e.message) + '</div>';
+      $('#adminCount').textContent = '';
+    }
+  }
+  function renderAdminUsers(doc){
+    var list = $('#adminList');
+    var users = doc.users.filter(function(u){ return !isProtectedUser(u.name); });
+    $('#adminCount').textContent = users.length + ' 位注册用户';
+    var html = '<div class="urec">' +
+      '<div class="uinfo">' +
+        '<div class="uname">' + esc(CFG.rootUser) + ' <span style="color:var(--cyan);font-size:10px;letter-spacing:.08em">ROOT · ADMIN</span></div>' +
+        '<div class="umeta">根账号 · /' + esc(CFG.dir) + '/' + esc(CFG.rootUser) + '/ · 受保护</div>' +
+      '</div>' +
+      '<span class="act" style="cursor:default;opacity:.6">不可删除</span>' +
+    '</div>';
+    if (!users.length){
+      html += '<div class="admin-empty" style="margin-top:10px">暂无其他注册用户</div>';
+      list.innerHTML = html;
+      return;
+    }
+    html += users.map(function(u){
+      return '<div class="urec">' +
+        '<div class="uinfo">' +
+          '<div class="uname">' + esc(u.name) + ' <span style="color:var(--cyan);font-size:10px;letter-spacing:.08em">' + esc(String(u.role || 'user').toUpperCase()) + '</span></div>' +
+          '<div class="umeta">' + esc(fmtDate(u.createdAt || '') || '—') + ' · /' + esc(CFG.dir) + '/' + esc(u.name) + '/</div>' +
+        '</div>' +
+        '<button class="act danger" data-deluser="' + esc(u.name) + '">删除</button>' +
+      '</div>';
+    }).join('');
+    list.innerHTML = html;
+  }
+  $('#adminBtn').addEventListener('click', openAdmin);
+  $('#adminClose').addEventListener('click', function(){ closeModal($('#adminModal')); });
+  $('#adminModal').addEventListener('click', function(e){
+    if (e.target === this) closeModal($('#adminModal'));
+  });
+  $('#adminList').addEventListener('click', async function(e){
+    var b = e.target.closest('[data-deluser]');
+    if (!b) return;
+    var name = b.getAttribute('data-deluser');
+    if (isProtectedUser(name)){ toast('该账号受保护，不能删除', 'err'); return; }
+    var yes = await confirmBox('删除用户', '确定删除用户 “' + name + '”？将同时删除其目录 /' + CFG.dir + '/' + name + '/ 下的全部文件与链接记录，此操作不可撤销。', '删除用户及数据');
+    if (!yes) return;
+    b.disabled = true; b.textContent = '删除中…';
+    try{
+      await deleteFolderRec(CFG.dir + '/' + name);
+      await mutateUsers(function(doc){
+        doc.users = doc.users.filter(function(u){ return String(u.name).toLowerCase() !== name.toLowerCase(); });
+      });
+      toast('已删除用户 ' + name + ' 及其数据', 'ok');
+      await openAdmin();
+    }catch(err){
+      $('#adminMsg').textContent = '删除失败：' + err.message;
+      b.disabled = false; b.textContent = '删除';
+    }
+  });
+  $('#addUserForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var name = $('#newUserName').value.trim();
+    var pwd = $('#newUserPwd').value;
+    var msg = $('#adminMsg');
+    var err = validName(name) || validPwd(pwd);
+    if (err){ msg.textContent = err; return; }
+    msg.textContent = '';
+    var btn = $('#addUserBtn');
+    btn.disabled = true; btn.textContent = '添加中…';
+    try{
+      var box = await encryptBox(S.token, pwd);
+      var rec = { name: name, role: 'user', it: box.it, s: box.s, n: box.n, c: box.c, createdAt: new Date().toISOString() };
+      await mutateUsers(function(doc){
+        for (var i = 0; i < doc.users.length; i++){
+          if (String(doc.users[i].name).toLowerCase() === name.toLowerCase()) throw new Error('用户名已存在');
+        }
+        doc.users.push(rec);
+      });
+      try{ await ensureUserFolder(name); }catch(e2){ console.warn('[yunpan] create user folder fail', e2); }
+      toast('已添加用户 ' + name, 'ok');
+      $('#addUserForm').reset();
+      await openAdmin();
+    }catch(err2){
+      msg.textContent = '添加失败：' + ((err2 && err2.message) || '未知错误');
+    }finally{
+      btn.disabled = false; btn.textContent = '添加用户';
+    }
+  });
+
+  /* ---------- 目录与列表 ---------- */
+  function userRoot(){ return CFG.dir + '/' + (S.admin ? CFG.rootUser : S.user); }
+  function curDir(){ return userRoot() + (S.path.length ? '/' + S.path.join('/') : ''); }
+  function relFolder(){ return S.path.join('/'); }
+  function userMetaPath(){ return userRoot() + '/yunml.json'; }
+  function newId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+  function findEntry(key){
+    for (var i = 0; i < S.items.length; i++){ if (S.items[i]._key === key) return S.items[i]; }
+    return null;
+  }
+  function renderCrumbs(){
+    var rootName = S.admin ? CFG.rootUser : S.user;
+    var html = '<button class="crumb" data-crumb="-1">' + esc(rootName) + ' · 根目录</button>';
+    for (var i = 0; i < S.path.length; i++){
+      html += '<span class="crumb-sep">/</span>';
+      html += '<button class="crumb' + (i === S.path.length - 1 ? ' current' : '') + '" data-crumb="' + i + '">' + esc(S.path[i]) + '</button>';
+    }
+    $('#crumbs').innerHTML = html;
+  }
+  $('#crumbs').addEventListener('click', function(e){
+    var b = e.target.closest('[data-crumb]');
+    if (!b) return;
+    var idx = parseInt(b.getAttribute('data-crumb'), 10);
+    S.path = idx < 0 ? [] : S.path.slice(0, idx + 1);
+    loadList().catch(function(err){ toast('打开失败：' + err.message, 'err'); });
+  });
+
+  function fileIconSvg(){ return '<svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a1.8 1.8 0 0 0-1.8 1.8v14.4A1.8 1.8 0 0 0 7 21h10a1.8 1.8 0 0 0 1.8-1.8V8z"/><path d="M14 3v5h5"/><path d="M9.5 14.5h5M9.5 17.5h3"/></svg>'; }
+  function dirIconSvg(){ return '<svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2.5h8a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z"/></svg>'; }
+  function linkIconSvg(){ return '<svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13.5a4 4 0 0 0 5.7 0l2.1-2.1a4 4 0 0 0-5.7-5.7l-1.2 1.2"/><path d="M14 10.5a4 4 0 0 0-5.7 0l-2.1 2.1a4 4 0 0 0 5.7 5.7l1.2-1.2"/></svg>'; }
+
+  function rowHtml(e){
+    if (e.type === 'dir'){
+      return '<div class="row" data-type="dir" data-key="' + esc(e._key) + '">' +
+        '<div class="ficon dir">' + dirIconSvg() + '</div>' +
+        '<div class="fmain"><div class="fname" title="' + esc(e.name) + '">' + esc(e.name) + '</div>' +
+        '<div class="fmeta">文件夹</div></div>' +
+        '<div class="actions">' +
+          '<button class="act" data-act="open">进入</button>' +
+          '<button class="act danger" data-act="rmdir">删除</button>' +
+        '</div>' +
+      '</div>';
+    }
+    if (e.type === 'link'){
+      var lzip = !!e.zip, ldisplay = dispName(e.name);
+      var lmeta = '共享链接<span class="sep">·</span>' + fmtSize(e.size) + '<span class="sep">·</span>' + (lzip ? '加密 ZIP' : '原始文件');
+      var lact = '';
+      if (canText(ldisplay) || canVideo(ldisplay)) lact += '<button class="act" data-act="preview">预览</button>';
+      lact += '<button class="act" data-act="download">下载</button>';
+      if (!lzip) lact += '<button class="act" data-act="openweb">打开</button>';
+      lact += '<button class="act" data-act="share">分享</button>';
+      lact += '<button class="act danger" data-act="rmlink">删除链接</button>';
+      return '<div class="row" data-type="link" data-key="' + esc(e._key) + '">' +
+        '<div class="ficon plain">' + linkIconSvg() + '</div>' +
+        '<div class="fmain"><div class="fname" title="' + esc(ldisplay) + '">' + esc(ldisplay) + '</div>' +
+        '<div class="fmeta">' + lmeta + '</div></div>' +
+        '<div class="actions">' + lact + '</div>' +
+      '</div>';
+    }
+    var zip = isZipName(e.name), display = dispName(e.name);
+    var meta = (zip ? 'AES-256 加密' : '明文存储') + '<span class="sep">·</span>' + fmtSize(e.size) + '<span class="sep">·</span>' + (zip ? '加密 ZIP' : '原始文件');
+    var acts = '';
+    if (canText(display) || canVideo(display)) acts += '<button class="act" data-act="preview">预览</button>';
+    acts += '<button class="act" data-act="download">下载</button>';
+    if (!zip) acts += '<button class="act" data-act="openweb">打开</button>';
+    acts += '<button class="act" data-act="share">分享</button>';
+    acts += '<button class="act" data-act="rename">重命名</button>';
+    acts += '<button class="act danger" data-act="remove">删除</button>';
+    return '<div class="row" data-type="file" data-key="' + esc(e._key) + '">' +
+      '<div class="ficon' + (zip ? '' : ' plain') + '">' + fileIconSvg() + '</div>' +
+      '<div class="fmain"><div class="fname" title="' + esc(display) + '">' + esc(display) + '</div>' +
+      '<div class="fmeta">' + meta + '</div></div>' +
+      '<div class="actions">' + acts + '</div>' +
+    '</div>';
+  }
+
+  function render(){
+    var list = $('#listBox'), empty = $('#emptyBox');
+    renderCrumbs();
+    var files = S.items.filter(function(e){ return e.type !== 'dir'; });
+    var total = 0;
+    files.forEach(function(f){ total += Number(f.size) || 0; });
+    $('#fileCount').textContent = S.items.length + ' 项';
+    $('#statFiles').textContent = files.length;
+    $('#statSize').textContent = fmtSize(total);
+    if (!S.items.length){
+      list.innerHTML = '';
+      list.style.display = 'none';
+      empty.style.display = '';
+      return;
+    }
+    list.style.display = '';
+    empty.style.display = 'none';
+    list.innerHTML = S.items.map(rowHtml).join('');
+  }
+
+  async function loadUserMeta(){
+    try{
+      var res = await gh('/contents/' + encodePath(userMetaPath()) + '?ref=' + CFG.branch);
+      var j = await res.json();
+      var text = decoder.decode(b64d(String(j.content || '').replace(/[\r\n]/g, '')));
+      var doc = JSON.parse(text);
+      if (!doc || typeof doc !== 'object' || Array.isArray(doc)) doc = {};
+      if (!Array.isArray(doc.files)) doc.files = [];
+      doc.version = doc.version || 1;
+      return { doc: doc, sha: j.sha };
+    }catch(e){
+      if (e.status === 404) return { doc: { version: 1, files: [] }, sha: null };
+      throw e;
+    }
+  }
+  async function saveUserMeta(doc, sha){
+    var json = JSON.stringify(doc, null, 2);
+    await putFile(userMetaPath(), encoder.encode(json), 'meta: yunml.json', sha);
+  }
+  async function mutateUserMeta(fn){
+    for (var attempt = 0; attempt < 3; attempt++){
+      var out = await loadUserMeta();
+      await fn(out.doc);
+      out.doc.version = out.doc.version || 1;
+      out.doc.updated = new Date().toISOString();
+      try{ await saveUserMeta(out.doc, out.sha); return out.doc; }
+      catch(e){
+        if (e.status === 409 || e.status === 422) continue;
+        throw e;
+      }
+    }
+    throw new Error('yunml.json 更新冲突，请重试');
+  }
+  async function metaSync(fn){
+    try{ await mutateUserMeta(fn); }
+    catch(e){ console.warn('[yunpan] yunml sync fail', e && e.message); }
+  }
+
+  async function loadList(){
+    var path = curDir();
+    var entries = await listDir(path);
+    var items = entries.filter(function(e){
+      if (e.type !== 'dir' && e.type !== 'file') return false;
+      if (e.name === '.keep') return false;
+      if (e.type === 'file' && e.path === userMetaPath()) return false;
+      return true;
+    }).map(function(e){
+      e._key = 'local:' + e.path;
+      return e;
+    });
+    var meta = null;
+    try{ meta = await loadUserMeta(); }
+    catch(e){ console.warn('[yunpan] load yunml fail', e && e.message); }
+    if (meta){
+      var folder = relFolder();
+      meta.doc.files.forEach(function(f){
+        if (!f || f.kind !== 'link' || String(f.folder || '') !== folder) return;
+        var id = f.id || ('l' + Math.abs(hashStr(String(f.path || f.url || ''))));
+        var lpath = String(f.path || '');
+        var lstored = lpath ? lpath.slice(lpath.lastIndexOf('/') + 1) : '';
+        items.push({
+          type: 'link',
+          name: String(f.name || dispName(lstored)),
+          stored: lstored,
+          path: lpath,
+          url: String(f.url || ''),
+          size: Number(f.size) || 0,
+          zip: !!f.zip || isZipName(lstored),
+          at: f.at || '',
+          id: id,
+          _key: 'link:' + id
+        });
+      });
+    }
+    items.sort(function(a, b){
+      if (a.type !== b.type){
+        if (a.type === 'dir') return -1;
+        if (b.type === 'dir') return 1;
+      }
+      return String(a.name).localeCompare(String(b.name), 'zh');
+    });
+    S.items = items;
+    render();
+    setListMsg('');
+  }
+  function hashStr(s){
+    var h = 0;
+    for (var i = 0; i < s.length; i++){ h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    return h;
+  }
+
+  async function enterApp(){
+    showApp();
+    setListMsg('');
+    try{
+      await loadList();
+    }catch(e){
+      if (e.name === 'AuthError') return;
+      setListMsg('目录加载失败：' + e.message + '（可点击右上角刷新重试）');
+      toast('目录加载失败：' + e.message, 'err');
+    }
+  }
+  /* ---------- 刷新 / 锁定 ---------- */
+  var busy = false;
+  async function refresh(){
+    if (busy) return;
+    busy = true;
+    var btn = $('#refreshBtn');
+    btn.classList.add('spin');
+    try{
+      await loadList();
+      toast('已刷新', 'ok');
+    }catch(e){
+      if (e.name !== 'AuthError') toast('刷新失败：' + e.message, 'err');
+    }finally{
+      busy = false;
+      btn.classList.remove('spin');
+    }
+  }
+  $('#refreshBtn').addEventListener('click', refresh);
+  $('#refreshMini').addEventListener('click', refresh);
+  function doLock(){
+    clearSession();
+    S = { user: '', login: '', role: '', token: '', pwd: '', path: [], items: [], admin: false };
+    $('#chipName').textContent = '';
+    $('#userChip').hidden = true; $('#userChip').style.display = 'none';
+    $('#adminBtn').hidden = true; $('#adminBtn').style.display = 'none';
+    $('#listBox').innerHTML = ''; $('#listBox').style.display = 'none';
+    $('#emptyBox').style.display = '';
+    $('#fileCount').textContent = '0 项';
+    $('#statFiles').textContent = '0';
+    $('#statSize').textContent = '0 B';
+    $('#crumbs').innerHTML = '';
+    $('#loginUser').value = '';
+    $('#pwd').value = '';
+    showLock('');
+  }
+  $('#lockBtn').addEventListener('click', doLock);
+
+  /* ---------- 通用弹窗 ---------- */
+  var inputResolve = null, confirmResolve = null;
+  function askInput(title, value){
+    return new Promise(function(resolve){
+      inputResolve = resolve;
+      $('#inputTitle').textContent = title;
+      $('#inputField').value = value || '';
+      $('#inputMsg').textContent = '';
+      openModal($('#inputModal'));
+      setTimeout(function(){ $('#inputField').focus(); $('#inputField').select(); }, 40);
+    });
+  }
+  $('#inputForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    var v = $('#inputField').value;
+    var r = inputResolve; inputResolve = null;
+    closeModal($('#inputModal'));
+    if (r) r(v);
+  });
+  $('#inputModal').addEventListener('click', function(e){
+    if (e.target === this || e.target.closest('[data-close]')){
+      var r = inputResolve; inputResolve = null;
+      closeModal($('#inputModal'));
+      if (r) r(null);
+    }
+  });
+  function confirmBox(title, text, okLabel){
+    return new Promise(function(resolve){
+      confirmResolve = resolve;
+      $('#confirmTitle').textContent = title;
+      $('#confirmText').textContent = text;
+      $('#confirmOk').textContent = okLabel || '确定';
+      openModal($('#confirmModal'));
+    });
+  }
+  $('#confirmOk').addEventListener('click', function(){
+    var r = confirmResolve; confirmResolve = null;
+    closeModal($('#confirmModal'));
+    if (r) r(true);
+  });
+  $('#confirmModal').addEventListener('click', function(e){
+    if (e.target === this || e.target.closest('[data-close]')){
+      var r = confirmResolve; confirmResolve = null;
+      closeModal($('#confirmModal'));
+      if (r) r(false);
+    }
+  });
+  /* ---------- 账户设置：改密码 / 注销 ---------- */
+  function openAccount(){
+    var label = S.user + ' · ' + (S.admin ? 'ADMIN' : 'USER');
+    if (S.login && S.login !== S.user) label = S.login + ' → ' + S.user + ' · ADMIN';
+    $('#acctName').textContent = label;
+    $('#pwdForm').reset();
+    $('#pwdMsg').textContent = '';
+    var canPwd = String(S.login || '').toLowerCase() !== 'admin';
+    $('#acctPwdBox').style.display = canPwd ? '' : 'none';
+    var note = $('#acctNote');
+    note.hidden = canPwd;
+    if (!canPwd) note.textContent = 'admin 主账号的密码由页面内置密文托管，无法在线修改；如需更换请更新部署的 index.html。';
+    var canDel = !S.admin && !isProtectedUser(S.user);
+    $('#acctDanger').style.display = canDel ? '' : 'none';
+    openModal($('#accountModal'));
+  }
+  async function changePassword(oldPwd, newPwd){
+    var login = String(S.login || S.user);
+    var out = await fetchUsersAuthed();
+    var rec = null;
+    for (var i = 0; i < out.doc.users.length; i++){
+      if (String(out.doc.users[i].name).toLowerCase() === login.toLowerCase()){ rec = out.doc.users[i]; break; }
+    }
+    var token = '';
+    if (rec){
+      var vs = pwdVariants(oldPwd);
+      for (var v = 0; v < vs.length && !token; v++){
+        try{ token = await decryptBox(rec, vs[v]); }catch(_){}
+      }
+      if (!token) throw new Error('原密码错误');
+    }else{
+      if (!S.admin) throw new Error('账号记录不存在，请联系管理员');
+      token = await withTimeout(tryVault(oldPwd, 'admin'), 25000, '本地解密超时，请重试');
+      if (!token) throw new Error('原密码错误');
+    }
+    var box = await encryptBox(token, newPwd);
+    await mutateUsers(function(doc){
+      var found = null;
+      for (var j = 0; j < doc.users.length; j++){
+        if (String(doc.users[j].name).toLowerCase() === login.toLowerCase()){ found = doc.users[j]; break; }
+      }
+      if (found){
+        found.it = box.it; found.s = box.s; found.n = box.n; found.c = box.c;
+        found.updatedAt = new Date().toISOString();
+      }else{
+        doc.users.push({
+          name: login,
+          role: S.admin ? 'admin' : 'user',
+          it: box.it, s: box.s, n: box.n, c: box.c,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+    });
+    S.token = token;
+    S.pwd = newPwd;
+    saveSession();
+  }
+  async function deleteOwnAccount(){
+    if (S.admin || isProtectedUser(S.user)){ toast('该账号受保护，不能注销', 'err'); return; }
+    var name = S.user;
+    var yes = await confirmBox('注销账号', '确定注销账号 “' + name + '”？账号记录与 /' + CFG.dir + '/' + name + '/ 下的全部文件、链接记录将被删除，此操作不可撤销。', '注销并删除数据');
+    if (!yes) return;
+    var btn = $('#delAccBtn');
+    btn.disabled = true; btn.textContent = '注销中…';
+    try{
+      await deleteFolderRec(CFG.dir + '/' + name);
+      await mutateUsers(function(doc){
+        doc.users = doc.users.filter(function(u){ return String(u.name).toLowerCase() !== name.toLowerCase(); });
+      });
+      closeModal($('#accountModal'));
+      toast('账号已注销', 'ok');
+      doLock();
+    }catch(err){
+      toast('注销失败：' + err.message, 'err');
+      btn.disabled = false; btn.textContent = '注销账号并删除所有数据';
+    }
+  }
+  $('#userChip').addEventListener('click', openAccount);
+  $('#accountModal').addEventListener('click', function(e){
+    if (e.target === this || e.target.closest('[data-close]')) closeModal($('#accountModal'));
+  });
+  $('#pwdForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var oldPwd = $('#oldPwd').value;
+    var np = $('#newPwd').value;
+    var np2 = $('#newPwd2').value;
+    var msg = $('#pwdMsg');
+    var err = validPwd(np) || (np !== np2 ? '两次输入的新密码不一致' : '') || (np === oldPwd ? '新密码不能与原密码相同' : '');
+    if (err){ msg.textContent = err; return; }
+    msg.textContent = '';
+    var btn = $('#pwdSubmit');
+    btn.disabled = true; btn.textContent = '验证中…';
+    try{
+      await changePassword(oldPwd, np);
+      $('#pwdForm').reset();
+      toast('密码已更新（TOKEN 已用新密码重新加密）', 'ok');
+      closeModal($('#accountModal'));
+    }catch(e2){
+      msg.textContent = (e2 && e2.message) || '修改失败';
+    }finally{
+      btn.disabled = false; btn.textContent = '修改密码';
+    }
+  });
+  $('#delAccBtn').addEventListener('click', deleteOwnAccount);
+
+  $('#previewClose').addEventListener('click', closePreview);
+  $('#previewModal').addEventListener('click', function(e){ if (e.target === this) closePreview(); });
+
+  /* ---------- 预览 ---------- */
+  function closePreview(){
+    if (previewUrl){ URL.revokeObjectURL(previewUrl); previewUrl = ''; }
+    var v = document.querySelector('video.preview-video');
+    if (v){ try{ v.pause(); }catch(_){} v.removeAttribute('src'); try{ v.load(); }catch(_){} }
+    $('#previewBody').innerHTML = '';
+    closeModal($('#previewModal'));
+  }
+  function openPreview(name, blob){
+    closePreview();
+    $('#previewTitle').textContent = name;
+    var body = $('#previewBody');
+    if (canVideo(name)){
+      previewUrl = URL.createObjectURL(blob);
+      var v = document.createElement('video');
+      v.className = 'preview-video';
+      v.controls = true;
+      v.preload = 'metadata';
+      v.src = previewUrl;
+      body.appendChild(v);
+      openModal($('#previewModal'));
+    } else if (canText(name)){
+      var pre = document.createElement('pre');
+      pre.className = 'preview-pre';
+      pre.textContent = '加载中…';
+      body.appendChild(pre);
+      openModal($('#previewModal'));
+      blob.slice(0, PREVIEW_TEXT_CAP).text().then(function(t){
+        pre.textContent = t || '（空文件）';
+        var note = document.createElement('p');
+        note.className = 'preview-note';
+        note.textContent = (blob.size > PREVIEW_TEXT_CAP ? '内容较大，仅显示前 512 KB · ' : '') + '大小 ' + fmtSize(blob.size);
+        body.appendChild(note);
+      }).catch(function(e){
+        pre.textContent = '预览失败：' + (e && e.message ? e.message : '未知错误');
+      });
+    } else {
+      toast('该类型暂不支持在线预览，请下载查看', 'err');
+    }
+  }
+
+  /* ---------- 下载 / 预览文件 ---------- */
+  function saveBlob(blob, name){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+  }
+  async function fetchEntryBlob(entry){
+    if (entry.type === 'link'){
+      if (entry.path){
+        try{ return await fetchRepoBlob(entry.path); }catch(e){ console.warn('[yunpan] link path fetch fail', e && e.message); }
+      }
+      if (entry.url){
+        var res = await fetch(entry.url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('链接读取失败 HTTP ' + res.status);
+        return await res.blob();
+      }
+      throw new Error('链接缺少有效地址');
+    }
+    return fetchRepoBlob(entry.path);
+  }
+  async function downloadEntry(entry, btn){
+    var zip = entry.type === 'link' ? !!entry.zip : isZipName(entry.name);
+    var display = dispName(entry.name);
+    var blob = await fetchEntryBlob(entry);
+    if (zip){
+      btn.textContent = '解密中…';
+      var out = await decryptZipBlob(blob, CFG.zipPassword);
+      saveBlob(out.blob, out.name || display);
+      toast('已解密并保存：' + (out.name || display), 'ok');
+    }else{
+      saveBlob(blob, display);
+      toast('已保存：' + display, 'ok');
+    }
+  }
+  async function previewEntry(entry){
+    var display = dispName(entry.name);
+    var blob = await fetchEntryBlob(entry);
+    var zip = entry.type === 'link' ? !!entry.zip : isZipName(entry.name);
+    if (zip){
+      var out = await decryptZipBlob(blob, CFG.zipPassword);
+      blob = out.blob;
+    }
+    openPreview(display, blob);
+  }
+
+  /* ---------- 重命名 / 删除 ---------- */
+  async function renameEntry(entry, btn){
+    var isZip = isZipName(entry.name);
+    var display = dispName(entry.name);
+    var input = await askInput('重命名文件', display);
+    if (input === null) return;
+    var base = sanitizeName(input);
+    if (!base){ toast('文件名不能为空', 'err'); return; }
+    if (/\.zip$/i.test(base)) base = base.slice(0, -4);
+    var target = isZip ? base + '.zip' : base;
+    if (target === entry.name) return;
+    var parent = entry.path.slice(0, entry.path.lastIndexOf('/'));
+    btn.disabled = true; btn.textContent = '重命名中…';
+    try{
+      var bytes = await getFileBytes(entry);
+      try{
+        await putFile(parent + '/' + target, bytes, 'rename: ' + entry.name + ' -> ' + target);
+      }catch(e){
+        if (e.status === 422) throw new Error('同名文件已存在');
+        throw e;
+      }
+      await deletePath(entry.path, entry.sha, 'rename: remove ' + entry.name);
+      await metaSync(function(doc){
+        doc.files.forEach(function(f){
+          if (f.kind === 'local' && f.path === entry.path){
+            f.path = parent + '/' + target;
+            f.name = dispName(target);
+            f.stored = target;
+          }
+        });
+      });
+      toast('已重命名为 ' + target, 'ok');
+      await loadList();
+    }catch(err){
+      toast('重命名失败：' + err.message, 'err');
+    }finally{
+      btn.disabled = false; btn.textContent = '重命名';
+    }
+  }
+  async function removeEntry(entry, btn){
+    var yes = await confirmBox('删除文件', '确定删除 “' + dispName(entry.name) + '”？此操作不可撤销。', '删除文件');
+    if (!yes) return;
+    btn.disabled = true; btn.textContent = '删除中…';
+    try{
+      await deletePath(entry.path, entry.sha, 'delete: ' + entry.name);
+      await metaSync(function(doc){
+        doc.files = doc.files.filter(function(f){ return !(f.kind === 'local' && f.path === entry.path); });
+      });
+      toast('已删除', 'ok');
+      await loadList();
+    }catch(err){
+      toast('删除失败：' + err.message, 'err');
+    }finally{
+      btn.disabled = false; btn.textContent = '删除';
+    }
+  }
+  async function deleteFolderRec(path){
+    var entries = await listDir(path);
+    for (var i = 0; i < entries.length; i++){
+      var e = entries[i];
+      if (e.type === 'dir') await deleteFolderRec(e.path);
+      else if (e.type === 'file') await deletePath(e.path, e.sha, 'delete: ' + e.name);
+    }
+  }
+  async function removeFolder(entry, btn){
+    var yes = await confirmBox('删除文件夹', '确定删除文件夹 “' + entry.name + '” 及其中全部文件？此操作不可撤销。', '删除文件夹');
+    if (!yes) return;
+    btn.disabled = true; btn.textContent = '删除中…';
+    try{
+      await deleteFolderRec(entry.path);
+      var goneFolder = relFolder() ? relFolder() + '/' + entry.name : entry.name;
+      await metaSync(function(doc){
+        doc.files = doc.files.filter(function(f){
+          if (f.kind === 'local' && String(f.path || '').indexOf(entry.path + '/') === 0) return false;
+          if (f.kind === 'link'){
+            var ff = String(f.folder || '');
+            if (ff === goneFolder || ff.indexOf(goneFolder + '/') === 0) return false;
+          }
+          return true;
+        });
+      });
+      toast('已删除文件夹', 'ok');
+      await loadList();
+    }catch(err){
+      toast('删除失败：' + err.message, 'err');
+    }finally{
+      btn.disabled = false; btn.textContent = '删除';
+    }
+  }
+
+  /* ---------- 分享 / URL 导入 ---------- */
+  function shareUrlFor(entry){
+    if (entry.type === 'link') return entry.url || (CFG.pagesBase + encodePath(entry.path));
+    return CFG.pagesBase + encodePath(entry.path);
+  }
+  async function copyText(text){
+    try{
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    }catch(_){}
+    try{
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    }catch(_){ return false; }
+  }
+  function openShare(entry){
+    $('#shareName').textContent = dispName(entry.name) + (entry.type === 'link' ? '（引用的共享文件）' : '');
+    $('#shareUrl').value = shareUrlFor(entry);
+    openModal($('#shareModal'));
+  }
+  function repoPathFromUrl(raw){
+    var u = String(raw || '').trim();
+    if (!u) return '';
+    u = u.split('#')[0].split('?')[0];
+    try{ u = decodeURIComponent(u); }catch(_){}
+    var marker = CFG.dir + '/';
+    var i = u.indexOf(marker);
+    if (i < 0) return '';
+    var p = u.slice(i).replace(/\/+$/, '');
+    return p;
+  }
+  async function importByUrl(raw){
+    var url = String(raw || '').trim();
+    if (!url) throw new Error('请输入链接');
+    if (!/^https?:\/\//i.test(url)) throw new Error('链接需以 http(s):// 开头');
+    var path = repoPathFromUrl(url);
+    if (!path || path.indexOf(CFG.dir + '/') !== 0) throw new Error('仅支持本站云盘文件链接（URL 中需包含 /' + CFG.dir + '/）');
+    var stored = path.slice(path.lastIndexOf('/') + 1);
+    var name = dispName(stored);
+    var info;
+    try{
+      var res = await gh('/contents/' + encodePath(path) + '?ref=' + CFG.branch);
+      info = await res.json();
+    }catch(e){
+      if (e.status === 404) throw new Error('链接对应的文件不存在');
+      throw e;
+    }
+    if (!info || info.type !== 'file') throw new Error('链接不是文件');
+    var folder = relFolder();
+    var path2 = path;
+    await mutateUserMeta(function(doc){
+      var dup = doc.files.some(function(f){
+        return f.kind === 'link' && String(f.folder || '') === folder && String(f.path || '') === path2;
+      });
+      if (dup) throw new Error('该链接已在当前目录');
+      doc.files.push({
+        kind: 'link',
+        id: newId(),
+        name: name,
+        path: path2,
+        url: url,
+        folder: folder,
+        size: Number(info.size) || 0,
+        zip: isZipName(stored) ? 1 : 0,
+        at: new Date().toISOString()
+      });
+    });
+    await loadList();
+    toast('已导入链接：' + name, 'ok');
+  }
+  async function removeLink(entry, btn){
+    var yes = await confirmBox('删除链接', '确定删除链接 “' + dispName(entry.name) + '”？仅移除本目录下的链接记录，源文件不会被删除。', '删除链接');
+    if (!yes) return;
+    btn.disabled = true; btn.textContent = '删除中…';
+    try{
+      await mutateUserMeta(function(doc){
+        doc.files = doc.files.filter(function(f){ return !(f.kind === 'link' && String(f.id) === String(entry.id)); });
+      });
+      toast('已删除链接（源文件未受影响）', 'ok');
+      await loadList();
+    }catch(err){
+      toast('删除链接失败：' + err.message, 'err');
+    }finally{
+      btn.disabled = false; btn.textContent = '删除链接';
+    }
+  }
+  $('#shareCopyBtn').addEventListener('click', async function(){
+    var v = $('#shareUrl').value;
+    if (!v) return;
+    var ok = await copyText(v);
+    toast(ok ? '链接已复制，可转发给其他用户' : '复制失败，请手动选择链接复制', ok ? 'ok' : 'err');
+  });
+  $('#shareModal').addEventListener('click', function(e){
+    if (e.target === this || e.target.closest('[data-close]')) closeModal($('#shareModal'));
+  });
+  $('#importUrlBtn').addEventListener('click', function(){
+    $('#urlForm').reset();
+    $('#importMsg').textContent = '';
+    openModal($('#urlModal'));
+    setTimeout(function(){ $('#importUrl').focus(); }, 40);
+  });
+  $('#urlModal').addEventListener('click', function(e){
+    if (e.target === this || e.target.closest('[data-close]')) closeModal($('#urlModal'));
+  });
+  $('#urlForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var msg = $('#importMsg');
+    var btn = $('#importBtn');
+    var url = $('#importUrl').value;
+    msg.textContent = '';
+    btn.disabled = true; btn.textContent = '校验中…';
+    try{
+      await importByUrl(url);
+      closeModal($('#urlModal'));
+    }catch(err){
+      msg.textContent = (err && err.message) || '导入失败';
+    }finally{
+      btn.disabled = false; btn.textContent = '导 入';
+    }
+  });
+
+  /* ---------- 列表操作 ---------- */
+  $('#listBox').addEventListener('click', async function(e){
+    var row = e.target.closest('.row');
+    if (!row) return;
+    var entry = findEntry(row.getAttribute('data-key'));
+    if (!entry) return;
+    var btn = e.target.closest('[data-act]');
+    var act = btn ? btn.getAttribute('data-act') : (entry.type === 'dir' ? 'open' : '');
+    if (act === 'open'){
+      if (entry.type !== 'dir' || entry.path.indexOf(curDir() + '/') !== 0) return;
+      S.path = S.path.concat([entry.name]);
+      try{ await loadList(); }catch(err){ toast('打开失败：' + err.message, 'err'); }
+      return;
+    }
+    if (!btn) return;
+    if (act === 'download'){
+      btn.disabled = true; btn.textContent = '拉取中…';
+      try{ await downloadEntry(entry, btn); }
+      catch(err){ toast('下载失败：' + err.message, 'err'); }
+      finally{ btn.disabled = false; btn.textContent = '下载'; }
+    }else if (act === 'preview'){
+      btn.disabled = true; btn.textContent = '拉取中…';
+      try{ await previewEntry(entry); }
+      catch(err){ toast('预览失败：' + err.message, 'err'); }
+      finally{ btn.disabled = false; btn.textContent = '预览'; }
+    }else if (act === 'openweb'){
+      window.open(shareUrlFor(entry), '_blank', 'noopener');
+    }else if (act === 'share'){
+      openShare(entry);
+    }else if (act === 'rmlink'){
+      await removeLink(entry, btn);
+    }else if (act === 'rename'){
+      await renameEntry(entry, btn);
+    }else if (act === 'remove'){
+      await removeEntry(entry, btn);
+    }else if (act === 'rmdir'){
+      await removeFolder(entry, btn);
+    }
+  });
+
+  /* ---------- 新建文件夹 ---------- */
+  $('#newFolderBtn').addEventListener('click', async function(){
+    var name = await askInput('新建文件夹', '');
+    if (name === null) return;
+    var n = sanitizeName(name);
+    if (!n || n === 'file'){ toast('文件夹名称无效', 'err'); return; }
+    if (n === '.keep' || n.toLowerCase() === 'yunml.json'){ toast('名称不可用', 'err'); return; }
+    try{
+      await putFile(curDir() + '/' + n + '/.keep', new Uint8Array(0), 'mkdir: ' + n);
+      toast('已创建文件夹 ' + n, 'ok');
+      await loadList();
+    }catch(err){
+      toast(err.status === 422 ? '同名文件夹已存在' : '创建失败：' + err.message, 'err');
+    }
+  });
+
+  /* ---------- 浏览器内 ZIP 加密（zip.js） ---------- */
+  var ZIP_CDN = [
+    'https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.7.53/dist/zip.min.js',
+    'https://unpkg.com/@zip.js/zip.js@2.7.53/dist/zip.min.js',
+    'https://fastly.jsdelivr.net/npm/@zip.js/zip.js@2.7.53/dist/zip.min.js'
+  ];
+  var zipLoading = null;
+  function ensureZipLib(){
+    if (window.zip && window.zip.ZipWriter) return Promise.resolve(window.zip);
+    if (zipLoading) return zipLoading;
+    zipLoading = (async function(){
+      for (var i = 0; i < ZIP_CDN.length; i++){
+        try{
+          await new Promise(function(resolve, reject){
+            var s = document.createElement('script');
+            s.src = ZIP_CDN[i];
+            s.async = true;
+            s.onload = resolve;
+            s.onerror = function(){ reject(new Error('cdn fail')); };
+            document.head.appendChild(s);
+          });
+          if (window.zip && window.zip.ZipWriter){
+            if (window.zip.configure) window.zip.configure({ useWebWorkers: false });
+            return window.zip;
+          }
+        }catch(_){ /* 切换下一个 CDN */ }
+      }
+      zipLoading = null;
+      throw new Error('加密组件加载失败，请检查网络后重试');
+    })();
+    return zipLoading;
+  }
+  async function makeEncryptedZip(file, entryName, password){
+    var z = await ensureZipLib();
+    var writer = new z.ZipWriter(new z.BlobWriter('application/zip'), {
+      password: password,
+      encryptionStrength: 3,
+      useWebWorkers: false
+    });
+    await writer.add(entryName, new z.BlobReader(file), { useWebWorkers: false });
+    return writer.close();
+  }
+  async function decryptZipBlob(zipBlob, password){
+    var z = await ensureZipLib();
+    var reader = new z.ZipReader(new z.BlobReader(zipBlob), { password: password, useWebWorkers: false });
+    try{
+      var entries = await reader.getEntries();
+      var entry = null;
+      for (var i = 0; i < entries.length; i++){
+        if (!entries[i].directory){ entry = entries[i]; break; }
+      }
+      if (!entry) throw new Error('压缩包内没有文件');
+      var out = await entry.getData(new z.BlobWriter(), { useWebWorkers: false });
+      return { blob: out, name: entry.filename || 'decrypted' };
+    }finally{
+      try{ await reader.close(); }catch(_){}
+    }
+  }
+
+  /* ---------- 上传 ---------- */
+  function uniqueName(fileName, zip){
+    var base = sanitizeName(fileName);
+    if (zip && /\.zip$/i.test(base)) base = base.slice(0, -4);
+    var used = {};
+    S.items.forEach(function(e){ used[e.name] = 1; });
+    var n = zip ? base + '.zip' : base;
+    if (!used[n]) return n;
+    var ts = stamp();
+    var i = 1;
+    do {
+      var stamped = zip ? base + '-' + ts + (i > 1 ? '-' + i : '') + '.zip' : withStamp(base, ts, i);
+      n = stamped;
+      i++;
+    } while (used[n]);
+    return n;
+  }
+  function withStamp(name, ts, i){
+    var suffix = '-' + ts + (i > 1 ? '-' + i : '');
+    var idx = name.lastIndexOf('.');
+    if (idx > 0) return name.slice(0, idx) + suffix + name.slice(idx);
+    return name + suffix;
+  }
+  function addQueueItem(name){
+    var el = document.createElement('div');
+    el.className = 'q';
+    el.innerHTML = '<span class="spinner"></span><span class="qname">' + esc(name) + '</span><span class="qmsg">准备中…</span>';
+    $('#queue').appendChild(el);
+    var msg = el.querySelector('.qmsg');
+    return {
+      text: function(t){ msg.textContent = t; },
+      done: function(t){ el.className = 'q ok'; msg.textContent = t; },
+      fail: function(t){ el.className = 'q err'; msg.textContent = t; }
+    };
+  }
+  async function uploadOne(file, plainChecked){
+    var q = addQueueItem(file.name);
+    var plain = plainChecked && isHtmlName(file.name);
+    try{
+      if (file.size > CFG.maxFileMB * 1024 * 1024) throw new Error('超过单文件 ' + CFG.maxFileMB + ' MB 限制');
+      if (!S.token) throw new Error('会话已失效');
+      var stored = '', zipSize = 0;
+      if (plain){
+        q.text('上传明文…');
+        var rawName = uniqueName(file.name, false);
+        var raw = new Uint8Array(await file.arrayBuffer());
+        stored = await putWithRetry(rawName, raw, false, 'upload(plain): ' + rawName);
+        zipSize = raw.length;
+        q.done('完成 · 明文');
+      }else{
+        q.text('加密中…');
+        var zipName = uniqueName(file.name, true);
+        var blob = await makeEncryptedZip(file, file.name, CFG.zipPassword);
+        q.text('上传中…');
+        var u8 = new Uint8Array(await blob.arrayBuffer());
+        stored = await putWithRetry(zipName, u8, true, 'upload: ' + zipName);
+        zipSize = u8.length;
+        q.done('完成 · 加密');
+      }
+      await metaSync(function(doc){
+        var p = curDir() + '/' + stored;
+        doc.files = doc.files.filter(function(f){ return !(f.kind === 'local' && f.path === p); });
+        doc.files.push({
+          kind: 'local',
+          name: dispName(stored),
+          stored: stored,
+          path: p,
+          folder: relFolder(),
+          size: file.size,
+          zipSize: zipSize,
+          enc: plain ? 'none' : 'AES-256',
+          at: new Date().toISOString()
+        });
+      });
+      return true;
+    }catch(e){
+      q.fail(e.name === 'AuthError' ? '凭据失效' : ((e && e.message) || '失败'));
+      return false;
+    }
+  }
+  async function putWithRetry(name, u8, zip, message){
+    try{
+      await putFile(curDir() + '/' + name, u8, message);
+      return name;
+    }catch(e){
+      if (e.status !== 422) throw e;
+      var ts = stamp();
+      var alt = zip ? withStamp(name.slice(0, -4), ts, 2) + '.zip' : withStamp(name, ts, 2);
+      await putFile(curDir() + '/' + alt, u8, message + ' (retry)');
+      return alt;
+    }
+  }
+
+  var uploading = false;
+  async function handleFiles(fileList){
+    var files = Array.from(fileList || []);
+    if (!files.length) return;
+    if (!S.token){ showLock('请先登录'); return; }
+    if (uploading){ toast('上一批文件仍在上传，请稍候', 'err'); return; }
+    uploading = true;
+    $('#queue').innerHTML = '';
+    $('#pickBtn').disabled = true;
+    var plainChecked = $('#plainHtml').checked;
+    var ok = 0;
+    try{
+      for (var i = 0; i < files.length; i++){
+        if (await uploadOne(files[i], plainChecked)) ok++;
+      }
+    }finally{
+      uploading = false;
+      $('#pickBtn').disabled = false;
+      if (ok){
+        toast('已上传 ' + ok + ' 个文件', 'ok');
+        try{ await loadList(); }catch(e){ /* 稍后刷新 */ }
+      }
+    }
+  }
+
+  $('#pickBtn').addEventListener('click', function(e){
+    e.stopPropagation();
+    $('#fileInput').click();
+  });
+  $('#dropZone').addEventListener('click', function(e){
+    if (e.target.closest('button, input, label')) return;
+    $('#fileInput').click();
+  });
+  $('#fileInput').addEventListener('change', function(e){
+    var files = e.target.files;
+    handleFiles(files);
+    e.target.value = '';
+  });
+  var dz = $('#dropZone');
+  ['dragenter', 'dragover'].forEach(function(ev){
+    dz.addEventListener(ev, function(e){
+      e.preventDefault(); e.stopPropagation();
+      dz.classList.add('drag');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function(ev){
+    dz.addEventListener(ev, function(e){
+      e.preventDefault(); e.stopPropagation();
+      if (ev === 'dragleave' && e.relatedTarget && dz.contains(e.relatedTarget)) return;
+      dz.classList.remove('drag');
+    });
+  });
+  dz.addEventListener('drop', function(e){
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length){
+      handleFiles(e.dataTransfer.files);
+    }
+  });
+  window.addEventListener('dragover', function(e){ e.preventDefault(); });
+  window.addEventListener('drop', function(e){ e.preventDefault(); });
+
+  /* ---------- 启动 ---------- */
+  (function boot(){
+    document.cookie = 'hc_yunpan_token=; path=' + cookiePath() + '; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+    var saved = loadSession();
+    if (!saved){ showLock(''); return; }
+    S = { user: saved.u, login: saved.l || saved.u, role: saved.r || 'user', token: saved.t, pwd: saved.p, path: [], items: [], admin: saved.r === 'admin' };
+    enterApp();
+  })();
+})();
+
+</script>
+</body>
+</html>
