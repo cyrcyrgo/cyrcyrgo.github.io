@@ -212,7 +212,7 @@
       <button id="unlockBtn" class="primary" type="submit">解 锁</button>
       <p id="lockMsg" class="msg" role="alert"></p>
     </form>
-    <p class="foot">凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密存储于页面内，解锁成功后仅保存在本机 Cookie（30 天有效）。</p>
+    <p class="foot">凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密存储于页面内，解锁成功后仅保存在本机 Cookie（30 天有效）。<br><span style="opacity:.75">build v4 · 若无法进入请按 Ctrl+F5 强制刷新或访问 index.html?v=4</span></p>
   </div>
 </main>
 
@@ -232,6 +232,9 @@
         <div><b id="statFiles">0</b><span>FILES</span></div>
         <div><b id="statSize">0 B</b><span>TOTAL</span></div>
       </div>
+      <button class="icon-btn" id="lockBtn" title="锁定并重新解锁" aria-label="锁定">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>
+      </button>
       <button class="icon-btn" id="refreshBtn" title="刷新" aria-label="刷新">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
       </button>
@@ -369,8 +372,10 @@
   function pwdVariants(pwd){
     var src = String(pwd == null ? '' : pwd);
     var norm = src.normalize ? src.normalize('NFKC') : src;
+    var lower = norm.toLowerCase();
+    var bare = lower.replace(/\s+/g, '');
     var out = [];
-    [src, src.trim(), norm, norm.trim()].forEach(function(v){
+    [src, src.trim(), norm, norm.trim(), lower.trim(), bare].forEach(function(v){
       if (v && out.indexOf(v) === -1) out.push(v);
     });
     return out;
@@ -618,6 +623,16 @@
   }
   $('#refreshBtn').addEventListener('click', refresh);
   $('#refreshMini').addEventListener('click', refresh);
+  $('#lockBtn').addEventListener('click', function(){
+    delCookie();
+    TOKEN = '';
+    META = { version: 1, files: [] };
+    render();
+    setListMsg('');
+    lockMsg.textContent = '';
+    pwdInput.value = '';
+    showLock('');
+  });
 
   /* ---------- 视图切换 ---------- */
   function showLock(msg){
