@@ -21,6 +21,7 @@
     --radius:18px;
   }
   *{box-sizing:border-box}
+  [hidden]{display:none !important}
   html,body{height:100%}
   body{
     margin:0;background:var(--bg);color:var(--txt);
@@ -212,7 +213,7 @@
       <button id="unlockBtn" class="primary" type="submit">解 锁</button>
       <p id="lockMsg" class="msg" role="alert"></p>
     </form>
-    <p class="foot">凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密存储于页面内，解锁成功后仅保存在本机 Cookie（30 天有效）。<br><span style="opacity:.75">build v4 · 若无法进入请按 Ctrl+F5 强制刷新或访问 index.html?v=4</span></p>
+    <p class="foot">凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密存储于页面内，解锁成功后仅保存在本机 Cookie（30 天有效）。<br><span style="opacity:.75">build v5 · 若无法进入请按 Ctrl+F5 强制刷新</span></p>
   </div>
 </main>
 
@@ -284,7 +285,7 @@
 </div>
 <div id="toast"></div>
 
-<script id="vault" type="application/json">{"v":1,"alg":"PBKDF2-SHA256+AES-256-GCM","items":[{"it":210000,"s":"bR0VUw6OKST8Ev9tUOUzuQ==","n":"AVjWZO7zisPnHHRz","c":"R0HXs/XZK+VAVgjAnV7P1IyIO3kdxDSe9Rm++SwGRcqoB30ku+0DhjQmTj3WaXSnNn0pEK27LFU="},{"it":210000,"s":"KQl+yfzt739viB+p2wS0OQ==","n":"V8IJ7Po/8wFRGuuO","c":"nIgCu8YZTDfCfxZJXgblgy6BWtlZariEDiB19B/s/9WGnIhCBBzhAyruLNxhmAWGLCOvMw1NX1I="}]}</script>
+<script id="vault" type="application/json">{"v":1,"alg":"PBKDF2-SHA256+AES-256-GCM","items":[{"it":210000,"s":"o9Z7x6oIiyIaEF9qlUMkxw==","n":"Ywd5uaj4Ikk64kJB","c":"4WoC35jVPOS/3bHkVnLX1lxyMQvKG666t1j1i1cYo9eKOOUAjDZkwyUaShD1Df2+S+UAmnYyssk="}]}</script>
 <script>
 (function(){
   'use strict';
@@ -380,6 +381,23 @@
     });
     return out;
   }
+  function withTimeout(promise, ms, message){
+    return new Promise(function(resolve, reject){
+      var done = false;
+      var timer = setTimeout(function(){
+        if (done) return;
+        done = true;
+        reject(new Error(message));
+      }, ms);
+      promise.then(function(v){
+        if (done) return;
+        done = true; clearTimeout(timer); resolve(v);
+      }, function(e){
+        if (done) return;
+        done = true; clearTimeout(timer); reject(e);
+      });
+    });
+  }
   async function tryUnlock(pwd){
     var variants = pwdVariants(pwd);
     for (var v = 0; v < variants.length; v++){
@@ -410,10 +428,12 @@
       return;
     }
     unlockBtn.disabled = true; unlockBtn.textContent = '本地解密中…'; lockMsg.textContent = '';
+    console.log('[yunpan] unlock start · build v5');
     try{
-      var token = await tryUnlock(pwd);
+      var token = await withTimeout(tryUnlock(pwd), 25000, '本地解密超时，请重试');
+      console.log('[yunpan] decrypt result:', !!token);
       if (!token){
-        lockMsg.textContent = '密码错误，请重试（可使用备用密码）';
+        lockMsg.textContent = '密码错误，请重新输入';
         lockCard.classList.remove('shake');
         void lockCard.offsetWidth;
         lockCard.classList.add('shake');
@@ -634,16 +654,26 @@
     showLock('');
   });
 
-  /* ---------- 视图切换 ---------- */
-  function showLock(msg){
+  /* ---------- 视图切换（显式 display，避免 CSS 覆盖 hidden） ---------- */
+  function showApp(){
+    lockView.hidden = true;
+    lockView.style.display = 'none';
+    appView.hidden = false;
+    appView.style.display = 'flex';
+  }
+  function showLockView(){
     appView.hidden = true;
+    appView.style.display = 'none';
     lockView.hidden = false;
-    if (msg) lockMsg.textContent = msg;
+    lockView.style.display = 'grid';
+  }
+  function showLock(msg){
+    showLockView();
+    lockMsg.textContent = msg || '';
     setTimeout(function(){ pwdInput.focus(); }, 40);
   }
   async function enterApp(){
-    lockView.hidden = true;
-    appView.hidden = false;
+    showApp();
     setListMsg('');
     try{
       await loadList();
