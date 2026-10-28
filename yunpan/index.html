@@ -163,8 +163,8 @@
   .dl{border:1px solid rgba(102,227,244,.3);background:rgba(102,227,244,.11);color:#bdf3fb;
     padding:7px 13px;border-radius:9px;font-size:12px;font-weight:600;transition:.16s}
   .dl:hover{background:rgba(102,227,244,.2);color:#fff}
-  .dl2{border:1px solid var(--line);background:transparent;color:var(--muted);padding:7px 10px;border-radius:9px;font-size:11.5px;transition:.16s}
-  .dl2:hover{color:var(--txt);border-color:var(--line-strong);background:var(--panel)}
+  .dl[disabled]{opacity:.6;cursor:progress}
+  .list-msg{margin:0 2px 10px;font-size:12px;line-height:1.6;color:var(--red)}
 
   .empty{padding:46px 20px;text-align:center;color:var(--muted);font-size:12.5px;line-height:1.9}
   .empty .eico{width:52px;height:52px;margin:0 auto 12px;border-radius:16px;display:grid;place-items:center;
@@ -188,7 +188,6 @@
     .stat{display:none}
     .row{padding:13px 13px;gap:11px}
     .actions{gap:6px}
-    .dl2{display:none}
     .fmeta{font-size:10.5px}
     .brand span{max-width:180px}
   }
@@ -265,6 +264,7 @@
           刷新
         </button>
       </div>
+      <p class="list-msg" id="listMsg" hidden></p>
       <div class="list" id="listBox"></div>
       <div class="empty" id="emptyBox">
         <div class="eico">
@@ -276,7 +276,7 @@
   </main>
 
   <footer>
-    <div class="bar">加密存储于 HiCodeHC/HiCodeHC.github.io · 下载经由 gh-proxy 镜像跳转<br>由 CYRCYRGO 管理 · YUNPAN</div>
+    <div class="bar">加密存储于 HiCodeHC/HiCodeHC.github.io · 下载经 gh-proxy 镜像后台拉取、本地解密后保存<br>由 CYRCYRGO 管理 · YUNPAN</div>
   </footer>
 </div>
 <div id="toast"></div>
@@ -366,16 +366,27 @@
       km, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
     );
   }
+  function pwdVariants(pwd){
+    var src = String(pwd == null ? '' : pwd);
+    var norm = src.normalize ? src.normalize('NFKC') : src;
+    var out = [];
+    [src, src.trim(), norm, norm.trim()].forEach(function(v){
+      if (v && out.indexOf(v) === -1) out.push(v);
+    });
+    return out;
+  }
   async function tryUnlock(pwd){
-    if (!pwd) return '';
-    for (var i = 0; i < vault.items.length; i++){
-      var item = vault.items[i];
-      try{
-        var key = await deriveDecryptKey(pwd, item);
-        var pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(item.n) }, key, b64d(item.c));
-        var token = dec.decode(pt).trim();
-        if (token) return token;
-      }catch(_){ /* 此密码槽位不匹配 */ }
+    var variants = pwdVariants(pwd);
+    for (var v = 0; v < variants.length; v++){
+      for (var i = 0; i < vault.items.length; i++){
+        var item = vault.items[i];
+        try{
+          var key = await deriveDecryptKey(variants[v], item);
+          var pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(item.n) }, key, b64d(item.c));
+          var token = dec.decode(pt).trim();
+          if (token) return token;
+        }catch(_){ /* 此密码槽位不匹配 */ }
+      }
     }
     return '';
   }
@@ -389,7 +400,11 @@
     e.preventDefault();
     var pwd = pwdInput.value;
     if (!pwd) return;
-    unlockBtn.disabled = true; unlockBtn.textContent = '验证中…'; lockMsg.textContent = '';
+    if (!window.crypto || !crypto.subtle){
+      lockMsg.textContent = '当前访问环境不支持浏览器端解密，请使用 HTTPS 地址访问';
+      return;
+    }
+    unlockBtn.disabled = true; unlockBtn.textContent = '本地解密中…'; lockMsg.textContent = '';
     try{
       var token = await tryUnlock(pwd);
       if (!token){
@@ -422,7 +437,17 @@
       'Accept': 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28'
     }, opts.headers || {});
-    var res = await fetch(API + path, Object.assign({ cache: 'no-store' }, opts, { headers: headers }));
+    var ctrl = new AbortController();
+    var timer = setTimeout(function(){ ctrl.abort(); }, 20000);
+    var res;
+    try{
+      res = await fetch(API + path, Object.assign({ cache: 'no-store', signal: ctrl.signal }, opts, { headers: headers }));
+    }catch(err){
+      if (err && err.name === 'AbortError') throw new Error('请求 GitHub 超时，请检查网络');
+      throw err;
+    }finally{
+      clearTimeout(timer);
+    }
     if (res.status === 401){
       delCookie(); TOKEN = '';
       showLock('凭据已失效，请重新解锁');
@@ -489,26 +514,84 @@
         '</div>' +
         '<div class="actions">' +
           '<button class="dl" data-dl="' + esc(f.zip) + '">下载</button>' +
-          '<button class="dl2" data-raw="' + esc(f.zip) + '" title="镜像不可用时使用 GitHub 原始链接">直连</button>' +
         '</div>' +
       '</div>';
     }).join('');
   }
 
-  function rawUrl(zip){ return RAW + encodeURIComponent(zip); }
-  function goMirror(zip){
-    var u = CFG.mirror + rawUrl(zip);
-    toast('正在跳转镜像下载…');
-    setTimeout(function(){ location.href = u; }, 180);
+  function findEntry(zip){
+    var list = META.files || [];
+    for (var i = 0; i < list.length; i++){ if (list[i].zip === zip) return list[i]; }
+    return null;
   }
+
+  async function fetchZipBlob(zipName){
+    var raw = RAW + encodeURIComponent(zipName);
+    var urls = [CFG.mirror + raw, 'https://ghfast.top/' + raw, raw];
+    var lastErr = null;
+    for (var i = 0; i < urls.length; i++){
+      try{
+        var res = await fetch(urls[i], { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var blob = await res.blob();
+        if (!blob.size) throw new Error('文件为空');
+        return blob;
+      }catch(e){ lastErr = e; }
+    }
+    throw new Error('镜像拉取失败：' + (lastErr && lastErr.message ? lastErr.message : '网络错误'));
+  }
+
+  async function decryptZipBlob(zipBlob){
+    var z = await ensureZipLib();
+    var reader = new z.ZipReader(new z.BlobReader(zipBlob), { password: CFG.zipPassword, useWebWorkers: false });
+    try{
+      var entries = await reader.getEntries();
+      var entry = null;
+      for (var i = 0; i < entries.length; i++){
+        if (!entries[i].directory){ entry = entries[i]; break; }
+      }
+      if (!entry) throw new Error('压缩包内没有文件');
+      var out = await entry.getData(new z.BlobWriter(), { useWebWorkers: false });
+      return { blob: out, name: entry.filename || 'decrypted' };
+    }finally{
+      try{ await reader.close(); }catch(_){}
+    }
+  }
+
+  function saveBlob(blob, name){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+  }
+
+  async function downloadEntry(btn, zip){
+    if (!zip || btn.disabled) return;
+    var entry = findEntry(zip);
+    btn.disabled = true;
+    btn.textContent = '拉取中…';
+    try{
+      var zipBlob = await fetchZipBlob(zip);
+      btn.textContent = '解密中…';
+      var out = await decryptZipBlob(zipBlob);
+      var name = (entry && entry.name) || out.name;
+      saveBlob(out.blob, name);
+      toast('已解密并保存：' + name, 'ok');
+    }catch(e){
+      toast('下载失败：' + (e.message || '未知错误'), 'err');
+    }finally{
+      btn.disabled = false;
+      btn.textContent = '下载';
+    }
+  }
+
   $('#listBox').addEventListener('click', function(e){
     var dl = e.target.closest('[data-dl]');
-    if (dl){ goMirror(dl.getAttribute('data-dl')); return; }
-    var raw = e.target.closest('[data-raw]');
-    if (raw){
-      toast('正在打开 GitHub 原始链接…');
-      setTimeout(function(){ location.href = rawUrl(raw.getAttribute('data-raw')); }, 160);
-    }
+    if (dl) downloadEntry(dl, dl.getAttribute('data-dl'));
   });
 
   /* ---------- 加载 / 刷新 ---------- */
@@ -516,6 +599,7 @@
     var out = await loadMeta();
     META = out.meta;
     render();
+    setListMsg('');
   }
   async function refresh(){
     if (busy) return;
@@ -545,14 +629,20 @@
   async function enterApp(){
     lockView.hidden = true;
     appView.hidden = false;
+    setListMsg('');
     try{
       await loadList();
     }catch(e){
       if (e.name === 'AuthError') return;
-      appView.hidden = true;
-      lockView.hidden = false;
-      showLock('加载失败：' + e.message);
+      setListMsg('文件列表加载失败：' + e.message + '（可点击右上角刷新重试）');
+      toast('列表加载失败：' + e.message, 'err');
     }
+  }
+  function setListMsg(msg){
+    var el = $('#listMsg');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.hidden = !msg;
   }
 
   /* ---------- 浏览器内 ZIP 加密（zip.js） ---------- */
