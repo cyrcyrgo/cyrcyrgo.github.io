@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>diag6-v1</title>
+<style>body{font:12px/1.5 monospace;background:#111;color:#ddd;padding:12px}pre{white-space:pre-wrap}</style>
+</head><body><h3>diag6-v1 · 浏览器内加密→解密自检</h3><pre id="out">running…</pre>
+<script src="./zip.min.js"></script>
+<script>
+var out = document.getElementById('out');
+function w(s){ out.textContent += '\n' + s; console.log(s); }
+function ensureZipLib(){
+    if (window.zip && window.zip.ZipWriter) return Promise.resolve(window.zip);
+    if (zipLoading) return zipLoading;
+    zipLoading = (async function(){
+      for (var i = 0; i < ZIP_CDN.length; i++){
+        try{
+          await new Promise(function(resolve, reject){
+            var s = document.createElement('script');
+            s.src = ZIP_CDN[i];
+            s.async = true;
+            s.onload = resolve;
+            s.onerror = function(){ reject(new Error('cdn fail')); };
+            document.head.appendChild(s);
+          });
+          if (window.zip && window.zip.ZipWriter){
+            if (window.zip.configure) window.zip.configure({ useWebWorkers: false });
+            return window.zip;
+          }
+        }catch(_){ /* 切换下一个 CDN */ }
+      }
+      zipLoading = null;
+      var e = new Error('解密组件加载失败，请检查网络后重试');
+      e.code = 'ziplib';
+      throw e;
+    })();
+    return zipLoading;
+  }
+
+async function makeEncryptedZip(file, entryName, password){
+    var z = await ensureZipLib();
+    var writer = new z.ZipWriter(new z.BlobWriter('application/zip'), {
+      password: password,
+      encryptionStrength: 3,
+      useWebWorkers: false
+    });
+    await writer.add(entryName, new z.BlobReader(file), { useWebWorkers: false });
+    return writer.close();
+  }
+
+async function decryptZipBlob(zipBlob, password, onProgress){
+    var z = await ensureZipLib();
+    var reader = new z.ZipReader(new z.BlobReader(zipBlob), { password: password, useWebWorkers: false });
+    try{
+      var entries = await reader.getEntries();
+      var entry = null;
+      for (var i = 0; i < entries.length; i++){
+        if (!entries[i].directory){ entry = entries[i]; break; }
+      }
+      if (!entry) throw new Error('压缩包内没有文件');
+      if (onProgress) onProgress(0);
+      var out = await entry.getData(new z.BlobWriter(), {
+        useWebWorkers: false,
+        onprogress: function(p, total){
+          if (!onProgress) return;
+          var pct = total ? Math.min(99, Math.round(p / total * 100)) : 0;
+          onProgress(pct);
+        }
+      });
+      if (onProgress) onProgress(100);
+      return { blob: out, name: entry.filename || 'decrypted' };
+    }finally{
+      try{ await reader.close(); }catch(_){}
+    }
+  }
+
+/* 读取中央目录里记录的 csize/usize */
+async function cdInfo(zipBlob){
+  var buf = new Uint8Array(await zipBlob.arrayBuffer());
+  var eocd = -1;
+  for (var i = buf.length - 22; i >= 0; i--){ if (buf[i]===0x50&&buf[i+1]===0x4b&&buf[i+2]===0x05&&buf[i+3]===0x06){ eocd=i; break; } }
+  if (eocd < 0) return 'no-eocd';
+  var dv = new DataView(buf.buffer);
+  var nrec = dv.getUint16(eocd+10, true), cdsize = dv.getUint32(eocd+12, true), cdoff = dv.getUint32(eocd+16, true);
+  if (!nrec) return 'no-entry';
+  var csize = dv.getUint32(cdoff+20, true), usize = dv.getUint32(cdoff+24, true), method = dv.getUint16(cdoff+10, true);
+  return 'method=' + method + ' csize=' + csize + ' usize=' + usize + ' diff=' + (csize-usize);
+}
+function rnd(n){
+  var u = new Uint8Array(n);
+  for (var i = 0; i < n; i += 65536){
+    crypto.getRandomValues(u.subarray(i, Math.min(n, i + 65536)));
+  }
+  return u;
+}
+async function roundtrip(label, bytes, entryName){
+  try{
+    var t0 = Date.now();
+    var z = await makeEncryptedZip(new Blob([bytes]), entryName, 'cyry5988');
+    var info = await cdInfo(z);
+    var got;
+    try{ got = await decryptZipBlob(z, 'cyry5988', function(){}); }
+    catch(e){ w(label + ' | zip=' + z.size + ' | ' + info + ' | DECRYPT FAIL [' + (e && e.message) + '] | ' + (Date.now()-t0) + 'ms'); return; }
+    var same = got.blob.size === bytes.length;
+    w(label + ' | zip=' + z.size + ' | ' + info + ' | decrypt OK size=' + got.blob.size + ' same=' + same + ' | ' + (Date.now()-t0) + 'ms');
+  }catch(e){ w(label + ' | MAKE FAIL ' + (e && e.message)); }
+}
+(async function(){
+  try{ await ensureZipLib(); }catch(e){ w('lib fail ' + e.message); document.title='DONE'; return; }
+  await roundtrip('rand-200KB', rnd(200*1024), 'a.bin');
+  await roundtrip('rand-3MB', rnd(3*1024*1024), 'b.bin');
+  await roundtrip('rand-7.7MB', rnd(7660000), '26.10.28.zip');
+  document.title = 'DONE';
+  w('DONE');
+})();
+</script>
+</body></html>
