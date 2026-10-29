@@ -262,6 +262,25 @@ async function fetchRepoBlob(path, bust, onProgress){
     throw new Error('所有文件源均不可用（' + errors.join('；') + '）');
   }
 
+async function fetchEntryBlob(entry, onProgress){
+    if (entry.type === 'link'){
+      if (entry.path){
+        try{ return await fetchRepoBlob(entry.path, false, onProgress); }
+        catch(e){
+          if (!entry.url) throw e;
+          console.warn('[yunpan] link path fetch fail, try url', e && e.message);
+        }
+      }
+      if (entry.url){
+        var res = await fetch(entry.url, { cache: 'no-store', mode: 'cors' });
+        if (!res.ok) throw new Error('链接读取失败 HTTP ' + res.status);
+        return await readBodyWithProgress(res, onProgress);
+      }
+      throw new Error('链接缺少有效地址');
+    }
+    return fetchRepoBlob(entry.path, false, onProgress);
+  }
+
 function ensureZipLib(){
     if (window.zip && window.zip.ZipWriter) return Promise.resolve(window.zip);
     if (zipLoading) return zipLoading;
