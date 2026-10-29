@@ -326,7 +326,7 @@
       <button id="regBtn" class="secondary" type="button">注 册 新 用 户</button>
       <p id="lockMsg" class="msg" role="alert"></p>
     </form>
-    <p class="foot">账号凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密，登录时仅校验本地密文。登录成功后会话保存在本机 Cookie（30 天）。<br><span style="opacity:.75">build v13 · 已内置独立解密引擎，若页面仍是旧版请按 Ctrl+F5 强制刷新</span></p>
+    <p class="foot">账号凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密，登录时仅校验本地密文。登录成功后会话保存在本机 Cookie（30 天）。<br><span style="opacity:.75">build v13.1 · 已内置独立解码引擎，若页面仍是旧版请按 Ctrl+F5 强制刷新</span></p>
   </div>
 </main>
 
@@ -1231,7 +1231,7 @@
     }
     var btn = $('#unlockBtn');
     btn.disabled = true; btn.textContent = '验证中…'; msg.textContent = '';
-    console.log('[yunpan] login start ·', username, '· build v13');
+    console.log('[yunpan] login start ·', username, '· build v13.1');
     try{
       var lower = username.toLowerCase();
       var isRoot = (lower === 'admin' || lower === String(CFG.rootUser).toLowerCase());
@@ -2088,8 +2088,8 @@
           throw new Error('解密失败：' + (last.message || '格式不受支持'));
         }
         if (attempt >= 2){
-          throw new Error('解密失败：' + (last.message || '数据校验未通过') +
-            '（已依次从镜像 / 备用镜像 / GitHub 官方源重试 3 次，仍不一致，文件本身可能已损坏）');
+          throw new Error('解码失败：' + (last.message || '数据校验未通过') +
+            '（已依次从镜像 / 备用镜像 / GitHub 官方源重试 3 次；请按 Ctrl+F5 强制刷新页面后重试）');
         }
         if (attempt === 0 && preferredBase){
           avoidBase = preferredBase;
@@ -2115,6 +2115,7 @@
     var got = await pullDecrypted(entry, zip, set);
     if (got.name) display = got.name;
     saveBlob(got.blob, display);
+    if (q) q.done((zip ? '已解密并保存：' : '已保存：') + display);
     toast((zip ? '已解密并保存：' : '已保存：') + display, 'ok');
   }
   function openPreviewUrl(name, url){
