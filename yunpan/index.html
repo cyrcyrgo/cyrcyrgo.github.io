@@ -880,6 +880,9 @@
       phase = 'head';
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var total = Number(res.headers.get('content-length')) || 0;
+      /* 压缩传输时 content-length 是压缩后大小，不能用来校验解码后的长度 */
+      var enc = (res.headers.get('content-encoding') || '').toLowerCase();
+      var expectLen = (!enc || enc === 'identity') ? total : 0;
       var beat = function(){
         if (stall) clearTimeout(stall);
         stall = setTimeout(function(){ phase = 'stall'; try{ ctrl.abort(); }catch(_){} }, CFG.stallTimeout);
@@ -898,7 +901,7 @@
         clearTimeout(totalTimer);
       }
       if (!blob.size) throw new Error('空响应');
-      if (total && blob.size !== total) throw new Error('数据不完整 ' + blob.size + '/' + total);
+      if (expectLen && blob.size !== expectLen) throw new Error('数据不完整 ' + blob.size + '/' + expectLen);
       await verifyBlob(path, blob);
       return { base: base, blob: blob, ms: Date.now() - t0, size: blob.size };
     }catch(e){
