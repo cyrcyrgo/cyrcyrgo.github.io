@@ -326,7 +326,7 @@
       <button id="regBtn" class="secondary" type="button">注 册 新 用 户</button>
       <p id="lockMsg" class="msg" role="alert"></p>
     </form>
-    <p class="foot">账号凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密，登录时仅校验本地密文。登录成功后会话保存在本机 Cookie（30 天）。<br><span style="opacity:.75">build v11 · 若无法进入请按 Ctrl+F5 强制刷新</span></p>
+    <p class="foot">账号凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密，登录时仅校验本地密文。登录成功后会话保存在本机 Cookie（30 天）。<br><span style="opacity:.75">build v12 · 若无法进入请按 Ctrl+F5 强制刷新</span></p>
   </div>
 </main>
 
@@ -867,6 +867,14 @@
     if (/\.zip$/i.test(name)){
       var head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
       if (head[0] !== 0x50 || head[1] !== 0x4b) throw new Error('非 ZIP 数据');
+      /* 末尾必须有中央目录结束标记（EOCD），否则是传输被截断 */
+      var tailLen = Math.min(blob.size, 65557);
+      var tail = new Uint8Array(await blob.slice(blob.size - tailLen).arrayBuffer());
+      var eocd = false;
+      for (var i = tail.length - 22; i >= 0; i--){
+        if (tail[i] === 0x50 && tail[i+1] === 0x4b && tail[i+2] === 0x05 && tail[i+3] === 0x06){ eocd = true; break; }
+      }
+      if (!eocd) throw new Error('ZIP 数据被截断');
     }
   }
   async function fetchFromBase(base, path, rel, ctrl, onProgress){
@@ -881,9 +889,9 @@
       phase = 'head';
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var total = Number(res.headers.get('content-length')) || 0;
-      /* 压缩传输时 content-length 是压缩后大小，不能用来校验解码后的长度 */
-      var enc = (res.headers.get('content-encoding') || '').toLowerCase();
-      var expectLen = (!enc || enc === 'identity') ? total : 0;
+      /* Content-Encoding 在 CORS 下读不到，无法判断是否压缩：只拦「收到的比声明少」的截断，
+         收到比声明多是压缩后自动解压的正常情况，交给后面的 ZIP 结构校验 */
+      var expectLen = total;
       var beat = function(){
         if (stall) clearTimeout(stall);
         stall = setTimeout(function(){ phase = 'stall'; try{ ctrl.abort(); }catch(_){} }, CFG.stallTimeout);
@@ -902,7 +910,7 @@
         clearTimeout(totalTimer);
       }
       if (!blob.size) throw new Error('空响应');
-      if (expectLen && blob.size !== expectLen) throw new Error('数据不完整 ' + blob.size + '/' + expectLen);
+      if (expectLen && blob.size < expectLen) throw new Error('数据不完整 ' + blob.size + '/' + expectLen);
       await verifyBlob(path, blob);
       return { base: base, blob: blob, ms: Date.now() - t0, size: blob.size };
     }catch(e){
@@ -1220,7 +1228,7 @@
     }
     var btn = $('#unlockBtn');
     btn.disabled = true; btn.textContent = '验证中…'; msg.textContent = '';
-    console.log('[yunpan] login start ·', username, '· build v11');
+    console.log('[yunpan] login start ·', username, '· build v12');
     try{
       var lower = username.toLowerCase();
       var isRoot = (lower === 'admin' || lower === String(CFG.rootUser).toLowerCase());
@@ -2066,7 +2074,14 @@
         });
         return { blob: out.blob, name: out.name };
       }catch(err){
-        if (attempt >= 1) throw new Error('解密失败：文件数据不完整，请稍后重试');
+        /* 解密组件没加载出来不是数据问题，重拉也没用，直接提示真实原因 */
+        if (err && err.code === 'ziplib') throw err;
+        if (attempt >= 1){
+          var why = (err && err.message) || '数据校验失败';
+          if (/password/i.test(why)) why = '该文件的加密密码与当前设置不一致';
+          else if (/invalid|compressed|signature/i.test(why)) why = '文件数据已损坏（压缩校验失败）';
+          throw new Error('解密失败：' + why + '（已自动换源重试）');
+        }
         avoidBase = preferredBase;
         preferredBase = '';
         blob = await pull('重新拉取');
@@ -2866,10 +2881,13 @@
   });
 
   /* ---------- 浏览器内 ZIP 加密（zip.js） ---------- */
+  /* 优先用同源自带的 zip.min.js（随页面一起发布，最稳最快），
+     其次国内可直连的 npmmirror，最后才是公共 CDN */
   var ZIP_CDN = [
+    './zip.min.js',
+    'https://registry.npmmirror.com/@zip.js/zip.js/2.7.53/files/dist/zip.min.js',
     'https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.7.53/dist/zip.min.js',
-    'https://unpkg.com/@zip.js/zip.js@2.7.53/dist/zip.min.js',
-    'https://fastly.jsdelivr.net/npm/@zip.js/zip.js@2.7.53/dist/zip.min.js'
+    'https://unpkg.com/@zip.js/zip.js@2.7.53/dist/zip.min.js'
   ];
   var zipLoading = null;
   function ensureZipLib(){
@@ -2893,7 +2911,9 @@
         }catch(_){ /* 切换下一个 CDN */ }
       }
       zipLoading = null;
-      throw new Error('加密组件加载失败，请检查网络后重试');
+      var e = new Error('解密组件加载失败，请检查网络后重试');
+      e.code = 'ziplib';
+      throw e;
     })();
     return zipLoading;
   }
