@@ -326,7 +326,7 @@
       <button id="regBtn" class="secondary" type="button">注 册 新 用 户</button>
       <p id="lockMsg" class="msg" role="alert"></p>
     </form>
-    <p class="foot">账号凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密，登录时仅校验本地密文。登录成功后会话保存在本机 Cookie（30 天）。<br><span style="opacity:.75">build v9 · 若无法进入请按 Ctrl+F5 强制刷新</span></p>
+    <p class="foot">账号凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密，登录时仅校验本地密文。登录成功后会话保存在本机 Cookie（30 天）。<br><span style="opacity:.75">build v10 · 若无法进入请按 Ctrl+F5 强制刷新</span></p>
   </div>
 </main>
 
@@ -605,22 +605,26 @@
     cookie: 'hc_yunpan_session',
     cookieDays: 30,
     maxFileMB: 95,
-    mirrorSlow: 4000,
+    mirrorSlow: 6000,
+    hedgeDelay: 800,
+    stallTimeout: 12000,
     officialTimeout: 9000,
-    downloadTimeout: 120000,
+    downloadTimeout: 180000,
     apiTimeout: 20000,
     pbkdf2Iter: 210000,
     inviteCode: 'outlook00',
     pagesBase: 'https://hicodehc.github.io/',
     zipPassword: 'cyry5988',
     rootUser: 'cyrcyrgo',
-    /* 固定优先级：gh-proxy → 备用镜像 → GitHub 官方直链 → 官方 API 兜底 */
+    /* 镜像优先：只用加速镜像；官方直链仅在镜像全部失败后才启用 */
     mirrors: [
       'https://gh-proxy.com/',
       'https://ghfast.top/',
-      'https://raw.githubusercontent.com/hicodehc/hicodehc.github.io/main/',
-      'https://github.com/hicodehc/hicodehc.github.io/raw/main/',
       'https://cdn.jsdelivr.net/gh/hicodehc/hicodehc.github.io@main/'
+    ],
+    official: [
+      'https://raw.githubusercontent.com/hicodehc/hicodehc.github.io/main/',
+      'https://github.com/hicodehc/hicodehc.github.io/raw/main/'
     ]
   };
   var API = 'https://api.github.com/repos/' + CFG.owner + '/' + CFG.repo;
@@ -828,56 +832,159 @@
     return '';
   }
 
-  /* ---------- 文件源故障切换 ----------
-     固定优先级：gh-proxy → ghfast → GitHub 官方 raw → github.com raw → jsdelivr
-     · 镜像站若在 4s 内无响应（延时高/无响应），立即切换下一站
-     · 官方直链给出 9s 建连预算；拿到响应后允许最长 120s 下载
-     · 全部失败时，登录态下改用 GitHub 官方 API 原始内容接口兜底 */
+  /* ---------- 文件源调度（镜像优先 + 对冲并发） ----------
+     提速策略：
+     1) 只用加速镜像（gh-proxy → ghfast → jsdelivr）；官方直链仅在镜像全部失败后才启用
+     2) 对冲：当前源 800ms 内没拿到响应头，就并行启动下一源，谁先成功用谁
+     3) 赢家产生后立即 abort 其余请求，全程只保留一条数据流，避免互相抢带宽
+     4) 传输中 12s 无新数据判定卡死并换源；单次下载最长 180s
+     5) 完整性校验：拦截镜像返回的 HTML 错误页 / 非 ZIP 数据 / 长度不符，避免「下载成功但解密失败」
+     6) 记住最近成功的源（preferredBase）；解密失败时把该源降级（avoidBase）后再拉一次 */
+  var preferredBase = '', avoidBase = '';
+
+  function srcLabel(base){ return base.replace(/^https?:\/\//, '').replace(/\/$/, ''); }
   function isOfficialSource(base){
     return base.indexOf('raw.githubusercontent.com') >= 0 || base.indexOf('github.com/') >= 0;
+  }
+  function sourceList(useOfficial){
+    var bases = (useOfficial ? CFG.official : CFG.mirrors).slice();
+    if (avoidBase){
+      var ai = bases.indexOf(avoidBase);
+      if (ai >= 0){ bases.splice(ai, 1); bases.push(avoidBase); }
+    }
+    if (preferredBase && preferredBase !== avoidBase){
+      var pi = bases.indexOf(preferredBase);
+      if (pi > 0){ bases.splice(pi, 1); bases.unshift(preferredBase); }
+    }
+    return bases;
+  }
+  async function verifyBlob(path, blob){
+    var name = String(path), ct = (blob.type || '').toLowerCase();
+    if (!/\.(zip|html?)$/i.test(name) && ct.indexOf('text/html') >= 0 && blob.size < 8192){
+      throw new Error('返回了错误页面');
+    }
+    if (/\.zip$/i.test(name)){
+      var head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
+      if (head[0] !== 0x50 || head[1] !== 0x4b) throw new Error('非 ZIP 数据');
+    }
+  }
+  async function fetchFromBase(base, path, rel, ctrl, onProgress){
+    var t0 = Date.now();
+    var phase = 'ttfb';
+    var budget = isOfficialSource(base) ? CFG.officialTimeout : CFG.mirrorSlow;
+    var ttfb = setTimeout(function(){ try{ ctrl.abort(); }catch(_){} }, budget);
+    var stall = null, totalTimer = null;
+    try{
+      var res = await fetch(base + rel, { cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(ttfb);
+      phase = 'head';
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var total = Number(res.headers.get('content-length')) || 0;
+      var beat = function(){
+        if (stall) clearTimeout(stall);
+        stall = setTimeout(function(){ phase = 'stall'; try{ ctrl.abort(); }catch(_){} }, CFG.stallTimeout);
+      };
+      phase = 'body';
+      beat();
+      totalTimer = setTimeout(function(){ phase = 'total'; try{ ctrl.abort(); }catch(_){} }, CFG.downloadTimeout);
+      var blob;
+      try{
+        blob = await readBodyWithProgress(res, function(l, t, s){
+          beat();
+          if (onProgress) onProgress(l, t || total, s);
+        });
+      }finally{
+        if (stall) clearTimeout(stall);
+        clearTimeout(totalTimer);
+      }
+      if (!blob.size) throw new Error('空响应');
+      if (total && blob.size !== total) throw new Error('数据不完整 ' + blob.size + '/' + total);
+      await verifyBlob(path, blob);
+      return { base: base, blob: blob, ms: Date.now() - t0, size: blob.size };
+    }catch(e){
+      if (e && e.name === 'AbortError'){
+        if (phase === 'stall') throw new Error('传输卡顿');
+        if (phase === 'total') throw new Error('下载超时');
+        throw new Error('响应超时');
+      }
+      throw e;
+    }finally{
+      clearTimeout(ttfb);
+    }
+  }
+  function fetchHedged(bases, path, rel, errors, onProgress){
+    return new Promise(function(resolve, reject){
+      var idx = 0, active = 0, finished = false, seq = 0, owner = 0;
+      var hedgeTimer = 0, aborts = [];
+      function finish(err, val){
+        if (finished) return;
+        finished = true;
+        clearTimeout(hedgeTimer);
+        aborts.forEach(function(c){ try{ c.abort(); }catch(_){} });
+        if (err) reject(err); else resolve(val);
+      }
+      function schedule(delay){
+        if (finished || idx >= bases.length || active >= 2) return false;
+        clearTimeout(hedgeTimer);
+        hedgeTimer = setTimeout(startOne, delay == null ? CFG.hedgeDelay : delay);
+        return true;
+      }
+      function startOne(){
+        if (finished || idx >= bases.length || active >= 2) return;
+        var base = bases[idx++];
+        var ctrl = new AbortController();
+        aborts.push(ctrl);
+        var my = ++seq;
+        if (!owner) owner = my;
+        active++;
+        fetchFromBase(base, path, rel, ctrl, function(l, t, s){
+          if (owner === my && onProgress) onProgress(l, t, s);
+        }).then(function(r){
+          active--;
+          if (finished) return;
+          preferredBase = base;
+          if (avoidBase === base) avoidBase = '';
+          console.log('[yunpan] source ok:', srcLabel(base), r.ms + 'ms / ' + fmtSize(r.size));
+          finish(null, r);
+        }).catch(function(e){
+          active--;
+          if (finished) return;
+          var why = (e && e.message) || '失败';
+          errors.push(srcLabel(base) + ' ' + why);
+          console.warn('[yunpan] source fail:', srcLabel(base), why);
+          if (owner === my) owner = 0;
+          var more = schedule(0);
+          if (!more && active === 0) finish(new Error('镜像均不可用'));
+        });
+        schedule();
+      }
+      startOne();
+    });
   }
   async function fetchRepoBlob(path, bust, onProgress){
     var rel = encodePath(path) + (bust ? '?t=' + Date.now() : '');
     var errors = [];
-    for (var i = 0; i < CFG.mirrors.length; i++){
-      var base = CFG.mirrors[i];
-      var budget = isOfficialSource(base) ? CFG.officialTimeout : CFG.mirrorSlow;
-      var ctrl = new AbortController();
-      var phase = 'ttfb';
-      var t0 = Date.now();
-      var ttfbTimer = setTimeout(function(c){ try{ c.abort(); }catch(_){} }.bind(null, ctrl), budget);
-      try{
-        var res = await fetch(base + rel, { cache: 'no-store', signal: ctrl.signal });
-        clearTimeout(ttfbTimer);
-        phase = 'body';
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        var headMs = Date.now() - t0;
-        var totalTimer = setTimeout(function(c){ try{ c.abort(); }catch(_){} }.bind(null, ctrl), CFG.downloadTimeout);
-        var blob;
-        try{ blob = await readBodyWithProgress(res, onProgress); }
-        finally{ clearTimeout(totalTimer); }
-        if (!blob.size) throw new Error('空响应');
-        console.log('[yunpan] source ok:', base.replace(/^https?:\/\//, '').replace(/\/$/, ''), headMs + 'ms/' + (Date.now() - t0) + 'ms');
-        return blob;
-      }catch(e){
-        clearTimeout(ttfbTimer);
-        var why = (e && e.name === 'AbortError')
-          ? (phase === 'ttfb' ? '响应超时' : '下载超时')
-          : ((e && e.message) || '失败');
-        errors.push(base.replace(/^https?:\/\//, '').replace(/\/$/, '') + ' ' + why);
-        console.warn('[yunpan] source fail:', base, why, 'after', (Date.now() - t0) + 'ms');
-      }
-    }
-    /* 兜底：GitHub 官方 API 原始内容（需要登录态） */
+    /* 第一阶段：镜像（对冲并发） */
+    try{
+      var r = await fetchHedged(sourceList(false), path, rel, errors, onProgress);
+      return r.blob;
+    }catch(_){ /* 进入下一阶段 */ }
+    /* 第二阶段：官方直链（不到万不得已不用） */
+    try{
+      var r2 = await fetchHedged(sourceList(true), path, rel, errors, onProgress);
+      return r2.blob;
+    }catch(_){ /* 进入兜底 */ }
+    /* 第三阶段：GitHub 官方 API 原始内容（需登录态） */
     if (S.token){
       try{
-        var r = await fetch(API + '/contents/' + encodePath(path) + '?ref=' + CFG.branch, {
+        var res = await fetch(API + '/contents/' + encodePath(path) + '?ref=' + CFG.branch, {
           cache: 'no-store',
           headers: { 'Authorization': 'token ' + S.token, 'Accept': 'application/vnd.github.raw' }
         });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        var b = await readBodyWithProgress(r, onProgress);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var b = await readBodyWithProgress(res, onProgress);
         if (!b.size) throw new Error('空响应');
+        await verifyBlob(path, b);
         console.log('[yunpan] source ok: official api');
         return b;
       }catch(e3){
@@ -1109,7 +1216,7 @@
     }
     var btn = $('#unlockBtn');
     btn.disabled = true; btn.textContent = '验证中…'; msg.textContent = '';
-    console.log('[yunpan] login start ·', username, '· build v9');
+    console.log('[yunpan] login start ·', username, '· build v10');
     try{
       var lower = username.toLowerCase();
       var isRoot = (lower === 'admin' || lower === String(CFG.rootUser).toLowerCase());
@@ -1937,6 +2044,31 @@
     }
     return fetchRepoBlob(entry.path, false, onProgress);
   }
+  /* 拉取 + 解密（解密失败时自动降级当前源并重拉一次） */
+  async function pullDecrypted(entry, zip, set, verb){
+    var label = verb || '下载中';
+    var pull = function(txt){
+      return fetchEntryBlob(entry, function(l, t, s){
+        set(txt + '… ' + (t ? Math.floor(l / t * 100) + '% · ' : '') + fmtSize(l) + ' · ' + fmtSpeed(s));
+      });
+    };
+    var blob = await pull(label);
+    if (!zip) return { blob: blob };
+    for (var attempt = 0; ; attempt++){
+      try{
+        set('解密中… 0%');
+        var out = await decryptZipBlob(blob, CFG.zipPassword, function(p){
+          set('解密中… ' + p + '% · ' + fmtSize(blob.size));
+        });
+        return { blob: out.blob, name: out.name };
+      }catch(err){
+        if (attempt >= 1) throw new Error('解密失败：文件数据不完整，请稍后重试');
+        avoidBase = preferredBase;
+        preferredBase = '';
+        blob = await pull('重新拉取');
+      }
+    }
+  }
   async function downloadEntry(entry, q){
     var display = dispName(entry.name);
     var set = function(t){ if (q) q.text(t); };
@@ -1948,22 +2080,10 @@
     }
     var zip = entry.type === 'link' ? !!entry.zip : isZipName(entry.name);
     set('下载中…');
-    var blob = await fetchEntryBlob(entry, function(l, t, s){
-      set('下载中… ' + (t ? Math.floor(l / t * 100) + '% · ' : '') + fmtSize(l) + ' · ' + fmtSpeed(s));
-    });
-    if (zip){
-      set('解密中… 0%');
-      var out = await decryptZipBlob(blob, CFG.zipPassword, function(p){
-        set('解密中… ' + p + '% · ' + fmtSize(blob.size));
-      });
-      blob = out.blob;
-      if (out.name) display = out.name;
-      saveBlob(blob, display);
-      toast('已解密并保存：' + display, 'ok');
-    }else{
-      saveBlob(blob, display);
-      toast('已保存：' + display, 'ok');
-    }
+    var got = await pullDecrypted(entry, zip, set);
+    if (got.name) display = got.name;
+    saveBlob(got.blob, display);
+    toast((zip ? '已解密并保存：' : '已保存：') + display, 'ok');
   }
   function openPreviewUrl(name, url){
     closePreview();
@@ -2004,16 +2124,9 @@
       if (openPreviewUrl(display, entry.url)) return;
     }
     set('拉取中…');
-    var blob = await fetchEntryBlob(entry, function(l, t, s){
-      set('拉取中… ' + (t ? Math.floor(l / t * 100) + '% · ' : '') + fmtSize(l) + ' · ' + fmtSpeed(s));
-    });
     var zip = entry.type === 'link' ? !!entry.zip : isZipName(entry.name);
-    if (zip){
-      set('解密中… 0%');
-      var out = await decryptZipBlob(blob, CFG.zipPassword, function(p){ set('解密中… ' + p + '%'); });
-      blob = out.blob;
-    }
-    openPreview(display, blob);
+    var got = await pullDecrypted(entry, zip, set, '拉取中');
+    openPreview(display, got.blob);
   }
 
   /* ---------- 重命名 / 删除 ---------- */
@@ -2390,15 +2503,9 @@
           blob = await fetchExternalBlob(e, q, tag);
         }else{
           var zip = e.type === 'link' ? !!e.zip : isZipName(e.name);
-          blob = await fetchEntryBlob(e, function(l, t, s){
-            q.text(tag + '下载 ' + (t ? Math.floor(l / t * 100) + '% · ' : '') + fmtSize(l) + ' · ' + fmtSpeed(s));
-          });
-          if (zip){
-            q.text(tag + '解密中… 0%');
-            var out = await decryptZipBlob(blob, CFG.zipPassword, function(p){ q.text(tag + '解密 ' + p + '%'); });
-            blob = out.blob;
-            if (out.name) display = out.name;
-          }
+          var got = await pullDecrypted(e, zip, function(txt){ q.text(tag + txt); }, '下载中');
+          blob = got.blob;
+          if (got.name) display = got.name;
         }
         var nm = uniqueCopyName(display, used);
         used[nm] = 1;
