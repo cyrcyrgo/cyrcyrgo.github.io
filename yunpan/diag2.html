@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>diag2</title>
+<style>body{font:13px/1.5 monospace;background:#111;color:#ddd;padding:16px}pre{white-space:pre-wrap}</style>
+</head><body>
+<h3>diag2 · 同源 zip.min.js 解密验证</h3>
+<pre id="out">running…</pre>
+<script>
+var out = document.getElementById('out');
+function w(s){ out.textContent += '\n' + s; console.log(s); }
+var FILES = [
+ 'yunpan/cyrcyrgo/hicode/162321-179213900154d6.jpg.zip',
+ 'yunpan/cyrcyrgo/hicode/5294c11cb3ed6be81d6f855f42b0bfb8.webm.zip',
+ 'yunpan/cyrcyrgo/26.10.28\u8bfe\u7a0b\u603b\u7ed3.txt.zip',
+ 'yunpan/cyrcyrgo/26.10.28.zip.zip'
+];
+var BASE = 'https://gh-proxy.com/https://raw.githubusercontent.com/hicodehc/hicodehc.github.io/main/';
+function encPath(p){ return p.split('/').map(encodeURIComponent).join('/'); }
+function loadLib(){
+  return new Promise(function(res, rej){
+    var s = document.createElement('script');
+    s.src = './zip.min.js';
+    s.onload = function(){ if (window.zip && window.zip.ZipWriter){ zip.configure({useWebWorkers:false}); res(window.zip); } else rej(new Error('no zip global')); };
+    s.onerror = function(){ rej(new Error('same-origin zip.min.js load fail')); };
+    document.head.appendChild(s);
+  });
+}
+async function verifyZip(path, blob){
+  var head = new Uint8Array(await blob.slice(0,2).arrayBuffer());
+  if (head[0]!==0x50||head[1]!==0x4b) throw new Error('非 ZIP 数据');
+  var tailLen = Math.min(blob.size, 65557);
+  var tail = new Uint8Array(await blob.slice(blob.size-tailLen).arrayBuffer());
+  var eocd = false;
+  for (var i = tail.length-22; i>=0; i--){ if (tail[i]===0x50&&tail[i+1]===0x4b&&tail[i+2]===0x05&&tail[i+3]===0x06){ eocd = true; break; } }
+  if (!eocd) throw new Error('ZIP 数据被截断');
+}
+async function decrypt(z, blob){
+  var reader = new z.ZipReader(new z.BlobReader(blob), { password:'cyry5988', useWebWorkers:false });
+  try{
+    var entries = await reader.getEntries();
+    var e = entries.filter(function(x){ return !x.directory; })[0];
+    var out2 = await e.getData(new z.BlobWriter(), { useWebWorkers:false });
+    return 'OK ' + e.filename + ' ' + out2.size;
+  } finally { try{ await reader.close(); }catch(_){} }
+}
+(async function(){
+  var z;
+  try{ z = await loadLib(); w('lib: ./zip.min.js loaded, version ' + (z.version || '?')); }
+  catch(e){ w('lib FAIL: ' + e.message); document.title='DONE'; return; }
+  for (var f of FILES){
+    try{
+      var res = await fetch(BASE + encPath(f), { cache:'no-store' });
+      var blob = await res.blob();
+      await verifyZip(f, blob);
+      w(f.split('/').pop() + ' | ' + blob.size + ' | verify PASS | decrypt: ' + await decrypt(z, blob));
+    }catch(err){
+      w(f.split('/').pop() + ' | verify/decrypt: ' + (err && (err.message || err)));
+    }
+  }
+  document.title = 'DONE';
+  w('DONE');
+})();
+</script>
+</body></html>
