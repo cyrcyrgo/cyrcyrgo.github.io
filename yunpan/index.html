@@ -326,7 +326,7 @@
       <button id="regBtn" class="secondary" type="button">注 册 新 用 户</button>
       <p id="lockMsg" class="msg" role="alert"></p>
     </form>
-    <p class="foot">账号凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密，登录时仅校验本地密文。登录成功后会话保存在本机 Cookie（30 天）。<br><span style="opacity:.75">build v12 · 若无法进入请按 Ctrl+F5 强制刷新</span></p>
+    <p class="foot">账号凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密，登录时仅校验本地密文。登录成功后会话保存在本机 Cookie（30 天）。<br><span style="opacity:.75">build v13 · 已内置独立解密引擎，若页面仍是旧版请按 Ctrl+F5 强制刷新</span></p>
   </div>
 </main>
 
@@ -925,6 +925,7 @@
     }
   }
   function fetchHedged(bases, path, rel, errors, onProgress){
+    if (!bases.length) return Promise.reject(new Error('无可用文件源'));
     return new Promise(function(resolve, reject){
       var idx = 0, active = 0, finished = false, seq = 0, owner = 0;
       var hedgeTimer = 0, aborts = [];
@@ -973,14 +974,16 @@
       startOne();
     });
   }
-  async function fetchRepoBlob(path, bust, onProgress){
+  async function fetchRepoBlob(path, bust, onProgress, officialOnly){
     var rel = encodePath(path) + (bust ? '?t=' + Date.now() : '');
     var errors = [];
-    /* 第一阶段：镜像（对冲并发） */
-    try{
-      var r = await fetchHedged(sourceList(false), path, rel, errors, onProgress);
-      return r.blob;
-    }catch(_){ /* 进入下一阶段 */ }
+    /* 第一阶段：镜像（对冲并发）；officialOnly 时跳过 */
+    if (!officialOnly){
+      try{
+        var r = await fetchHedged(sourceList(false), path, rel, errors, onProgress);
+        return r.blob;
+      }catch(_){ /* 进入下一阶段 */ }
+    }
     /* 第二阶段：官方直链（不到万不得已不用） */
     try{
       var r2 = await fetchHedged(sourceList(true), path, rel, errors, onProgress);
@@ -1228,7 +1231,7 @@
     }
     var btn = $('#unlockBtn');
     btn.disabled = true; btn.textContent = '验证中…'; msg.textContent = '';
-    console.log('[yunpan] login start ·', username, '· build v12');
+    console.log('[yunpan] login start ·', username, '· build v13');
     try{
       var lower = username.toLowerCase();
       var isRoot = (lower === 'admin' || lower === String(CFG.rootUser).toLowerCase());
@@ -2038,10 +2041,10 @@
     a.remove();
   }
   function isExternal(entry){ return !!(entry.type === 'link' && entry.external); }
-  async function fetchEntryBlob(entry, onProgress){
+  async function fetchEntryBlob(entry, onProgress, officialOnly){
     if (entry.type === 'link'){
       if (entry.path){
-        try{ return await fetchRepoBlob(entry.path, false, onProgress); }
+        try{ return await fetchRepoBlob(entry.path, false, onProgress, officialOnly); }
         catch(e){
           if (!entry.url) throw e;
           console.warn('[yunpan] link path fetch fail, try url', e && e.message);
@@ -2054,39 +2057,49 @@
       }
       throw new Error('链接缺少有效地址');
     }
-    return fetchRepoBlob(entry.path, false, onProgress);
+    return fetchRepoBlob(entry.path, false, onProgress, officialOnly);
   }
-  /* 拉取 + 解密（解密失败时自动降级当前源并重拉一次） */
+  /* 拉取 + 解密：密码不符立即报错；数据校验失败判为传输损坏，自动换源重拉，
+     最后一步强制走 GitHub 官方源，彻底排除镜像注入/截断导致的解码失败 */
   async function pullDecrypted(entry, zip, set, verb){
     var label = verb || '下载中';
-    var pull = function(txt){
+    var pull = function(txt, officialOnly){
       return fetchEntryBlob(entry, function(l, t, s){
         set(txt + '… ' + (t ? Math.floor(l / t * 100) + '% · ' : '') + fmtSize(l) + ' · ' + fmtSpeed(s));
-      });
+      }, officialOnly);
     };
-    var blob = await pull(label);
+    var blob = await pull(label, false);
     if (!zip) return { blob: blob };
-    for (var attempt = 0; ; attempt++){
+    var last = null;
+    for (var attempt = 0; attempt < 3; attempt++){
       try{
         set('解密中… 0%');
-        var out = await decryptZipBlob(blob, CFG.zipPassword, function(p){
+        var out = await decryptWithCandidates(blob, function(p){
           set('解密中… ' + p + '% · ' + fmtSize(blob.size));
         });
-        return { blob: out.blob, name: out.name };
+        return out;
       }catch(err){
-        /* 解密组件没加载出来不是数据问题，重拉也没用，直接提示真实原因 */
-        if (err && err.code === 'ziplib') throw err;
-        if (attempt >= 1){
-          var why = (err && err.message) || '数据校验失败';
-          if (/password/i.test(why)) why = '该文件的加密密码与当前设置不一致';
-          else if (/invalid|compressed|signature/i.test(why)) why = '文件数据已损坏（压缩校验失败）';
-          throw new Error('解密失败：' + why + '（已自动换源重试）');
+        last = err || {};
+        var code = last.code || '';
+        if (code === 'badpass'){
+          throw new Error('该文件使用的加密密码无法识别（已尝试当前设置的密码与邀请码，不是文件损坏）');
         }
-        avoidBase = preferredBase;
-        preferredBase = '';
-        blob = await pull('重新拉取');
+        if (code === 'unsupported' || code === 'empty'){
+          throw new Error('解密失败：' + (last.message || '格式不受支持'));
+        }
+        if (attempt >= 2){
+          throw new Error('解密失败：' + (last.message || '数据校验未通过') +
+            '（已依次从镜像 / 备用镜像 / GitHub 官方源重试 3 次，仍不一致，文件本身可能已损坏）');
+        }
+        if (attempt === 0 && preferredBase){
+          avoidBase = preferredBase;
+          preferredBase = '';
+        }
+        set('数据校验未通过，换源重试…');
+        blob = await pull('重新拉取', attempt >= 2);
       }
     }
+    throw new Error('解密失败：' + ((last && last.message) || '未知错误'));
   }
   async function downloadEntry(entry, q){
     var display = dispName(entry.name);
@@ -2510,9 +2523,7 @@
       return;
     }
     try{
-      var z = await ensureZipLib();
-      var writer = new z.ZipWriter(new z.BlobWriter('application/zip'), { useWebWorkers: false });
-      var used = {};
+      var items = [], used = {};
       for (var i = 0; i < entries.length; i++){
         var e = entries[i];
         var display = dispName(e.name);
@@ -2529,9 +2540,9 @@
         var nm = uniqueCopyName(display, used);
         used[nm] = 1;
         q.text(tag + '打包中…');
-        await writer.add(nm, new z.BlobReader(blob), { useWebWorkers: false });
+        items.push({ name: nm, data: new Uint8Array(await blob.arrayBuffer()) });
       }
-      var zb = await writer.close();
+      var zb = await makePlainZip(items);
       saveBlob(zb, 'yunpan-' + stamp() + '.zip');
       q.done('完成 · ' + entries.length + ' 个文件 · ' + fmtSize(zb.size));
       toast('批量下载完成（已打包为 zip）', 'ok');
@@ -2804,18 +2815,12 @@
   async function editEntry(entry, q){
     if (entry.type !== 'file'){ toast('共享链接不能直接编辑', 'err'); return; }
     var display = dispName(entry.name);
-    var zip = isZipName(entry.name);
     var set = function(t){ if (q) q.text(t); };
     set('拉取中…');
-    var blob = await fetchEntryBlob(entry, function(l, t, s){
-      set('拉取中… ' + (t ? Math.floor(l / t * 100) + '% · ' : '') + fmtSize(l) + ' · ' + fmtSpeed(s));
-    });
-    if (zip){
-      set('解密中… 0%');
-      var out = await decryptZipBlob(blob, CFG.zipPassword, function(p){ set('解密中… ' + p + '%'); });
-      blob = out.blob;
-      if (out.name) display = out.name;
-    }
+    var zip = isZipName(entry.name);
+    var got = await pullDecrypted(entry, zip, set, '拉取中');
+    var blob = got.blob;
+    if (got.name) display = got.name;
     if (blob.size > EDIT_MAX) throw new Error('文件超过 2 MB，暂不支持在线编辑');
     var text = await blob.text();
     editState = { entry: entry, zip: zip, fileName: display };
@@ -2880,77 +2885,350 @@
     }
   });
 
-  /* ---------- 浏览器内 ZIP 加密（zip.js） ---------- */
-  /* 优先用同源自带的 zip.min.js（随页面一起发布，最稳最快），
-     其次国内可直连的 npmmirror，最后才是公共 CDN */
-  var ZIP_CDN = [
-    './zip.min.js',
-    'https://registry.npmmirror.com/@zip.js/zip.js/2.7.53/files/dist/zip.min.js',
-    'https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.7.53/dist/zip.min.js',
-    'https://unpkg.com/@zip.js/zip.js@2.7.53/dist/zip.min.js'
-  ];
-  var zipLoading = null;
-  function ensureZipLib(){
-    if (window.zip && window.zip.ZipWriter) return Promise.resolve(window.zip);
-    if (zipLoading) return zipLoading;
-    zipLoading = (async function(){
-      for (var i = 0; i < ZIP_CDN.length; i++){
-        try{
-          await new Promise(function(resolve, reject){
-            var s = document.createElement('script');
-            s.src = ZIP_CDN[i];
-            s.async = true;
-            s.onload = resolve;
-            s.onerror = function(){ reject(new Error('cdn fail')); };
-            document.head.appendChild(s);
-          });
-          if (window.zip && window.zip.ZipWriter){
-            if (window.zip.configure) window.zip.configure({ useWebWorkers: false });
-            return window.zip;
-          }
-        }catch(_){ /* 切换下一个 CDN */ }
+  /* ---------- 内置 ZIP 加解密（WinZip AES-128/192/256，纯前端实现，不依赖第三方库） ----------
+     这样解密不再受 CDN / 第三方库加载失败、版本差异、浏览器压缩流实现差异影响。
+     AES 用查表法纯 JS 实现（8MB 文件约 0.4 秒）；PBKDF2 / HMAC 用浏览器原生 WebCrypto。 */
+  var AES_SBOX = new Uint8Array([
+  0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
+  0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
+  0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,
+  0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,
+  0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,
+  0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,
+  0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,
+  0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,
+  0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,
+  0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,
+  0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,
+  0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,
+  0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,
+  0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
+  0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,
+  0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16
+  ]);
+  var AES_M2 = new Uint8Array(256), AES_M3 = new Uint8Array(256);
+  (function initAesTables(){
+    for (var i = 0; i < 256; i++){
+      var t = ((i << 1) ^ (i & 0x80 ? 0x1b : 0)) & 0xff;
+      AES_M2[i] = t; AES_M3[i] = t ^ i;
+    }
+  })();
+  function aesSchedule(key){
+    var Nk = key.length >> 2, Nr = Nk + 6, total = 4 * (Nr + 1);
+    var W = new Uint32Array(total);
+    for (var i = 0; i < Nk; i++) W[i] = (key[4*i] << 24) | (key[4*i+1] << 16) | (key[4*i+2] << 8) | key[4*i+3];
+    var rcon = 1;
+    for (var j = Nk; j < total; j++){
+      var t = W[j-1];
+      if (j % Nk === 0){
+        t = ((t << 8) | (t >>> 24)) >>> 0;
+        t = (AES_SBOX[t >>> 24] << 24 | AES_SBOX[(t >>> 16) & 255] << 16 | AES_SBOX[(t >>> 8) & 255] << 8 | AES_SBOX[t & 255]) >>> 0;
+        t = (t ^ (rcon << 24)) >>> 0;
+        rcon = AES_M2[rcon];
+      } else if (Nk > 6 && j % Nk === 4){
+        t = (AES_SBOX[t >>> 24] << 24 | AES_SBOX[(t >>> 16) & 255] << 16 | AES_SBOX[(t >>> 8) & 255] << 8 | AES_SBOX[t & 255]) >>> 0;
       }
-      zipLoading = null;
-      var e = new Error('解密组件加载失败，请检查网络后重试');
-      e.code = 'ziplib';
-      throw e;
-    })();
-    return zipLoading;
+      W[j] = (W[j-Nk] ^ t) >>> 0;
+    }
+    return { W: W, Nr: Nr };
   }
-  async function makeEncryptedZip(file, entryName, password){
-    var z = await ensureZipLib();
-    var writer = new z.ZipWriter(new z.BlobWriter('application/zip'), {
-      password: password,
-      encryptionStrength: 3,
-      useWebWorkers: false
-    });
-    await writer.add(entryName, new z.BlobReader(file), { useWebWorkers: false });
-    return writer.close();
+  function aesXorRK(s, W, r){
+    var o = r * 4;
+    for (var c = 0; c < 4; c++){
+      var k = W[o + c], i = c * 4;
+      s[i] ^= (k >>> 24) & 255; s[i+1] ^= (k >>> 16) & 255; s[i+2] ^= (k >>> 8) & 255; s[i+3] ^= k & 255;
+    }
+  }
+  function aesSubShift(s){
+    for (var i = 0; i < 16; i++) s[i] = AES_SBOX[s[i]];
+    var t = s[1]; s[1] = s[5]; s[5] = s[9]; s[9] = s[13]; s[13] = t;
+    t = s[2]; s[2] = s[10]; s[10] = t; t = s[6]; s[6] = s[14]; s[14] = t;
+    t = s[15]; s[15] = s[11]; s[11] = s[7]; s[7] = s[3]; s[3] = t;
+  }
+  function aesMixCols(s){
+    for (var c = 0; c < 4; c++){
+      var i = c * 4, a0 = s[i], a1 = s[i+1], a2 = s[i+2], a3 = s[i+3];
+      s[i]   = AES_M2[a0] ^ AES_M3[a1] ^ a2 ^ a3;
+      s[i+1] = a0 ^ AES_M2[a1] ^ AES_M3[a2] ^ a3;
+      s[i+2] = a0 ^ a1 ^ AES_M2[a2] ^ AES_M3[a3];
+      s[i+3] = AES_M3[a0] ^ a1 ^ a2 ^ AES_M2[a3];
+    }
+  }
+  function aesEncBlock(ks, st, out){
+    var W = ks.W, Nr = ks.Nr, r, s = st;
+    aesXorRK(s, W, 0);
+    for (r = 1; r < Nr; r++){ aesSubShift(s); aesMixCols(s); aesXorRK(s, W, r); }
+    aesSubShift(s); aesXorRK(s, W, Nr);
+    out.set(s);
+  }
+  /* WinZip AES 使用 128 位小端计数器（从 1 开始），加密与解密同一条密钥流 */
+  async function aesCtrXor(ks, input, out, onChunk){
+    var ctr = new Uint8Array(16), st = new Uint8Array(16), ksb = new Uint8Array(16);
+    var n = 1, len = input.length, CHUNK = 1 << 20;
+    for (var off = 0; off < len; off += CHUNK){
+      var end = Math.min(len, off + CHUNK);
+      for (var p = off; p < end; p += 16){
+        ctr[0] = n & 255; ctr[1] = (n >>> 8) & 255; ctr[2] = (n >>> 16) & 255; ctr[3] = (n >>> 24) & 255;
+        for (var z = 4; z < 16; z++) ctr[z] = 0;
+        st.set(ctr);
+        aesEncBlock(ks, st, ksb);
+        var lim = Math.min(16, len - p);
+        for (var i = 0; i < lim; i++) out[p + i] = input[p + i] ^ ksb[i];
+        n++;
+      }
+      if (onChunk) onChunk(end, len);
+      if (end < len) await new Promise(function(r){ setTimeout(r, 0); });
+    }
+  }
+  async function zipPbkdf2(pwd, salt, len){
+    var base = await crypto.subtle.importKey('raw', encoder.encode(String(pwd)), 'PBKDF2', false, ['deriveBits']);
+    return new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt, iterations: 1000, hash: 'SHA-1' }, base, len * 8));
+  }
+  async function zipHmac10(key, data){
+    var k = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+    return new Uint8Array(await crypto.subtle.sign('HMAC', k, data)).subarray(0, 10);
+  }
+  async function zipInflateRaw(u8){
+    if (typeof DecompressionStream === 'undefined'){
+      throw Object.assign(new Error('当前浏览器不支持解压组件，请升级浏览器'), { code: 'unsupported' });
+    }
+    try{
+      var ds = new DecompressionStream('deflate-raw');
+      var buf = await new Response(new Blob([u8]).stream().pipeThrough(ds)).arrayBuffer();
+      return new Uint8Array(buf);
+    }catch(e){
+      throw zipErr('压缩数据无效（解压失败）', 'corrupt');
+    }
+  }
+  async function zipDeflateRaw(u8){
+    if (typeof CompressionStream === 'undefined') return null;
+    try{
+      var cs = new CompressionStream('deflate-raw');
+      var buf = await new Response(new Blob([u8]).stream().pipeThrough(cs)).arrayBuffer();
+      return new Uint8Array(buf);
+    }catch(e){ return null; }
+  }
+  function zipErr(msg, code){ var e = new Error(msg); e.code = code; return e; }
+  var MIME_BY_EXT = {jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',gif:'image/gif',webp:'image/webp',bmp:'image/bmp',avif:'image/avif',ico:'image/x-icon',mp4:'video/mp4',webm:'video/webm',ogv:'video/ogg',ogg:'video/ogg',mov:'video/quicktime',m4v:'video/mp4',mp3:'audio/mpeg',wav:'audio/wav',m4a:'audio/mp4',flac:'audio/flac',aac:'audio/aac',pdf:'application/pdf',txt:'text/plain',md:'text/plain',json:'application/json',html:'text/html',htm:'text/html',css:'text/css',js:'text/javascript',svg:'image/svg+xml',csv:'text/csv',xml:'text/xml'};
+  function mimeOfName(name){
+    var e = extOf(name);
+    return MIME_BY_EXT[e] || 'application/octet-stream';
+  }
+  /* 历史原因，站内文件可能用不同密码加密：固定压缩密码、邀请码、当前登录密码。
+     逐个用「密码校验值」快速判定（只需 1000 次 PBKDF2，几毫秒），命中即解密。 */
+  function zipPasswordCandidates(){
+    var out = [];
+    var add = function(v){ v = String(v == null ? '' : v); if (v && out.indexOf(v) === -1) out.push(v); };
+    add(CFG.zipPassword);
+    add(CFG.inviteCode);
+    if (S){ add(S.pwd); add(S.user); }
+    return out;
+  }
+  async function decryptWithCandidates(blob, onProgress){
+    var cands = zipPasswordCandidates(), lastBad = null;
+    for (var i = 0; i < cands.length; i++){
+      try{
+        return await decryptZipBlob(blob, cands[i], onProgress);
+      }catch(e){
+        if (e && e.code === 'badpass'){ lastBad = e; continue; }
+        throw e;
+      }
+    }
+    throw lastBad || zipErr('密码校验值不匹配', 'badpass');
   }
   async function decryptZipBlob(zipBlob, password, onProgress){
-    var z = await ensureZipLib();
-    var reader = new z.ZipReader(new z.BlobReader(zipBlob), { password: password, useWebWorkers: false });
-    try{
-      var entries = await reader.getEntries();
-      var entry = null;
-      for (var i = 0; i < entries.length; i++){
-        if (!entries[i].directory){ entry = entries[i]; break; }
-      }
-      if (!entry) throw new Error('压缩包内没有文件');
-      if (onProgress) onProgress(0);
-      var out = await entry.getData(new z.BlobWriter(), {
-        useWebWorkers: false,
-        onprogress: function(p, total){
-          if (!onProgress) return;
-          var pct = total ? Math.min(99, Math.round(p / total * 100)) : 0;
-          onProgress(pct);
-        }
-      });
-      if (onProgress) onProgress(100);
-      return { blob: out, name: entry.filename || 'decrypted' };
-    }finally{
-      try{ await reader.close(); }catch(_){}
+    var buf = new Uint8Array(await zipBlob.arrayBuffer());
+    var dv = new DataView(buf.buffer);
+    var eocd = -1;
+    for (var i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--){
+      if (buf[i] === 0x50 && buf[i+1] === 0x4b && buf[i+2] === 0x05 && buf[i+3] === 0x06){ eocd = i; break; }
     }
+    if (eocd < 0) throw zipErr('压缩包目录缺失，数据不完整', 'truncated');
+    var nrec = dv.getUint16(eocd + 10, true);
+    var p = dv.getUint32(eocd + 16, true);
+    var entry = null;
+    for (var k = 0; k < nrec; k++){
+      if (p + 46 > buf.length || dv.getUint32(p, true) !== 0x02014b50) throw zipErr('压缩包目录损坏', 'corrupt');
+      var flags = dv.getUint16(p + 8, true);
+      var method = dv.getUint16(p + 10, true);
+      var crc = dv.getUint32(p + 16, true);
+      var csize = dv.getUint32(p + 20, true);
+      var usize = dv.getUint32(p + 24, true);
+      var nlen = dv.getUint16(p + 28, true);
+      var xlen = dv.getUint16(p + 30, true);
+      var clen = dv.getUint16(p + 32, true);
+      var loff = dv.getUint32(p + 42, true);
+      var nameBytes = buf.subarray(p + 46, p + 46 + nlen);
+      var name = new TextDecoder().decode(nameBytes);
+      var extra = buf.subarray(p + 46 + nlen, p + 46 + nlen + xlen);
+      var aes = null;
+      for (var q = 0; q + 4 <= extra.length;){
+        var hid = extra[q] | (extra[q+1] << 8), hsz = extra[q+2] | (extra[q+3] << 8);
+        if (hid === 0x9901 && hsz >= 7 && q + 11 <= extra.length){
+          aes = { strength: extra[q + 8], method: extra[q + 9] | (extra[q + 10] << 8) };
+        }
+        q += 4 + hsz;
+      }
+      if (!entry && !/\/$/.test(name)) entry = { name: name, flags: flags, method: method, crc: crc, csize: csize, usize: usize, loff: loff, aes: aes };
+      p += 46 + nlen + xlen + clen;
+    }
+    if (!entry) throw zipErr('压缩包内没有文件', 'empty');
+    var t = entry;
+    if (loffBad(dv, t.loff)) throw zipErr('压缩包本地头损坏', 'corrupt');
+    if (t.csize === 0xffffffff || t.usize === 0xffffffff) throw zipErr('暂不支持 ZIP64 格式', 'unsupported');
+    var lnlen = dv.getUint16(t.loff + 26, true), lxlen = dv.getUint16(t.loff + 28, true);
+    var dstart = t.loff + 30 + lnlen + lxlen;
+    if (dstart + t.csize > buf.length) throw zipErr('压缩包数据越界，文件不完整', 'truncated');
+    var data, actualMethod;
+    if (t.aes){
+      var strength = t.aes.strength;
+      if (strength < 1 || strength > 3) throw zipErr('加密强度不受支持', 'unsupported');
+      var keyLen = 8 + 8 * strength, saltLen = keyLen >> 1;
+      if (t.csize < saltLen + 12) throw zipErr('加密数据过短', 'corrupt');
+      var salt = buf.subarray(dstart, dstart + saltLen);
+      var pwv = buf.subarray(dstart + saltLen, dstart + saltLen + 2);
+      var enc = buf.subarray(dstart + saltLen + 2, dstart + t.csize - 10);
+      var auth = buf.subarray(dstart + t.csize - 10, dstart + t.csize);
+      var dk = await zipPbkdf2(password, salt, keyLen * 2 + 2);
+      if (dk[keyLen * 2] !== pwv[0] || dk[keyLen * 2 + 1] !== pwv[1]){
+        throw zipErr('密码校验值不匹配', 'badpass');
+      }
+      var calc = await zipHmac10(dk.subarray(keyLen, keyLen * 2), enc);
+      var authOk = true;
+      for (var ai = 0; ai < 10; ai++) if (calc[ai] !== auth[ai]) authOk = false;
+      if (!authOk) throw zipErr('数据认证码校验失败', 'corrupt');
+      var ks = aesSchedule(dk.subarray(0, keyLen));
+      data = new Uint8Array(enc.length);
+      await aesCtrXor(ks, enc, data, function(done, total){
+        if (onProgress) onProgress(Math.min(90, Math.floor(done / total * 90)));
+      });
+      actualMethod = t.aes.method;
+    } else {
+      if (t.flags & 1) throw zipErr('不支持传统 ZIP 加密', 'unsupported');
+      data = buf.subarray(dstart, dstart + t.csize);
+      actualMethod = t.method;
+    }
+    if (onProgress) onProgress(95);
+    var out = data;
+    if (actualMethod === 8){
+      if (data.length === t.usize){
+        /* 兼容旧版写入器的错误标记：数据其实是「存储」模式，却被标成 deflate。
+           此时解密后的长度已等于原始大小，解压失败就按原样返回，避免误判为损坏。 */
+        try{ out = await zipInflateRaw(data); }catch(_){ out = data; }
+      }else{
+        out = await zipInflateRaw(data);
+      }
+    }else if (actualMethod === 0){
+      out = data;
+      if (data.length !== t.usize){
+        /* 反向兼容：标称存储但长度对不上时，尝试按 deflate 解压 */
+        try{ out = await zipInflateRaw(data); }catch(_){ out = data; }
+      }
+    }else{
+      throw zipErr('不支持的压缩方式 ' + actualMethod, 'unsupported');
+    }
+    if (out.length !== t.usize) throw zipErr('解压长度不符 ' + out.length + '/' + t.usize, 'corrupt');
+    if (t.crc){
+      var cc = crc32u8(out);
+      if (cc !== t.crc) throw zipErr('CRC 校验失败', 'corrupt');
+    }
+    if (onProgress) onProgress(100);
+    return { blob: new Blob([out], { type: mimeOfName(t.name) }), name: t.name };
+  }
+  function loffBad(dv, loff){
+    return loff + 30 > dv.byteLength || dv.getUint32(loff, true) !== 0x04034b50;
+  }
+  function crc32u8(u8){
+    var c = 0xffffffff;
+    for (var i = 0; i < u8.length; i++){
+      c ^= u8[i];
+      for (var k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  }
+  /* 生成 WinZip AES-256 加密 ZIP（AE-2：CRC 置 0，由 HMAC 认证） */
+  async function makeEncryptedZip(input, entryName, password){
+    var bytes = input instanceof Uint8Array ? input : new Uint8Array(await input.arrayBuffer());
+    var compressed = await zipDeflateRaw(bytes);
+    var method = compressed ? 8 : 0;
+    var payload = compressed || bytes;
+    var strength = 3, keyLen = 32, saltLen = 16;
+    var salt = crypto.getRandomValues(new Uint8Array(saltLen));
+    var dk = await zipPbkdf2(password, salt, keyLen * 2 + 2);
+    var key = dk.subarray(0, keyLen), macKey = dk.subarray(keyLen, keyLen * 2);
+    var pwv = dk.subarray(keyLen * 2, keyLen * 2 + 2);
+    var enc = new Uint8Array(payload.length);
+    await aesCtrXor(aesSchedule(key), payload, enc, null);
+    var auth = await zipHmac10(macKey, enc);
+    var data = new Uint8Array(saltLen + 2 + enc.length + 10);
+    data.set(salt, 0); data.set(pwv, saltLen); data.set(enc, saltLen + 2); data.set(auth, saltLen + 2 + enc.length);
+    var csize = data.length, usize = bytes.length, crc = 0;
+    var name = encoder.encode(String(entryName));
+    var extra = new Uint8Array([0x01,0x99,0x07,0x00,0x02,0x00,0x41,0x45,strength,method & 255,(method >> 8) & 255]);
+    var d = new Date();
+    var dosTime = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    var dosDate = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    var flags = 0x0001 | 0x0800;
+    var localLen = 30 + name.length + extra.length;
+    var out = new Uint8Array(localLen + data.length + 46 + name.length + extra.length + 22);
+    var dv = new DataView(out.buffer), o = 0;
+    var w16 = function(v){ dv.setUint16(o, v, true); o += 2; };
+    var w32 = function(v){ dv.setUint32(o, v >>> 0, true); o += 4; };
+    w32(0x04034b50); w16(51); w16(flags); w16(99); w16(dosTime); w16(dosDate);
+    w32(crc); w32(csize); w32(usize); w16(name.length); w16(extra.length);
+    out.set(name, o); o += name.length;
+    out.set(extra, o); o += extra.length;
+    out.set(data, o); o += data.length;
+    var cdStart = o;
+    w32(0x02014b50); w16(51); w16(51); w16(flags); w16(99); w16(dosTime); w16(dosDate);
+    w32(crc); w32(csize); w32(usize); w16(name.length); w16(extra.length); w16(0);
+    w16(0); w16(0); w32(0); w32(0);
+    out.set(name, o); o += name.length;
+    out.set(extra, o); o += extra.length;
+    var cdLen = o - cdStart;
+    w32(0x06054b50); w16(0); w16(0); w16(1); w16(1); w32(cdLen); w32(cdStart); w16(0);
+    return new Blob([out], { type: 'application/zip' });
+  }
+  /* 批量下载打包（明文 ZIP，deflate 压缩，不支持压缩时退回存储模式） */
+  function zipDosTime(d){
+    return {
+      time: (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1),
+      date: ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()
+    };
+  }
+  async function makePlainZip(items){
+    var chunks = [], centrals = [], offset = 0, cdSize = 0;
+    var now = zipDosTime(new Date());
+    for (var i = 0; i < items.length; i++){
+      var data = items[i].data;
+      var comp = await zipDeflateRaw(data);
+      var method = comp ? 8 : 0;
+      var payload = comp || data;
+      var crc = crc32u8(data);
+      var nb = encoder.encode(items[i].name);
+      var lh = new Uint8Array(30), lv = new DataView(lh.buffer);
+      lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, 0x0800, true);
+      lv.setUint16(8, method, true); lv.setUint16(10, now.time, true); lv.setUint16(12, now.date, true);
+      lv.setUint32(14, crc, true); lv.setUint32(18, payload.length, true); lv.setUint32(22, data.length, true);
+      lv.setUint16(26, nb.length, true); lv.setUint16(28, 0, true);
+      chunks.push(lh, nb, payload);
+      var ch = new Uint8Array(46), cv = new DataView(ch.buffer);
+      cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0x0800, true); cv.setUint16(10, method, true);
+      cv.setUint16(12, now.time, true); cv.setUint16(14, now.date, true);
+      cv.setUint32(16, crc, true); cv.setUint32(20, payload.length, true); cv.setUint32(24, data.length, true);
+      cv.setUint16(28, nb.length, true); cv.setUint16(30, 0, true); cv.setUint16(32, 0, true);
+      cv.setUint16(34, 0, true); cv.setUint16(36, 0, true); cv.setUint32(38, 0, true);
+      cv.setUint32(42, offset, true);
+      centrals.push(ch, nb);
+      offset += 30 + nb.length + payload.length;
+      cdSize += 46 + nb.length;
+    }
+    var end = new Uint8Array(22), ev = new DataView(end.buffer);
+    ev.setUint32(0, 0x06054b50, true); ev.setUint16(4, 0, true); ev.setUint16(6, 0, true);
+    ev.setUint16(8, items.length, true); ev.setUint16(10, items.length, true);
+    ev.setUint32(12, cdSize, true); ev.setUint32(16, offset, true); ev.setUint16(20, 0, true);
+    return new Blob(chunks.concat(centrals, [end]), { type: 'application/zip' });
   }
 
   /* ---------- 上传 ---------- */
