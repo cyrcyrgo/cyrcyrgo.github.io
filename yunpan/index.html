@@ -326,7 +326,7 @@
       <button id="regBtn" class="secondary" type="button">注 册 新 用 户</button>
       <p id="lockMsg" class="msg" role="alert"></p>
     </form>
-    <p class="foot">账号凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密，登录时仅校验本地密文。登录成功后会话保存在本机 Cookie（30 天）。<br><span style="opacity:.75">build v10 · 若无法进入请按 Ctrl+F5 强制刷新</span></p>
+    <p class="foot">账号凭据使用 PBKDF2-SHA256 + AES-256-GCM 加密，登录时仅校验本地密文。登录成功后会话保存在本机 Cookie（30 天）。<br><span style="opacity:.75">build v11 · 若无法进入请按 Ctrl+F5 强制刷新</span></p>
   </div>
 </main>
 
@@ -616,10 +616,11 @@
     pagesBase: 'https://hicodehc.github.io/',
     zipPassword: 'cyry5988',
     rootUser: 'cyrcyrgo',
-    /* 镜像优先：只用加速镜像；官方直链仅在镜像全部失败后才启用 */
+    /* 镜像优先：只用加速镜像；官方直链仅在镜像全部失败后才启用
+       注意：gh-proxy / ghfast 必须带完整源地址前缀，否则会返回 404 */
     mirrors: [
-      'https://gh-proxy.com/',
-      'https://ghfast.top/',
+      'https://gh-proxy.com/https://raw.githubusercontent.com/hicodehc/hicodehc.github.io/main/',
+      'https://ghfast.top/https://raw.githubusercontent.com/hicodehc/hicodehc.github.io/main/',
       'https://cdn.jsdelivr.net/gh/hicodehc/hicodehc.github.io@main/'
     ],
     official: [
@@ -844,7 +845,7 @@
 
   function srcLabel(base){ return base.replace(/^https?:\/\//, '').replace(/\/$/, ''); }
   function isOfficialSource(base){
-    return base.indexOf('raw.githubusercontent.com') >= 0 || base.indexOf('github.com/') >= 0;
+    return /^(https?:)?\/\/(raw\.githubusercontent\.com|github\.com)\//i.test(base);
   }
   function sourceList(useOfficial){
     var bases = (useOfficial ? CFG.official : CFG.mirrors).slice();
@@ -1219,7 +1220,7 @@
     }
     var btn = $('#unlockBtn');
     btn.disabled = true; btn.textContent = '验证中…'; msg.textContent = '';
-    console.log('[yunpan] login start ·', username, '· build v10');
+    console.log('[yunpan] login start ·', username, '· build v11');
     try{
       var lower = username.toLowerCase();
       var isRoot = (lower === 'admin' || lower === String(CFG.rootUser).toLowerCase());
