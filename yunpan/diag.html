@@ -1,91 +1,63 @@
 <!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>decrypt diag</title>
-<style>body{font:13px/1.5 monospace;background:#111;color:#ddd;padding:16px}pre{white-space:pre-wrap}td,th{border:1px solid #444;padding:4px 6px;font-size:12px}</style>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>diag2</title>
+<style>body{font:13px/1.5 monospace;background:#111;color:#ddd;padding:16px}pre{white-space:pre-wrap}</style>
 </head><body>
-<h3>YUNPAN 解密诊断</h3>
-<table id="t"><thead><tr><th>文件</th><th>源</th><th>HTTP</th><th>bytes</th><th>CL</th><th>CE</th><th>CT</th><th>ZIP尾</th><th>解密</th></tr></thead><tbody></tbody></table>
-<pre id="log"></pre>
+<h3>diag2 · 同源 zip.min.js 解密验证</h3>
+<pre id="out">running…</pre>
 <script>
-var MIR = [
- 'https://gh-proxy.com/https://raw.githubusercontent.com/hicodehc/hicodehc.github.io/main/',
- 'https://ghfast.top/https://raw.githubusercontent.com/hicodehc/hicodehc.github.io/main/',
- 'https://cdn.jsdelivr.net/gh/hicodehc/hicodehc.github.io@main/'
-];
-var OFF = [
- 'https://raw.githubusercontent.com/hicodehc/hicodehc.github.io/main/',
- 'https://github.com/hicodehc/hicodehc.github.io/raw/main/'
-];
+var out = document.getElementById('out');
+function w(s){ out.textContent += '\n' + s; console.log(s); }
 var FILES = [
- 'yunpan/cyrcyrgo/26.10.28.zip.zip',
- 'yunpan/cyrcyrgo/26.10.28\u8bfe\u7a0b\u603b\u7ed3.txt.zip',
+ 'yunpan/cyrcyrgo/hicode/162321-179213900154d6.jpg.zip',
  'yunpan/cyrcyrgo/hicode/5294c11cb3ed6be81d6f855f42b0bfb8.webm.zip',
- 'yunpan/cyrcyrgo/hicode/162321-179213900154d6.jpg.zip'
+ 'yunpan/cyrcyrgo/26.10.28\u8bfe\u7a0b\u603b\u7ed3.txt.zip',
+ 'yunpan/cyrcyrgo/26.10.28.zip.zip'
 ];
+var BASE = 'https://gh-proxy.com/https://raw.githubusercontent.com/hicodehc/hicodehc.github.io/main/';
 function encPath(p){ return p.split('/').map(encodeURIComponent).join('/'); }
-function log(x){ document.getElementById('log').textContent += x + '\n'; console.log(x); }
-async function readBody(res, cb){
-  var reader = res.body.getReader(), chunks = [], loaded = 0;
-  for(;;){ var r = await reader.read(); if (r.done) break; chunks.push(r.value); loaded += r.value.length; if (cb) cb(loaded); }
-  return new Blob(chunks);
-}
-async function ztail(blob){
-  var tail = new Uint8Array(await blob.slice(Math.max(0, blob.size-66000)).arrayBuffer());
-  for (var i = tail.length-22; i >= 0; i--){
-    if (tail[i]===0x50 && tail[i+1]===0x4b && tail[i+2]===0x05 && tail[i+3]===0x06) return 'EOCD#'+(blob.size-66000+i);
-  }
-  return 'NO-EOCD';
-}
-var zipLib = null;
-function loadZip(){
-  if (zipLib) return Promise.resolve(zipLib);
+function loadLib(){
   return new Promise(function(res, rej){
     var s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.7.53/dist/zip.min.js';
-    s.onload = function(){ if (window.zip.configure) window.zip.configure({useWebWorkers:false}); zipLib = window.zip; res(zipLib); };
-    s.onerror = function(){ rej(new Error('cdn fail')); };
+    s.src = './zip.min.js';
+    s.onload = function(){ if (window.zip && window.zip.ZipWriter){ zip.configure({useWebWorkers:false}); res(window.zip); } else rej(new Error('no zip global')); };
+    s.onerror = function(){ rej(new Error('same-origin zip.min.js load fail')); };
     document.head.appendChild(s);
   });
 }
-async function decrypt(blob){
-  var z = await loadZip(), last = -1, steps = [];
-  var reader = new z.ZipReader(new z.BlobReader(blob), { password: 'cyry5988', useWebWorkers: false });
+async function verifyZip(path, blob){
+  var head = new Uint8Array(await blob.slice(0,2).arrayBuffer());
+  if (head[0]!==0x50||head[1]!==0x4b) throw new Error('非 ZIP 数据');
+  var tailLen = Math.min(blob.size, 65557);
+  var tail = new Uint8Array(await blob.slice(blob.size-tailLen).arrayBuffer());
+  var eocd = false;
+  for (var i = tail.length-22; i>=0; i--){ if (tail[i]===0x50&&tail[i+1]===0x4b&&tail[i+2]===0x05&&tail[i+3]===0x06){ eocd = true; break; } }
+  if (!eocd) throw new Error('ZIP 数据被截断');
+}
+async function decrypt(z, blob){
+  var reader = new z.ZipReader(new z.BlobReader(blob), { password:'cyry5988', useWebWorkers:false });
   try{
     var entries = await reader.getEntries();
     var e = entries.filter(function(x){ return !x.directory; })[0];
-    if (!e) throw new Error('no file entry');
-    var out = await e.getData(new z.BlobWriter(), { useWebWorkers:false, onprogress: function(p,t){ var pct = t?Math.min(99,Math.round(p/t*100)):0; if (pct !== last){ last = pct; if (pct%25===0) steps.push(pct); } } });
-    return 'OK ' + e.filename + ' ' + out.size + ' [' + steps.join(',') + ']';
-  } catch(err){
-    return 'ERR ' + (err && (err.message || err)) + ' [' + steps.join(',') + ']';
+    var out2 = await e.getData(new z.BlobWriter(), { useWebWorkers:false });
+    return 'OK ' + e.filename + ' ' + out2.size;
   } finally { try{ await reader.close(); }catch(_){} }
 }
-async function one(path, base){
-  var tr = document.createElement('tr');
-  var cells = [path.split('/').pop(), base.replace(/^https?:\/\//,'').slice(0,28)].map(function(x){ return x; });
-  var tds = cells.map(function(c){ var td=document.createElement('td'); td.textContent=c; tr.appendChild(td); return td; });
-  function add(v){ var td=document.createElement('td'); td.textContent=String(v); tr.appendChild(td); return td; }
-  document.querySelector('#t tbody').appendChild(tr);
-  var ctrl = new AbortController();
-  try{
-    var res = await fetch(base + encPath(path), { cache:'no-store', signal: ctrl.signal });
-    var cl = res.headers.get('content-length'), ce = res.headers.get('content-encoding'), ct = res.headers.get('content-type');
-    add(res.status); var btd = add(''); var cld = add(cl||'-'); var ced = add(ce||'-'); var ctd = add(ct||'-');
-    if (!res.ok){ btd.textContent='-'; add('-'); add('-'); return; }
-    var blob = await readBody(res);
-    btd.textContent = blob.size + (cl && Number(cl)!==blob.size ? ' ≠CL' : '');
-    add(await ztail(blob));
-    add(await decrypt(blob));
-    log(path + ' @ ' + base.split('/')[2] + ' => ' + blob.size + '/' + cl + ' ce=' + ce + ' decrypt=' + tr.lastChild.textContent);
-  }catch(err){
-    add('ERR'); add(''); add(''); add(''); add('fetch ERR ' + (err && err.message));
-    log(path + ' @ ' + base.split('/')[2] + ' => FETCH ERR ' + (err && err.message));
-  }
-}
 (async function(){
+  var z;
+  try{ z = await loadLib(); w('lib: ./zip.min.js loaded, version ' + (z.version || '?')); }
+  catch(e){ w('lib FAIL: ' + e.message); document.title='DONE'; return; }
   for (var f of FILES){
-    for (var b of MIR.concat(OFF)) await one(f, b);
+    try{
+      var res = await fetch(BASE + encPath(f), { cache:'no-store' });
+      var blob = await res.blob();
+      await verifyZip(f, blob);
+      w(f.split('/').pop() + ' | ' + blob.size + ' | verify PASS | decrypt: ' + await decrypt(z, blob));
+    }catch(err){
+      w(f.split('/').pop() + ' | verify/decrypt: ' + (err && (err.message || err)));
+    }
   }
   document.title = 'DONE';
+  w('DONE');
 })();
 </script>
 </body></html>
