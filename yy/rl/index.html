@@ -158,11 +158,11 @@
     <p class="sub">一句话描述安排，大模型返回结构化 JSON，一键写入系统日历。</p>
     <div class="badges">
       <span>Android 12 及以上</span>
-      <span>v1.0.0</span>
-      <span>38 KB</span>
+      <span>v1.1.0</span>
+      <span>42 KB</span>
       <span>无需登录</span>
     </div>
-    <a class="btn" href="ai-schedule-1.0.0.apk" download="ai-schedule-1.0.0.apk">
+    <a class="btn" href="ai-schedule-1.1.0.apk" download="ai-schedule-1.1.0.apk">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
@@ -175,7 +175,7 @@
     <h2>复制下载链接</h2>
     <p class="desc">复制后粘贴到另一个窗口或手机浏览器地址栏，回车即可下载。</p>
     <div class="copyrow">
-      <input id="apkLink" readonly value="https://cyrcyrgo.github.io/yy/rl/ai-schedule-1.0.0.apk" onclick="this.select()">
+      <input id="apkLink" readonly value="https://cyrcyrgo.github.io/yy/rl/ai-schedule-1.1.0.apk" onclick="this.select()">
       <button id="copyBtn" type="button">复制</button>
     </div>
     <div class="qr">
@@ -194,6 +194,7 @@
       <li><b>授予日历读写权限</b>打开应用后点击顶部「日历权限未开启」提示，允许读取和写入日历。</li>
       <li><b>配置大模型接口</b>填写 OpenAI 兼容的 Base URL、API Key 与模型名（默认 deepseek-chat）。</li>
       <li><b>描述日程并写入</b>输入「明天下午 3 点和张总开会 1 小时」，生成后勾选日程，选择日历，一键写入。</li>
+      <li><b>随时管理日程</b>在「已添加的日程」中可修改标题、时间、地点、备注与提醒，或直接删除；重要提醒可随时切换。</li>
     </ol>
   </section>
 
@@ -205,6 +206,8 @@
       <div class="feat"><b>纯 JSON 约束</b><span>系统提示词强制模型只返回结构化 JSON，应用内直接解析为日程列表。</span></div>
       <div class="feat"><b>一键写入日历</b><span>通过系统日历权限写入事件与提醒，支持选择目标日历账户与提前提醒。</span></div>
       <div class="feat"><b>多日程识别</b><span>一段话可生成多个日程，逐条勾选后再写入，避免误写。</span></div>
+      <div class="feat"><b>修改与删除</b><span>已写入的日程可在应用内修改标题、时间、地点、备注，或删除并同步移除系统日历事件。</span></div>
+      <div class="feat"><b>重要提醒开关</b><span>可为日程开启重要提醒，自动追加提前 1 天与提前 1 小时的两次提醒。</span></div>
       <div class="feat"><b>密钥本地保存</b><span>接口配置仅存放在本机，不联网上传、不收集任何用户数据。</span></div>
     </div>
   </section>
@@ -215,6 +218,7 @@
       <li>适用 Android 12（API 31）及以上系统，安装包为自签名，安装时提示未知来源属于正常现象。</li>
       <li>接口地址填到版本号即可，例如 <code>https://api.deepseek.com/v1</code>，应用会自动补全 <code>/chat/completions</code>。</li>
       <li>需要系统日历中存在可写账户（本机日历 / Google / 厂商日历均可），只读日历会写入失败。</li>
+      <li>重要提醒会在日历中生成两条提醒（提前 1 天、提前 1 小时）；未开启时按模型给出的提醒分钟数生成单条提醒。</li>
       <li>模型返回内容不符合 JSON 时，可在结果卡片中查看原始返回，便于排查接口问题。</li>
     </ul>
   </section>
