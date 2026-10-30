@@ -155,14 +155,14 @@
       </svg>
     </div>
     <h1>AI 日程助手</h1>
-    <p class="sub">一句话描述安排，大模型返回结构化 JSON，一键写入系统日历。</p>
+    <p class="sub">一句话新增、修改或删除日程，模型实时流式输出结构化 JSON，确认后写入系统日历。</p>
     <div class="badges">
       <span>Android 12 及以上</span>
-      <span>v1.1.0</span>
-      <span>42 KB</span>
+      <span>v1.2.0</span>
+      <span>50 KB</span>
       <span>无需登录</span>
     </div>
-    <a class="btn" href="ai-schedule-1.1.0.apk" download="ai-schedule-1.1.0.apk">
+    <a class="btn" href="ai-schedule-1.2.0.apk" download="ai-schedule-1.2.0.apk">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
@@ -175,7 +175,7 @@
     <h2>复制下载链接</h2>
     <p class="desc">复制后粘贴到另一个窗口或手机浏览器地址栏，回车即可下载。</p>
     <div class="copyrow">
-      <input id="apkLink" readonly value="https://cyrcyrgo.github.io/yy/rl/ai-schedule-1.1.0.apk" onclick="this.select()">
+      <input id="apkLink" readonly value="https://cyrcyrgo.github.io/yy/rl/ai-schedule-1.2.0.apk" onclick="this.select()">
       <button id="copyBtn" type="button">复制</button>
     </div>
     <div class="qr">
@@ -192,9 +192,10 @@
     <ol class="steps">
       <li><b>下载并安装 APK</b>如提示未知来源，请在系统设置中允许当前浏览器或文件管理器安装应用。</li>
       <li><b>授予日历读写权限</b>打开应用后点击顶部「日历权限未开启」提示，允许读取和写入日历。</li>
-      <li><b>配置大模型接口</b>填写 OpenAI 兼容的 Base URL、API Key 与模型名（默认 deepseek-chat）。</li>
-      <li><b>描述日程并写入</b>输入「明天下午 3 点和张总开会 1 小时」，生成后勾选日程，选择日历，一键写入。</li>
+      <li><b>配置大模型接口</b>填写 OpenAI 兼容的 Base URL、API Key 与模型名（默认 deepseek-chat），并按需选择思考模式。</li>
+      <li><b>描述日程并执行</b>输入「明天下午 3 点和张总开会 1 小时」或「把周会删掉」，实时输出结束后勾选操作，选择日历，一键执行。</li>
       <li><b>随时管理日程</b>在「已添加的日程」中可修改标题、时间、地点、备注与提醒，或直接删除；重要提醒可随时切换。</li>
+      <li><b>添加常用提示词</b>在「常用提示词」中输入并勾选，之后每次发送都会自动附带，无需重复输入。</li>
     </ol>
   </section>
 
@@ -202,8 +203,12 @@
     <h2>功能</h2>
     <div class="grid">
       <div class="feat"><b>OpenAI 兼容接口</b><span>标准 /chat/completions，可对接 DeepSeek、Kimi、通义、OpenAI 与自建网关。</span></div>
-      <div class="feat"><b>DeepSeek 自动关思考</b><span>模型名包含 deepseek 时自动下发 thinking=disabled，不支持的网关自动回退重试。</span></div>
-      <div class="feat"><b>纯 JSON 约束</b><span>系统提示词强制模型只返回结构化 JSON，应用内直接解析为日程列表。</span></div>
+      <div class="feat"><b>思考模式可调</b><span>支持 DeepSeek、GLM、豆包：按模型自动识别并发送 thinking 参数，可强制开启或关闭思考，不支持时自动回退。</span></div>
+      <div class="feat"><b>AI 改删日程</b><span>用自然语言修改或删除已有日程，模型返回带 id 的 updates / deletes，执行前逐条确认。</span></div>
+      <div class="feat"><b>重复日程</b><span>支持「每 N 天一次、共 M 次」以及指定多个日期，自动写入 RRULE 或按日期批量创建。</span></div>
+      <div class="feat"><b>常用提示词</b><span>可保存多条自定义提示词并勾选启用，每次请求自动附带，与系统提示词、用户输入一起生效。</span></div>
+      <div class="feat"><b>流式实时输出</b><span>以 SSE 流式接收模型输出，界面实时滚动显示 JSON 或思考内容，结束后再生成可执行的操作预览。</span></div>
+      <div class="feat"><b>纯 JSON 约束</b><span>系统提示词强制模型只返回结构化 JSON，应用内直接解析为新增/修改/删除操作。</span></div>
       <div class="feat"><b>一键写入日历</b><span>通过系统日历权限写入事件与提醒，支持选择目标日历账户与提前提醒。</span></div>
       <div class="feat"><b>多日程识别</b><span>一段话可生成多个日程，逐条勾选后再写入，避免误写。</span></div>
       <div class="feat"><b>修改与删除</b><span>已写入的日程可在应用内修改标题、时间、地点、备注，或删除并同步移除系统日历事件。</span></div>
@@ -218,6 +223,11 @@
       <li>适用 Android 12（API 31）及以上系统，安装包为自签名，安装时提示未知来源属于正常现象。</li>
       <li>接口地址填到版本号即可，例如 <code>https://api.deepseek.com/v1</code>，应用会自动补全 <code>/chat/completions</code>。</li>
       <li>需要系统日历中存在可写账户（本机日历 / Google / 厂商日历均可），只读日历会写入失败。</li>
+      <li>AI 修改/删除只作用于「本应用写入」的日程；发送时会把它们的 id 与时间作为上下文给模型，模型不能编造 id。</li>
+      <li>重复日程中「每 N 天共 M 次」使用日历 RRULE 表达；指定多个日期会按日期分别创建事件，可在「已添加的日程」中单独管理。</li>
+      <li>思考模式仅对识别到的 DeepSeek / GLM / 豆包模型发送 thinking 参数；若网关不支持会自动去掉参数重试一次。</li>
+      <li>常用提示词保存在本机并随每次请求自动附带；最多保存 20 条，可随时取消勾选或删除。</li>
+      <li>流式输出需要接口支持 SSE；若网关返回普通 JSON，应用会在请求结束后直接解析，不影响使用。</li>
       <li>重要提醒会在日历中生成两条提醒（提前 1 天、提前 1 小时）；未开启时按模型给出的提醒分钟数生成单条提醒。</li>
       <li>模型返回内容不符合 JSON 时，可在结果卡片中查看原始返回，便于排查接口问题。</li>
     </ul>
