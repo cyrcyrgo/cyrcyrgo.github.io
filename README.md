@@ -1,85 +1,39 @@
-# cyrcyrgo.github.io
+# cyrcyrgo.github.io · 作品归档
 
-个人前端作品集合与 GitHub Pages 站点入口。这里汇集了多个可直接在浏览器中运行的独立应用与小工具，覆盖操作系统模拟、开发工具、效率工具、AI、音乐、绘画与游戏等类型。
+本仓库已精简为 **6 个核心项目**，作为全新官网（[newcyr.github.io](https://newcyr.github.io/)）的在线作品库与历史归档。
 
-## 快速开始
-
-打开站点首页即可浏览全部项目：[https://cyrcyrgo.github.io](https://cyrcyrgo.github.io)
-
-首页以 GitHub 视觉语言为底色，融合现代主义艺术设计：渐变光晕、网格质感、极致圆角与丝滑缓动动画。首屏包含主标题、随机个性标语与圆形搜索栏（支持模糊匹配，可快速定位项目），下滑即可展开全部作品，点击卡片查看详情并一键跳转。
+- 访问仓库首页会自动静默跳转到新官网：<https://newcyr.github.io/>
+- 历史主页已迁移至 [`old/`](./old/index.html)：<https://cyrcyrgo.github.io/old/>
 
 ## 目录结构
 
 ```
 cyrcyrgo.github.io/
-├─ index.html          # 唯一入口主页（艺术化导航 / 搜索 / 项目详情）
-├─ 404.html            # GitHub Pages 自定义 404
-└─ xm/                 # 全部项目与资源
-   ├─ llm/             # MiniLLM 精简大模型
-   ├─ nt/              # WebNT 桌面系统
-   ├─ polyterm/        # PolyTerm 多语言终端
-   ├─ py/              # 蟒蛇 Python IDE
-   ├─ lumina/          # Lumina Cloud Agent
-   ├─ ai/              # Forge AI 训练台（含 ai/xq 棋类对弈）
-   ├─ logix/           # LogiX 代码分析引擎
-   ├─ talkwave/        # TalkWave 即时通讯
-   ├─ gomoku/          # Gomoku 星阵五子棋
-   ├─ cipher/          # CipherLab 加密计算
-   ├─ atelier/         # Atelier 匠作工具集
-   ├─ 2048/            # 2048 小游戏
-   ├─ assets/          # 公共样式与页面模板
-   └─ extensions/      # 扩展包示例
+├─ index.html      # 静默跳转至新官网
+├─ 404.html        # 404 同样静默跳转到新官网
+├─ old/            # 原版主页（历史归档）
+└─ xm/             # 6 个核心项目
+   ├─ llm/         # MiniLLM 精简大模型（含浏览器端模型权重）
+   ├─ nt/          # WebNT 桌面系统
+   ├─ polyterm/    # PolyTerm 多语言终端
+   ├─ py/          # 蟒蛇 Python IDE
+   ├─ lumina/      # Lumina Cloud Agent
+   └─ gomoku/      # Gomoku 星阵五子棋
 ```
 
-## 项目一览
+## 核心项目
 
-### 应用与系统
-- **MiniLLM 精简大模型**（`xm/llm/`）：从零实现并训练的精简 LLM（BPE 分词、RoPE、GQA、SwiGLU、RMSNorm、KV Cache），权重导出后在浏览器内实时推理。
-- **WebNT 桌面系统**（`xm/nt/`）：浏览器中的网页操作系统，包含窗口管理、任务栏、文件管理器与小游戏。
-- **PolyTerm 多语言终端**（`xm/polyterm/`）：集成 Python、CMD 的浏览器终端环境，支持扩展包与项目管理。（C++ 环境入口保留但不可运行：浏览器端没有内置编译器。）
-- **蟒蛇 Python IDE**（`xm/py/`）：在线运行 Python 代码，集成文件管理、编辑器与控制台，另有 Py IDE Pro 版。
-- **Lumina Cloud Agent**（`xm/lumina/`）：运行在本机的自主 AI 智能体，邮箱验证码登录后可读写文件、执行脚本、调用 MCP 并回传产物。
-- **Forge AI 训练台**（`xm/ai/`）：配置 API 后可对模型进行强化式训练、测试与知识问答。
-- **LogiX API**（`xm/logix/api/`）：Python 静态代码分析引擎，支持简单与进阶万级规则检测，快速定位代码问题。
-- **TalkWave 即时通讯**（`xm/talkwave/`）：轻量即时通讯系统。
+| 项目 | 说明 | 入口 |
+| --- | --- | --- |
+| MiniLLM 精简大模型 | 从零实现并训练的精简 LLM，浏览器内实时推理 | `xm/llm/web/index.html` |
+| WebNT 桌面系统 | 浏览器里的网页操作系统，窗口管理、任务栏与文件管理器 | `xm/nt/index.html` |
+| PolyTerm 多语言终端 | 集成 Python / CMD 的浏览器终端，支持扩展包 | `xm/polyterm/index.html` |
+| 蟒蛇 Python IDE | 在线运行 Python，集成文件管理与控制台 | `xm/py/index.html` |
+| Lumina Cloud Agent | 运行在本机的自主 AI 智能体（含本机后端） | `xm/lumina/index.html` |
+| Gomoku 星阵五子棋 | P2P 联机五子棋，支持内网直连与外网中继 | `xm/gomoku/index.html` |
 
-### Atelier 匠作工具集（`xm/atelier/`）
-一组日常实用的轻量前端工具：
-- **JSON 格式化**：粘贴 JSON 后自动高亮、折叠、校验与压缩。
-- **色彩工具**：取色、调色、格式转换，前端配色好帮手。
-- **单位换算器**：长度、重量、温度、货币等多类单位互相转换。
-- **密码生成器**：自定义长度与字符集，一键生成安全强密码。
-- **便利贴**：随手记录、贴满屏幕，支持拖拽与多色便签。
-- **待办清单**：简单的任务管理，添加、完成、筛选一气呵成。
-- **计时器**：倒计时、秒表、番茄钟，专注工作必备。
-- **打字练习**：随机文本、速度统计、错字高亮，练手速。
-- **音乐播放器**：本地音乐播放器，支持播放列表与封面展示。
-- **像素画板**：格点绘图、调色盘、导出图片，复古创作。
-- **Inkwell 画板**：自由绘图工具，画笔、橡皮、形状与保存。
+## 说明
 
-### 游戏与其他
-- **2048**（`xm/2048/`）：经典数字滑动拼图，看看你能拼到多少。
-- **Gomoku 星阵五子棋**（`xm/gomoku/`）：P2P 零服务器联机五子棋，附带残局解析器。
-- **CipherLab 加密计算**（`xm/cipher/`）：基于密钥的加密与计算工具页。
-- **AI 象棋 · 五子棋**（`xm/ai/xq/`）：配置模型接口后，AI 实时读取棋盘与你在中国象棋、五子棋中对弈，随机先手，按规则判定胜负。
-
-## 技术特点
-
-- 纯前端实现，无需后端即可运行（Lumina Cloud Agent 除外）。
-- 响应式布局，适配桌面与移动设备。
-- 主页内置模糊匹配搜索（编辑距离 + 子序列打分），可快速定位任意项目。
-- 所有项目统一收纳于 `xm/`，通过 GitHub Pages 直接部署。
-
-## 本地预览
-
-克隆仓库后，使用任意静态服务器预览根目录即可，例如：
-
-```bash
-python3 -m http.server 8080
-```
-
-然后在浏览器打开 `http://localhost:8080`。
-
-## 许可
-
-本仓库为个人学习与实践作品，仅供交流参考。
+- 除 Lumina 需按 `xm/lumina/README.md` 启动本机后端外，其余项目均为纯前端，可直接在浏览器打开。
+- 旧版主页的样式与交互保持不变，仅将项目链接修正为 `../xm/` 相对路径。
+- 本项目集为个人学习与实践作品，仅供交流参考。
