@@ -1,0 +1,116 @@
+/* ============================================================
+   assets/common.css - 公共样式表
+   供 version_pool/ 下所有版本搜索页面统一引用，减少重复冗余
+   版本页面通过内联 <style> 补充颜色/尺寸/特效等版本特定样式
+   ============================================================ */
+
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;min-height:100vh;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* 搜索区容器 */
+.search-wrap{
+  position:relative;
+  z-index:1;
+  width:100%;
+  display:flex;
+  justify-content:center;
+  padding:20px;
+}
+
+/* 搜索卡片骨架（颜色/阴影/模糊由版本内联补充） */
+.search-wrapper{
+  position:relative;
+  width:min(92%,520px);
+  border-radius:20px;
+  padding:clamp(28px,4vw,40px) clamp(22px,3vw,32px);
+}
+
+/* 标题 */
+.search-title{
+  text-align:center;
+  font-weight:800;
+  letter-spacing:-0.01em;
+}
+.search-title::after{
+  content:'';
+  display:block;
+  width:40px;
+  height:3px;
+  margin:10px auto 0;
+  border-radius:2px;
+  opacity:0.7;
+}
+
+/* 输入框骨架 */
+.search-input{
+  width:100%;
+  outline:none;
+}
+.search-input::placeholder{opacity:1;}
+
+/* 搜索按钮骨架 */
+.search-btn{
+  display:block;
+  width:100%;
+  border:none;
+  cursor:pointer;
+  font-weight:700;
+}
+
+/* 引擎标签 */
+.search-engine-tag{
+  text-align:center;
+  letter-spacing:0.04em;
+}
+
+/* 返回链接 */
+.back-link{
+  display:inline-block;
+  text-decoration:none;
+  transition:all 0.25s cubic-bezier(0.4,0,0.2,1);
+  letter-spacing:0.04em;
+  border-bottom:1px dashed transparent;
+  padding-bottom:2px;
+}
+
+/* 齿轮按钮（返回配置中心） */
+.gear-btn{
+  position:fixed;
+  border-radius:50%;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:100;
+}
+.gear-btn:hover{transform:rotate(60deg);}
+.gear-btn svg{
+  width:55%;
+  height:55%;
+  transition:fill 0.25s;
+}
+
+/* 粒子层 */
+#particles{
+  position:fixed;
+  top:0;left:0;
+  pointer-events:none;
+  z-index:0;
+}
+
+/* 响应式 */
+@media (max-width:480px){
+  .search-wrap{padding:12px;}
+  .search-wrapper{padding:24px 16px;border-radius:16px;}
+}
+@media (min-width:1400px){
+  .search-wrapper{max-width:580px;}
+}

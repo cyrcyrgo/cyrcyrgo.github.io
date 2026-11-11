@@ -1,0 +1,16 @@
+/* 棋盘相关样式 */
+#board-box {
+  background: #e8c688;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: var(--shadow);
+  display: inline-block;
+  border: 1px solid #b98a4e;
+}
+#board {
+  display: block;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}

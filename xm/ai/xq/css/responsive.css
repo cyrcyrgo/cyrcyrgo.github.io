@@ -1,0 +1,23 @@
+/* 响应式样式：移动端 / 窄屏适配 */
+@media (max-width: 920px) {
+  .game-wrap { grid-template-columns: 1fr; }
+  .side { order: -1; flex-direction: row; flex-wrap: wrap; }
+  .ai-card { flex: 1 1 100%; }
+  .panel.grow { min-height: 0; }
+  .history { max-height: 140px; }
+  #board-box { padding: 6px; }
+  .screen { padding: 14px; }
+}
+
+@media (max-width: 520px) {
+  .home-box .title { font-size: 23px; }
+  .gamebar { gap: 8px; }
+  .gamebar .title { font-size: 15px; }
+  .status { font-size: 11px; padding: 5px 10px; }
+  .controls .btn { font-size: 13px; padding: 10px 8px; }
+}
+
+/* 触控设备：去掉 hover 造成的粘滞感 */
+@media (hover: none) {
+  .btn { transition: none; }
+}

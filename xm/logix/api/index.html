@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LogiX API - Code Analysis</title>
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --surface: #16213e;
+            --surface2: #0f3460;
+            --accent: #e94560;
+            --text: #eee;
+            --text2: #a0a0b0;
+            --green: #00c853;
+            --orange: #ff9100;
+            --red: #ff1744;
+            --blue: #448aff;
+            --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--accent);
+            margin-bottom: 4px;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: var(--text2);
+            letter-spacing: 1px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text2);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            background: var(--bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 13px;
+            line-height: 1.6;
+            padding: 14px;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        textarea:focus {
+            border-color: var(--accent);
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        select {
+            background: var(--surface2);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 8px 12px;
+            font-size: 13px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .btn {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 9px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            letter-spacing: 0.5px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            filter: brightness(1.15);
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: var(--surface2);
+        }
+
+        .result {
+            display: none;
+        }
+
+        .result.visible {
+            display: block;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .result-count {
+            font-size: 13px;
+            color: var(--text2);
+        }
+
+        .result-count span {
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .result-count .ok { color: var(--green); }
+        .result-count .warn { color: var(--orange); }
+        .result-count .err { color: var(--red); }
+
+        .problem {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 13px;
+            background: rgba(255,255,255,0.02);
+            border-left: 3px solid transparent;
+        }
+
+        .problem.severity-info { border-left-color: var(--blue); }
+        .problem.severity-warning { border-left-color: var(--orange); }
+        .problem.severity-error { border-left-color: var(--red); }
+
+        .problem .sev {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .sev-info { background: rgba(68,138,255,0.15); color: var(--blue); }
+        .sev-warning { background: rgba(255,145,0,0.15); color: var(--orange); }
+        .sev-error { background: rgba(255,23,68,0.15); color: var(--red); }
+
+        .problem .msg {
+            flex: 1;
+            line-height: 1.4;
+        }
+
+        .problem .loc {
+            color: var(--text2);
+            font-size: 11px;
+            font-family: var(--mono);
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 30px;
+            color: var(--text2);
+            font-size: 14px;
+        }
+
+        .json-output {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 14px;
+            font-family: var(--mono);
+            font-size: 12px;
+            line-height: 1.5;
+            max-height: 400px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: var(--text2);
+            display: none;
+        }
+
+        .json-output.visible { display: block; }
+
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 14px;
+        }
+
+        .tab {
+            padding: 7px 16px;
+            font-size: 12px;
+            cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: transparent;
+            color: var(--text2);
+            transition: all 0.2s;
+        }
+
+        .tab:first-child { border-radius: 6px 0 0 6px; }
+        .tab:last-child { border-radius: 0 6px 6px 0; }
+        .tab.active { background: var(--surface2); color: var(--text); border-color: rgba(255,255,255,0.15); }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            color: var(--text2);
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .stats strong {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 11px;
+            color: var(--text2);
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">LogiX API</div>
+            <div class="subtitle">Static Code Analysis Engine v3.0</div>
+        </header>
+
+        <div class="card">
+            <h2>Submit Code</h2>
+            <textarea id="code-input" placeholder="Paste your Python code here...">print("Hello, World!")</textarea>
+            <div class="controls">
+                <select id="mode-select">
+                    <option value="simple">Simple Mode</option>
+                    <option value="advanced">Advanced Mode (10000+ Rules)</option>
+                </select>
+                <button class="btn" id="btn-analyze">Analyze</button>
+                <button class="btn btn-secondary" id="btn-json">View JSON</button>
+            </div>
+        </div>
+
+        <div class="card result" id="result-card">
+            <div class="tabs">
+                <button class="tab active" data-view="list">List View</button>
+                <button class="tab" data-view="raw">Raw JSON</button>
+            </div>
+            <div class="result-header">
+                <div class="result-count" id="result-count"></div>
+            </div>
+            <div id="problems-list"></div>
+            <div class="json-output" id="json-output"></div>
+            <div class="stats" id="stats-bar"></div>
+        </div>
+
+        <footer>
+            LogiX API v3.0.0 &mdash; Powered by LogiX Analysis Engine
+        </footer>
+    </div>
+
+    <script src="../analyzer.js"></script>
+    <script>
+        const logiX = new LogiX();
+
+        // Handle form submission via POST-like behavior
+        function handleSubmit() {
+            const code = document.getElementById('code-input').value;
+            const mode = document.getElementById('mode-select').value;
+            logiX.setMode(mode);
+            const problems = logiX.analyze(code);
+            const stats = logiX.getStats();
+            renderResults(problems, stats);
+            return { problems, stats };
+        }
+
+        function renderResults(problems, stats) {
+            const card = document.getElementById('result-card');
+            const list = document.getElementById('problems-list');
+            const count = document.getElementById('result-count');
+            const jsonOut = document.getElementById('json-output');
+            const statsBar = document.getElementById('stats-bar');
+
+            card.classList.add('visible');
+
+            const errors = problems.filter(p => p.severity === 'error').length;
+            const warnings = problems.filter(p => p.severity === 'warning').length;
+            const infos = problems.filter(p => p.severity === 'info').length;
+
+            count.innerHTML = `
+                <span class="err">${errors}</span> errors &middot;
+                <span class="warn">${warnings}</span> warnings &middot;
+                <span class="ok">${infos}</span> info
+                &middot; ${problems.length} total
+            `;
+
+            if (problems.length === 0) {
+                list.innerHTML = '<div class="empty">No issues detected. Code looks clean.</div>';
+            } else {
+                list.innerHTML = problems.map(p => `
+                    <div class="problem severity-${p.severity}">
+                        <span class="sev sev-${p.severity}">${p.severity}</span>
+                        <span class="msg">${escapeHtml(p.message)}</span>
+                        <span class="loc">L${p.line}:${p.column || 1}</span>
+                    </div>
+                `).join('');
+            }
+
+            const resultPayload = {
+                success: true,
+                timestamp: new Date().toISOString(),
+                mode: logiX.mode,
+                stats: { count: stats.count, version: stats.version, ruleCount: stats.ruleCount },
+                total: problems.length,
+                errors: errors,
+                warnings: warnings,
+                infos: infos,
+                problems: problems
+            };
+
+            jsonOut.textContent = JSON.stringify(resultPayload, null, 2);
+
+            statsBar.innerHTML = `
+                <span>Engine: <strong>LogiX v${stats.version}</strong></span>
+                <span>Rules: <strong>${stats.ruleCount.toLocaleString()}</strong></span>
+                <span>Analysis count: <strong>${stats.count}</strong></span>
+            `;
+
+            // Store for external API access
+            window._lastResult = resultPayload;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+
+        // Button events
+        document.getElementById('btn-analyze').addEventListener('click', handleSubmit);
+
+        document.getElementById('btn-json').addEventListener('click', () => {
+            const jsonOut = document.getElementById('json-output');
+            jsonOut.classList.toggle('visible');
+        });
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const view = tab.dataset.view;
+                document.getElementById('problems-list').style.display = view === 'list' ? '' : 'none';
+                document.getElementById('json-output').classList.toggle('visible', view === 'raw');
+            });
+        });
+
+        // Handle POST data from form submission
+        document.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const codeParam = params.get('code');
+            if (codeParam) {
+                document.getElementById('code-input').value = decodeURIComponent(codeParam);
+                handleSubmit();
+            }
+
+            // Listen for postMessage API calls
+            window.addEventListener('message', (event) => {
+                try {
+                    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                    if (data && data.action === 'analyze') {
+                        document.getElementById('code-input').value = data.code || '';
+                        if (data.mode) {
+                            document.getElementById('mode-select').value = data.mode;
+                        }
+                        const result = handleSubmit();
+                        if (event.source && event.origin) {
+                            event.source.postMessage(JSON.stringify({
+                                type: 'logix-analysis-result',
+                                result: window._lastResult
+                            }), event.origin);
+                        }
+                    }
+                } catch (e) {
+                    // Ignore invalid messages
+                }
+            });
+        });
+
+        // Handle form POST (when embedded in iframe or used as endpoint)
+        window.addEventListener('load', () => {
+            const hash = window.location.hash;
+            if (hash && hash.startsWith('#code=')) {
+                try {
+                    const code = decodeURIComponent(hash.slice(6));
+                    document.getElementById('code-input').value = code;
+                    handleSubmit();
+                } catch (e) {}
+            }
+        });
+    </script>
+</body>
+</html>

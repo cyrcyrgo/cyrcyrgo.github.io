@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 象棋 · 五子棋对决</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 首页 / 游戏选择 -->
+  <div id="screen-home" class="screen">
+    <div class="hero">
+      <h1>AI 棋局对决</h1>
+      <p>AI 实时读取棋盘执黑或执红，与你在象棋 / 五子棋中一较高下。</p>
+      <button id="btn-settings" class="btn ghost">⚙ 接口设置</button>
+    </div>
+    <div class="cards">
+      <div class="card" id="card-xiangqi">
+        <div class="card-icon">♞</div>
+        <h2>中国象棋</h2>
+        <p>9 路 × 10 行 · 全规则引擎 · 将死判负</p>
+        <button class="btn primary">开始对局</button>
+      </div>
+      <div class="card" id="card-gomoku">
+        <div class="card-icon">◉</div>
+        <h2>五子棋</h2>
+        <p>15 × 15 · 五连即胜 · 先手随机</p>
+        <button class="btn primary">开始对局</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 棋局画面 -->
+  <div id="screen-game" class="screen hidden">
+    <header class="gamebar">
+      <button id="btn-back" class="btn ghost">‹ 返回</button>
+      <div id="game-title" class="title"></div>
+      <div id="status-chip" class="chip">准备中…</div>
+    </header>
+    <div id="game-wrap" class="game-wrap">
+      <div id="board-box">
+        <canvas id="board"></canvas>
+      </div>
+      <div class="side">
+        <div id="side-info" class="side-info"></div>
+        <div id="log" class="log"></div>
+        <div class="actions">
+          <button id="btn-retry-ai" class="btn hidden" style="margin-bottom:8px;color:#e8eef7;background:#4a5a70;border-color:transparent;width:100%">↻ AI 出错 —— 点击重试</button>
+          <button id="btn-restart" class="btn">重新开局</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 配置弹窗 -->
+  <div id="modal-config" class="modal hidden">
+    <div class="modal-box">
+      <h2>接口设置</h2>
+      <p class="hint">配置用于对弈的模型接口。信息仅保存在本地浏览器。</p>
+      <label>API Key</label>
+      <input id="cfg-key" type="password" placeholder="sk-xxxx" autocomplete="off">
+      <label>API URL（完整 chat/completions 地址）</label>
+      <input id="cfg-url" type="text" placeholder="https://api.example.com/v1/chat/completions">
+      <label>Model</label>
+      <input id="cfg-model" type="text" placeholder="model-name">
+      <label style="margin-top:6px;font-weight:400;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="cfg-show"> 显示我的 Key
+      </label>
+      <div class="modal-actions">
+        <button id="cfg-cancel" class="btn ghost">取消</button>
+        <button id="cfg-save" class="btn primary">保存并进入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 结果弹窗 -->
+  <div id="modal-result" class="modal hidden">
+    <div class="modal-box center">
+      <h2 id="result-title"></h2>
+      <p id="result-text"></p>
+      <div class="modal-actions center">
+        <button id="res-again" class="btn primary">再来一局</button>
+        <button id="res-back" class="btn ghost">返回大厅</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/settings.js"></script>
+  <script src="js/xiangqi.js"></script>
+  <script src="js/gomoku.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
