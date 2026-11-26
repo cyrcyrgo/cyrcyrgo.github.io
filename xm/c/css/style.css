@@ -312,8 +312,9 @@ input, select, textarea { font-family: inherit; }
 }
 .tab-close:hover { background: rgba(255, 107, 107, 0.16); color: var(--red); }
 
-.editor-wrap { flex: 1 1 auto; min-height: 0; position: relative; }
-.monaco-editor { position: absolute; inset: 0; }
+.editor-wrap { flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden; }
+/* 使用 ID 选择器，避免与 Monaco 自身的 .monaco-editor 样式冲突 */
+#monaco-editor { position: absolute; inset: 0; width: 100%; height: 100%; }
 
 .editor-status {
     flex: 0 0 auto;

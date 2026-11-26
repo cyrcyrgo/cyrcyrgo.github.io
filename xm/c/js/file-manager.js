@@ -19,7 +19,7 @@
         '#include <algorithm>',
         '',
         'int main() {',
-        '    std::cout << "Hello, C++! 🚀" << std::endl;',
+        '    std::cout << "Hello, C++!" << std::endl;',
         '',
         '    std::vector<int> nums{5, 2, 9, 1, 7, 3};',
         '    std::sort(nums.begin(), nums.end());',
