@@ -281,6 +281,14 @@
         overlay.classList.add('hidden');
         setTimeout(function () { overlay.style.display = 'none'; }, 400);
         this.setStatus('就绪');
+
+        // 确保编辑器在布局稳定后重新测量尺寸
+        requestAnimationFrame(function () {
+            if (App.em && App.em.editor) App.em.editor.layout();
+        });
+        setTimeout(function () {
+            if (App.em && App.em.editor) App.em.editor.layout();
+        }, 300);
     };
 
     App.loadSettings = function () {
