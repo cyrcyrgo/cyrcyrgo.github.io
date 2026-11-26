@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CppForge - C++ 在线编译器，使用真实的 GCC / Clang 编译并在独立的命令窗口中运行">
+    <title>CppForge - C++ 在线编译器</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%234F8CFF'/%3E%3Ctext x='50' y='66' font-size='38' font-family='monospace' font-weight='bold' text-anchor='middle' fill='white'%3EC++%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+    <!-- 启动遮罩 -->
+    <div id="boot-overlay" class="boot-overlay">
+        <div class="boot-card">
+            <div class="boot-mark">C++</div>
+            <div class="boot-title">CppForge</div>
+            <div class="boot-status" id="boot-status">正在加载代码编辑器…</div>
+            <div class="boot-bar"><span></span></div>
+            <div class="boot-hint">使用真实 GCC / Clang 编译，首次加载需要下载编辑器资源</div>
+        </div>
+    </div>
+
+    <div id="app" class="ide">
+
+        <!-- 顶部菜单栏 -->
+        <header class="menubar">
+            <div class="menubar-left">
+                <div class="brand">
+                    <span class="brand-mark">C++</span>
+                    <span class="brand-name">CppForge</span>
+                    <span class="brand-ver">v2.0</span>
+                </div>
+
+                <nav class="main-menu">
+                    <div class="menu-item dropdown">
+                        <button class="menu-trigger"><i class="fas fa-file"></i> 文件</button>
+                        <div class="dropdown-menu">
+                            <button class="dropdown-item" data-action="new-file"><i class="fas fa-file-circle-plus"></i> 新建文件<span class="shortcut">Ctrl+Alt+N</span></button>
+                            <button class="dropdown-item" data-action="open-file"><i class="fas fa-folder-open"></i> 导入 .cpp 文件<span class="shortcut">Ctrl+O</span></button>
+                            <button class="dropdown-item" data-action="save-file"><i class="fas fa-floppy-disk"></i> 保存<span class="shortcut">Ctrl+S</span></button>
+                            <button class="dropdown-item" data-action="rename-file"><i class="fas fa-i-cursor"></i> 重命名当前文件</button>
+                            <div class="dropdown-sep"></div>
+                            <button class="dropdown-item" data-action="download-cpp"><i class="fas fa-download"></i> 下载 .cpp</button>
+                            <button class="dropdown-item" data-action="download-exe-note"><i class="fas fa-microchip"></i> 关于产物说明</button>
+                        </div>
+                    </div>
+
+                    <div class="menu-item dropdown">
+                        <button class="menu-trigger"><i class="fas fa-pen"></i> 编辑</button>
+                        <div class="dropdown-menu">
+                            <button class="dropdown-item" data-action="undo"><i class="fas fa-rotate-left"></i> 撤销<span class="shortcut">Ctrl+Z</span></button>
+                            <button class="dropdown-item" data-action="redo"><i class="fas fa-rotate-right"></i> 重做<span class="shortcut">Ctrl+Y</span></button>
+                            <div class="dropdown-sep"></div>
+                            <button class="dropdown-item" data-action="cut"><i class="fas fa-scissors"></i> 剪切<span class="shortcut">Ctrl+X</span></button>
+                            <button class="dropdown-item" data-action="copy"><i class="fas fa-copy"></i> 复制<span class="shortcut">Ctrl+C</span></button>
+                            <button class="dropdown-item" data-action="paste"><i class="fas fa-paste"></i> 粘贴<span class="shortcut">Ctrl+V</span></button>
+                            <div class="dropdown-sep"></div>
+                            <button class="dropdown-item" data-action="find"><i class="fas fa-magnifying-glass"></i> 查找<span class="shortcut">Ctrl+F</span></button>
+                            <button class="dropdown-item" data-action="replace"><i class="fas fa-right-left"></i> 替换<span class="shortcut">Ctrl+H</span></button>
+                            <button class="dropdown-item" data-action="format"><i class="fas fa-align-left"></i> 格式化代码<span class="shortcut">Shift+Alt+F</span></button>
+                            <button class="dropdown-item" data-action="comment"><i class="fas fa-comment"></i> 注释 / 取消注释<span class="shortcut">Ctrl+/</span></button>
+                        </div>
+                    </div>
+
+                    <div class="menu-item dropdown">
+                        <button class="menu-trigger"><i class="fas fa-play"></i> 运行</button>
+                        <div class="dropdown-menu">
+                            <button class="dropdown-item" data-action="run"><i class="fas fa-play"></i> 编译并运行<span class="shortcut">F5</span></button>
+                            <button class="dropdown-item" data-action="run-warn"><i class="fas fa-triangle-exclamation"></i> 以严格警告运行</button>
+                            <div class="dropdown-sep"></div>
+                            <button class="dropdown-item" data-action="reset-editor"><i class="fas fa-arrow-rotate-left"></i> 恢复示例代码</button>
+                        </div>
+                    </div>
+
+                    <div class="menu-item dropdown">
+                        <button class="menu-trigger"><i class="fas fa-book"></i> 示例</button>
+                        <div class="dropdown-menu" id="example-menu">
+                            <button class="dropdown-item" data-example="hello"><i class="fas fa-hand-wave"></i> Hello World</button>
+                            <button class="dropdown-item" data-example="aplusb"><i class="fas fa-plus"></i> A + B（标准输入）</button>
+                            <button class="dropdown-item" data-example="fibonacci"><i class="fas fa-superscript"></i> 斐波那契</button>
+                            <button class="dropdown-item" data-example="sort"><i class="fas fa-arrow-down-a-z"></i> 排序与算法</button>
+                            <button class="dropdown-item" data-example="class"><i class="fas fa-cube"></i> 类与对象</button>
+                            <button class="dropdown-item" data-example="stl"><i class="fas fa-layer-group"></i> STL 容器</button>
+                            <button class="dropdown-item" data-example="pointer"><i class="fas fa-link"></i> 指针与引用</button>
+                            <button class="dropdown-item" data-example="modern"><i class="fas fa-bolt"></i> C++17 现代特性</button>
+                        </div>
+                    </div>
+
+                    <div class="menu-item dropdown">
+                        <button class="menu-trigger"><i class="fas fa-circle-question"></i> 帮助</button>
+                        <div class="dropdown-menu">
+                            <button class="dropdown-item" data-action="shortcuts"><i class="fas fa-keyboard"></i> 快捷键</button>
+                            <button class="dropdown-item" data-action="about"><i class="fas fa-circle-info"></i> 关于 CppForge</button>
+                            <button class="dropdown-item" data-action="disclaimer"><i class="fas fa-shield-halved"></i> 免责声明</button>
+                        </div>
+                    </div>
+                </nav>
+            </div>
+
+            <div class="menubar-right">
+                <div class="toolbar-selects">
+                    <label class="select-field">
+                        <span class="select-label">编译器</span>
+                        <select id="compiler-select">
+                            <option value="gcc-13.2.0">GCC 13.2.0</option>
+                            <option value="gcc-12.3.0">GCC 12.3.0</option>
+                            <option value="gcc-11.4.0">GCC 11.4.0</option>
+                            <option value="clang-17.0.1">Clang 17.0.1</option>
+                            <option value="clang-16.0.4">Clang 16.0.4</option>
+                            <option value="gcc-head">GCC HEAD</option>
+                            <option value="clang-head">Clang HEAD</option>
+                        </select>
+                    </label>
+                    <label class="select-field">
+                        <span class="select-label">标准</span>
+                        <select id="standard-select">
+                            <option value="c++11">C++11</option>
+                            <option value="c++14">C++14</option>
+                            <option value="c++17" selected>C++17</option>
+                            <option value="c++20">C++20</option>
+                            <option value="c++23">C++23</option>
+                        </select>
+                    </label>
+                    <label class="chk-field" title="启用 -Wall 警告">
+                        <input type="checkbox" id="opt-warnings" checked><span>警告</span>
+                    </label>
+                    <label class="chk-field" title="启用 -O2 优化">
+                        <input type="checkbox" id="opt-optimize"><span>优化</span>
+                    </label>
+                </div>
+                <button class="btn btn-run" id="btn-run" title="编译并运行 (F5)">
+                    <i class="fas fa-play"></i><span>运行</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- 工作区 -->
+        <main class="workspace">
+            <aside class="sidebar">
+                <div class="sidebar-tabs" id="sidebar-tabs">
+                    <button class="sidebar-tab active" data-tab="files" title="文件"><i class="fas fa-folder"></i></button>
+                    <button class="sidebar-tab" data-tab="stdin" title="标准输入"><i class="fas fa-terminal"></i></button>
+                    <button class="sidebar-tab" data-tab="snippets" title="代码片段"><i class="fas fa-code"></i></button>
+                    <button class="sidebar-tab" data-tab="outline" title="大纲"><i class="fas fa-list"></i></button>
+                </div>
+
+                <div class="sidebar-body">
+                    <div class="sidebar-panel active" id="panel-files">
+                        <div class="panel-head">
+                            <span>文件</span>
+                            <button class="icon-btn" id="btn-new-file" title="新建文件"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <div class="file-list" id="file-list"></div>
+                    </div>
+
+                    <div class="sidebar-panel" id="panel-stdin">
+                        <div class="panel-head">
+                            <span>标准输入 (stdin)</span>
+                            <button class="icon-btn" id="btn-clear-stdin" title="清空"><i class="fas fa-eraser"></i></button>
+                        </div>
+                        <textarea id="stdin-input" class="stdin-input" spellcheck="false" placeholder="程序运行前，在这里填写标准输入内容…&#10;例如：&#10;3 4"></textarea>
+                        <div class="panel-tip">运行时会作为程序的 std::cin 输入。程序运行后也可在命令窗口内修改并重新运行。</div>
+                    </div>
+
+                    <div class="sidebar-panel" id="panel-snippets">
+                        <div class="panel-head"><span>代码片段</span></div>
+                        <div class="snippet-list" id="snippet-list"></div>
+                    </div>
+
+                    <div class="sidebar-panel" id="panel-outline">
+                        <div class="panel-head">
+                            <span>大纲</span>
+                            <button class="icon-btn" id="btn-refresh-outline" title="刷新"><i class="fas fa-rotate"></i></button>
+                        </div>
+                        <div class="outline-list" id="outline-list"></div>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="editor-area">
+                <div class="editor-tabs" id="editor-tabs"></div>
+                <div class="editor-wrap">
+                    <div id="monaco-editor" class="monaco-editor"></div>
+                </div>
+                <div class="editor-status" id="editor-status">
+                    <span><i class="fas fa-code"></i> <span id="status-language">C++</span></span>
+                    <span id="status-cursor">行 1, 列 1</span>
+                </div>
+            </section>
+        </main>
+
+        <!-- 状态栏 -->
+        <footer class="statusbar">
+            <div class="status-left">
+                <span class="status-chip" id="status-ready"><i class="fas fa-circle-check"></i> 就绪</span>
+                <span class="status-msg" id="status-message"></span>
+            </div>
+            <div class="status-right">
+                <span id="status-std">C++17</span>
+                <span id="status-compiler">GCC 13.2.0</span>
+                <span>UTF-8</span>
+                <span><i class="fas fa-terminal"></i> Wandbox</span>
+            </div>
+        </footer>
+    </div>
+
+    <input type="file" id="file-input" accept=".cpp,.cc,.cxx,.h,.hpp,.txt" hidden>
+    <div id="toast-container" class="toast-container"></div>
+    <div id="modal-container" class="modal-container"></div>
+
+    <script src="https://cdn.jsdmirror.com/npm/monaco-editor@0.45.0/min/vs/loader.min.js"></script>
+    <script src="js/compiler.js"></script>
+    <script src="js/file-manager.js"></script>
+    <script src="js/editor-manager.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
