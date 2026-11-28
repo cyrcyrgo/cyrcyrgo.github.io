@@ -298,7 +298,7 @@
   @media (max-width:640px){
     .user-chip b{max-width:80px}
     .actions{flex-wrap:wrap}
-    .files-head{gap:7px}
+    .files-head{gap:7px;flex-wrap:wrap}
     .mini{padding:7px 9px;font-size:11.5px}
   }
 </style>
@@ -391,19 +391,24 @@
       <div class="up-ico">
         <svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M4.5 15v3.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>
       </div>
-      <h3>拖拽文件到此处，或点击上传</h3>
+      <h3>拖拽文件 / 文件夹到此处，或点击上传</h3>
       <p>文件将在浏览器本地以 AES-256 加密为 ZIP 后上传至仓库</p>
       <button class="btn" id="pickBtn" type="button">
         <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M4.5 15v3.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>
         选择文件上传
       </button>
-      <p class="note">加密 ZIP 使用当前登录密码 · 单文件上限 95 MB</p>
+      <button class="btn" id="pickFolderBtn" type="button">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2.5h8a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z"/></svg>
+        上传文件夹
+      </button>
+      <p class="note">加密 ZIP 使用当前登录密码 · 单文件上限 95 MB · 文件夹按原目录结构上传</p>
       <label class="plain-opt"><input type="checkbox" id="plainHtml"> HTML 文件明文存储（可直接部署为网站）</label>
       <div><button class="mini" id="importUrlBtn" type="button" style="margin-top:12px">
         <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13.5a4 4 0 0 0 5.7 0l2.1-2.1a4 4 0 0 0-5.7-5.7l-1.2 1.2"/><path d="M14 10.5a4 4 0 0 0-5.7 0l-2.1 2.1a4 4 0 0 0 5.7 5.7l1.2-1.2"/></svg>
         通过 URL 上传（不复制文件）
       </button></div>
       <input id="fileInput" type="file" multiple hidden>
+      <input id="folderInput" type="file" webkitdirectory directory multiple hidden>
       <div class="queue" id="queue"></div>
     </section>
 
@@ -413,6 +418,7 @@
         <span class="count" id="fileCount">0</span>
         <span class="spacer"></span>
         <button class="mini" id="selAllBtn" type="button">全选</button>
+        <button class="mini" id="mvSelBtn" type="button">移动选中</button>
         <button class="mini" id="dlSelBtn" type="button">下载选中 <span id="selCount">0</span></button>
         <button class="mini" id="newFolderBtn">
           <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -1493,11 +1499,13 @@
     var more = '<button class="act" data-act="more">更多</button>';
     if (e.type === 'dir'){
       return '<div class="row" data-type="dir" data-key="' + esc(e._key) + '">' +
+        pickHtml(e) +
         '<div class="ficon dir">' + dirIconSvg() + '</div>' +
         '<div class="fmain"><div class="fname" title="' + esc(e.name) + '">' + esc(e.name) + '</div>' +
         '<div class="fmeta">文件夹</div></div>' +
         '<div class="actions">' +
-          '<button class="act" data-act="open">进入</button>' + more +
+          '<button class="act" data-act="open">进入</button>' +
+          '<button class="act" data-act="download_folder">下载</button>' + more +
         '</div>' +
       '</div>';
     }
@@ -2418,14 +2426,14 @@
 
   /* ---------- 列表操作 ---------- */
   function selectedEntries(){
-    return S.items.filter(function(e){ return e.type !== 'dir' && S.sel[e._key]; });
+    return S.items.filter(function(e){ return S.sel[e._key]; });
   }
   function updateSelUI(){
     var n = selectedEntries().length;
     $('#selCount').textContent = n;
     $('#dlSelBtn').classList.toggle('on', n > 0);
-    var files = S.items.filter(function(e){ return e.type !== 'dir'; });
-    var allSel = files.length > 0 && files.every(function(e){ return S.sel[e._key]; });
+    $('#mvSelBtn').classList.toggle('on', n > 0);
+    var allSel = S.items.length > 0 && S.items.every(function(e){ return S.sel[e._key]; });
     $('#selAllBtn').textContent = allSel ? '取消全选' : '全选';
     $('#selAllBtn').classList.toggle('on', allSel);
   }
@@ -2476,6 +2484,10 @@
       await copyEntry(entry);
     }else if (act === 'download_selected'){
       await downloadSelected();
+    }else if (act === 'download_folder'){
+      var qf = addQueueItem('下载文件夹 · ' + entry.name);
+      try{ await downloadFolder(entry, qf); }
+      catch(err){ qf.fail(err.message || '失败'); toast('下载失败：' + err.message, 'err'); }
     }
   });
   $('#listBox').addEventListener('change', function(e){
@@ -2486,10 +2498,9 @@
     updateSelUI();
   });
   $('#selAllBtn').addEventListener('click', function(){
-    var files = S.items.filter(function(e){ return e.type !== 'dir'; });
-    var allSel = files.length > 0 && files.every(function(e){ return S.sel[e._key]; });
+    var allSel = S.items.length > 0 && S.items.every(function(e){ return S.sel[e._key]; });
     S.sel = {};
-    if (!allSel) files.forEach(function(e){ S.sel[e._key] = 1; });
+    if (!allSel) S.items.forEach(function(e){ S.sel[e._key] = 1; });
     Array.prototype.forEach.call(document.querySelectorAll('#listBox .pick'), function(cb){
       cb.checked = !!S.sel[cb.getAttribute('data-pick')];
     });
@@ -2497,7 +2508,7 @@
   });
   $('#dlSelBtn').addEventListener('click', function(){ downloadSelected(); });
 
-  /* ---------- 批量下载（勾选后打包为 zip） ---------- */
+  /* ---------- 批量下载（勾选后打包为 zip，支持文件夹） ---------- */
   function uniqueCopyName(name, used){
     if (!used[name]) return name;
     var dot = name.lastIndexOf('.');
@@ -2514,11 +2525,58 @@
       if (q) q.text((tag || '') + '下载 ' + (t ? Math.floor(l / t * 100) + '% · ' : '') + fmtSize(l) + ' · ' + fmtSpeed(s));
     });
   }
+  async function fetchEntryItem(e, q, tag){
+    var display = dispName(e.name || 'file');
+    var blob;
+    if (isExternal(e) && !e.path){
+      blob = await fetchExternalBlob(e, q, tag);
+    }else{
+      var zip = e.type === 'link' ? !!e.zip : isZipName(e.name);
+      var got = await pullDecrypted(e, zip, function(txt){ if (q) q.text(tag + txt); }, '下载中');
+      blob = got.blob;
+      if (got.name) display = got.name;
+    }
+    return { name: display, data: new Uint8Array(await blob.arrayBuffer()) };
+  }
+  async function collectFolderFiles(entry, q, tag){
+    var out = [];
+    async function walk(absPath, zipPrefix){
+      var entries = await listDir(absPath);
+      entries.sort(function(a, b){
+        if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+        return String(a.name).localeCompare(String(b.name), 'zh');
+      });
+      for (var i = 0; i < entries.length; i++){
+        var e = entries[i];
+        if (e.type === 'dir'){
+          if (isInternalName(e.name)) continue;
+          await walk(e.path, zipPrefix + '/' + e.name);
+        }else if (e.type === 'file'){
+          if (e.name === '.keep' || e.path === userMetaPath()) continue;
+          if (q) q.text(tag + '读取 ' + zipPrefix + '/' + e.name + '…');
+          var item = await fetchEntryItem({ type: 'file', name: e.name, path: e.path, size: e.size }, q, tag);
+          out.push({ name: zipPrefix + '/' + item.name, data: item.data });
+        }
+      }
+    }
+    await walk(entry.path, entry.name);
+    return out;
+  }
+  async function downloadFolder(entry, q){
+    var items = await collectFolderFiles(entry, q, '');
+    if (!items.length) throw new Error('文件夹内没有可下载的文件');
+    if (q) q.text('打包中…');
+    var zb = await makePlainZip(items);
+    saveBlob(zb, sanitizeName(entry.name) + '.zip');
+    if (q) q.done('完成 · ' + items.length + ' 个文件 · ' + fmtSize(zb.size));
+    toast('已打包下载文件夹：' + entry.name, 'ok');
+  }
   async function downloadSelected(){
     var entries = selectedEntries();
-    if (!entries.length){ toast('请先勾选要下载的文件', 'err'); return; }
-    var q = addQueueItem('批量下载 · ' + entries.length + ' 个文件');
-    if (entries.length === 1){
+    if (!entries.length){ toast('请先勾选要下载的文件或文件夹', 'err'); return; }
+    var hasDir = entries.some(function(e){ return e.type === 'dir'; });
+    var q = addQueueItem('批量下载 · ' + entries.length + ' 项');
+    if (entries.length === 1 && !hasDir){
       try{ await downloadEntry(entries[0], q); }
       catch(err){ q.fail(err.message || '失败'); toast('下载失败：' + err.message, 'err'); }
       return;
@@ -2527,25 +2585,25 @@
       var items = [], used = {};
       for (var i = 0; i < entries.length; i++){
         var e = entries[i];
-        var display = dispName(e.name);
-        var tag = '(' + (i + 1) + '/' + entries.length + ') ' + display + ' · ';
-        var blob;
-        if (isExternal(e) && !e.path){
-          blob = await fetchExternalBlob(e, q, tag);
-        }else{
-          var zip = e.type === 'link' ? !!e.zip : isZipName(e.name);
-          var got = await pullDecrypted(e, zip, function(txt){ q.text(tag + txt); }, '下载中');
-          blob = got.blob;
-          if (got.name) display = got.name;
+        var tag = '(' + (i + 1) + '/' + entries.length + ') ' + e.name + ' · ';
+        if (e.type === 'dir'){
+          var list = await collectFolderFiles(e, q, tag);
+          if (!list.length){ q.text(tag + '空文件夹已跳过'); continue; }
+          list.forEach(function(it){ items.push(it); });
+          continue;
         }
-        var nm = uniqueCopyName(display, used);
-        used[nm] = 1;
-        q.text(tag + '打包中…');
-        items.push({ name: nm, data: new Uint8Array(await blob.arrayBuffer()) });
+        q.text(tag + '下载中…');
+        var item = await fetchEntryItem(e, q, tag);
+        item.name = uniqueCopyName(item.name, used);
+        used[item.name] = 1;
+        items.push(item);
       }
+      if (!items.length) throw new Error('所选内容为空，无法打包');
+      q.text('打包中…');
       var zb = await makePlainZip(items);
-      saveBlob(zb, 'yunpan-' + stamp() + '.zip');
-      q.done('完成 · ' + entries.length + ' 个文件 · ' + fmtSize(zb.size));
+      var fileName = (entries.length === 1 && hasDir) ? sanitizeName(entries[0].name) + '.zip' : 'yunpan-' + stamp() + '.zip';
+      saveBlob(zb, fileName);
+      q.done('完成 · ' + items.length + ' 个文件 · ' + fmtSize(zb.size));
       toast('批量下载完成（已打包为 zip）', 'ok');
     }catch(err){
       q.fail(err.message || '失败');
@@ -2561,6 +2619,7 @@
     var items = [];
     function add(act, label, danger){ items.push({ act: act, label: label, danger: !!danger }); }
     if (entry.type === 'dir'){
+      add('download_folder', '下载文件夹（ZIP）');
       add('move', '移动文件夹');
       add('rmdir', '删除文件夹', true);
     }else if (entry.type === 'link'){
@@ -2592,6 +2651,11 @@
     try{
       if (act === 'share') openShare(entry);
       else if (act === 'move') openMove(entry);
+      else if (act === 'download_folder'){
+        var qf = addQueueItem('下载文件夹 · ' + entry.name);
+        try{ await downloadFolder(entry, qf); }
+        catch(err){ qf.fail(err.message || '失败'); toast('下载失败：' + err.message, 'err'); }
+      }
       else if (act === 'copy') await copyEntry(entry);
       else if (act === 'rename') await renameEntry(entry, null);
       else if (act === 'openweb') window.open(shareUrlFor(entry), '_blank', 'noopener');
@@ -2663,8 +2727,8 @@
     }
   }
 
-  /* ---------- 移动到文件夹 ---------- */
-  var mv = { entry: null, path: [] };
+  /* ---------- 移动到文件夹（支持多选） ---------- */
+  var mv = { entries: [], path: [] };
   function mvDestAbs(){
     return userRoot() + (mv.path.length ? '/' + mv.path.join('/') : '');
   }
@@ -2699,10 +2763,13 @@
       box.innerHTML = '<div class="move-empty">加载失败：' + esc(e.message || '未知错误') + '</div>';
     }
   }
-  function openMove(entry){
-    mv = { entry: entry, path: [] };
-    $('#moveName').textContent = dispName(entry.name) || entry.name;
+  function openMove(entry){ openMoveEntries([entry]); }
+  function openMoveEntries(entries){
+    if (!entries || !entries.length){ toast('请先勾选要移动的项目', 'err'); return; }
+    mv = { entries: entries, path: [] };
+    $('#moveName').textContent = entries.length > 1 ? (entries.length + ' 项') : (dispName(entries[0].name) || entries[0].name);
     $('#moveOk').disabled = false;
+    $('#moveOk').textContent = '移动到这里';
     $('#moveMsg').textContent = '';
     openModal($('#moveModal'));
     loadMoveFolders();
@@ -2733,72 +2800,90 @@
       }
     }
   }
+  async function performMoveEntry(entry, destAbs, newFolder){
+    if (entry.type === 'link'){
+      await mutateUserMeta(function(doc){
+        doc.files.forEach(function(f){
+          if (f.kind === 'link' && String(f.id) === String(entry.id)) f.folder = newFolder;
+        });
+      });
+      return;
+    }
+    if (entry.type === 'file'){
+      var bytes = await getFileBytes(entry);
+      await putFile(destAbs + '/' + entry.name, bytes, 'move: ' + entry.path + ' -> ' + destAbs);
+      await deletePath(entry.path, entry.sha, 'move: remove ' + entry.name);
+      var oldPath = entry.path;
+      await metaSync(function(doc){
+        doc.files.forEach(function(f){
+          if (f.kind === 'local' && f.path === oldPath){
+            f.path = destAbs + '/' + entry.name;
+            f.folder = newFolder;
+          }
+        });
+      });
+      return;
+    }
+    var oldPrefix = entry.path + '/';
+    var oldRel = relFolder() ? relFolder() + '/' + entry.name : entry.name;
+    var newRel = (newFolder ? newFolder + '/' : '') + entry.name;
+    var dstDir = destAbs + '/' + entry.name;
+    await moveDirRec(entry.path, dstDir);
+    await deleteFolderRec(entry.path);
+    await metaSync(function(doc){
+      doc.files.forEach(function(f){
+        if (f.kind === 'local' && String(f.path || '').indexOf(oldPrefix) === 0){
+          f.path = dstDir + '/' + String(f.path).slice(oldPrefix.length);
+          if (String(f.folder || '').indexOf(oldRel) === 0) f.folder = newRel + String(f.folder || '').slice(oldRel.length);
+        }else if (f.kind === 'link'){
+          var ff = String(f.folder || '');
+          if (ff === oldRel || ff.indexOf(oldRel + '/') === 0) f.folder = newRel + ff.slice(oldRel.length);
+        }
+      });
+    });
+  }
   $('#moveOk').addEventListener('click', async function(){
-    var entry = mv.entry;
-    if (!entry) return;
+    var entries = mv.entries;
+    if (!entries || !entries.length) return;
     var msg = $('#moveMsg');
     var btn = $('#moveOk');
     var destAbs = mvDestAbs();
     var newFolder = mv.path.join('/');
-    var srcParent = entry.path.slice(0, entry.path.lastIndexOf('/'));
-    if (entry.type === 'dir'){
-      if (destAbs === entry.path || destAbs.indexOf(entry.path + '/') === 0){
-        msg.textContent = '不能移动到自身或其子目录';
-        return;
+    var todo = [];
+    for (var i = 0; i < entries.length; i++){
+      var entry = entries[i];
+      var srcParent = entry.path ? entry.path.slice(0, entry.path.lastIndexOf('/')) : '';
+      if (entry.type === 'dir'){
+        if (destAbs === entry.path || destAbs.indexOf(entry.path + '/') === 0){
+          msg.textContent = '不能把文件夹 “' + entry.name + '” 移动到自身或其子目录';
+          return;
+        }
+        if (destAbs === srcParent) continue;
+      }else if (entry.type === 'file'){
+        if (destAbs === srcParent) continue;
+      }else if (entry.type === 'link'){
+        if (newFolder === relFolder()) continue;
       }
-    }else if (entry.type === 'file'){
-      if (destAbs === srcParent){ msg.textContent = '该文件已在当前目录'; return; }
-    }else if (entry.type === 'link'){
-      if (newFolder === relFolder()){ msg.textContent = '该链接已在当前目录'; return; }
+      todo.push(entry);
     }
+    if (!todo.length){ msg.textContent = '所选项目已在目标目录'; return; }
     btn.disabled = true; btn.textContent = '移动中…';
     msg.textContent = '';
     try{
-      if (entry.type !== 'link'){
-        var destEntries = await listDir(destAbs);
-        var taken = destEntries.some(function(x){ return x.name.toLowerCase() === entry.name.toLowerCase(); });
-        if (taken) throw new Error('目标目录已存在同名项目');
+      var destEntries = await listDir(destAbs);
+      var taken = {};
+      destEntries.forEach(function(x){ taken[String(x.name).toLowerCase()] = 1; });
+      for (var j = 0; j < todo.length; j++){
+        if (todo[j].type !== 'link' && taken[String(todo[j].name).toLowerCase()]){
+          throw new Error('目标目录已存在同名项目：' + todo[j].name);
+        }
       }
-      if (entry.type === 'link'){
-        await mutateUserMeta(function(doc){
-          doc.files.forEach(function(f){
-            if (f.kind === 'link' && String(f.id) === String(entry.id)) f.folder = newFolder;
-          });
-        });
-      }else if (entry.type === 'file'){
-        var bytes = await getFileBytes(entry);
-        await putFile(destAbs + '/' + entry.name, bytes, 'move: ' + entry.path + ' -> ' + destAbs);
-        await deletePath(entry.path, entry.sha, 'move: remove ' + entry.name);
-        var oldPath = entry.path;
-        await metaSync(function(doc){
-          doc.files.forEach(function(f){
-            if (f.kind === 'local' && f.path === oldPath){
-              f.path = destAbs + '/' + entry.name;
-              f.folder = newFolder;
-            }
-          });
-        });
-      }else{
-        var oldPrefix = entry.path + '/';
-        var oldRel = relFolder() ? relFolder() + '/' + entry.name : entry.name;
-        var newRel = (newFolder ? newFolder + '/' : '') + entry.name;
-        var dstDir = destAbs + '/' + entry.name;
-        await moveDirRec(entry.path, dstDir);
-        await deleteFolderRec(entry.path);
-        await metaSync(function(doc){
-          doc.files.forEach(function(f){
-            if (f.kind === 'local' && String(f.path || '').indexOf(oldPrefix) === 0){
-              f.path = dstDir + '/' + String(f.path).slice(oldPrefix.length);
-              if (String(f.folder || '').indexOf(oldRel) === 0) f.folder = newRel + String(f.folder || '').slice(oldRel.length);
-            }else if (f.kind === 'link'){
-              var ff = String(f.folder || '');
-              if (ff === oldRel || ff.indexOf(oldRel + '/') === 0) f.folder = newRel + ff.slice(oldRel.length);
-            }
-          });
-        });
+      for (var k = 0; k < todo.length; k++){
+        if (todo.length > 1) msg.textContent = '正在移动 ' + (k + 1) + '/' + todo.length + ' …';
+        await performMoveEntry(todo[k], destAbs, newFolder);
       }
       closeModal($('#moveModal'));
-      toast('移动完成', 'ok');
+      toast('已移动 ' + todo.length + ' 项', 'ok');
       await loadList();
     }catch(err){
       msg.textContent = '移动失败：' + (err.message || '未知错误');
@@ -2806,6 +2891,7 @@
       btn.disabled = false; btn.textContent = '移动到这里';
     }
   });
+  $('#mvSelBtn').addEventListener('click', function(){ openMoveEntries(selectedEntries()); });
 
   /* ---------- 在线编辑文本 ---------- */
   var editState = null;
@@ -3233,22 +3319,6 @@
   }
 
   /* ---------- 上传 ---------- */
-  function uniqueName(fileName, zip){
-    var base = sanitizeName(fileName);
-    if (zip && /\.zip$/i.test(base)) base = base.slice(0, -4);
-    var used = {};
-    S.items.forEach(function(e){ used[e.name] = 1; });
-    var n = zip ? base + '.zip' : base;
-    if (!used[n]) return n;
-    var ts = stamp();
-    var i = 1;
-    do {
-      var stamped = zip ? base + '-' + ts + (i > 1 ? '-' + i : '') + '.zip' : withStamp(base, ts, i);
-      n = stamped;
-      i++;
-    } while (used[n]);
-    return n;
-  }
   function withStamp(name, ts, i){
     var suffix = '-' + ts + (i > 1 ? '-' + i : '');
     var idx = name.lastIndexOf('.');
@@ -3267,43 +3337,76 @@
       fail: function(t){ el.className = 'q err'; msg.textContent = t; }
     };
   }
-  async function uploadOne(file, plainChecked){
-    var q = addQueueItem(file.name);
+  var dirNameCache = {};
+  async function usedNamesAt(destAbs){
+    if (dirNameCache[destAbs]) return dirNameCache[destAbs];
+    var used = {};
+    if (destAbs === curDir()){
+      S.items.forEach(function(e){ used[e.name] = 1; });
+    }else{
+      try{
+        var entries = await listDir(destAbs);
+        entries.forEach(function(e){ used[e.name] = 1; });
+      }catch(_){ /* 新目录，视为空 */ }
+    }
+    dirNameCache[destAbs] = used;
+    return used;
+  }
+  async function uniqueNameAt(destAbs, fileName, zip){
+    var base = sanitizeName(fileName);
+    if (zip && /\.zip$/i.test(base)) base = base.slice(0, -4);
+    var used = await usedNamesAt(destAbs);
+    var n = zip ? base + '.zip' : base;
+    if (used[n]){
+      var ts = stamp(), i = 1;
+      do {
+        n = zip ? base + '-' + ts + (i > 1 ? '-' + i : '') + '.zip' : withStamp(base, ts, i);
+        i++;
+      } while (used[n]);
+    }
+    used[n] = 1;
+    return n;
+  }
+  async function uploadOne(file, plainChecked, ctx){
+    ctx = ctx || {};
+    var q = addQueueItem(ctx.label || file.name);
     var plain = plainChecked && isHtmlName(file.name);
+    var destAbs = ctx.destAbs || curDir();
+    var folderRel = ctx.folderRel != null ? ctx.folderRel : relFolder();
     try{
       if (file.size > CFG.maxFileMB * 1024 * 1024) throw new Error('超过单文件 ' + CFG.maxFileMB + ' MB 限制');
       if (!S.token) throw new Error('会话已失效');
       var stored = '', zipSize = 0;
       if (plain){
         q.text('上传中… 0%');
-        var rawName = uniqueName(file.name, false);
+        var rawName = await uniqueNameAt(destAbs, file.name, false);
         var raw = new Uint8Array(await file.arrayBuffer());
         stored = await putWithRetry(rawName, raw, false, 'upload(plain): ' + rawName, function(l, t, s){
           q.text('上传中… ' + Math.floor(l / t * 100) + '% · ' + fmtSize(l) + ' · ' + fmtSpeed(s));
-        });
+        }, destAbs);
         zipSize = raw.length;
         q.done('完成 · 明文 · ' + fmtSize(file.size));
       }else{
         q.text('加密中…');
-        var zipName = uniqueName(file.name, true);
+        var zipName = await uniqueNameAt(destAbs, file.name, true);
         var blob = await makeEncryptedZip(file, file.name, CFG.zipPassword);
         q.text('上传中… 0%');
         var u8 = new Uint8Array(await blob.arrayBuffer());
         stored = await putWithRetry(zipName, u8, true, 'upload: ' + zipName, function(l, t, s){
           q.text('上传中… ' + Math.floor(l / t * 100) + '% · ' + fmtSize(l) + ' · ' + fmtSpeed(s));
-        });
+        }, destAbs);
         zipSize = u8.length;
         q.done('完成 · 加密 · 原始 ' + fmtSize(file.size) + ' · 占用 ' + fmtSize(zipSize));
       }
       await metaSync(function(doc){
-        var p = curDir() + '/' + stored;
+        var p = destAbs + '/' + stored;
         doc.files = doc.files.filter(function(f){ return !(f.kind === 'local' && f.path === p); });
         doc.files.push({
           kind: 'local',
           name: dispName(stored),
           stored: stored,
           path: p,
-          folder: relFolder(),
+          folder: folderRel,
           size: file.size,
           zipSize: zipSize,
           enc: plain ? 'none' : 'AES-256',
@@ -3359,37 +3462,58 @@
       xhr.send(data);
     });
   }
-  async function putWithRetry(name, u8, zip, message, onProgress){
+  async function putWithRetry(name, u8, zip, message, onProgress, destAbs){
+    destAbs = destAbs || curDir();
     try{
-      await putFileXhr(curDir() + '/' + name, u8, message, '', onProgress);
+      await putFileXhr(destAbs + '/' + name, u8, message, '', onProgress);
       return name;
     }catch(e){
       if (e.status !== 422) throw e;
       var ts = stamp();
       var alt = zip ? withStamp(name.slice(0, -4), ts, 2) + '.zip' : withStamp(name, ts, 2);
-      await putFileXhr(curDir() + '/' + alt, u8, message + ' (retry)', '', onProgress);
+      await putFileXhr(destAbs + '/' + alt, u8, message + ' (retry)', '', onProgress);
       return alt;
     }
   }
 
   var uploading = false;
+  function relSegments(file){
+    var rel = file._relPath || file.webkitRelativePath || '';
+    if (!rel) return [];
+    return rel.split('/').filter(Boolean).map(sanitizeName);
+  }
   async function handleFiles(fileList){
     var files = Array.from(fileList || []);
     if (!files.length) return;
     if (!S.token){ showLock('请先登录'); return; }
     if (uploading){ toast('上一批文件仍在上传，请稍候', 'err'); return; }
     uploading = true;
+    dirNameCache = {};
     $('#queue').innerHTML = '';
     $('#pickBtn').disabled = true;
+    $('#pickFolderBtn').disabled = true;
     var plainChecked = $('#plainHtml').checked;
     var ok = 0;
     try{
       for (var i = 0; i < files.length; i++){
-        if (await uploadOne(files[i], plainChecked)) ok++;
+        var file = files[i];
+        var segs = relSegments(file);
+        var ctx = null;
+        if (segs.length > 1){
+          var sub = segs.slice(0, -1);
+          var prefix = relFolder() ? relFolder() + '/' : '';
+          ctx = {
+            destAbs: curDir() + '/' + sub.join('/'),
+            folderRel: prefix + sub.join('/'),
+            label: file._relPath || file.webkitRelativePath || file.name
+          };
+        }
+        if (await uploadOne(file, plainChecked, ctx)) ok++;
       }
     }finally{
       uploading = false;
       $('#pickBtn').disabled = false;
+      $('#pickFolderBtn').disabled = false;
       if (ok){
         toast('已上传 ' + ok + ' 个文件', 'ok');
         try{ await loadList(); }catch(e){ /* 稍后刷新 */ }
@@ -3401,11 +3525,20 @@
     e.stopPropagation();
     $('#fileInput').click();
   });
+  $('#pickFolderBtn').addEventListener('click', function(e){
+    e.stopPropagation();
+    $('#folderInput').click();
+  });
   $('#dropZone').addEventListener('click', function(e){
     if (e.target.closest('button, input, label')) return;
     $('#fileInput').click();
   });
   $('#fileInput').addEventListener('change', function(e){
+    var files = e.target.files;
+    handleFiles(files);
+    e.target.value = '';
+  });
+  $('#folderInput').addEventListener('change', function(e){
     var files = e.target.files;
     handleFiles(files);
     e.target.value = '';
@@ -3424,10 +3557,55 @@
       dz.classList.remove('drag');
     });
   });
-  dz.addEventListener('drop', function(e){
-    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length){
-      handleFiles(e.dataTransfer.files);
+  function readAllDirEntries(reader){
+    return new Promise(function(resolve, reject){
+      var all = [];
+      (function next(){
+        reader.readEntries(function(list){
+          if (!list.length){ resolve(all); return; }
+          all = all.concat(Array.prototype.slice.call(list));
+          next();
+        }, reject);
+      })();
+    });
+  }
+  async function walkDropEntry(entry, prefix, out){
+    if (entry.isFile){
+      var file = await new Promise(function(resolve, reject){ entry.file(resolve, reject); });
+      try{ file._relPath = prefix + entry.name; }catch(_){}
+      out.push(file);
+      return;
     }
+    if (entry.isDirectory){
+      var reader = entry.createReader();
+      var children = await readAllDirEntries(reader);
+      for (var i = 0; i < children.length; i++) await walkDropEntry(children[i], prefix + entry.name + '/', out);
+    }
+  }
+  dz.addEventListener('drop', async function(e){
+    var dt = e.dataTransfer;
+    if (!dt) return;
+    var items = dt.items;
+    if (items && items.length && items[0].webkitGetAsEntry){
+      var roots = [];
+      for (var i = 0; i < items.length; i++){
+        if (items[i].kind !== 'file') continue;
+        var en = items[i].webkitGetAsEntry && items[i].webkitGetAsEntry();
+        if (en) roots.push(en);
+      }
+      if (roots.length){
+        var files = [];
+        try{
+          for (var j = 0; j < roots.length; j++) await walkDropEntry(roots[j], '', files);
+        }catch(err){
+          toast('读取拖拽内容失败：' + (err.message || '未知错误'), 'err');
+          return;
+        }
+        handleFiles(files);
+        return;
+      }
+    }
+    if (dt.files && dt.files.length) handleFiles(dt.files);
   });
   window.addEventListener('dragover', function(e){ e.preventDefault(); });
   window.addEventListener('drop', function(e){ e.preventDefault(); });
